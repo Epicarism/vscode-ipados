@@ -1,0 +1,100 @@
+import SwiftUI
+
+struct GitView: View {
+    @State private var commitMessage = ""
+    @State private var gitStatus = "No changes"
+    @State private var isLoading = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            HStack {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.title2)
+                Text("Source Control")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top)
+            
+            // Git Status
+            VStack(alignment: .leading, spacing: 10) {
+                Text("STATUS")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+                
+                ScrollView {
+                    Text(gitStatus)
+                        .font(.system(.body, design: .monospaced))
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .cornerRadius(8)
+                }
+                .frame(maxHeight: 200)
+                .padding(.horizontal)
+            }
+            
+            // Commit Section
+            VStack(alignment: .leading, spacing: 10) {
+                Text("COMMIT")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+                
+                TextField("Commit message...", text: $commitMessage)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+                
+                HStack(spacing: 15) {
+                    Button(action: performCommit) {
+                        Label("Commit", systemImage: "checkmark.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(commitMessage.isEmpty || isLoading)
+                    
+                    Button(action: refreshStatus) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isLoading)
+                }
+                .padding(.horizontal)
+            }
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.systemBackground))
+        .onAppear {
+            refreshStatus()
+        }
+    }
+    
+    private func refreshStatus() {
+        isLoading = true
+        // Simulate git status check
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            gitStatus = "On branch main\nYour branch is up to date with 'origin/main'.\n\nChanges not staged for commit:\n  modified:   ContentView.swift\n  modified:   README.md"
+            isLoading = false
+        }
+    }
+    
+    private func performCommit() {
+        isLoading = true
+        // Simulate git commit
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            gitStatus = "On branch main\nYour branch is ahead of 'origin/main' by 1 commit.\n\nnothing to commit, working tree clean"
+            commitMessage = ""
+            isLoading = false
+        }
+    }
+}
+
+#Preview {
+    GitView()
+}

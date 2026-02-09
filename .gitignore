@@ -1,0 +1,6 @@
+.garbage/
+.DS_Store
+*.xcuserstate
+DerivedData/
+build/
+.build/

@@ -1,0 +1,227 @@
+//
+//  Tab.swift
+//  VSCodeiPadOS
+//
+//  Created by AI Assistant
+//  A model representing an editor tab with file content and metadata
+//
+
+import Foundation
+import SwiftUI
+
+/// Represents an open editor tab containing file content
+struct Tab: Identifiable, Equatable, Hashable {
+    // MARK: - Properties
+    
+    /// Unique identifier for the tab
+    let id: UUID
+    
+    /// Display name of the file
+    var fileName: String
+    
+    /// Current content of the file
+    var content: String
+    
+    /// Programming language/file type
+    var language: CodeLanguage
+    
+    /// File system URL (nil for unsaved new files)
+    var url: URL?
+    
+    /// Whether the file has unsaved changes
+    var isUnsaved: Bool
+    
+    /// Whether this tab is currently active/selected
+    var isActive: Bool
+    
+    // MARK: - Initialization
+    
+    /// Creates a new tab
+    /// - Parameters:
+    ///   - id: Unique identifier (auto-generated if not provided)
+    ///   - fileName: Display name for the file
+    ///   - content: File content (empty by default)
+    ///   - language: Programming language (auto-detected from fileName if not provided)
+    ///   - url: File system URL (nil for new unsaved files)
+    ///   - isUnsaved: Whether file has unsaved changes (false by default)
+    ///   - isActive: Whether this is the active tab (false by default)
+    init(
+        id: UUID = UUID(),
+        fileName: String,
+        content: String = "",
+        language: CodeLanguage? = nil,
+        url: URL? = nil,
+        isUnsaved: Bool = false,
+        isActive: Bool = false
+    ) {
+        self.id = id
+        self.fileName = fileName
+        self.content = content
+        self.url = url
+        self.isUnsaved = isUnsaved
+        self.isActive = isActive
+        
+        // Auto-detect language from file extension if not provided
+        if let language = language {
+            self.language = language
+        } else {
+            let fileExtension = (fileName as NSString).pathExtension
+            self.language = CodeLanguage(from: fileExtension)
+        }
+    }
+    
+    /// Convenience initializer that accepts language as String
+    init(
+        id: UUID = UUID(),
+        fileName: String,
+        content: String = "",
+        language: String,
+        url: URL? = nil,
+        isUnsaved: Bool = false,
+        isActive: Bool = false
+    ) {
+        self.init(
+            id: id,
+            fileName: fileName,
+            content: content,
+            language: CodeLanguage(from: language),
+            url: url,
+            isUnsaved: isUnsaved,
+            isActive: isActive
+        )
+    }
+    
+    // MARK: - Computed Properties
+    
+    /// File extension (e.g., "swift", "js")
+    var fileExtension: String {
+        (fileName as NSString).pathExtension.lowercased()
+    }
+    
+    /// Display title for the tab (includes unsaved indicator)
+    var displayTitle: String {
+        isUnsaved ? "● \(fileName)" : fileName
+    }
+    
+    /// Number of lines in the content
+    var lineCount: Int {
+        content.isEmpty ? 0 : content.components(separatedBy: .newlines).count
+    }
+    
+    /// File size in bytes
+    var contentSize: Int {
+        content.utf8.count
+    }
+    
+    // MARK: - Equatable & Hashable
+    
+    /// Tabs are equal if they have the same ID
+    static func == (lhs: Tab, rhs: Tab) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    /// Hash based on ID only
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+// MARK: - CodeLanguage
+
+/// Supported programming languages and file types
+enum CodeLanguage: String, CaseIterable, Codable {
+    case swift = "swift"
+    case javascript = "javascript"
+    case typescript = "typescript"
+    case python = "python"
+    case html = "html"
+    case css = "css"
+    case json = "json"
+    case markdown = "markdown"
+    case yaml = "yaml"
+    case xml = "xml"
+    case plainText = "plaintext"
+    
+    // MARK: - Initialization
+    
+    /// Detects language from file extension
+    /// - Parameter fileExtension: File extension (e.g., "swift", "js")
+    init(from fileExtension: String) {
+        let ext = fileExtension.lowercased()
+        switch ext {
+        case "swift":
+            self = .swift
+        case "js", "jsx", "mjs":
+            self = .javascript
+        case "ts", "tsx":
+            self = .typescript
+        case "py", "pyw":
+            self = .python
+        case "html", "htm":
+            self = .html
+        case "css", "scss", "sass", "less":
+            self = .css
+        case "json":
+            self = .json
+        case "md", "markdown":
+            self = .markdown
+        case "yml", "yaml":
+            self = .yaml
+        case "xml":
+            self = .xml
+        default:
+            self = .plainText
+        }
+    }
+    
+    // MARK: - Display Properties
+    
+    /// Human-readable display name
+    var displayName: String {
+        switch self {
+        case .swift: return "Swift"
+        case .javascript: return "JavaScript"
+        case .typescript: return "TypeScript"
+        case .python: return "Python"
+        case .html: return "HTML"
+        case .css: return "CSS"
+        case .json: return "JSON"
+        case .markdown: return "Markdown"
+        case .yaml: return "YAML"
+        case .xml: return "XML"
+        case .plainText: return "Plain Text"
+        }
+    }
+    
+    /// Icon name for SF Symbols
+    var iconName: String {
+        switch self {
+        case .swift: return "swift"
+        case .javascript, .typescript: return "curlybraces"
+        case .python: return "chevron.left.forwardslash.chevron.right"
+        case .html: return "globe"
+        case .css: return "paintbrush"
+        case .json: return "curlybraces.square"
+        case .markdown: return "doc.richtext"
+        case .yaml, .xml: return "doc.text"
+        case .plainText: return "doc"
+        }
+    }
+    
+    /// Color associated with the language
+    var color: Color {
+        switch self {
+        case .swift: return .orange
+        case .javascript: return .yellow
+        case .typescript: return .blue
+        case .python: return .green
+        case .html: return .red
+        case .css: return .purple
+        case .json: return .green
+        case .markdown: return .blue
+        case .yaml: return .cyan
+        case .xml: return .orange
+        case .plainText: return .gray
+        }
+    }
+}

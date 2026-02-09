@@ -1,0 +1,138 @@
+--- ContentView.swift
++++ ContentView.swift
+@@ -1114,11 +1114,23 @@
+         case .upArrow:
+             let lines = document.content.components(separatedBy: "\n")
+             if let position = document.content.cursorPosition(from: cursorPosition, for: lines) {
+-                if position.line > 0 {
+-                    let newLine = position.line - 1
+-                    let targetLine = lines[newLine]
+-                    let newColumn = min(position.column, targetLine.count)
+-                    cursorPosition = document.content.positionFromLineColumn(line: newLine, column: newColumn, lines: lines)
++                if event.modifierFlags.contains(.shift) {
++                    // Shift+Up: Extend selection upward
++                    if position.line > 0 {
++                        let newLine = position.line - 1
++                        let targetLine = lines[newLine]
++                        let newColumn = min(position.column, targetLine.count)
++                        let newPosition = document.content.positionFromLineColumn(line: newLine, column: newColumn, lines: lines)
++                        let selectionStart = selectionRange?.lowerBound ?? cursorPosition
++                        selectionRange = selectionStart..<newPosition
++                        cursorPosition = newPosition
++                    }
++                } else {
++                    if position.line > 0 {
++                        let newLine = position.line - 1
++                        let targetLine = lines[newLine]
++                        let newColumn = min(position.column, targetLine.count)
++                        cursorPosition = document.content.positionFromLineColumn(line: newLine, column: newColumn, lines: lines)
++                        selectionRange = nil // Clear selection when moving without shift
++                    }
+                 }
+             }
+             return true
+@@ -1125,11 +1137,23 @@
+         case .downArrow:
+             let lines = document.content.components(separatedBy: "\n")
+             if let position = document.content.cursorPosition(from: cursorPosition, for: lines) {
+-                if position.line < lines.count - 1 {
+-                    let newLine = position.line + 1
+-                    let targetLine = lines[newLine]
+-                    let newColumn = min(position.column, targetLine.count)
+-                    cursorPosition = document.content.positionFromLineColumn(line: newLine, column: newColumn, lines: lines)
++                if event.modifierFlags.contains(.shift) {
++                    // Shift+Down: Extend selection downward
++                    if position.line < lines.count - 1 {
++                        let newLine = position.line + 1
++                        let targetLine = lines[newLine]
++                        let newColumn = min(position.column, targetLine.count)
++                        let newPosition = document.content.positionFromLineColumn(line: newLine, column: newColumn, lines: lines)
++                        let selectionStart = selectionRange?.lowerBound ?? cursorPosition
++                        selectionRange = selectionStart..<newPosition
++                        cursorPosition = newPosition
++                    }
++                } else {
++                    if position.line < lines.count - 1 {
++                        let newLine = position.line + 1
++                        let targetLine = lines[newLine]
++                        let newColumn = min(position.column, targetLine.count)
++                        cursorPosition = document.content.positionFromLineColumn(line: newLine, column: newColumn, lines: lines)
++                        selectionRange = nil // Clear selection when moving without shift
++                    }
+                 }
+             }
+             return true
+@@ -1136,11 +1160,29 @@
+         case .leftArrow:
+             let lines = document.content.components(separatedBy: "\n")
+             if let position = document.content.cursorPosition(from: cursorPosition, for: lines) {
+-                if position.column > 0 {
+-                    cursorPosition = max(0, cursorPosition - 1)
+-                } else if position.line > 0 {
+-                    let prevLine = lines[position.line - 1]
+-                    cursorPosition = document.content.positionFromLineColumn(line: position.line - 1, column: prevLine.count, lines: lines)
++                if event.modifierFlags.contains(.shift) {
++                    // Shift+Left: Extend selection leftward
++                    let selectionStart = selectionRange?.lowerBound ?? cursorPosition
++                    if position.column > 0 {
++                        let newPosition = max(0, cursorPosition - 1)
++                        if newPosition < selectionStart {
++                            selectionRange = newPosition..<selectionStart
++                        } else {
++                            selectionRange = selectionStart..<newPosition
++                        }
++                        cursorPosition = newPosition
++                    } else if position.line > 0 {
++                        let prevLine = lines[position.line - 1]
++                        let newPosition = document.content.positionFromLineColumn(line: position.line - 1, column: prevLine.count, lines: lines)
++                        selectionRange = newPosition..<selectionStart
++                        cursorPosition = newPosition
++                    }
++                } else {
++                    if position.column > 0 {
++                        cursorPosition = max(0, cursorPosition - 1)
++                    } else if position.line > 0 {
++                        let prevLine = lines[position.line - 1]
++                        cursorPosition = document.content.positionFromLineColumn(line: position.line - 1, column: prevLine.count, lines: lines)
++                    }
++                    selectionRange = nil // Clear selection when moving without shift
+                 }
+             }
+             return true
+@@ -1147,11 +1189,29 @@
+         case .rightArrow:
+             let lines = document.content.components(separatedBy: "\n")
+             if let position = document.content.cursorPosition(from: cursorPosition, for: lines) {
+-                let currentLine = lines[position.line]
+-                if position.column < currentLine.count {
+-                    cursorPosition = min(document.content.count, cursorPosition + 1)
+-                } else if position.line < lines.count - 1 {
+-                    cursorPosition = document.content.positionFromLineColumn(line: position.line + 1, column: 0, lines: lines)
++                if event.modifierFlags.contains(.shift) {
++                    // Shift+Right: Extend selection rightward
++                    let selectionStart = selectionRange?.lowerBound ?? cursorPosition
++                    let currentLine = lines[position.line]
++                    if position.column < currentLine.count {
++                        let newPosition = min(document.content.count, cursorPosition + 1)
++                        if newPosition > selectionStart {
++                            selectionRange = selectionStart..<newPosition
++                        } else {
++                            selectionRange = newPosition..<selectionStart
++                        }
++                        cursorPosition = newPosition
++                    } else if position.line < lines.count - 1 {
++                        let newPosition = document.content.positionFromLineColumn(line: position.line + 1, column: 0, lines: lines)
++                        selectionRange = selectionStart..<newPosition
++                        cursorPosition = newPosition
++                    }
++                } else {
++                    let currentLine = lines[position.line]
++                    if position.column < currentLine.count {
++                        cursorPosition = min(document.content.count, cursorPosition + 1)
++                    } else if position.line < lines.count - 1 {
++                        cursorPosition = document.content.positionFromLineColumn(line: position.line + 1, column: 0, lines: lines)
++                    }
++                    selectionRange = nil // Clear selection when moving without shift
+                 }
+             }
+             return true

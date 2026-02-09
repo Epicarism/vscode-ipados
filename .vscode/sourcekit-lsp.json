@@ -1,0 +1,17 @@
+{
+  "name": "sourcekit-lsp",
+  "displayName": "Swift Language Server",
+  "version": "1.0.0",
+  "description": "Swift Language Server Protocol implementation using sourcekit-lsp",
+  "serverPath": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/sourcekit-lsp",
+  "languages": ["swift"],
+  "fileExtensions": [".swift"],
+  "configuration": {
+    "swift": {
+      "serverEnabled": true,
+      "serverPath": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/sourcekit-lsp",
+      "enableLogging": true,
+      "logLevel": "info"
+    }
+  }
+}

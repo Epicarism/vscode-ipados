@@ -1,0 +1,18 @@
+{
+  "files.associations": {
+    "*.swift": "swift"
+  },
+  "swift.languageServerPath": "/usr/bin/sourcekit-lsp",
+  "swift.path": "/usr/bin/swift",
+  "sourcekit-lsp.serverPath": "/usr/bin/sourcekit-lsp",
+  "sourcekit-lsp.serverArguments": [],
+  "sourcekit-lsp.trace.server": "verbose",
+  "[swift]": {
+    "editor.defaultFormatter": "sourcekit-lsp",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  }
+}
