@@ -40,7 +40,6 @@ struct ContentView: View {
                         
                         if let tab = editorCore.activeTab {
                             IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
-                                .id(tab.id)  // Force view recreation when tab changes
                         } else {
                             IDEWelcomeView(editorCore: editorCore, showFolderPicker: $showingFolderPicker, theme: theme)
                         }

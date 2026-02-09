@@ -233,10 +233,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
            requested != context.coordinator.lastRequestedLineSelection {
             context.coordinator.lastRequestedLineSelection = requested
             context.coordinator.scrollToAndSelectLine(requested, in: textView)
-            // Defer @Binding update to avoid "Publishing changes from within view updates"
-            DispatchQueue.main.async {
-                self.requestedLineSelection = nil
-            }
+            requestedLineSelection = nil
         }
 
         // Handle cursor index requests (e.g. accepting autocomplete)
@@ -244,18 +241,14 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
            requested != context.coordinator.lastRequestedCursorIndex {
             context.coordinator.lastRequestedCursorIndex = requested
             textView.selectedRange = NSRange(location: max(0, requested), length: 0)
-            // Defer @Binding update to avoid "Publishing changes from within view updates"
-            DispatchQueue.main.async {
-                self.requestedCursorIndex = nil
-            }
+            requestedCursorIndex = nil
 
             // Update SwiftUI state
             context.coordinator.updateCursorPosition(textView)
             context.coordinator.updateScrollPosition(textView)
         }
         
-        // Note: updateLineCount is called in textViewDidChange, no need to call here
-        // as it causes unnecessary state churn on every updateUIView
+        context.coordinator.updateLineCount(textView)
     }
     
     // MARK: - Coordinator

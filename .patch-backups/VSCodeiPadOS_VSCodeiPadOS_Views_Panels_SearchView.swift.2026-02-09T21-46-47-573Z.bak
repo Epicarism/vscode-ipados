@@ -1211,6 +1211,9 @@ struct SearchResultsHeader: View {
 
 struct SearchProgressView: View {
     let progress: Double
+    let currentFileIndex: Int
+    let totalFileCount: Int
+    let currentFileName: String
     let onCancel: () -> Void
     
     var body: some View {
@@ -1228,9 +1231,15 @@ struct SearchProgressView: View {
             }
             
             HStack {
-                Text("Searching...")
+                Text("Searching \(currentFileIndex)/\(totalFileCount)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                
+                Text(currentFileName)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 
                 Spacer()
             }

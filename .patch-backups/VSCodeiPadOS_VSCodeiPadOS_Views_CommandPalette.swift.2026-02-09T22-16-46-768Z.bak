@@ -270,11 +270,9 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Add Cursor Above", shortcut: "⌥⌘↑", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
-                editorCore.addCursorAbove()
                 dismiss()
             },
             Command(name: "Add Cursor Below", shortcut: "⌥⌘↓", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
-                editorCore.addCursorBelow()
                 dismiss()
             },
             

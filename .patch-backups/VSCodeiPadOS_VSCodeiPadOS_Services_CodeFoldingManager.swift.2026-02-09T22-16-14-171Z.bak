@@ -603,24 +603,6 @@ class CodeFoldingManager: ObservableObject {
         }
     }
     
-    // MARK: - Legacy/Convenience Methods (for keyboard shortcuts)
-    
-    /// Folds at the current line (uses line 0 as fallback - caller should use foldAtLine(_:) with actual cursor)
-    func foldCurrentLine() {
-        // This is called from keyboard shortcuts - fold at line 0 or first available region
-        if let firstUnfolded = foldRegions.first(where: { !$0.isFolded }) {
-            collapseRegion(at: firstUnfolded.startLine)
-        }
-    }
-    
-    /// Unfolds at the current line (uses line 0 as fallback - caller should use unfoldAtLine(_:) with actual cursor)
-    func unfoldCurrentLine() {
-        // This is called from keyboard shortcuts - unfold first folded region
-        if let firstFolded = foldRegions.first(where: { $0.isFolded }) {
-            expandRegion(at: firstFolded.startLine)
-        }
-    }
-    
     /// Collapses all foldable regions
     func collapseAll() {
         for index in foldRegions.indices {

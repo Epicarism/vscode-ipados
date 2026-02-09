@@ -577,8 +577,9 @@ struct SearchView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
                     Text("Search")
-                        .font(.system(size: 12, weight: .medium))
                 }
+                .font(.caption)
+                .fontWeight(.medium)
             }
             .buttonStyle(.borderedProminent)
             .disabled(searchText.count < 2 || searchManager.isSearching)
@@ -599,6 +600,9 @@ struct SearchView: View {
     private var searchProgressSection: some View {
         SearchProgressView(
             progress: searchManager.progress,
+            currentFileIndex: searchManager.currentFileIndex,
+            totalFileCount: searchManager.totalFileCount,
+            currentFileName: searchManager.currentFileName,
             onCancel: {
                 searchManager.cancelSearch()
             }
@@ -1211,6 +1215,9 @@ struct SearchResultsHeader: View {
 
 struct SearchProgressView: View {
     let progress: Double
+    let currentFileIndex: Int
+    let totalFileCount: Int
+    let currentFileName: String
     let onCancel: () -> Void
     
     var body: some View {
@@ -1228,9 +1235,15 @@ struct SearchProgressView: View {
             }
             
             HStack {
-                Text("Searching...")
+                Text("Searching \(currentFileIndex)/\(totalFileCount)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                
+                Text(currentFileName)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 
                 Spacer()
             }

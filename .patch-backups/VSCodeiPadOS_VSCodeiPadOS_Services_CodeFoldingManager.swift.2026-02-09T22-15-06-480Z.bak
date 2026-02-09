@@ -567,58 +567,16 @@ class CodeFoldingManager: ObservableObject {
         }
     }
     
-    /// Folds the region containing the given cursor line
-    func foldAtLine(_ cursorLine: Int) {
-        // Find the innermost region containing this line
-        if let region = foldRegions.filter({ 
-            cursorLine >= $0.startLine && cursorLine <= $0.endLine && !$0.isFolded
-        }).min(by: { ($0.endLine - $0.startLine) < ($1.endLine - $1.startLine) }) {
-            collapseRegion(at: region.startLine)
-        }
-    }
-    
-    /// Unfolds the region containing the given cursor line
-    func unfoldAtLine(_ cursorLine: Int) {
-        // Find any folded region that starts at or contains this line
-        if let region = foldRegions.first(where: { 
-            $0.isFolded && ($0.startLine == cursorLine || (cursorLine >= $0.startLine && cursorLine <= $0.endLine))
-        }) {
-            expandRegion(at: region.startLine)
-        }
-    }
-    
-    /// Toggle fold at cursor line - convenience method
-    func toggleFoldAtLine(_ cursorLine: Int) {
-        // First check if we're on a fold start line
-        if let region = foldRegions.first(where: { $0.startLine == cursorLine }) {
-            toggleFold(at: region.startLine)
-            return
-        }
-        
-        // Otherwise find the innermost region containing this line
-        if let region = foldRegions.filter({ 
-            cursorLine >= $0.startLine && cursorLine <= $0.endLine
-        }).min(by: { ($0.endLine - $0.startLine) < ($1.endLine - $1.startLine) }) {
-            toggleFold(at: region.startLine)
-        }
-    }
-    
-    // MARK: - Legacy/Convenience Methods (for keyboard shortcuts)
-    
-    /// Folds at the current line (uses line 0 as fallback - caller should use foldAtLine(_:) with actual cursor)
+    /// Folds the region at current cursor line (stub - requires cursor position from editor)
     func foldCurrentLine() {
-        // This is called from keyboard shortcuts - fold at line 0 or first available region
-        if let firstUnfolded = foldRegions.first(where: { !$0.isFolded }) {
-            collapseRegion(at: firstUnfolded.startLine)
-        }
+        // This would need cursor position from the editor
+        // For now, it's a no-op since we don't have cursor context
     }
     
-    /// Unfolds at the current line (uses line 0 as fallback - caller should use unfoldAtLine(_:) with actual cursor)
+    /// Unfolds the region at current cursor line (stub - requires cursor position from editor)
     func unfoldCurrentLine() {
-        // This is called from keyboard shortcuts - unfold first folded region
-        if let firstFolded = foldRegions.first(where: { $0.isFolded }) {
-            expandRegion(at: firstFolded.startLine)
-        }
+        // This would need cursor position from the editor
+        // For now, it's a no-op since we don't have cursor context
     }
     
     /// Collapses all foldable regions

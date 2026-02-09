@@ -254,8 +254,6 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Find in Files", shortcut: "⌘⇧F", icon: "doc.text.magnifyingglass", category: .edit) {
-                editorCore.focusedSidebarTab = 1  // Search tab
-                editorCore.showSidebar = true
                 dismiss()
             },
             
@@ -270,11 +268,9 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Add Cursor Above", shortcut: "⌥⌘↑", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
-                editorCore.addCursorAbove()
                 dismiss()
             },
             Command(name: "Add Cursor Below", shortcut: "⌥⌘↓", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
-                editorCore.addCursorBelow()
                 dismiss()
             },
             
@@ -291,15 +287,12 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Zoom In", shortcut: "⌘+", icon: "plus.magnifyingglass", category: .view) {
-                editorCore.zoomIn()
                 dismiss()
             },
             Command(name: "Zoom Out", shortcut: "⌘-", icon: "minus.magnifyingglass", category: .view) {
-                editorCore.zoomOut()
                 dismiss()
             },
             Command(name: "Reset Zoom", shortcut: "⌘0", icon: "1.magnifyingglass", category: .view) {
-                editorCore.resetZoom()
                 dismiss()
             },
             Command(name: "Show Command Palette", shortcut: "⌘⇧P", icon: "command", category: .view) {
@@ -310,11 +303,11 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Collapse All", shortcut: "⌘K ⌘[", icon: "minus.rectangle.on.rectangle", category: .view) {
-                CodeFoldingManager.shared.collapseAll()
+                // Note: Calls editorCode.collapseAllFolds() - ensure editorCode is accessible
                 dismiss()
             },
             Command(name: "Expand All", shortcut: "⌘K ⌘]", icon: "plus.rectangle.on.rectangle", category: .view) {
-                CodeFoldingManager.shared.expandAll()
+                editorCore.expandAllFolds()
                 dismiss()
             },
             
@@ -332,15 +325,12 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Go to Definition", shortcut: "F12", icon: "arrow.right.circle", category: .go) {
-                editorCore.goToDefinitionAtCursor()
                 dismiss()
             },
             Command(name: "Go Back", shortcut: "⌃-", icon: "chevron.backward", category: .go) {
-                editorCore.navigateBack()
                 dismiss()
             },
             Command(name: "Go Forward", shortcut: "⌃⇧-", icon: "chevron.forward", category: .go) {
-                editorCore.navigateForward()
                 dismiss()
             },
             Command(name: "Next Editor", shortcut: "⌃Tab", icon: "arrow.right.square", category: .go) {

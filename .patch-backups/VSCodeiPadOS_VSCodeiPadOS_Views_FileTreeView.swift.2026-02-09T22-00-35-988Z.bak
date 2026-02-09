@@ -32,12 +32,7 @@ struct FileTreeRowView: View {
     
     @State private var isHovered = false
     @State private var showingRenameAlert = false
-    @State private var showingNewFileAlert = false
-    @State private var showingNewFolderAlert = false
-    @State private var showingDeleteConfirmation = false
     @State private var newName = ""
-    @State private var newFileName = "untitled.txt"
-    @State private var newFolderName = "New Folder"
     
     private var isExpanded: Bool {
         fileNavigator.expandedPaths.contains(node.url.path)
@@ -103,16 +98,16 @@ struct FileTreeRowView: View {
             .contextMenu {
                 // New File
                 Button {
-                    newFileName = "untitled.txt"
-                    showingNewFileAlert = true
+                    // TODO: Add createFile method to FileSystemNavigator
+                    // fileNavigator.createFile(in: node.isDirectory ? node.url : node.url.deletingLastPathComponent())
                 } label: {
                     Label("New File", systemImage: "doc.badge.plus")
                 }
                 
                 // New Folder
                 Button {
-                    newFolderName = "New Folder"
-                    showingNewFolderAlert = true
+                    // TODO: Add createFolder method to FileSystemNavigator
+                    // fileNavigator.createFolder(in: node.isDirectory ? node.url : node.url.deletingLastPathComponent())
                 } label: {
                     Label("New Folder", systemImage: "folder.badge.plus")
                 }
@@ -129,7 +124,8 @@ struct FileTreeRowView: View {
                 
                 // Delete
                 Button(role: .destructive) {
-                    showingDeleteConfirmation = true
+                    // TODO: Add deleteItem method to FileSystemNavigator
+                    // fileNavigator.deleteItem(at: node.url)
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -160,39 +156,9 @@ struct FileTreeRowView: View {
                 TextField("Name", text: $newName)
                 Button("Cancel", role: .cancel) { }
                 Button("Rename") {
-                    guard !newName.isEmpty, newName != node.name else { return }
-                    do {
-                        _ = try fileNavigator.renameItem(at: node.url, to: newName)
-                    } catch {
-                        print("Failed to rename: \(error)")
-                    }
+                    // TODO: Add renameItem method to FileSystemNavigator
+                    // fileNavigator.renameItem(at: node.url, to: newName)
                 }
-            }
-            .alert("New File", isPresented: $showingNewFileAlert) {
-                TextField("File name", text: $newFileName)
-                Button("Cancel", role: .cancel) { }
-                Button("Create") {
-                    guard !newFileName.isEmpty else { return }
-                    let targetFolder = node.isDirectory ? node.url : node.url.deletingLastPathComponent()
-                    fileNavigator.createFile(name: newFileName, in: targetFolder)
-                }
-            }
-            .alert("New Folder", isPresented: $showingNewFolderAlert) {
-                TextField("Folder name", text: $newFolderName)
-                Button("Cancel", role: .cancel) { }
-                Button("Create") {
-                    guard !newFolderName.isEmpty else { return }
-                    let targetFolder = node.isDirectory ? node.url : node.url.deletingLastPathComponent()
-                    fileNavigator.createFolder(name: newFolderName, in: targetFolder)
-                }
-            }
-            .alert("Delete \"\(node.name)\"?", isPresented: $showingDeleteConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    _ = fileNavigator.deleteItem(at: node.url)
-                }
-            } message: {
-                Text("This action cannot be undone.")
             }
             
             // Children

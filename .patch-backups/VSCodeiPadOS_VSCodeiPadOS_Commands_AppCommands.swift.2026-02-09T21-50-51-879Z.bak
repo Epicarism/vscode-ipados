@@ -305,8 +305,7 @@ extension KeyboardShortcut {
         case .leftArrow: keyString = "←"
         case .rightArrow: keyString = "→"
         default:
-            // KeyEquivalent doesn't expose character on iOS, use description
-            keyString = "?"
+            keyString = String(describing: key.character).uppercased()
         }
         
         parts.append(keyString)
