@@ -1,0 +1,891 @@
+import SwiftUI
+import Combine
+
+// MARK: - Data Models
+
+struct SearchResultLine: Identifiable {
+    let id = UUID()
+    let lineNumber: Int
+    let text: String
+    let matches: [Range<String.Index>]
+}
+
+struct FileSearchResult: Identifiable, Comparable {
+    let id = UUID()
+    let fileName: String
+    let path: String
+    let matches: [SearchResultLine]
+    var isExpanded: Bool = true
+    
+    // Computed property for directory grouping
+    var directory: String {
+        let components = path.components(separatedBy: "/")
+        return components.dropLast().joined(separator: "/")
+    }
+    
+    // Comparable implementation for sorting
+    static func < (lhs: FileSearchResult, rhs: FileSearchResult) -> Bool {
+        lhs.fileName < rhs.fileName
+    }
+}
+
+// MARK: - Sort Options
+
+enum SortOption: String, CaseIterable, Identifiable {
+    case fileName = "Filename"
+    case path = "Path"
+    case matches = "Matches"
+    
+    var id: String { self.rawValue }
+    
+    var icon: String {
+        switch self {
+        case .fileName: return "doc.text"
+        case .path: return "folder"
+        case .matches: return "number"
+        }
+    }
+}
+
+// MARK: - Result Limit
+
+enum ResultLimit: String, CaseIterable, Identifiable {
+    case top100 = "Top 100"
+    case top500 = "Top 500"
+    case all = "All"
+    
+    var id: String { self.rawValue }
+    
+    var maxCount: Int? {
+        switch self {
+        case .top100: return 100
+        case .top500: return 500
+        case .all: return nil
+        }
+    }
+}
+
+struct SearchView: View {
+    var onResultSelected: ((String, Int) -> Void)?
+    var rootURL: URL
+    
+    // MARK: - Search Manager
+    @StateObject private var searchManager = SearchManager()
+    
+    // MARK: - Search State
+    @State private var searchText: String = ""
+    @State private var replaceText: String = ""
+    @State private var filesToInclude: String = ""
+    @State private var filesToExclude: String = ""
+    
+    // MARK: - Debounce & Search Task
+    @State private var searchTask: Task<Void, Never>?
+    @State private var debounceCancellable: AnyCancellable?
+    private let debounceInterval: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(400)
+    
+    @State private var showReplace: Bool = false
+    @State private var showDetails: Bool = false
+    
+    @State private var matchCase: Bool = false
+    @State private var matchWholeWord: Bool = false
+    @State private var useRegex: Bool = false
+    
+    // MARK: - Sort & Filter State
+    @State private var sortOption: SortOption = .fileName
+    @State private var sortAscending: Bool = true
+    @State private var selectedExtensions: Set<String> = []
+    @State private var groupByDirectory: Bool = false
+    @State private var showFilePath: Bool = true
+    @State private var resultLimit: ResultLimit = .all
+    @State private var excludeBinaryFiles: Bool = true
+    @State private var showFilters: Bool = false
+    
+    // Common file extensions for quick filtering
+    private let commonExtensions = [".swift", ".md", ".json", ".txt", ".js", ".ts", ".html", ".css", ".py", ".rb"]
+    
+    // Binary file extensions to exclude
+    private let binaryExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".avi", ".mov", ".exe", ".dll", ".so", ".dylib", ".app", ".ipa", ".ipa", ".dmg", ".pkg", ".deb", ".rpm", ".img", ".iso", ".bin", ".dat", ".db", ".sqlite", ".sqlite3", ".ttf", ".otf", ".woff", ".woff2", ".eot"]
+    
+    // Dummy data for visualization
+    @State private var rawResults: [FileSearchResult] = [
+        FileSearchResult(fileName: "ContentView.swift", path: "Views/ContentView.swift", matches: [
+            SearchResultLine(lineNumber: 10, text: "struct ContentView: View {", matches: []),
+            SearchResultLine(lineNumber: 24, text: "    var body: some View {", matches: [])
+        ]),
+        FileSearchResult(fileName: "SidebarView.swift", path: "Views/Sidebar/SidebarView.swift", matches: [
+            SearchResultLine(lineNumber: 5, text: "struct SidebarView: View {", matches: [])
+        ]),
+        FileSearchResult(fileName: "README.md", path: "Documentation/README.md", matches: [
+            SearchResultLine(lineNumber: 1, text: "# Project Documentation", matches: []),
+            SearchResultLine(lineNumber: 5, text: "## Getting Started", matches: []),
+            SearchResultLine(lineNumber: 10, text: "### Installation", matches: [])
+        ]),
+        FileSearchResult(fileName: "config.json", path: "Config/config.json", matches: [
+            SearchResultLine(lineNumber: 3, text: "\"name\": \"MyApp\",", matches: [])
+        ]),
+        FileSearchResult(fileName: "utils.swift", path: "Utils/utils.swift", matches: [
+            SearchResultLine(lineNumber: 15, text: "func helper() -> String {", matches: []),
+            SearchResultLine(lineNumber: 16, text: "    return \"helper\"", matches: []),
+            SearchResultLine(lineNumber: 17, text: "}", matches: []),
+            SearchResultLine(lineNumber: 20, text: "func another() -> Int {", matches: [])
+        ])
+    ]
+    
+    @State private var searchHistory: [String] = ["previous search", "another query", "function definition"]
+    @State private var showHistory: Bool = false
+    
+    // MARK: - Loading State
+    @State private var isSearching: Bool = false
+    
+    // MARK: - Computed Properties
+    
+    /// Returns the filtered, sorted, and limited results
+    var processedResults: [FileSearchResult] {
+        var filtered = rawResults
+        
+        // 1. Filter by binary files
+        if excludeBinaryFiles {
+            filtered = filtered.filter { result in
+                let ext = (result.fileName as NSString).pathExtension.lowercased()
+                return !binaryExtensions.contains(where: { $0.lowercased().hasSuffix(ext) })
+            }
+        }
+        
+        // 2. Filter by selected extensions
+        if !selectedExtensions.isEmpty {
+            filtered = filtered.filter { result in
+                let ext = (result.fileName as NSString).pathExtension.lowercased()
+                return selectedExtensions.contains { $0.lowercased().dropFirst() == ext }
+            }
+        }
+        
+        // 3. Sort results
+        filtered = filtered.sorted { lhs, rhs in
+            switch sortOption {
+            case .fileName:
+                return sortAscending ? lhs.fileName < rhs.fileName : lhs.fileName > rhs.fileName
+            case .path:
+                return sortAscending ? lhs.path < rhs.path : lhs.path > rhs.path
+            case .matches:
+                return sortAscending ? lhs.matches.count < rhs.matches.count : lhs.matches.count > rhs.matches.count
+            }
+        }
+        
+        // 4. Apply result limit
+        if let maxCount = resultLimit.maxCount, filtered.count > maxCount {
+            filtered = Array(filtered.prefix(maxCount))
+        }
+        
+        return filtered
+    }
+    
+    /// Group results by directory if enabled
+    var groupedResults: [(key: String, results: [FileSearchResult])] {
+        if groupByDirectory {
+            let grouped = Dictionary(grouping: processedResults) { $0.directory }
+            return grouped.sorted { $0.key < $1.key }
+        } else {
+            return [("", results: processedResults)]
+        }
+    }
+    
+    /// All unique extensions from current results
+    var availableExtensions: [String] {
+        let extensions = rawResults.map { (result: FileSearchResult) -> String in
+            let ext = (result.fileName as NSString).pathExtension
+            return ext.isEmpty ? "noext" : ext.lowercased()
+        }
+        return Array(Set(extensions)).sorted()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Title / Header
+            HStack {
+                Text("SEARCH")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: {
+                    // Clear action
+                    searchText = ""
+                    searchManager.clearResults()
+                    debounceCancellable?.cancel()
+                    searchTask?.cancel()
+                }) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            
+            ScrollView {
+                VStack(spacing: 12) {
+                    // Search Inputs Section
+                    VStack(spacing: 8) {
+                        // Search Input
+                        HStack(spacing: 0) {
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .rotationEffect(showReplace ? .degrees(90) : .zero)
+                                .onTapGesture {
+                                    withAnimation {
+                                        showReplace.toggle()
+                                    }
+                                }
+                                .padding(.horizontal, 4)
+                            
+                            ZStack(alignment: .trailing) {
+                                TextField("Search", text: $searchText)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding(6)
+                                    .padding(.trailing, 60) // Space for toggles
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(4)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                HStack(spacing: 2) {
+                                    ToggleIcon(iconName: "textformat", isSelected: $matchCase)
+                                    ToggleIcon(iconName: "underline", isSelected: $matchWholeWord)
+                                    ToggleIcon(iconName: "staroflife", isSelected: $useRegex)
+                                }
+                                .padding(.trailing, 4)
+                            }
+                        }
+                        
+                        // Replace Input
+                        if showReplace {
+                            HStack(spacing: 0) {
+                                Spacer().frame(width: 20)
+                                ZStack(alignment: .trailing) {
+                                    TextField("Replace", text: $replaceText)
+                                        .textFieldStyle(PlainTextFieldStyle())
+                                        .padding(6)
+                                        .padding(.trailing, 24)
+                                        .background(Color(nsColor: .controlBackgroundColor))
+                                        .cornerRadius(4)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                        )
+                                    
+                                    Button(action: { performReplace() }) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.trailing, 6)
+                                    .disabled(searchManager.isSearching || searchManager.results.isEmpty)
+                                }
+                            }
+                        }
+                        
+                        // Search button row (manual search still available)
+                        HStack {
+                            Spacer().frame(width: 20)
+                            Button(action: {
+                                debouncedSearch(immediate: true)
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "magnifyingglass")
+                                    Text("Search")
+                                }
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(searchText.count < 2 || isSearching)
+                            .controlSize(.small)
+                            
+                            if isSearching {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .padding(.leading, 8)
+                                Text("Searching...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            if !convertedResults.isEmpty {
+                                Text("\(convertedResults.count) files, \(convertedResults.map { $0.matches.count }.reduce(0, +)) matches")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.leading, 20)
+                        
+                        // Files to Include/Exclude Toggle
+                        HStack {
+                            Spacer().frame(width: 20)
+                            Text("files to include/exclude")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .onTapGesture {
+                            withAnimation {
+                                showDetails.toggle()
+                            }
+                        }
+                        
+                        if showDetails {
+                            VStack(spacing: 8) {
+                                TextField("files to include", text: $filesToInclude)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding(6)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(4)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                TextField("files to exclude", text: $filesToExclude)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding(6)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(4)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    Divider()
+                    
+                    // Results Section
+                    if processedResults.isEmpty && !searchText.isEmpty && !isSearching {
+                        Text(searchText.count < 2 ? "Type at least 2 characters to search" : "No results found")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 20)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Results Header with Filters
+                            SearchResultsHeader(
+                                resultCount: processedResults.count,
+                                totalCount: rawResults.count,
+                                sortOption: $sortOption,
+                                sortAscending: $sortAscending,
+                                selectedExtensions: $selectedExtensions,
+                                groupByDirectory: $groupByDirectory,
+                                showFilePath: $showFilePath,
+                                resultLimit: $resultLimit,
+                                excludeBinaryFiles: $excludeBinaryFiles,
+                                showFilters: $showFilters,
+                                availableExtensions: availableExtensions,
+                                onCollapseAll: collapseAll,
+                                onExpandAll: expandAll
+                            )
+                            
+                            // Results List
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                if groupByDirectory {
+                                    ForEach(groupedResults, id: \.key) { group in
+                                        if !group.key.isEmpty {
+                                            DirectoryGroupHeader(directory: group.key, count: group.results.count)
+                                        }
+                                        ForEach(group.results) { fileResult in
+                                            FileResultRow(
+                                                fileResult: fileResult,
+                                                showPath: showFilePath,
+                                                onMatchSelected: onResultSelected
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    ForEach(processedResults) { fileResult in
+                                        FileResultRow(
+                                            fileResult: fileResult,
+                                            showPath: showFilePath
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 20)
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear(perform: onAppear)
+        .onDisappear(perform: onDisappear)
+    }
+    
+    // MARK: - Lifecycle
+    
+    private func setupDebouncedSearch() {
+        // Use Combine to debounce search text changes
+        debounceCancellable = $searchText
+            .debounce(for: debounceInterval, scheduler: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak searchManager] newText in
+                guard newText.count >= 2 else {
+                    // Clear results if text is too short
+                    searchManager?.clearResults()
+                    return
+                }
+                performDebouncedSearch(query: newText)
+            }
+    }
+    
+    // MARK: - Debounced Search
+    
+    private func debouncedSearch(immediate: Bool = false) {
+        // Cancel any pending debounce
+        debounceCancellable?.cancel()
+        
+        if immediate {
+            performDebouncedSearch(query: searchText)
+        } else {
+            // Re-setup the debounce publisher
+            setupDebouncedSearch()
+        }
+    }
+    
+    private func performDebouncedSearch(query: String) {
+        // Cancel any existing search task
+        searchTask?.cancel()
+        
+        guard query.count >= 2 else { return }
+        
+        isSearching = true
+        
+        // Build search options from UI state
+        let options = SearchManager.SearchOptions(
+            isCaseSensitive: matchCase,
+            isWholeWord: matchWholeWord,
+            isRegex: useRegex
+        )
+        
+        // Build include/exclude globs
+        let includeGlobs = filesToInclude
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        let excludeGlobs = filesToExclude
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        let searchQuery = SearchManager.SearchQuery(
+            text: query,
+            options: options,
+            includeGlobs: includeGlobs,
+            excludeGlobs: excludeGlobs
+        )
+        
+        // Perform search on background task with cancellation support
+        searchTask = Task { [weak searchManager] in
+            defer { isSearching = false }
+            
+            guard let manager = searchManager else { return }
+            
+            // Check for cancellation before starting
+            guard !Task.isCancelled else { return }
+            
+            await manager.search(in: rootURL, query: searchQuery)
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func collapseAll() {
+        // In a real implementation, this would update the rawResults
+        // For now, this is a placeholder for the collapse action
+        print("Collapse all files")
+    }
+    
+    private func expandAll() {
+        // In a real implementation, this would update the rawResults
+        // For now, this is a placeholder for the expand action
+        print("Expand all files")
+    }
+    
+    // MARK: - Legacy Search Functions (kept for reference)
+    
+    private func performSearch() {
+        debouncedSearch(immediate: true)
+    }
+    
+    private func performReplace() {
+        guard !searchText.isEmpty && !replaceText.isEmpty else { return }
+        
+        let options = SearchManager.SearchOptions(
+            isCaseSensitive: matchCase,
+            isWholeWord: matchWholeWord,
+            isRegex: useRegex
+        )
+        
+        let includeGlobs = filesToInclude
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        let excludeGlobs = filesToExclude
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        let query = SearchManager.SearchQuery(
+            text: searchText,
+            options: options,
+            includeGlobs: includeGlobs,
+            excludeGlobs: excludeGlobs
+        )
+        
+        Task {
+            do {
+                let result = try await searchManager.replace(in: rootURL, query: query, replacement: replaceText)
+                print("Replace completed: \(result.replacements) replacements in \(result.filesTouched) files")
+            } catch {
+                print("Replace failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func onAppear() {
+        setupDebouncedSearch()
+    }
+    
+    private func onDisappear() {
+        // Clean up
+        debounceCancellable?.cancel()
+        searchTask?.cancel()
+    }
+    
+    // Convert SearchManager results to view model
+    private var convertedResults: [FileSearchResult] {
+        searchManager.results.map { fileMatch in
+            let fileName = URL(fileURLWithPath: fileMatch.filePath).lastPathComponent
+            let matches = fileMatch.matches.map { match in
+                SearchResultLine(
+                    lineNumber: match.location.line,
+                    text: match.preview,
+                    matches: []
+                )
+            }
+            return FileSearchResult(
+                fileName: fileName,
+                path: fileMatch.filePath,
+                matches: matches,
+                isExpanded: true
+            )
+        }
+    }
+    
+    /// Returns the filtered, sorted, and limited results from SearchManager
+    private var rawResults: [FileSearchResult] {
+        convertedResults
+    }
+}
+
+struct ToggleIcon: View {
+    let iconName: String
+    @Binding var isSelected: Bool
+    var tooltip: String? = nil
+    
+    var body: some View {
+        Button(action: {
+            isSelected.toggle()
+        }) {
+            Image(systemName: iconName)
+                .font(.caption2)
+                .padding(4)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .foregroundColor(isSelected ? .accentColor : .secondary)
+                .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+        .help(tooltip ?? "")
+    }
+}
+
+struct FileResultRow: View {
+    let fileResult: FileSearchResult
+    let showPath: Bool
+    let onMatchSelected: ((String, Int) -> Void)?
+    @State private var isExpanded: Bool = true
+    @State private var hoveredMatchId: UUID?
+    
+    init(fileResult: FileSearchResult, showPath: Bool, onMatchSelected: ((String, Int) -> Void)? = nil) {
+        self.fileResult = fileResult
+        self.showPath = showPath
+        self.onMatchSelected = onMatchSelected
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // File Header
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    fileResult.isExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: fileResult.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .frame(width: 12)
+                        .foregroundColor(.secondary)
+                    
+                    Image(systemName: "doc.text")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text(fileResult.fileName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text(fileResult.path)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    
+                    Spacer()
+                    
+                    Text("\(fileResult.matches.count)")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.2))
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color.secondary.opacity(0.05))
+            
+            // Matches
+            if isExpanded {
+                ForEach(fileResult.matches) { match in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(match.lineNumber)")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                        
+                        Text(match.text)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(matchBackground(for: match))
+                    .onTapGesture {
+                        onMatchSelected?(fileResult.path, match.lineNumber)
+                    }
+                    .onHover { isHovered in
+                        if isHovered {
+                            hoveredMatchId = match.id
+                        } else if hoveredMatchId == match.id {
+                            hoveredMatchId = nil
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func matchBackground(for match: SearchResultLine) -> Color {
+        if hoveredMatchId == match.id {
+            return Color.accentColor.opacity(0.15)
+        }
+        return Color(nsColor: .controlBackgroundColor).opacity(0.5)
+    }
+}
+
+// MARK: - Keyboard Shortcut Helper
+extension View {
+    /// Adds a keyboard shortcut that executes an action when triggered
+    @ViewBuilder
+    func keyboardShortcut(_ key: KeyEquivalent, modifiers: EventModifiers, action: @escaping () -> Void) -> some View {
+        self
+            .background(
+                KeyboardShortcutHandler(key: key, modifiers: modifiers, action: action)
+            )
+    }
+}
+
+// MARK: - Keyboard Shortcut Handler
+struct KeyboardShortcutHandler: NSViewRepresentable {
+    let key: KeyEquivalent
+    let modifiers: EventModifiers
+    let action: () -> Void
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Register shortcut in next run loop
+        DispatchQueue.main.async {
+            context.coordinator.registerShortcut(for: nsView)
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(key: key, modifiers: modifiers, action: action)
+    }
+    
+    class Coordinator {
+        let key: KeyEquivalent
+        let modifiers: EventModifiers
+        let action: () -> Void
+        var localMonitor: Any?
+        
+        init(key: KeyEquivalent, modifiers: EventModifiers, action: @escaping () -> Void) {
+            self.key = key
+            self.modifiers = modifiers
+            self.action = action
+        }
+        
+        func registerShortcut(for view: NSView) {
+            guard localMonitor == nil else { return }
+            
+            let keyCode = keyToKeyCode(key)
+            let modifierFlags = eventModifiersToFlags(modifiers)
+            
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self = self else { return event }
+                
+                if event.keyCode == keyCode && 
+                   event.modifierFlags.intersection(.deviceIndependentFlagsMask) == modifierFlags {
+                    self.action()
+                    return nil // Consume the event
+                }
+                return event
+            }
+        }
+        
+        deinit {
+            if let monitor = localMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+        
+        private func keyToKeyCode(_ key: KeyEquivalent) -> UInt16 {
+            switch key {
+            case .return: return 36
+            case .escape: return 53
+            case .upArrow: return 126
+            case .downArrow: return 125
+            case .leftArrow: return 123
+            case .rightArrow: return 124
+            case .space: return 49
+            case .tab: return 48
+            case .delete: return 51
+            case .deleteForward: return 117
+            case .home: return 115
+            case .end: return 119
+            case .pageUp: return 116
+            case .pageDown: return 121
+            case .clear: return 71
+            default:
+                // For character keys, we need to check the characters
+                if let char = key.character {
+                    // Map common letters to key codes
+                    let upperChar = String(char).uppercased()
+                    switch upperChar {
+                    case "A": return 0
+                    case "B": return 11
+                    case "C": return 8
+                    case "D": return 2
+                    case "E": return 14
+                    case "F": return 3
+                    case "G": return 5
+                    case "H": return 4
+                    case "I": return 34
+                    case "J": return 38
+                    case "K": return 40
+                    case "L": return 37
+                    case "M": return 46
+                    case "N": return 45
+                    case "O": return 31
+                    case "P": return 35
+                    case "Q": return 12
+                    case "R": return 15
+                    case "S": return 1
+                    case "T": return 17
+                    case "U": return 32
+                    case "V": return 9
+                    case "W": return 13
+                    case "X": return 7
+                    case "Y": return 16
+                    case "Z": return 6
+                    default: return 0
+                    }
+                }
+                return 0
+            }
+        }
+        
+        private func eventModifiersToFlags(_ modifiers: EventModifiers) -> NSEvent.ModifierFlags {
+            var flags: NSEvent.ModifierFlags = []
+            if modifiers.contains(.command) { flags.insert(.command) }
+            if modifiers.contains(.option) { flags.insert(.option) }
+            if modifiers.contains(.control) { flags.insert(.control) }
+            if modifiers.contains(.shift) { flags.insert(.shift) }
+            if modifiers.contains(.function) { flags.insert(.function) }
+            return flags
+        }
+    }
+}
+
+extension KeyEquivalent {
+    var character: Character? {
+        // Try to extract the character from the key equivalent
+        let mirror = Mirror(reflecting: self)
+        if let label = mirror.children.first?.label {
+            return label.first
+        }
+        return nil
+    }
+}
+
+// Helper to use NSColor in SwiftUI on macOS or fallback on iOS if needed
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+typealias NSColor = UIColor
+
+extension Color {
+    init(nsColor: UIColor) {
+        self.init(uiColor: nsColor)
+    }
+}
+
+extension UIColor {
+    static var controlBackgroundColor: UIColor {
+        return .systemGray6 // Approximation
+    }
+    static var windowBackgroundColor: UIColor {
+        return .systemBackground
+    }
+}
+#endif

@@ -1,0 +1,145 @@
+import SwiftUI
+
+class FileSystemNavigator: ObservableObject {
+    @Published var fileTree: FileTreeNode?
+    @Published var expandedPaths: Set<String> = []
+    
+    func loadFileTree(at url: URL) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let tree = self.buildFileTree(at: url)
+            DispatchQueue.main.async {
+                self.fileTree = tree
+                if let tree = tree {
+                    self.expandedPaths.insert(tree.url.path)
+                }
+            }
+        }
+    }
+    
+    // MARK: - File Operations (Create / Delete)
+    
+    /// BUG-009: Create a new empty file in a folder and refresh the tree.
+    func createFile(name: String, in folder: URL) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let didStart = folder.startAccessingSecurityScopedResource()
+            defer { if didStart { folder.stopAccessingSecurityScopedResource() } }
+            
+            let fileURL = folder.appendingPathComponent(name, isDirectory: false)
+            let fileManager = FileManager.default
+            
+            // Create empty file if it doesn't exist.
+            if !fileManager.fileExists(atPath: fileURL.path) {
+                _ = fileManager.createFile(atPath: fileURL.path, contents: Data(), attributes: nil)
+            }
+            
+            DispatchQueue.main.async {
+                self.refreshFileTree()
+            }
+        }
+    }
+    
+    /// BUG-009: Create a new folder in a folder and refresh the tree.
+    func createFolder(name: String, in folder: URL) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let didStart = folder.startAccessingSecurityScopedResource()
+            defer { if didStart { folder.stopAccessingSecurityScopedResource() } }
+            
+            let folderURL = folder.appendingPathComponent(name, isDirectory: true)
+            let fileManager = FileManager.default
+            
+            do {
+                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: false)
+            } catch {
+                print("Error creating folder at \(folderURL): \(error)")
+            }
+            
+            DispatchQueue.main.async {
+                self.refreshFileTree()
+            }
+        }
+    }
+    
+    /// BUG-010: Delete a file or folder and refresh the tree.
+    @discardableResult
+    func deleteItem(at url: URL) -> Bool {
+        var success = false
+        
+        // Try to access the item directly; if that fails, try its parent folder (common for child URLs).
+        let didStartItem = url.startAccessingSecurityScopedResource()
+        let parentURL = url.deletingLastPathComponent()
+        let didStartParent = (!didStartItem) ? parentURL.startAccessingSecurityScopedResource() : false
+        
+        defer {
+            if didStartItem { url.stopAccessingSecurityScopedResource() }
+            if didStartParent { parentURL.stopAccessingSecurityScopedResource() }
+        }
+        
+        do {
+            try FileManager.default.removeItem(at: url) // works for files and directories
+            success = true
+        } catch {
+            print("Error deleting item at \(url): \(error)")
+            success = false
+        }
+        
+        DispatchQueue.main.async {
+            self.refreshFileTree()
+        }
+        
+        return success
+    }
+    
+    // ADD: Refresh file tree method
+    func refreshFileTree() {
+        guard let currentTree = fileTree else { return }
+        let rootURL = currentTree.url
+        
+        // Clear expanded paths except root
+        let rootPath = rootURL.path
+        expandedPaths = expandedPaths.filter { $0 == rootPath }
+        
+        // Reload the tree
+        loadFileTree(at: rootURL)
+    }
+    
+    private func buildFileTree(at url: URL) -> FileTreeNode? {
+        let fileManager = FileManager.default
+        
+        do {
+            let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey, .nameKey])
+            let isDirectory = resourceValues.isDirectory ?? false
+            let name = resourceValues.name ?? url.lastPathComponent
+            
+            if isDirectory {
+                let contents = try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
+                let children = contents.compactMap { buildFileTree(at: $0) }.sorted { $0.name < $1.name }
+                return FileTreeNode(url: url, name: name, isDirectory: true, children: children)
+            } else {
+                return FileTreeNode(url: url, name: name, isDirectory: false, children: [])
+            }
+        } catch {
+            print("Error building file tree at \(url): \(error)")
+            return nil
+        }
+    }
+    
+    func toggleExpanded(path: String) {
+        if expandedPaths.contains(path) {
+            expandedPaths.remove(path)
+        } else {
+            expandedPaths.insert(path)
+        }
+    }
+}
+
+struct FileTreeNode: Identifiable {
+    let id = UUID()
+    let url: URL
+    let name: String
+    let isDirectory: Bool
+    let children: [FileTreeNode]
+    
+    var fileExtension: String {
+        (name as NSString).pathExtension.lowercased()
+    }
+}

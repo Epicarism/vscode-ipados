@@ -1,0 +1,72 @@
+import SwiftUI
+
+struct OutputView: View {
+    @State private var outputLog: [String] = [
+        "[10:42:01] Starting build...",
+        "[10:42:01] Compiling 'VSCodeiPadOS' source files...",
+        "[10:42:02] Analyzing dependencies...",
+        "[10:42:02] Linking binary...",
+        "[10:42:03] Build succeeded in 2.4s",
+        "",
+        "[10:45:15] Git status: On branch main",
+        "[10:45:15] Your branch is up to date with 'origin/main'.",
+        "[10:45:15] nothing to commit, working tree clean"
+    ]
+    @State private var selectedChannel = "Tasks"
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Menu {
+                    Button("Tasks") { selectedChannel = "Tasks" }
+                    Button("Git") { selectedChannel = "Git" }
+                    Button("Extensions") { selectedChannel = "Extensions" }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(selectedChannel)
+                            .font(.system(size: 11))
+                            .foregroundColor(.primary)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(UIColor.tertiarySystemFill))
+                    .cornerRadius(4)
+                }
+                
+                Spacer()
+                
+                Button(action: { outputLog = [] }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .help("Clear Output")
+                
+                Button(action: { }) {
+                    Image(systemName: "lock.open") // Auto-scroll toggle placeholder
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(6)
+            .background(Color(UIColor.secondarySystemBackground))
+            
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(0..<outputLog.count, id: \.self) { i in
+                        Text(outputLog[i])
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(8)
+            }
+        }
+        .background(Color(UIColor.systemBackground))
+    }
+}

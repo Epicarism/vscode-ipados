@@ -11,81 +11,100 @@ import SwiftUI
 /// Represents a single search result
 struct SearchResult: Identifiable {
     let id = UUID()
+
+    /// Full path for display + identity. For unsaved tabs, this may be the file name.
     let filePath: String
+
+    /// Display name (usually lastPathComponent)
     let fileName: String
+
+    /// Backing URL when available (workspace/opened files)
+    let url: URL?
+
+    /// 1-based line number
     let lineNumber: Int
+
+    /// The full line content containing the match
     let lineContent: String
+
+    /// Match range in String indices
     let matchRange: Range<String.Index>
+
+    /// Match range in UTF16 space (UITextView / NSAttributedString compatible)
+    let matchNSRange: NSRange
+
     let contextBefore: String?
     let contextAfter: String?
 }
 
 /// View model for Find/Replace functionality
-class FindViewModel: ObservableObject {
+final class FindViewModel: ObservableObject {
     @Published var searchQuery: String = ""
     @Published var replaceQuery: String = ""
     @Published var searchResults: [SearchResult] = []
     @Published var currentResultIndex: Int = 0
     @Published var isSearching: Bool = false
     @Published var isReplaceMode: Bool = false
-    
+
     // Search options
     @Published var isCaseSensitive: Bool = false
     @Published var isWholeWord: Bool = false
     @Published var useRegex: Bool = false
     @Published var searchInSelection: Bool = false
-    
+
     // Search scope
     @Published var searchScope: SearchScope = .currentFile
-    
+
     enum SearchScope: String, CaseIterable {
         case currentFile = "Current File"
         case openFiles = "Open Files"
         case workspace = "Workspace"
     }
-    
+
+    /// Bound externally by EditorCore
+    weak var editorCore: EditorCore?
+
     private var searchWorkItem: DispatchWorkItem?
-    
+
+    // MARK: - Public API
+
     /// Performs search with current query
     func performSearch() {
         // Cancel any pending search
         searchWorkItem?.cancel()
-        
+
         guard !searchQuery.isEmpty else {
             searchResults = []
+            currentResultIndex = 0
+            isSearching = false
             return
         }
-        
+
         isSearching = true
-        
+
         // Debounce search
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            
+
+            let results = self.executeSearch()
             DispatchQueue.main.async {
-                self.searchResults = self.executeSearch()
+                self.searchResults = results
+                self.currentResultIndex = min(self.currentResultIndex, max(0, results.count - 1))
                 self.isSearching = false
             }
         }
-        
+
         searchWorkItem = workItem
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3, execute: workItem)
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
-    
-    /// Executes the actual search
-    private func executeSearch() -> [SearchResult] {
-        // This would integrate with the actual file system and editor
-        // For now, return mock results
-        return []
-    }
-    
+
     /// Moves to next search result
     func nextResult() {
         guard !searchResults.isEmpty else { return }
         currentResultIndex = (currentResultIndex + 1) % searchResults.count
         jumpToResult(at: currentResultIndex)
     }
-    
+
     /// Moves to previous search result
     func previousResult() {
         guard !searchResults.isEmpty else { return }
@@ -96,49 +115,252 @@ class FindViewModel: ObservableObject {
         }
         jumpToResult(at: currentResultIndex)
     }
-    
-    /// Jumps to a specific result
+
+    /// Jumps to a specific result (opens file if needed, selects match)
     func jumpToResult(at index: Int) {
-        guard index < searchResults.count else { return }
+        guard index >= 0, index < searchResults.count else { return }
+        guard let core = editorCore else { return }
+
         let result = searchResults[index]
-        // This would integrate with the editor to jump to the file/line
-        print("Jump to \(result.fileName):\(result.lineNumber)")
+
+        // Ensure file is open/active.
+        if let url = result.url {
+            core.openFile(from: url)
+        } else if let tab = core.tabs.first(where: { $0.fileName == result.fileName }) {
+            core.selectTab(id: tab.id)
+        }
+
+        // Request selection reveal.
+        core.requestedSelection = result.matchNSRange
     }
-    
-    /// Replaces current occurrence
+
+    /// Replaces current occurrence (active tab)
     func replaceCurrent() {
         guard isReplaceMode,
-              currentResultIndex < searchResults.count else { return }
-        
-        // This would integrate with the editor to replace text
+              currentResultIndex >= 0,
+              currentResultIndex < searchResults.count,
+              let core = editorCore,
+              let regex = buildRegex()
+        else { return }
+
         let result = searchResults[currentResultIndex]
-        print("Replace at \(result.fileName):\(result.lineNumber)")
-        
-        // Remove from results and move to next
-        searchResults.remove(at: currentResultIndex)
-        if currentResultIndex >= searchResults.count && !searchResults.isEmpty {
-            currentResultIndex = searchResults.count - 1
+
+        // Only replace in open tabs / current file (workspace files can be opened first).
+        if let url = result.url {
+            core.openFile(from: url)
+        }
+
+        guard let tabIndex = core.activeTabIndex else { return }
+        var content = core.tabs[tabIndex].content
+
+        guard let match = regex.firstMatch(in: content, options: [], range: result.matchNSRange) else { return }
+        let replacement: String
+        if useRegex {
+            replacement = regex.replacementString(for: match, in: content, offset: 0, template: replaceQuery)
+        } else {
+            replacement = replaceQuery
+        }
+
+        let mutable = NSMutableString(string: content)
+        mutable.replaceCharacters(in: match.range, with: replacement)
+        content = mutable as String
+
+        core.updateActiveTabContent(content)
+
+        // Refresh results and keep selection moving.
+        performSearch()
+        if currentResultIndex < searchResults.count {
+            jumpToResult(at: currentResultIndex)
         }
     }
-    
-    /// Replaces all occurrences
+
+    /// Replaces all occurrences in the chosen scope.
     func replaceAll() {
-        guard isReplaceMode else { return }
-        
-        // This would integrate with the editor to replace all
-        let count = searchResults.count
-        searchResults.removeAll()
-        currentResultIndex = 0
-        
-        print("Replaced \(count) occurrences")
+        guard isReplaceMode,
+              let core = editorCore,
+              let regex = buildRegex()
+        else { return }
+
+        switch searchScope {
+        case .currentFile:
+            guard let idx = core.activeTabIndex else { return }
+            let content = core.tabs[idx].content
+            let replaced = regex.stringByReplacingMatches(
+                in: content,
+                range: NSRange(location: 0, length: (content as NSString).length),
+                withTemplate: replaceQuery
+            )
+            core.updateActiveTabContent(replaced)
+
+        case .openFiles:
+            for i in core.tabs.indices {
+                let content = core.tabs[i].content
+                let replaced = regex.stringByReplacingMatches(
+                    in: content,
+                    range: NSRange(location: 0, length: (content as NSString).length),
+                    withTemplate: replaceQuery
+                )
+                if replaced != content {
+                    core.tabs[i].content = replaced
+                    if core.tabs[i].url != nil { core.tabs[i].isUnsaved = true }
+                }
+            }
+
+        case .workspace:
+            // Best-effort: replace in open tabs + on-disk workspace files.
+            var urls: [URL] = []
+            if let tree = core.fileNavigator?.fileTree {
+                urls = collectFileURLs(from: tree)
+            }
+
+            for url in urls {
+                // If open, update tab.
+                if let tabIndex = core.tabs.firstIndex(where: { $0.url == url }) {
+                    let content = core.tabs[tabIndex].content
+                    let replaced = regex.stringByReplacingMatches(
+                        in: content,
+                        range: NSRange(location: 0, length: (content as NSString).length),
+                        withTemplate: replaceQuery
+                    )
+                    if replaced != content {
+                        core.tabs[tabIndex].content = replaced
+                        core.tabs[tabIndex].isUnsaved = true
+                    }
+                    continue
+                }
+
+                // Otherwise, attempt to update on disk.
+                if let content = try? String(contentsOf: url, encoding: .utf8) {
+                    let replaced = regex.stringByReplacingMatches(
+                        in: content,
+                        range: NSRange(location: 0, length: (content as NSString).length),
+                        withTemplate: replaceQuery
+                    )
+                    if replaced != content {
+                        try? replaced.write(to: url, atomically: true, encoding: .utf8)
+                    }
+                }
+            }
+        }
+
+        performSearch()
     }
-    
+
     /// Clears search
     func clearSearch() {
         searchQuery = ""
         replaceQuery = ""
         searchResults = []
         currentResultIndex = 0
+        isSearching = false
+    }
+
+    // MARK: - Core search implementation
+
+    private func executeSearch() -> [SearchResult] {
+        guard let core = editorCore else { return [] }
+        guard let regex = buildRegex() else { return [] }
+
+        struct Target {
+            let url: URL?
+            let filePath: String
+            let fileName: String
+            let content: String
+        }
+
+        let targets: [Target] = {
+            switch searchScope {
+            case .currentFile:
+                guard let tab = core.activeTab else { return [] }
+                let path = tab.url?.path ?? tab.fileName
+                return [Target(url: tab.url, filePath: path, fileName: tab.fileName, content: tab.content)]
+
+            case .openFiles:
+                return core.tabs.map { tab in
+                    let path = tab.url?.path ?? tab.fileName
+                    return Target(url: tab.url, filePath: path, fileName: tab.fileName, content: tab.content)
+                }
+
+            case .workspace:
+                guard let tree = core.fileNavigator?.fileTree else { return [] }
+                let urls = collectFileURLs(from: tree)
+                return urls.compactMap { url in
+                    guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+                    return Target(url: url, filePath: url.path, fileName: url.lastPathComponent, content: content)
+                }
+            }
+        }()
+
+        var results: [SearchResult] = []
+        results.reserveCapacity(64)
+
+        for target in targets {
+            let text = target.content
+            let nsText = text as NSString
+
+            let searchRange: NSRange
+            if searchInSelection,
+               searchScope == .currentFile,
+               let selection = core.currentSelectionRange {
+                searchRange = selection
+            } else {
+                searchRange = NSRange(location: 0, length: nsText.length)
+            }
+
+            let matches = regex.matches(in: text, options: [], range: searchRange)
+            for match in matches {
+                let r = match.range
+                guard let swiftRange = Range(r, in: text) else { continue }
+
+                // 1-based line number
+                let prefix = nsText.substring(to: min(r.location, nsText.length))
+                let lineNumber = prefix.components(separatedBy: "\n").count
+
+                // Full line content
+                let lineRange = nsText.lineRange(for: r)
+                var lineContent = nsText.substring(with: lineRange)
+                lineContent = lineContent.trimmingCharacters(in: .newlines)
+
+                results.append(
+                    SearchResult(
+                        filePath: target.filePath,
+                        fileName: target.fileName,
+                        url: target.url,
+                        lineNumber: lineNumber,
+                        lineContent: lineContent,
+                        matchRange: swiftRange,
+                        matchNSRange: r,
+                        contextBefore: nil,
+                        contextAfter: nil
+                    )
+                )
+            }
+        }
+
+        return results
+    }
+
+    private func buildRegex() -> NSRegularExpression? {
+        guard !searchQuery.isEmpty else { return nil }
+
+        let pattern: String
+        if useRegex {
+            pattern = searchQuery
+        } else {
+            pattern = NSRegularExpression.escapedPattern(for: searchQuery)
+        }
+
+        let finalPattern = isWholeWord ? "\\b\(pattern)\\b" : pattern
+        let options: NSRegularExpression.Options = isCaseSensitive ? [] : [.caseInsensitive]
+
+        return try? NSRegularExpression(pattern: finalPattern, options: options)
+    }
+
+    private func collectFileURLs(from node: FileTreeNode) -> [URL] {
+        if node.isDirectory {
+            return node.children.flatMap { collectFileURLs(from: $0) }
+        }
+        return [node.url]
     }
 }
 

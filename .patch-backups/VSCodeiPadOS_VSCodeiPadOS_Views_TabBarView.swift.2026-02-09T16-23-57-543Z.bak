@@ -1,0 +1,222 @@
+//  TabBarView.swift
+//  VSCodeiPadOS
+//
+//  Created by AI Assistant
+//  Improved Tab Bar View
+//
+
+import SwiftUI
+
+struct TabBarView: View {
+    @Binding var tabs: [Tab]
+    @Binding var activeTabId: UUID?
+    @ObservedObject var themeManager: ThemeManager
+
+    // Drag and drop support
+    @State private var draggedTab: Tab? = nil
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            ScrollViewReader { scrollProxy in
+                HStack(spacing: 1) {
+                    ForEach(tabs) { tab in
+                        TabItemView(
+                            tab: tab,
+                            isActive: activeTabId == tab.id,
+                            themeManager: themeManager,
+                            onClose: { closeTab(tab) },
+                            onActivate: { activateTab(tab) },
+                            onPin: { togglePin(tab) },
+                            onCloseOthers: { closeOthers(except: tab) },
+                            onCloseRight: { closeTabsToRight(of: tab) }
+                        )
+                        .id(tab.id)
+                        .onDrag {
+                            self.draggedTab = tab
+                            return NSItemProvider(object: tab.id.uuidString as NSString)
+                        }
+                        .onDrop(of: [.text], delegate: TabDropDelegate(item: tab, tabs: $tabs, draggedItem: $draggedTab))
+                    }
+                }
+                .padding(.leading, 1)
+                .onChange(of: activeTabId) { newId in
+                    if let id = newId {
+                        withAnimation {
+                            scrollProxy.scrollTo(id, anchor: .center)
+                        }
+                    }
+                }
+            }
+        }
+        .background(themeManager.currentTheme.tabBarBackground)
+        .frame(height: 35)
+    }
+
+    private func closeTab(_ tab: Tab) {
+        if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
+            tabs.remove(at: index)
+
+            // If we closed the active tab, activate another one
+            if activeTabId == tab.id {
+                if tabs.isEmpty {
+                    activeTabId = nil
+                } else {
+                    // Try to activate the tab to the right, or the last one if we closed the last one
+                    let newIndex = min(index, tabs.count - 1)
+                    activeTabId = tabs[newIndex].id
+                }
+            }
+        }
+    }
+
+    private func activateTab(_ tab: Tab) {
+        activeTabId = tab.id
+    }
+
+    private func togglePin(_ tab: Tab) {
+        if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
+            tabs[index].isPinned.toggle()
+            tabs[index].isPreview = false
+        }
+    }
+
+    private func closeOthers(except tab: Tab) {
+        tabs = tabs.filter { $0.id == tab.id || $0.isPinned }
+        if activeTabId != tab.id {
+            activeTabId = tab.id
+        }
+    }
+
+    private func closeTabsToRight(of tab: Tab) {
+        if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
+            // Keep tabs up to index, plus pinned tabs that might be to the right (though pinned tabs should be on left)
+            let tabsToKeep = tabs.prefix(through: index)
+            let remainingTabs = tabs.suffix(from: index + 1).filter { $0.isPinned }
+            tabs = Array(tabsToKeep) + Array(remainingTabs)
+        }
+    }
+}
+
+struct TabItemView: View {
+    let tab: Tab
+    let isActive: Bool
+    @ObservedObject var themeManager: ThemeManager
+    let onClose: () -> Void
+    let onActivate: () -> Void
+    let onPin: () -> Void
+    let onCloseOthers: () -> Void
+    let onCloseRight: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // File icon
+            if !tab.isPinned {
+                Image(systemName: tab.language.iconName)
+                    .foregroundColor(themeManager.color(for: tab.fileName))
+                    .font(.system(size: 14))
+            }
+
+            // Tab title (hidden if pinned)
+            if tab.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
+            } else {
+                Text(tab.fileName)
+                    .font(.system(size: 13))
+                    .modifier(ConditionalItalicModifier(isItalic: tab.isPreview))
+                    .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
+                    .lineLimit(1)
+            }
+
+            if !tab.isPinned {
+                Spacer()
+
+                ZStack {
+                    if tab.isUnsaved {
+                        Circle()
+                            .fill(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
+                            .frame(width: 8, height: 8)
+                            .opacity(isHovering ? 0 : 1)
+                    }
+
+                    if isHovering || !tab.isUnsaved {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
+                                .frame(width: 16, height: 16)
+                                .background(Color.black.opacity(0.1))
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(isHovering ? 1 : 0)
+                    }
+                }
+                .frame(width: 16, height: 16)
+            }
+        }
+        .padding(.horizontal, tab.isPinned ? 12 : 10)
+        .padding(.vertical, 8)
+        .frame(width: tab.isPinned ? 40 : 160)
+        .background(isActive ? themeManager.currentTheme.tabActiveBackground : themeManager.currentTheme.tabInactiveBackground)
+        .overlay(
+            Rectangle()
+                .fill(isActive ? themeManager.currentTheme.statusBarBackground : Color.clear)
+                .frame(height: 2),
+            alignment: .top
+        )
+        .onTapGesture { onActivate() }
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .contextMenu {
+            Button(action: onClose) { Label("Close", systemImage: "xmark") }
+            Button(action: onPin) { Label(tab.isPinned ? "Unpin" : "Pin", systemImage: "pin") }
+            Divider()
+            Button(action: onCloseOthers) { Label("Close Others", systemImage: "xmark.circle") }
+            Button(action: onCloseRight) { Label("Close to the Right", systemImage: "xmark.square") }
+        }
+    }
+}
+
+
+// MARK: - Tab Drop Delegate
+
+struct TabDropDelegate: DropDelegate {
+    let item: Tab
+    @Binding var tabs: [Tab]
+    @Binding var draggedItem: Tab?
+    
+    func performDrop(info: DropInfo) -> Bool {
+        draggedItem = nil
+        return true
+    }
+    
+    func dropEntered(info: DropInfo) {
+        guard let draggedItem = draggedItem,
+              draggedItem.id != item.id,
+              let fromIndex = tabs.firstIndex(where: { $0.id == draggedItem.id }),
+              let toIndex = tabs.firstIndex(where: { $0.id == item.id }) else { return }
+        
+        withAnimation {
+            tabs.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+        }
+    }
+}
+
+// MARK: - Conditional Italic Modifier
+
+struct ConditionalItalicModifier: ViewModifier {
+    let isItalic: Bool
+    
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content.italic(isItalic)
+        } else {
+            content
+        }
+    }
+}

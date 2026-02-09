@@ -1,0 +1,490 @@
+import SwiftUI
+
+// MARK: - Data Models
+
+struct SearchResultLine: Identifiable {
+    let id = UUID()
+    let lineNumber: Int
+    let text: String
+    let matches: [Range<String.Index>]
+}
+
+struct FileSearchResult: Identifiable, Comparable {
+    let id = UUID()
+    let fileName: String
+    let path: String
+    let matches: [SearchResultLine]
+    var isExpanded: Bool = true
+    
+    // Computed property for directory grouping
+    var directory: String {
+        let components = path.components(separatedBy: "/")
+        return components.dropLast().joined(separator: "/")
+    }
+    
+    // Comparable implementation for sorting
+    static func < (lhs: FileSearchResult, rhs: FileSearchResult) -> Bool {
+        lhs.fileName < rhs.fileName
+    }
+}
+
+// MARK: - Sort Options
+
+enum SortOption: String, CaseIterable, Identifiable {
+    case fileName = "Filename"
+    case path = "Path"
+    case matches = "Matches"
+    
+    var id: String { self.rawValue }
+    
+    var icon: String {
+        switch self {
+        case .fileName: return "doc.text"
+        case .path: return "folder"
+        case .matches: return "number"
+        }
+    }
+}
+
+// MARK: - Result Limit
+
+enum ResultLimit: String, CaseIterable, Identifiable {
+    case top100 = "Top 100"
+    case top500 = "Top 500"
+    case all = "All"
+    
+    var id: String { self.rawValue }
+    
+    var maxCount: Int? {
+        switch self {
+        case .top100: return 100
+        case .top500: return 500
+        case .all: return nil
+        }
+    }
+}
+
+struct SearchView: View {
+    @State private var searchText: String = ""
+    @State private var replaceText: String = ""
+    @State private var filesToInclude: String = ""
+    @State private var filesToExclude: String = ""
+    
+    @State private var showReplace: Bool = false
+    @State private var showDetails: Bool = false
+    
+    @State private var matchCase: Bool = false
+    @State private var matchWholeWord: Bool = false
+    @State private var useRegex: Bool = false
+    
+    // MARK: - Sort & Filter State
+    @State private var sortOption: SortOption = .fileName
+    @State private var sortAscending: Bool = true
+    @State private var selectedExtensions: Set<String> = []
+    @State private var groupByDirectory: Bool = false
+    @State private var showFilePath: Bool = true
+    @State private var resultLimit: ResultLimit = .all
+    @State private var excludeBinaryFiles: Bool = true
+    @State private var showFilters: Bool = false
+    
+    // Common file extensions for quick filtering
+    private let commonExtensions = [".swift", ".md", ".json", ".txt", ".js", ".ts", ".html", ".css", ".py", ".rb"]
+    
+    // Binary file extensions to exclude
+    private let binaryExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".avi", ".mov", ".exe", ".dll", ".so", ".dylib", ".app", ".ipa", ".ipa", ".dmg", ".pkg", ".deb", ".rpm", ".img", ".iso", ".bin", ".dat", ".db", ".sqlite", ".sqlite3", ".ttf", ".otf", ".woff", ".woff2", ".eot"]
+    
+    // Dummy data for visualization
+    @State private var rawResults: [FileSearchResult] = [
+        FileSearchResult(fileName: "ContentView.swift", path: "Views/ContentView.swift", matches: [
+            SearchResultLine(lineNumber: 10, text: "struct ContentView: View {", matches: []),
+            SearchResultLine(lineNumber: 24, text: "    var body: some View {", matches: [])
+        ]),
+        FileSearchResult(fileName: "SidebarView.swift", path: "Views/Sidebar/SidebarView.swift", matches: [
+            SearchResultLine(lineNumber: 5, text: "struct SidebarView: View {", matches: [])
+        ]),
+        FileSearchResult(fileName: "README.md", path: "Documentation/README.md", matches: [
+            SearchResultLine(lineNumber: 1, text: "# Project Documentation", matches: []),
+            SearchResultLine(lineNumber: 5, text: "## Getting Started", matches: []),
+            SearchResultLine(lineNumber: 10, text: "### Installation", matches: [])
+        ]),
+        FileSearchResult(fileName: "config.json", path: "Config/config.json", matches: [
+            SearchResultLine(lineNumber: 3, text: "\"name\": \"MyApp\",", matches: [])
+        ]),
+        FileSearchResult(fileName: "utils.swift", path: "Utils/utils.swift", matches: [
+            SearchResultLine(lineNumber: 15, text: "func helper() -> String {", matches: []),
+            SearchResultLine(lineNumber: 16, text: "    return \"helper\"", matches: []),
+            SearchResultLine(lineNumber: 17, text: "}", matches: []),
+            SearchResultLine(lineNumber: 20, text: "func another() -> Int {", matches: [])
+        ])
+    ]
+    
+    @State private var searchHistory: [String] = ["previous search", "another query", "function definition"]
+    @State private var showHistory: Bool = false
+    
+    // MARK: - Computed Properties
+    
+    /// Returns the filtered, sorted, and limited results
+    var processedResults: [FileSearchResult] {
+        var filtered = rawResults
+        
+        // 1. Filter by binary files
+        if excludeBinaryFiles {
+            filtered = filtered.filter { result in
+                let ext = (result.fileName as NSString).pathExtension.lowercased()
+                return !binaryExtensions.contains(where: { $0.lowercased().hasSuffix(ext) })
+            }
+        }
+        
+        // 2. Filter by selected extensions
+        if !selectedExtensions.isEmpty {
+            filtered = filtered.filter { result in
+                let ext = (result.fileName as NSString).pathExtension.lowercased()
+                return selectedExtensions.contains { $0.lowercased().dropFirst() == ext }
+            }
+        }
+        
+        // 3. Sort results
+        filtered = filtered.sorted { lhs, rhs in
+            switch sortOption {
+            case .fileName:
+                return sortAscending ? lhs.fileName < rhs.fileName : lhs.fileName > rhs.fileName
+            case .path:
+                return sortAscending ? lhs.path < rhs.path : lhs.path > rhs.path
+            case .matches:
+                return sortAscending ? lhs.matches.count < rhs.matches.count : lhs.matches.count > rhs.matches.count
+            }
+        }
+        
+        // 4. Apply result limit
+        if let maxCount = resultLimit.maxCount, filtered.count > maxCount {
+            filtered = Array(filtered.prefix(maxCount))
+        }
+        
+        return filtered
+    }
+    
+    /// Group results by directory if enabled
+    var groupedResults: [(key: String, results: [FileSearchResult])] {
+        if groupByDirectory {
+            let grouped = Dictionary(grouping: processedResults) { $0.directory }
+            return grouped.sorted { $0.key < $1.key }
+        } else {
+            return [("", results: processedResults)]
+        }
+    }
+    
+    /// All unique extensions from current results
+    var availableExtensions: [String] {
+        let extensions = rawResults.map { (result: FileSearchResult) -> String in
+            let ext = (result.fileName as NSString).pathExtension
+            return ext.isEmpty ? "noext" : ext.lowercased()
+        }
+        return Array(Set(extensions)).sorted()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Title / Header
+            HStack {
+                Text("SEARCH")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: {
+                    // Clear action
+                    searchText = ""
+                    results = []
+                }) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            
+            ScrollView {
+                VStack(spacing: 12) {
+                    // Search Inputs Section
+                    VStack(spacing: 8) {
+                        // Search Input
+                        HStack(spacing: 0) {
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .rotationEffect(showReplace ? .degrees(90) : .zero)
+                                .onTapGesture {
+                                    withAnimation {
+                                        showReplace.toggle()
+                                    }
+                                }
+                                .padding(.horizontal, 4)
+                            
+                            ZStack(alignment: .trailing) {
+                                TextField("Search", text: $searchText)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding(6)
+                                    .padding(.trailing, 60) // Space for toggles
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(4)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                HStack(spacing: 2) {
+                                    ToggleIcon(iconName: "textformat", isSelected: $matchCase)
+                                    ToggleIcon(iconName: "underline", isSelected: $matchWholeWord)
+                                    ToggleIcon(iconName: "staroflife", isSelected: $useRegex)
+                                }
+                                .padding(.trailing, 4)
+                            }
+                        }
+                        
+                        // Replace Input
+                        if showReplace {
+                            HStack(spacing: 0) {
+                                Spacer().frame(width: 20)
+                                ZStack(alignment: .trailing) {
+                                    TextField("Replace", text: $replaceText)
+                                        .textFieldStyle(PlainTextFieldStyle())
+                                        .padding(6)
+                                        .padding(.trailing, 24)
+                                        .background(Color(nsColor: .controlBackgroundColor))
+                                        .cornerRadius(4)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                        )
+                                    
+                                    Button(action: { /* Replace Action */ }) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.trailing, 6)
+                                }
+                            }
+                        }
+                        
+                        // Files to Include/Exclude Toggle
+                        HStack {
+                            Spacer().frame(width: 20)
+                            Text("files to include/exclude")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .onTapGesture {
+                            withAnimation {
+                                showDetails.toggle()
+                            }
+                        }
+                        
+                        if showDetails {
+                            VStack(spacing: 8) {
+                                TextField("files to include", text: $filesToInclude)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding(6)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(4)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                TextField("files to exclude", text: $filesToExclude)
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .padding(6)
+                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .cornerRadius(4)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+                            .padding(.leading, 20)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    Divider()
+                    
+                    // Results Section
+                    if processedResults.isEmpty {
+                        Text(rawResults.isEmpty ? "No results found" : "No results match current filters")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 20)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Results Header with Filters
+                            SearchResultsHeader(
+                                resultCount: processedResults.count,
+                                totalCount: rawResults.count,
+                                sortOption: $sortOption,
+                                sortAscending: $sortAscending,
+                                selectedExtensions: $selectedExtensions,
+                                groupByDirectory: $groupByDirectory,
+                                showFilePath: $showFilePath,
+                                resultLimit: $resultLimit,
+                                excludeBinaryFiles: $excludeBinaryFiles,
+                                showFilters: $showFilters,
+                                availableExtensions: availableExtensions,
+                                onCollapseAll: collapseAll,
+                                onExpandAll: expandAll
+                            )
+                            
+                            // Results List
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                if groupByDirectory {
+                                    ForEach(groupedResults, id: \.key) { group in
+                                        if !group.key.isEmpty {
+                                            DirectoryGroupHeader(directory: group.key, count: group.results.count)
+                                        }
+                                        ForEach(group.results) { fileResult in
+                                            FileResultRow(
+                                                fileResult: fileResult,
+                                                showPath: showFilePath
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    ForEach(processedResults) { fileResult in
+                                        FileResultRow(
+                                            fileResult: fileResult,
+                                            showPath: showFilePath
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 20)
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct ToggleIcon: View {
+    let iconName: String
+    @Binding var isSelected: Bool
+    
+    var body: some View {
+        Button(action: {
+            isSelected.toggle()
+        }) {
+            Image(systemName: iconName)
+                .font(.caption2)
+                .padding(4)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .foregroundColor(isSelected ? .accentColor : .secondary)
+                .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct FileResultRow: View {
+    @Binding var fileResult: FileSearchResult
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // File Header
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    fileResult.isExpanded.toggle()
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: fileResult.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .frame(width: 12)
+                        .foregroundColor(.secondary)
+                    
+                    Image(systemName: "doc.text")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text(fileResult.fileName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text(fileResult.path)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    
+                    Spacer()
+                    
+                    Text("\(fileResult.matches.count)")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.2))
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color.secondary.opacity(0.05))
+            
+            // Matches
+            if fileResult.isExpanded {
+                ForEach(fileResult.matches) { match in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(match.lineNumber)")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 30, alignment: .trailing)
+                        
+                        Text(match.text)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                    .onTapGesture {
+                        // Navigate to line
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper to use NSColor in SwiftUI on macOS or fallback on iOS if needed
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+typealias NSColor = UIColor
+
+extension Color {
+    init(nsColor: UIColor) {
+        self.init(uiColor: nsColor)
+    }
+}
+
+extension UIColor {
+    static var controlBackgroundColor: UIColor {
+        return .systemGray6 // Approximation
+    }
+    static var windowBackgroundColor: UIColor {
+        return .systemBackground
+    }
+}
+#endif

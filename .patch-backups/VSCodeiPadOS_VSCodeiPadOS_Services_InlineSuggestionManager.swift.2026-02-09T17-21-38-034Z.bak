@@ -1,0 +1,257 @@
+import Foundation
+import Combine
+
+/// Manages inline code suggestions with debouncing, throttling, and cancellation support.
+/// Tracks text changes and cursor position to provide context-aware completions.
+@MainActor
+class InlineSuggestionManager: ObservableObject {
+    
+    // MARK: - Published Properties
+    
+    /// The current inline suggestion text to display, if any.
+    @Published var currentSuggestion: String?
+    
+    /// The current cursor position in the document.
+    @Published var cursorPosition: CursorPosition = CursorPosition(line: 0, column: 0)
+    
+    // MARK: - Private Properties
+    
+    /// Debounce timer for text change detection.
+    private var debounceTimer: Timer?
+    
+    /// Throttle timestamp for rate limiting requests.
+    private var lastRequestTime: Date?
+    
+    /// Minimum interval between requests (throttling).
+    private let throttleInterval: TimeInterval = 0.5
+    
+    /// Debounce delay before triggering suggestion request.
+    private let debounceDelay: TimeInterval = 0.3
+    
+    /// Task handle for the current pending suggestion request.
+    private var pendingRequestTask: Task<Void, Never>?
+    
+    /// Set to store Combine cancellables.
+    private var cancellables = Set<AnyCancellable>()
+    
+    /// Subject for text change events.
+    private let textChangeSubject = PassthroughSubject<TextChangeEvent, Never>()
+    
+    // MARK: - Types
+    
+    /// Represents a cursor position in the editor.
+    struct CursorPosition: Equatable {
+        let line: Int
+        let column: Int
+        
+        var isValid: Bool {
+            return line >= 0 && column >= 0
+        }
+    }
+    
+    /// Represents a text change event.
+    struct TextChangeEvent {
+        let content: String
+        let position: CursorPosition
+        let timestamp: Date
+    }
+    
+    /// Extracted context for suggestion requests.
+    struct SuggestionContext {
+        let currentLine: String
+        let precedingCode: String
+        let cursorPosition: CursorPosition
+        let language: String?
+    }
+    
+    // MARK: - Initialization
+    
+    init() {
+        setupDebouncePipeline()
+    }
+    
+    deinit {
+        debounceTimer?.invalidate()
+        pendingRequestTask?.cancel()
+    }
+    
+    // MARK: - Public Methods
+    
+    /// Requests a suggestion for the given content at the current cursor position.
+    /// This method applies debouncing and throttling automatically.
+    /// - Parameters:
+    ///   - content: The full text content of the document.
+    ///   - position: The current cursor position.
+    func requestSuggestion(for content: String, at position: CursorPosition) {
+        // Update cursor position
+        self.cursorPosition = position
+        
+        // Create text change event
+        let event = TextChangeEvent(
+            content: content,
+            position: position,
+            timestamp: Date()
+        )
+        
+        // Send to debounce pipeline
+        textChangeSubject.send(event)
+    }
+    
+    /// Cancels any pending suggestion request.
+    func cancelPendingRequest() {
+        pendingRequestTask?.cancel()
+        pendingRequestTask = nil
+        debounceTimer?.invalidate()
+        debounceTimer = nil
+    }
+    
+    /// Clears the current suggestion.
+    func clearSuggestion() {
+        currentSuggestion = nil
+    }
+    
+    /// Updates the cursor position without triggering a suggestion request.
+    /// - Parameter position: The new cursor position.
+    func updateCursorPosition(_ position: CursorPosition) {
+        self.cursorPosition = position
+    }
+    
+    // MARK: - Private Methods
+    
+    /// Sets up the Combine pipeline for debounced text change processing.
+    private func setupDebouncePipeline() {
+        textChangeSubject
+            .debounce(for: .seconds(debounceDelay), scheduler: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.processDebouncedTextChange(event)
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Processes a debounced text change event.
+    private func processDebouncedTextChange(_ event: TextChangeEvent) {
+        // Check throttling
+        if let lastTime = lastRequestTime,
+           Date().timeIntervalSince(lastTime) < throttleInterval {
+            // Too soon, skip this request
+            return
+        }
+        
+        // Extract context
+        let context = extractContext(from: event.content, at: event.position)
+        
+        // Perform the suggestion request
+        performSuggestionRequest(context: context)
+    }
+    
+    /// Performs the actual suggestion request with cancellation support.
+    private func performSuggestionRequest(context: SuggestionContext) {
+        // Cancel any existing request
+        pendingRequestTask?.cancel()
+        
+        // Update throttle timestamp
+        lastRequestTime = Date()
+        
+        // Create new request task
+        pendingRequestTask = Task { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                let suggestion = try await fetchSuggestion(for: context)
+                
+                // Check if task was cancelled
+                guard !Task.isCancelled else { return }
+                
+                // Update suggestion on main actor
+                await MainActor.run {
+                    self.currentSuggestion = suggestion
+                }
+            } catch {
+                // Handle errors - clear suggestion on failure
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        self.currentSuggestion = nil
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Fetches a suggestion from the completion service.
+    /// This is a placeholder that should be replaced with actual implementation.
+    private func fetchSuggestion(for context: SuggestionContext) async throws -> String? {
+        // Simulate network delay - replace with actual API call
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        
+        // Check for cancellation
+        try Task.checkCancellation()
+        
+        // Placeholder: Return nil or mock suggestion based on context
+        // This should be replaced with actual LLM or completion service integration
+        return nil
+    }
+    
+    /// Extracts context information from the content at the given position.
+    private func extractContext(from content: String, at position: CursorPosition) -> SuggestionContext {
+        let lines = content.components(separatedBy: .newlines)
+        
+        // Get current line
+        let currentLineIndex = min(position.line, max(0, lines.count - 1))
+        let currentLine = lines.indices.contains(currentLineIndex) ? lines[currentLineIndex] : ""
+        
+        // Get preceding code (all lines before current)
+        let precedingLines = lines.prefix(currentLineIndex)
+        let precedingCode = precedingLines.joined(separator: "\n")
+        
+        // Detect language from file extension or content (placeholder)
+        let language = detectLanguage(from: content)
+        
+        return SuggestionContext(
+            currentLine: currentLine,
+            precedingCode: precedingCode,
+            cursorPosition: position,
+            language: language
+        )
+    }
+    
+    /// Detects the programming language from content.
+    /// This is a simple placeholder implementation.
+    private func detectLanguage(from content: String) -> String? {
+        // Basic heuristics for language detection
+        // In a real implementation, this would use file extension or more sophisticated detection
+        
+        if content.contains("import Swift") || content.contains("func ") && content.contains("->") {
+            return "swift"
+        } else if content.contains("function") || content.contains("const ") || content.contains("let ") {
+            return "javascript"
+        } else if content.contains("def ") || content.contains("import ") && content.contains("print(") {
+            return "python"
+        }
+        
+        return nil
+    }
+    
+    /// Determines if a suggestion should be requested based on context.
+    /// This can be used to avoid requesting suggestions in inappropriate contexts.
+    private func shouldRequestSuggestion(context: SuggestionContext) -> Bool {
+        // Don't suggest on empty lines unless there's preceding context
+        if context.currentLine.trimmingCharacters(in: .whitespaces).isEmpty {
+            return !context.precedingCode.isEmpty
+        }
+        
+        // Minimum content length to trigger suggestions
+        let minContextLength = 10
+        let totalContextLength = context.precedingCode.count + context.currentLine.count
+        
+        return totalContextLength >= minContextLength
+    }
+}
+
+// MARK: - Error Types
+
+enum InlineSuggestionError: Error {
+    case requestThrottled
+    case noContextAvailable
+    case serviceUnavailable
+    case cancelled
+}

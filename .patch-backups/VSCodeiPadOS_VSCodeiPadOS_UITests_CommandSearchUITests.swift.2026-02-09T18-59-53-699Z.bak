@@ -1,0 +1,69 @@
+import XCTest
+
+final class CommandSearchUITests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
+    // Keep this list aligned with the app’s accessibility identifiers.
+    private let preferredIdentifiers = [
+        "commandSearchInput",
+        "command-search-input",
+        "CommandSearchInput",
+        "commandPaletteSearchField",
+        "command-palette-search",
+        "Command Palette",
+        "Command Search"
+    ]
+
+    private func findCommandSearchElement(in app: XCUIApplication) -> XCUIElement {
+        for id in preferredIdentifiers {
+            let tf = app.textFields[id]
+            if tf.exists { return tf }
+            let sf = app.searchFields[id]
+            if sf.exists { return sf }
+        }
+
+        // Fallback: first visible searchField/textField.
+        if app.searchFields.count > 0 {
+            return app.searchFields.element(boundBy: 0)
+        }
+        return app.textFields.element(boundBy: 0)
+    }
+
+    func testCmdShiftPOpensCommandPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Cmd+Shift+P should open the command palette.
+        app.typeKey("p", modifierFlags: [.command, .shift])
+
+        let commandSearchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(
+            commandSearchElement.waitForExistence(timeout: 10),
+            "Expected command palette search input to appear after Cmd+Shift+P"
+        )
+    }
+
+    func testEnteringTextIntoSearchInputWorks() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let searchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(searchElement.waitForExistence(timeout: 10), "Expected a command search input to exist")
+
+        searchElement.tap()
+
+        let textToEnter = "format"
+        searchElement.typeText(textToEnter)
+
+        // Validate the entered text is reflected in the field.
+        // Some UIKit controls expose their content via `value`.
+        let valueString = (searchElement.value as? String) ?? ""
+        XCTAssertTrue(valueString.contains(textToEnter), "Expected search input value to contain '\(textToEnter)'. Actual value: '\(valueString)'.")
+    }
+}

@@ -1,0 +1,333 @@
+import Foundation
+import SwiftUI
+import Foundation
+
+/// UI-only debug state manager.
+///
+/// This does not perform real debugging yet; it only provides observable state
+/// for the Debug sidebar and breakpoint gutter markers.
+@MainActor
+final class DebugManager: ObservableObject {
+    static let shared = DebugManager()
+
+    enum SessionState: String {
+        case stopped
+        case running
+        case paused
+
+        var displayName: String {
+            switch self {
+            case .stopped: return "Stopped"
+            case .running: return "Running"
+            case .paused: return "Paused"
+            }
+        }
+
+        var canStep: Bool { self == .paused }
+        var canPlay: Bool { self != .running }
+        var canStop: Bool { self != .stopped }
+    }
+
+    struct StackFrame: Identifiable, Hashable {
+        let id = UUID()
+        var function: String
+        var file: String
+        var line: Int
+    }
+
+    struct Breakpoint: Identifiable, Hashable {
+        /// Stable id for list diffing.
+        var id: String { "\(file)::\(line)" }
+
+        /// File identifier (typically URL path, otherwise fileName).
+        var file: String
+
+        /// 1-based line number.
+        var line: Int
+
+        /// UI only for now; there is no real debugger yet.
+        var isEnabled: Bool = true
+    }
+
+    struct Variable: Identifiable, Hashable {
+        let id = UUID()
+        var name: String
+        var value: String
+        var type: String
+        var children: [Variable] = []
+    }
+
+    struct WatchExpression: Identifiable, Hashable {
+        let id = UUID()
+        var expression: String
+        var value: String
+    }
+
+    // MARK: - Published state
+
+    @Published var state: SessionState = .stopped
+
+    /// Breakpoints by file identifier (typically URL path, otherwise fileName).
+    @Published private(set) var breakpointsByFile: [String: Set<Int>] = [:]
+
+    @Published var watchExpressions: [WatchExpression] = []
+    @Published var variables: [Variable] = []
+    @Published var callStack: [StackFrame] = []
+    @Published var selectedFrameId: StackFrame.ID?
+
+    // MARK: - Convenience views of state (for UI plumbing)
+
+    var allBreakpoints: [Breakpoint] {
+        breakpointsByFile
+            .flatMap { (file, lines) in
+                lines.map { Breakpoint(file: file, line: $0) }
+            }
+            .sorted {
+                if $0.file == $1.file { return $0.line < $1.line }
+                return $0.file < $1.file
+            }
+    }
+
+    private init() {
+        // Seed some UI data so the panels aren’t empty.
+        watchExpressions = [
+            WatchExpression(expression: "counter", value: "0"),
+            WatchExpression(expression: "user.name", value: "\"Taylor\""),
+        ]
+    }
+
+    // MARK: - Breakpoints
+
+    private func canonicalFileId(_ file: String) -> String {
+        // Many call sites use URL.absoluteString; convert file:// URLs to paths so we
+        // don't end up with duplicate breakpoint buckets for the same file.
+        if let url = URL(string: file), url.isFileURL {
+            return url.path
+        }
+        return file
+    }
+
+    /// Normalizes UI-provided line indices.
+    ///
+    /// Some UI call sites may be 0-based while others are 1-based. We clamp to a
+    /// minimum of 1 so both representations work for the first line.
+    private func canonicalLine(_ line: Int) -> Int {
+        max(1, line)
+    }
+
+    func hasBreakpoint(file: String, line: Int) -> Bool {
+        let fileId = canonicalFileId(file)
+        let line = canonicalLine(line)
+        return breakpointsByFile[fileId]?.contains(line) == true
+    }
+
+    func toggleBreakpoint(file: String, line: Int) {
+        let fileId = canonicalFileId(file)
+        let line = canonicalLine(line)
+
+        // IMPORTANT: mutate via a copy so @Published emits reliably for collection changes.
+        var dict = breakpointsByFile
+        var set = dict[fileId] ?? []
+
+        if set.contains(line) {
+            set.remove(line)
+        } else {
+            set.insert(line)
+        }
+
+        if set.isEmpty {
+            dict.removeValue(forKey: fileId)
+        } else {
+            dict[fileId] = set
+        }
+
+        breakpointsByFile = dict
+    }
+
+    func setBreakpoint(file: String, line: Int, isEnabled: Bool) {
+        // UI-only model currently treats "enabled" as "present/absent".
+        // (Real debugger integration can extend this to store disabled breakpoints.)
+        if isEnabled {
+            if !hasBreakpoint(file: file, line: line) {
+                toggleBreakpoint(file: file, line: line)
+            }
+        } else {
+            removeBreakpoint(file: file, line: line)
+        }
+    }
+
+    func removeBreakpoint(file: String, line: Int) {
+        guard line > 0 else { return }
+        let fileId = canonicalFileId(file)
+
+        var dict = breakpointsByFile
+        guard var set = dict[fileId] else { return }
+
+        set.remove(line)
+        if set.isEmpty {
+            dict.removeValue(forKey: fileId)
+        } else {
+            dict[fileId] = set
+        }
+        breakpointsByFile = dict
+    }
+
+    func breakpoints(in file: String) -> [Breakpoint] {
+        let fileId = canonicalFileId(file)
+        let lines = breakpointsByFile[fileId] ?? []
+        return lines.sorted().map { Breakpoint(file: fileId, line: $0) }
+    }
+
+    // MARK: - Watch expressions
+
+    @discardableResult
+    func addWatchExpression(_ expression: String, initialValue: String = "—") -> WatchExpression? {
+        let trimmed = expression.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Avoid duplicates by expression text.
+        if watchExpressions.contains(where: { $0.expression == trimmed }) {
+            return watchExpressions.first(where: { $0.expression == trimmed })
+        }
+
+        let watch = WatchExpression(expression: trimmed, value: initialValue)
+        var watches = watchExpressions
+        watches.append(watch)
+        watchExpressions = watches
+        return watch
+    }
+
+    func removeWatchExpression(id: WatchExpression.ID) {
+        var watches = watchExpressions
+        watches.removeAll { $0.id == id }
+        watchExpressions = watches
+    }
+
+    func updateWatchExpression(id: WatchExpression.ID, expression: String) {
+        let trimmed = expression.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let idx = watchExpressions.firstIndex(where: { $0.id == id }) else { return }
+
+        var watches = watchExpressions
+        watches[idx].expression = trimmed
+        watchExpressions = watches
+    }
+
+    func setWatchValue(id: WatchExpression.ID, value: String) {
+        guard let idx = watchExpressions.firstIndex(where: { $0.id == id }) else { return }
+        var watches = watchExpressions
+        watches[idx].value = value
+        watchExpressions = watches
+    }
+
+    // MARK: - Variables
+
+    func setVariables(_ newVariables: [Variable]) {
+        variables = newVariables
+    }
+
+    func clearVariables() {
+        variables = []
+    }
+
+    /// Updates the first variable matching `name` at the root level.
+    func setRootVariableValue(name: String, value: String) {
+        guard let idx = variables.firstIndex(where: { $0.name == name }) else { return }
+        var vars = variables
+        vars[idx].value = value
+        variables = vars
+    }
+
+    func allBreakpointsSorted() -> [(file: String, line: Int)] {
+        // Keep existing return type because the current UI code uses it.
+        breakpointsByFile
+            .flatMap { (file, lines) in lines.map { (file: file, line: $0) } }
+            .sorted {
+                if $0.file == $1.file { return $0.line < $1.line }
+                return $0.file < $1.file
+            }
+    }
+
+    // MARK: - Debug controls (UI only)
+
+    func play() {
+        // If paused, resume; if stopped, start a simulated session.
+        if state == .stopped {
+            callStack = [
+                StackFrame(function: "main()", file: "App.swift", line: 12),
+                StackFrame(function: "run()", file: "Runner.swift", line: 48),
+                StackFrame(function: "doWork()", file: "Worker.swift", line: 103)
+            ]
+            selectedFrameId = callStack.first?.id
+
+            variables = [
+                Variable(name: "counter", value: "0", type: "Int"),
+                Variable(
+                    name: "user",
+                    value: "User(…)",
+                    type: "User",
+                    children: [
+                        Variable(name: "id", value: "42", type: "Int"),
+                        Variable(name: "name", value: "\"Taylor\"", type: "String")
+                    ]
+                )
+            ]
+        }
+
+        state = .running
+
+        // Auto-pause quickly so step buttons make sense in the UI.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self else { return }
+            if self.state == .running { self.state = .paused }
+        }
+    }
+
+    func stop() {
+        state = .stopped
+        callStack = []
+        variables = []
+        selectedFrameId = nil
+    }
+
+    func stepOver() {
+        guard state.canStep else { return }
+        advanceTopFrameLine(by: 1)
+    }
+
+    func stepInto() {
+        guard state.canStep else { return }
+        advanceTopFrameLine(by: 1)
+        // Pretend we stepped into a function.
+        if let top = callStack.first {
+            var cs = callStack
+            cs.insert(StackFrame(function: "helper()", file: top.file, line: top.line), at: 0)
+            callStack = cs
+            selectedFrameId = callStack.first?.id
+        }
+    }
+
+    private func advanceTopFrameLine(by delta: Int) {
+        guard !callStack.isEmpty else { return }
+
+        // IMPORTANT: mutate via a copy so @Published emits reliably for collection changes.
+        var cs = callStack
+        cs[0].line += delta
+        callStack = cs
+
+        // Make the demo watch expression change a bit.
+        if let idx = watchExpressions.firstIndex(where: { $0.expression == "counter" }) {
+            var watches = watchExpressions
+            let n = Int(watches[idx].value) ?? 0
+            watches[idx].value = "\(n + delta)"
+            watchExpressions = watches
+        }
+
+        if let varIdx = variables.firstIndex(where: { $0.name == "counter" }) {
+            var vars = variables
+            let n = Int(vars[varIdx].value) ?? 0
+            vars[varIdx].value = "\(n + delta)"
+            variables = vars
+        }
+    }
+}

@@ -1,0 +1,1217 @@
+import Foundation
+import Combine
+
+// SearchManager
+// Implements find-in-files style searching with options (case sensitivity, whole word, regex),
+// include/exclude glob patterns, query history, and replace-in-files.
+//
+// NOTE: This file is intentionally self-contained so it can integrate with varying app models.
+
+public final class SearchManager: ObservableObject {
+
+    // MARK: - Types
+
+    public struct SearchOptions: Codable, Hashable, Sendable {
+        public var isCaseSensitive: Bool
+        public var isWholeWord: Bool
+        public var isRegex: Bool
+
+        public init(isCaseSensitive: Bool = false,
+                    isWholeWord: Bool = false,
+                    isRegex: Bool = false) {
+            self.isCaseSensitive = isCaseSensitive
+            self.isWholeWord = isWholeWord
+            self.isRegex = isRegex
+        }
+    }
+
+    public struct SearchQuery: Codable, Hashable, Sendable {
+        public var text: String
+        public var options: SearchOptions
+        /// Include file globs (e.g. ["**/*.swift", "**/*.md"]) - empty means include all.
+        public var includeGlobs: [String]
+        /// Exclude file globs (e.g. ["**/.git/**", "**/DerivedData/**"]).
+        public var excludeGlobs: [String]
+
+        public init(text: String,
+                    options: SearchOptions = .init(),
+                    includeGlobs: [String] = [],
+                    excludeGlobs: [String] = []) {
+            self.text = text
+            self.options = options
+            self.includeGlobs = includeGlobs
+            self.excludeGlobs = excludeGlobs
+        }
+    }
+
+    public struct MatchLocation: Codable, Hashable, Sendable {
+        public var line: Int
+        public var column: Int
+        public var length: Int
+
+        public init(line: Int, column: Int, length: Int) {
+            self.line = line
+            self.column = column
+            self.length = length
+        }
+    }
+
+    public struct FileMatch: Codable, Hashable, Sendable, Identifiable {
+        public var id: String { filePath }
+        public var filePath: String
+        public var matches: [Match]
+
+        public init(filePath: String, matches: [Match]) {
+            self.filePath = filePath
+            self.matches = matches
+        }
+
+        public struct Match: Codable, Hashable, Sendable, Identifiable {
+            public var id: String { "\(location.line):\(location.column):\(location.length):\(preview)" }
+            public var location: MatchLocation
+            public var preview: String
+
+            public init(location: MatchLocation, preview: String) {
+                self.location = location
+                self.preview = preview
+            }
+        }
+    }
+
+    public struct ReplaceResult: Codable, Hashable, Sendable {
+        public var filesTouched: Int
+        public var replacements: Int
+        public var fileResults: [PerFile]
+
+        public init(filesTouched: Int, replacements: Int, fileResults: [PerFile]) {
+            self.filesTouched = filesTouched
+            self.replacements = replacements
+            self.fileResults = fileResults
+        }
+
+        public struct PerFile: Codable, Hashable, Sendable {
+            public var filePath: String
+            public var replacements: Int
+            public init(filePath: String, replacements: Int) {
+                self.filePath = filePath
+                self.replacements = replacements
+            }
+        }
+    }
+
+    public enum SearchError: Error, LocalizedError {
+        case emptyQuery
+        case invalidRegex(String)
+        case ioError(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .emptyQuery:
+                return "Search query is empty."
+            case .invalidRegex(let pattern):
+                return "Invalid regular expression: \(pattern)"
+            case .ioError(let msg):
+                return msg
+            }
+        }
+    }
+
+    // MARK: - Published State (UI integration)
+
+    @Published public private(set) var isSearching: Bool = false
+    @Published public private(set) var progress: Double = 0
+    @Published public private(set) var results: [FileMatch] = []
+    @Published public private(set) var lastError: String? = nil
+
+    /// Most-recent-first history.
+    @Published public private(set) var history: [SearchQuery] = []
+
+    // MARK: - Config
+
+    public var maxHistoryCount: Int = 30
+
+    // MARK: - Private
+
+    private var searchTask: Task<Void, Never>? = nil
+    private let historyKey = "SearchManager.history.v1"
+
+    // MARK: - Init
+
+    public init() {
+        loadHistory()
+    }
+
+    deinit {
+        searchTask?.cancel()
+    }
+
+    // MARK: - History
+
+    public func addToHistory(_ query: SearchQuery) {
+        let trimmed = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        var q = query
+        q.text = trimmed
+
+        history.removeAll(where: { $0 == q })
+        history.insert(q, at: 0)
+        if history.count > maxHistoryCount {
+            history.removeLast(history.count - maxHistoryCount)
+        }
+        persistHistory()
+    }
+
+    public func clearHistory() {
+        history = []
+        persistHistory()
+    }
+
+    private func loadHistory() {
+        guard let data = UserDefaults.standard.data(forKey: historyKey) else { return }
+        if let decoded = try? JSONDecoder().decode([SearchQuery].self, from: data) {
+            history = decoded
+        }
+    }
+
+    private func persistHistory() {
+        guard let data = try? JSONEncoder().encode(history) else { return }
+        UserDefaults.standard.set(data, forKey: historyKey)
+    }
+
+    // MARK: - Search API
+
+    /// Cancels any in-flight search.
+    public func cancelSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        isSearching = false
+    }
+
+    /// Search files under `rootURL`.
+    /// - Parameters:
+    ///   - rootURL: Directory to search.
+    ///   - query: Query and options.
+    ///   - fileURLs: Optional pre-resolved file list. If provided, include/exclude filtering is still applied.
+    @MainActor
+    public func search(in rootURL: URL,
+                       query: SearchQuery,
+                       fileURLs: [URL]? = nil) {
+        lastError = nil
+        results = []
+        progress = 0
+
+        let trimmed = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            lastError = SearchError.emptyQuery.localizedDescription
+            return
+        }
+
+        // update history immediately
+        addToHistory(query)
+
+        cancelSearch()
+        isSearching = true
+
+        let q = SearchQuery(text: trimmed,
+                            options: query.options,
+                            includeGlobs: query.includeGlobs,
+                            excludeGlobs: query.excludeGlobs)
+
+        searchTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let resolvedFiles = try self.resolveFiles(rootURL: rootURL, provided: fileURLs, query: q)
+                let total = max(resolvedFiles.count, 1)
+
+                var aggregated: [FileMatch] = []
+                for (idx, url) in resolvedFiles.enumerated() {
+                    try Task.checkCancellation()
+                    if let match = try self.searchFile(url: url, rootURL: rootURL, query: q), !match.matches.isEmpty {
+                        aggregated.append(match)
+                    }
+                    let p = Double(idx + 1) / Double(total)
+                    await MainActor.run {
+                        self.progress = p
+                    }
+                }
+
+                await MainActor.run {
+                    self.results = aggregated
+                    self.isSearching = false
+                    self.progress = 1
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.isSearching = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.lastError = error.localizedDescription
+                    self.isSearching = false
+                }
+            }
+        }
+    }
+
+    // MARK: - Replace in files
+
+    /// Replace occurrences for `query` with `replacement` under `rootURL`.
+    /// Returns counts per file.
+    public func replace(in rootURL: URL,
+                        query: SearchQuery,
+                        replacement: String,
+                        fileURLs: [URL]? = nil) async throws -> ReplaceResult {
+        let trimmed = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw SearchError.emptyQuery }
+
+        let q = SearchQuery(text: trimmed,
+                            options: query.options,
+                            includeGlobs: query.includeGlobs,
+                            excludeGlobs: query.excludeGlobs)
+
+        // Pre-compile pattern.
+        let compiled = try compilePattern(for: q)
+
+        let resolvedFiles = try resolveFiles(rootURL: rootURL, provided: fileURLs, query: q)
+        var perFile: [ReplaceResult.PerFile] = []
+        perFile.reserveCapacity(resolvedFiles.count)
+
+        var totalReplacements = 0
+        var filesTouched = 0
+
+        for url in resolvedFiles {
+            try Task.checkCancellation()
+            let (changed, reps) = try replaceInFile(url: url, compiled: compiled, replacement: replacement)
+            if changed {
+                filesTouched += 1
+                totalReplacements += reps
+                perFile.append(.init(filePath: url.path, replacements: reps))
+            }
+        }
+
+        return ReplaceResult(filesTouched: filesTouched,
+                             replacements: totalReplacements,
+                             fileResults: perFile)
+    }
+
+    // MARK: - File enumeration + filtering
+
+    private func resolveFiles(rootURL: URL, provided: [URL]?, query: SearchQuery) throws -> [URL] {
+        let all: [URL]
+        if let provided {
+            all = provided
+        } else {
+            all = try enumerateFiles(rootURL: rootURL)
+        }
+        return all.filter { url in
+            guard url.isFileURL else { return false }
+            let path = url.path
+            if matchesAnyGlob(path: path, globs: query.excludeGlobs) { return false }
+            if query.includeGlobs.isEmpty { return true }
+            return matchesAnyGlob(path: path, globs: query.includeGlobs)
+        }
+    }
+
+    private func enumerateFiles(rootURL: URL) throws -> [URL] {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: rootURL,
+                                            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+                                            options: [.skipsHiddenFiles],
+                                            errorHandler: { _, _ in true }) else {
+            return []
+        }
+
+        var urls: [URL] = []
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+            if values?.isDirectory == true { continue }
+            if values?.isRegularFile == true {
+                urls.append(url)
+            }
+        }
+        return urls
+    }
+
+    // MARK: - Actual searching
+
+    private struct CompiledPattern {
+        enum Kind {
+            case regex(NSRegularExpression)
+            case literal(needle: String, compareLowercased: Bool, wholeWord: Bool)
+        }
+        let kind: Kind
+    }
+
+    private func compilePattern(for query: SearchQuery) throws -> CompiledPattern {
+        if query.options.isRegex {
+            let opts: NSRegularExpression.Options = query.options.isCaseSensitive ? [] : [.caseInsensitive]
+            do {
+                let re = try NSRegularExpression(pattern: query.text, options: opts)
+                return CompiledPattern(kind: .regex(re))
+            } catch {
+                throw SearchError.invalidRegex(query.text)
+            }
+        } else {
+            // Literal search.
+            let compareLowercased = !query.options.isCaseSensitive
+            return CompiledPattern(kind: .literal(needle: query.text,
+                                                 compareLowercased: compareLowercased,
+                                                 wholeWord: query.options.isWholeWord))
+        }
+    }
+
+    private func searchFile(url: URL, rootURL: URL, query: SearchQuery) throws -> FileMatch? {
+        let compiled = try compilePattern(for: query)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            // ignore unreadable files
+            return nil
+        }
+        // Try UTF-8 first. If it fails, ignore file (keeps implementation safe).
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+
+        let relPath: String
+        if url.path.hasPrefix(rootURL.path) {
+            relPath = String(url.path.dropFirst(rootURL.path.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        } else {
+            relPath = url.path
+        }
+
+        let matches = findMatches(in: text, compiled: compiled)
+        if matches.isEmpty { return nil }
+
+        return FileMatch(filePath: relPath, matches: matches)
+    }
+
+    private func findMatches(in text: String, compiled: CompiledPattern) -> [FileMatch.Match] {
+        switch compiled.kind {
+        case .regex(let re):
+            return regexMatches(in: text, re: re)
+        case .literal(let needle, let compareLowercased, let wholeWord):
+            return literalMatches(in: text, needle: needle, compareLowercased: compareLowercased, wholeWord: wholeWord)
+        }
+    }
+
+    private func regexMatches(in text: String, re: NSRegularExpression) -> [FileMatch.Match] {
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        let matches = re.matches(in: text, options: [], range: range)
+        if matches.isEmpty { return [] }
+
+        // Precompute line starts for fast conversion.
+        let lineIndex = LineIndex(text)
+
+        return matches.compactMap { m in
+            guard m.range.location != NSNotFound, m.range.length > 0 else { return nil }
+            let (line, col) = lineIndex.lineAndColumn(utf16Offset: m.range.location)
+            let preview = lineIndex.lineText(line: line)
+            return .init(location: .init(line: line, column: col, length: m.range.length), preview: preview)
+        }
+    }
+
+    private func literalMatches(in text: String,
+                               needle: String,
+                               compareLowercased: Bool,
+                               wholeWord: Bool) -> [FileMatch.Match] {
+        guard !needle.isEmpty else { return [] }
+
+        let haystack = compareLowercased ? text.lowercased() : text
+        let n = compareLowercased ? needle.lowercased() : needle
+
+        // Use NSString for UTF16 indexing.
+        let nsHay = haystack as NSString
+        let nsOrig = text as NSString
+
+        let lineIndex = LineIndex(text)
+
+        var results: [FileMatch.Match] = []
+        var searchRange = NSRange(location: 0, length: nsHay.length)
+
+        while true {
+            let found = nsHay.range(of: n, options: [], range: searchRange)
+            if found.location == NSNotFound { break }
+
+            if wholeWord {
+                if !isWholeWordMatch(in: nsHay, range: found) {
+                    let nextLoc = found.location + max(found.length, 1)
+                    if nextLoc >= nsHay.length { break }
+                    searchRange = NSRange(location: nextLoc, length: nsHay.length - nextLoc)
+                    continue
+                }
+            }
+
+            let (line, col) = lineIndex.lineAndColumn(utf16Offset: found.location)
+            let preview = lineIndex.lineText(line: line)
+
+            // Use original needle length in UTF16 for accurate highlighting.
+            let origLen = (needle as NSString).length
+            results.append(.init(location: .init(line: line, column: col, length: origLen), preview: preview))
+
+            let nextLoc = found.location + max(found.length, 1)
+            if nextLoc >= nsHay.length { break }
+            searchRange = NSRange(location: nextLoc, length: nsHay.length - nextLoc)
+        }
+
+        return results
+    }
+
+    private func isWholeWordMatch(in nsText: NSString, range: NSRange) -> Bool {
+        // Word boundary definition: letters, numbers, underscore.
+        func isWordChar(_ u: unichar) -> Bool {
+            if u == 95 { return true } // '_'
+            // ASCII letters/digits
+            if (u >= 48 && u <= 57) || (u >= 65 && u <= 90) || (u >= 97 && u <= 122) { return true }
+            return false
+        }
+
+        if range.location > 0 {
+            let prev = nsText.character(at: range.location - 1)
+            if isWordChar(prev) { return false }
+        }
+        let end = range.location + range.length
+        if end < nsText.length {
+            let next = nsText.character(at: end)
+            if isWordChar(next) { return false }
+        }
+        return true
+    }
+
+    // MARK: - Replace implementation
+
+    private func replaceInFile(url: URL,
+                               compiled: CompiledPattern,
+                               replacement: String) throws -> (changed: Bool, replacements: Int) {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            return (false, 0)
+        }
+        guard let text = String(data: data, encoding: .utf8) else { return (false, 0) }
+
+        let (newText, reps) = replaceAll(in: text, compiled: compiled, replacement: replacement)
+        guard reps > 0 else { return (false, 0) }
+
+        do {
+            // Atomic write.
+            try newText.data(using: .utf8)?.write(to: url, options: [.atomic])
+        } catch {
+            throw SearchError.ioError("Failed to write file: \(url.path)")
+        }
+        return (true, reps)
+    }
+
+    private func replaceAll(in text: String,
+                            compiled: CompiledPattern,
+                            replacement: String) -> (String, Int) {
+        switch compiled.kind {
+        case .regex(let re):
+            let ns = text as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            let matches = re.matches(in: text, options: [], range: range)
+            if matches.isEmpty { return (text, 0) }
+            let out = re.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacement)
+            return (out, matches.count)
+
+        case .literal(let needle, let compareLowercased, let wholeWord):
+            if needle.isEmpty { return (text, 0) }
+            // For literal, we re-scan and build output to support whole-word.
+            let haystack = compareLowercased ? text.lowercased() : text
+            let n = compareLowercased ? needle.lowercased() : needle
+
+            let nsHay = haystack as NSString
+            let nsOrig = text as NSString
+            let nsNeedle = n as NSString
+
+            var out = ""
+            out.reserveCapacity(text.count)
+
+            var cursor = 0
+            var reps = 0
+
+            while cursor < nsHay.length {
+                let searchRange = NSRange(location: cursor, length: nsHay.length - cursor)
+                let found = nsHay.range(of: n, options: [], range: searchRange)
+                if found.location == NSNotFound {
+                    out += nsOrig.substring(with: NSRange(location: cursor, length: nsOrig.length - cursor))
+                    break
+                }
+
+                // append leading segment
+                out += nsOrig.substring(with: NSRange(location: cursor, length: found.location - cursor))
+
+                if wholeWord && !isWholeWordMatch(in: nsHay, range: found) {
+                    // not a whole-word match; append original matched text and continue
+                    out += nsOrig.substring(with: found)
+                    cursor = found.location + max(found.length, 1)
+                    continue
+                }
+
+                out += replacement
+                reps += 1
+
+                cursor = found.location + max(nsNeedle.length, 1)
+            }
+
+            return (out, reps)
+        }
+    }
+
+    // MARK: - Glob matching
+
+    /// Very small glob matcher supporting '*', '**', and '?'.
+    /// Matching is path-based (uses '/' as separator). Globs are compared against the full path.
+    private func matchesAnyGlob(path: String, globs: [String]) -> Bool {
+        guard !globs.isEmpty else { return false }
+        for g in globs {
+            if globMatch(path: path, pattern: g) { return true }
+        }
+        return false
+    }
+
+    private func globMatch(path: String, pattern: String) -> Bool {
+        // Convert glob to regex.
+        // - '**' => '.*'
+        // - '*' => '[^/]*'
+        // - '?' => '[^/]'
+        var regex = "^"
+        var i = pattern.startIndex
+        while i < pattern.endIndex {
+            let ch = pattern[i]
+            if ch == "*" {
+                let next = pattern.index(after: i)
+                if next < pattern.endIndex && pattern[next] == "*" {
+                    regex += ".*"
+                    i = pattern.index(after: next)
+                } else {
+                    regex += "[^/]*"
+                    i = next
+                }
+            } else if ch == "?" {
+                regex += "[^/]"
+                i = pattern.index(after: i)
+            } else {
+                // escape regex metacharacters
+                if "\\.^$|()[]{}+".contains(ch) {
+                    regex += "\\\\\(ch)"
+                } else {
+                    regex.append(ch)
+                }
+                i = pattern.index(after: i)
+            }
+        }
+        regex += "$"
+
+        let opts: NSRegularExpression.Options = []
+        guard let re = try? NSRegularExpression(pattern: regex, options: opts) else { return false }
+        let ns = path as NSString
+        let r = NSRange(location: 0, length: ns.length)
+        return re.firstMatch(in: path, options: [], range: r) != nil
+    }
+
+    // MARK: - Glob Pattern Testing
+
+    /// Runs all glob pattern tests and returns results for verification
+    /// - Returns: Tuple containing (passedCount, failedCount, [failureDetails])
+    public func runGlobTests() -> (passed: Int, failed: Int, failures: [String]) {
+        var passed = 0
+        var failed = 0
+        var failures: [String] = []
+
+        func assert(_ condition: Bool, _ message: String) {
+            if condition {
+                passed += 1
+            } else {
+                failed += 1
+                failures.append(message)
+            }
+        }
+
+        // MARK: 1. testGlobStar - single * matches any chars except /
+        
+        // Single * should match any characters except path separator /
+        assert(globMatch(path: "file.swift", pattern: "*.swift"), "testGlobStar: *.swift should match file.swift")
+        assert(globMatch(path: "main.swift", pattern: "*.swift"), "testGlobStar: *.swift should match main.swift")
+        assert(globMatch(path: "ViewController.swift", pattern: "*.swift"), "testGlobStar: *.swift should match ViewController.swift")
+        assert(!globMatch(path: "src/file.swift", pattern: "*.swift"), "testGlobStar: *.swift should NOT match src/file.swift (contains /)")
+        assert(!globMatch(path: "path/to/file.swift", pattern: "*.swift"), "testGlobStar: *.swift should NOT match path/to/file.swift (contains /)")
+        
+        // * in the middle
+        assert(globMatch(path: "test-file.txt", pattern: "test-*.txt"), "testGlobStar: test-*.txt should match test-file.txt")
+        assert(globMatch(path: "test-123.txt", pattern: "test-*.txt"), "testGlobStar: test-*.txt should match test-123.txt")
+        assert(globMatch(path: "test-123-456.txt", pattern: "test-*.txt"), "testGlobStar: test-*.txt should match test-123-456.txt")
+        
+        // Multiple *
+        assert(globMatch(path: "a.b.swift", pattern: "*.*.swift"), "testGlobStar: *.*.swift should match a.b.swift")
+        assert(globMatch(path: "View.Controller.swift", pattern: "*.*.swift"), "testGlobStar: *.*.swift should match View.Controller.swift")
+        assert(!globMatch(path: "file.swift", pattern: "*.*.swift"), "testGlobStar: *.*.swift should NOT match file.swift (no dot before .swift)")
+
+        // MARK: 2. testGlobDoubleStar - ** matches any path including /
+        
+        // ** should match any characters including path separator /
+        assert(globMatch(path: "file.swift", pattern: "**/*.swift"), "testGlobDoubleStar: **/*.swift should match file.swift")
+        assert(globMatch(path: "src/file.swift", pattern: "**/*.swift"), "testGlobDoubleStar: **/*.swift should match src/file.swift")
+        assert(globMatch(path: "path/to/file.swift", pattern: "**/*.swift"), "testGlobDoubleStar: **/*.swift should match path/to/file.swift")
+        assert(globMatch(path: "very/deep/nested/path/file.swift", pattern: "**/*.swift"), "testGlobDoubleStar: **/*.swift should match very/deep/nested/path/file.swift")
+        assert(!globMatch(path: "file.txt", pattern: "**/*.swift"), "testGlobDoubleStar: **/*.swift should NOT match file.txt (wrong extension)")
+        assert(!globMatch(path: "src/file.txt", pattern: "**/*.swift"), "testGlobDoubleStar: **/*.swift should NOT match src/file.txt (wrong extension)")
+        
+        // ** at the start only
+        assert(globMatch(path: "foo/bar/baz", pattern: "**/baz"), "testGlobDoubleStar: **/baz should match foo/bar/baz")
+        assert(globMatch(path: "baz", pattern: "**/baz"), "testGlobDoubleStar: **/baz should match baz")
+        assert(globMatch(path: "a/b/c/baz", pattern: "**/baz"), "testGlobDoubleStar: **/baz should match a/b/c/baz")
+        
+        // ** at the end
+        assert(globMatch(path: "src/", pattern: "src/**"), "testGlobDoubleStar: src/** should match src/")
+        assert(globMatch(path: "src/file.swift", pattern: "src/**"), "testGlobDoubleStar: src/** should match src/file.swift")
+        assert(globMatch(path: "src/components/Button.swift", pattern: "src/**"), "testGlobDoubleStar: src/** should match src/components/Button.swift")
+
+        // MARK: 3. testGlobQuestion - ? matches single char
+        
+        // ? should match exactly one character (any char except /)
+        assert(globMatch(path: "file1.swift", pattern: "file?.swift"), "testGlobQuestion: file?.swift should match file1.swift")
+        assert(globMatch(path: "fileA.swift", pattern: "file?.swift"), "testGlobQuestion: file?.swift should match fileA.swift")
+        assert(globMatch(path: "file_.swift", pattern: "file?.swift"), "testGlobQuestion: file?.swift should match file_.swift")
+        assert(!globMatch(path: "file12.swift", pattern: "file?.swift"), "testGlobQuestion: file?.swift should NOT match file12.swift (two chars)")
+        assert(!globMatch(path: "file.swift", pattern: "file?.swift"), "testGlobQuestion: file?.swift should NOT match file.swift (no char before .swift)")
+        assert(!globMatch(path: "file/1.swift", pattern: "file?.swift"), "testGlobQuestion: file?.swift should NOT match file/1.swift (? doesn't match /)")
+        
+        // Multiple ?
+        assert(globMatch(path: "file01.txt", pattern: "file??.txt"), "testGlobQuestion: file??.txt should match file01.txt")
+        assert(globMatch(path: "fileAB.txt", pattern: "file??.txt"), "testGlobQuestion: file??.txt should match fileAB.txt")
+        assert(!globMatch(path: "file1.txt", pattern: "file??.txt"), "testGlobQuestion: file??.txt should NOT match file1.txt (only one char)")
+
+        // MARK: 4. testGlobExactMatch - exact path matching
+        
+        // Exact path should match exactly
+        assert(globMatch(path: "file.swift", pattern: "file.swift"), "testGlobExactMatch: exact match file.swift")
+        assert(globMatch(path: "src/file.swift", pattern: "src/file.swift"), "testGlobExactMatch: exact match src/file.swift")
+        assert(!globMatch(path: "File.swift", pattern: "file.swift"), "testGlobExactMatch: file.swift should NOT match File.swift (case sensitive)")
+        assert(!globMatch(path: "file.swift", pattern: "file.txt"), "testGlobExactMatch: file.txt should NOT match file.swift")
+        assert(!globMatch(path: "src/file.swift", pattern: "file.swift"), "testGlobExactMatch: file.swift should NOT match src/file.swift (different path)")
+        
+        // Empty pattern edge case
+        assert(!globMatch(path: "file.swift", pattern: ""), "testGlobExactMatch: empty pattern should NOT match file.swift")
+        assert(globMatch(path: "", pattern: ""), "testGlobExactMatch: empty pattern should match empty path")
+
+        // MARK: 5. testGlobMultiplePatterns - test matchesAnyGlob with array
+        
+        // Test matchesAnyGlob with multiple patterns
+        assert(matchesAnyGlob(path: "file.swift", globs: ["*.swift", "*.md"]), "testGlobMultiplePatterns: should match *.swift in array")
+        assert(matchesAnyGlob(path: "README.md", globs: ["*.swift", "*.md"]), "testGlobMultiplePatterns: should match *.md in array")
+        assert(!matchesAnyGlob(path: "file.txt", globs: ["*.swift", "*.md"]), "testGlobMultiplePatterns: should NOT match *.txt")
+        
+        assert(matchesAnyGlob(path: "src/main.swift", globs: ["**/*.swift", "**/*.h", "**/*.m"]), "testGlobMultiplePatterns: should match **/*.swift")
+        assert(matchesAnyGlob(path: "headers/main.h", globs: ["**/*.swift", "**/*.h", "**/*.m"]), "testGlobMultiplePatterns: should match **/*.h")
+        assert(matchesAnyGlob(path: "impl/main.m", globs: ["**/*.swift", "**/*.h", "**/*.m"]), "testGlobMultiplePatterns: should match **/*.m")
+        assert(!matchesAnyGlob(path: "src/main.js", globs: ["**/*.swift", "**/*.h", "**/*.m"]), "testGlobMultiplePatterns: should NOT match **/*.js")
+        
+        // Empty globs array
+        assert(!matchesAnyGlob(path: "file.swift", globs: []), "testGlobMultiplePatterns: empty globs should return false")
+        
+        // Single pattern in array
+        assert(matchesAnyGlob(path: "file.swift", globs: ["*.swift"]), "testGlobMultiplePatterns: single pattern array should match")
+        assert(!matchesAnyGlob(path: "file.txt", globs: ["*.swift"]), "testGlobMultiplePatterns: single pattern array should NOT match wrong extension")
+
+        // MARK: 6. testGlobEdgeCases - empty patterns, special chars
+        
+        // Only wildcards
+        assert(globMatch(path: "anything", pattern: "*"), "testGlobEdgeCases: * should match anything")
+        assert(globMatch(path: "", pattern: "*"), "testGlobEdgeCases: * should match empty string")
+        assert(globMatch(path: "a/b/c", pattern: "**"), "testGlobEdgeCases: ** should match a/b/c")
+        
+        // Special regex characters that should be escaped (treated as literals)
+        assert(globMatch(path: "file.swift", pattern: "file.swift"), "testGlobEdgeCases: . should be literal, not regex wildcard")
+        assert(!globMatch(path: "fileXswift", pattern: "file.swift"), "testGlobEdgeCases: . should NOT match X")
+        assert(globMatch(path: "test+file.swift", pattern: "test+file.swift"), "testGlobEdgeCases: + should be literal")
+        assert(globMatch(path: "(test).swift", pattern: "(test).swift"), "testGlobEdgeCases: () should be literal")
+        assert(globMatch(path: "[test].swift", pattern: "[test].swift"), "testGlobEdgeCases: [] should be literal")
+        
+        // Escaped characters in pattern
+        assert(globMatch(path: "file.swift", pattern: #"file\.swift"#), "testGlobEdgeCases: escaped dot should match literal dot")
+        
+        // Whitespace handling
+        assert(globMatch(path: "file name.swift", pattern: "file*.swift"), "testGlobEdgeCases: should match with space in filename")
+        assert(globMatch(path: "file name.swift", pattern: "file *.swift"), "testGlobEdgeCases: should match with space in pattern")
+
+        // MARK: 7. testGlobSwiftFiles - **/*.swift pattern
+        
+        let swiftPattern = "**/*.swift"
+        
+        // Root level Swift files
+        assert(globMatch(path: "main.swift", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should match main.swift")
+        assert(globMatch(path: "App.swift", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should match App.swift")
+        
+        // Nested Swift files
+        assert(globMatch(path: "Sources/main.swift", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should match Sources/main.swift")
+        assert(globMatch(path: "Sources/Models/User.swift", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should match Sources/Models/User.swift")
+        assert(globMatch(path: "Sources/Views/Buttons/PrimaryButton.swift", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should match deep nested path")
+        
+        // Deep nesting
+        assert(globMatch(path: "a/b/c/d/e/f/g/file.swift", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should match very deep path")
+        
+        // Non-matching cases
+        assert(!globMatch(path: "main.m", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should NOT match main.m")
+        assert(!globMatch(path: "Sources/main.m", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should NOT match Sources/main.m")
+        assert(!globMatch(path: "file.txt", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should NOT match file.txt")
+        assert(!globMatch(path: "Sources/file.h", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should NOT match Sources/file.h")
+        
+        // Edge cases that look similar
+        assert(!globMatch(path: "file.swift.txt", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should NOT match file.swift.txt (ends with .txt)")
+        assert(!globMatch(path: "file.swiftbackup", pattern: swiftPattern), "testGlobSwiftFiles: **/*.swift should NOT match file.swiftbackup (ends with backup)")
+
+        // MARK: 8. testGlobExcludeNodeModules - **/node_modules/** pattern
+        
+        let nodeModulesPattern = "**/node_modules/**"
+        
+        // Should match node_modules at any level
+        assert(globMatch(path: "node_modules/", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match node_modules/")
+        assert(globMatch(path: "node_modules/lodash", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match node_modules/lodash")
+        assert(globMatch(path: "node_modules/lodash/index.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match node_modules/lodash/index.js")
+        assert(globMatch(path: "client/node_modules/", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match client/node_modules/")
+        assert(globMatch(path: "client/node_modules/react", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match client/node_modules/react")
+        assert(globMatch(path: "client/node_modules/react/index.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match client/node_modules/react/index.js")
+        assert(globMatch(path: "src/client/node_modules/package/lib/file.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match deeply nested node_modules")
+        
+        // Deep nesting
+        assert(globMatch(path: "a/b/c/node_modules/package/file.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should match a/b/c/node_modules")
+        
+        // Should NOT match (not node_modules)
+        assert(!globMatch(path: "src/main.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should NOT match src/main.js")
+        assert(!globMatch(path: "node_modules_backup/file.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should NOT match node_modules_backup (not exact match)")
+        assert(!globMatch(path: "src/node_modules_test/file.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should NOT match node_modules_test")
+        assert(!globMatch(path: "mynode_modules/file.js", pattern: nodeModulesPattern), "testGlobExcludeNodeModules: should NOT match mynode_modules")
+
+        // MARK: Additional Comprehensive Tests
+        
+        // Pattern with **, *, and ?
+        assert(globMatch(path: "src/components/Button.swift", pattern: "**/*?utton.swift"), "testComplex: **/*?utton.swift should match src/components/Button.swift")
+        assert(globMatch(path: "Button.swift", pattern: "**/*?utton.swift"), "testComplex: **/*?utton.swift should match Button.swift")
+        assert(!globMatch(path: "src/components/Switch.swift", pattern: "**/*?utton.swift"), "testComplex: **/*?utton.swift should NOT match Switch.swift")
+        
+        // Multiple ** in pattern
+        assert(globMatch(path: "a/b/c/d/e", pattern: "**/b/**/d/**"), "testComplex: **/b/**/d/** should match a/b/c/d/e")
+        assert(globMatch(path: "src/test/unit/utils", pattern: "**/test/**/utils"), "testComplex: **/test/**/utils should match src/test/unit/utils")
+        
+        // Real-world patterns
+        assert(globMatch(path: "Tests/Unit/Test.swift", pattern: "Tests/**/*.swift"), "testComplex: Tests/**/*.swift should match Tests/Unit/Test.swift")
+        assert(globMatch(path: "Tests/Integration/UI/Test.swift", pattern: "Tests/**/*.swift"), "testComplex: Tests/**/*.swift should match deeply nested test")
+        
+        // Xcode project patterns
+        assert(globMatch(path: "MyApp.xcodeproj/project.pbxproj", pattern: "*.xcodeproj/*.pbxproj"), "testComplex: *.xcodeproj/*.pbxproj should match")
+        assert(!globMatch(path: "MyApp.xcodeproj/project.xcworkspace", pattern: "*.xcodeproj/*.pbxproj"), "testComplex: *.xcodeproj/*.pbxproj should NOT match .xcworkspace")
+
+        // MARK: Dotfiles
+        assert(globMatch(path: ".gitignore", pattern: ".gitignore"), "testDotFiles: .gitignore should match")
+        assert(globMatch(path: ".env", pattern: ".*"), "testDotFiles: .* should match .env")
+        assert(globMatch(path: ".swiftlint.yml", pattern: ".*"), "testDotFiles: .* should match .swiftlint.yml")
+        assert(globMatch(path: ".github/workflows/ci.yml", pattern: ".github/**"), "testDotFiles: .github/** should match")
+        assert(!globMatch(path: "gitignore", pattern: ".gitignore"), "testDotFiles: .gitignore should NOT match gitignore (no dot)")
+
+        return (passed, failed, failures)
+    }
+}
+
+// MARK: - Line indexing helper
+
+/// LineIndex is internal to allow testing while being encapsulated within SearchManager
+internal struct LineIndex {
+    private let text: String
+    private let nsText: NSString
+    // line start offsets in UTF16
+    private var lineStarts: [Int] = [0]
+    private var lines: [String] = []
+
+    init(_ text: String) {
+        self.text = text
+        self.nsText = text as NSString
+
+        // Build lineStarts and cache line strings.
+        // Use NSString lineRange(for:) to be safe with various newline types.
+        var idx = 0
+        var currentLine = 1
+        while idx < nsText.length {
+            let r = nsText.lineRange(for: NSRange(location: idx, length: 0))
+            let lineStr = nsText.substring(with: r).trimmingCharacters(in: CharacterSet.newlines)
+            if lines.count < currentLine { lines.append(lineStr) } else { lines[currentLine - 1] = lineStr }
+
+            idx = NSMaxRange(r)
+            if idx < nsText.length {
+                lineStarts.append(idx)
+                currentLine += 1
+            }
+        }
+        if nsText.length == 0 {
+            lines = [""]
+            lineStarts = [0]
+        } else if lines.isEmpty {
+            // single line without newline
+            lines = [text]
+            lineStarts = [0]
+        }
+    }
+
+    func lineAndColumn(utf16Offset: Int) -> (line: Int, column: Int) {
+        // Binary search lineStarts to find last start <= offset.
+        var lo = 0
+        var hi = lineStarts.count - 1
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            let v = lineStarts[mid]
+            if v == utf16Offset {
+                return (mid + 1, 1)
+            } else if v < utf16Offset {
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        let lineIndex = max(hi, 0)
+        let lineStart = lineStarts[lineIndex]
+        let col = max(utf16Offset - lineStart, 0) + 1
+        return (lineIndex + 1, col)
+    }
+
+    func lineText(line: Int) -> String {
+        let i = max(1, line) - 1
+        if i >= 0 && i < lines.count { return lines[i] }
+        return ""
+    }
+    
+    /// Internal accessor for testing binary search behavior
+    internal var lineStartOffsets: [Int] { lineStarts }
+    internal var lineCount: Int { lines.count }
+    internal var allLines: [String] { lines }
+}
+
+// MARK: - LineIndex Tests
+
+#if DEBUG
+import XCTest
+
+/// XCTestCase extension for testing LineIndex functionality
+/// These tests verify lineAndColumn() and lineText() work correctly for showing match locations
+final class LineIndexTests: XCTestCase {
+    
+    // MARK: - Test 1: testLineAndColumnBasic
+    /// Simple line/column calculation on a single line
+    func testLineAndColumnBasic() {
+        let text = "Hello World"
+        let index = LineIndex(text)
+        
+        // Character positions (0-indexed UTF-16 offsets)
+        // H=0, e=1, l=2, l=3, o=4, (space)=5, W=6, o=7, r=8, l=9, d=10
+        
+        let resultH = index.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(resultH.line, 1)
+        XCTAssertEqual(resultH.column, 1) // H
+        
+        let resultE = index.lineAndColumn(utf16Offset: 1)
+        XCTAssertEqual(resultE.line, 1)
+        XCTAssertEqual(resultE.column, 2) // e
+        
+        let resultSpace = index.lineAndColumn(utf16Offset: 5)
+        XCTAssertEqual(resultSpace.line, 1)
+        XCTAssertEqual(resultSpace.column, 6) // space
+        
+        let resultW = index.lineAndColumn(utf16Offset: 6)
+        XCTAssertEqual(resultW.line, 1)
+        XCTAssertEqual(resultW.column, 7) // W
+        
+        let resultD = index.lineAndColumn(utf16Offset: 10)
+        XCTAssertEqual(resultD.line, 1)
+        XCTAssertEqual(resultD.column, 11) // d
+    }
+    
+    // MARK: - Test 2: testLineAndColumnMultiline
+    /// Multiple lines with Unix line endings
+    func testLineAndColumnMultiline() {
+        let text = "Line 1\nLine 2\nLine 3"
+        let index = LineIndex(text)
+        
+        XCTAssertEqual(index.lineCount, 3)
+        
+        // Line 1 positions: 0-6 (includes \n at position 6)
+        let line1Start = index.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(line1Start.line, 1)
+        XCTAssertEqual(line1Start.column, 1)
+        
+        let line1End = index.lineAndColumn(utf16Offset: 5) // '1' character
+        XCTAssertEqual(line1End.line, 1)
+        XCTAssertEqual(line1End.column, 6)
+        
+        // Line 2 starts after \n (position 7)
+        let line2Start = index.lineAndColumn(utf16Offset: 7)
+        XCTAssertEqual(line2Start.line, 2)
+        XCTAssertEqual(line2Start.column, 1)
+        
+        let line2Mid = index.lineAndColumn(utf16Offset: 9) // 'n' in "Line"
+        XCTAssertEqual(line2Mid.line, 2)
+        XCTAssertEqual(line2Mid.column, 3)
+        
+        // Line 3 positions: 14-19
+        let line3Start = index.lineAndColumn(utf16Offset: 14)
+        XCTAssertEqual(line3Start.line, 3)
+        XCTAssertEqual(line3Start.column, 1)
+        
+        let line3End = index.lineAndColumn(utf16Offset: 19) // '3'
+        XCTAssertEqual(line3End.line, 3)
+        XCTAssertEqual(line3End.column, 6)
+    }
+    
+    // MARK: - Test 3: testLineAndColumnEmptyFile
+    /// Edge case: empty file
+    func testLineAndColumnEmptyFile() {
+        let text = ""
+        let index = LineIndex(text)
+        
+        XCTAssertEqual(index.lineCount, 1)
+        XCTAssertEqual(index.lineStartOffsets, [0])
+        
+        let result = index.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(result.line, 1)
+        XCTAssertEqual(result.column, 1)
+        
+        // Line text should be empty
+        XCTAssertEqual(index.lineText(line: 1), "")
+    }
+    
+    // MARK: - Test 4: testLineAndColumnUnicode
+    /// UTF-16 surrogate pairs and combining characters
+    func testLineAndColumnUnicode() {
+        // Emoji 😀 (U+1F600) is a surrogate pair: takes 2 UTF-16 code units
+        let text = "Hello😀World"
+        let index = LineIndex(text)
+        
+        // H=0, e=1, l=2, l=3, o=4, 😀=5-6 (surrogate pair), W=7, o=8, r=9, l=10, d=11
+        
+        let resultBeforeEmoji = index.lineAndColumn(utf16Offset: 4)
+        XCTAssertEqual(resultBeforeEmoji.line, 1)
+        XCTAssertEqual(resultBeforeEmoji.column, 5) // o
+        
+        // Emoji starts at UTF-16 offset 5
+        let resultEmojiStart = index.lineAndColumn(utf16Offset: 5)
+        XCTAssertEqual(resultEmojiStart.line, 1)
+        XCTAssertEqual(resultEmojiStart.column, 6)
+        
+        // Second half of surrogate pair at offset 6
+        let resultEmojiEnd = index.lineAndColumn(utf16Offset: 6)
+        XCTAssertEqual(resultEmojiEnd.line, 1)
+        XCTAssertEqual(resultEmojiEnd.column, 7)
+        
+        let resultAfterEmoji = index.lineAndColumn(utf16Offset: 7)
+        XCTAssertEqual(resultAfterEmoji.line, 1)
+        XCTAssertEqual(resultAfterEmoji.column, 8) // W
+        
+        // Test with emoji at start of line
+        let text2 = "😀\nLine2"
+        let index2 = LineIndex(text2)
+        
+        let emojiLine = index2.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(emojiLine.line, 1)
+        XCTAssertEqual(emojiLine.column, 1)
+        
+        // 😀 takes 2 UTF-16 units, plus \n = 3 total before Line2
+        let line2Start = index2.lineAndColumn(utf16Offset: 3)
+        XCTAssertEqual(line2Start.line, 2)
+        XCTAssertEqual(line2Start.column, 1)
+        
+        // Multiline with emoji
+        XCTAssertGreaterThanOrEqual(index2.lineCount, 2)
+    }
+    
+    // MARK: - Test 5: testLineAndColumnCRLF
+    /// Windows line endings (CRLF)
+    func testLineAndColumnCRLF() {
+        let text = "Line 1\r\nLine 2\r\nLine 3"
+        let index = LineIndex(text)
+        
+        XCTAssertEqual(index.lineCount, 3)
+        
+        // Line 1: positions 0-7 (includes \r\n)
+        let line1Start = index.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(line1Start.line, 1)
+        XCTAssertEqual(line1Start.column, 1)
+        
+        // Last char of line 1 (the '1')
+        let line1End = index.lineAndColumn(utf16Offset: 5)
+        XCTAssertEqual(line1End.line, 1)
+        XCTAssertEqual(line1End.column, 6)
+        
+        // Line 2 starts after \r\n (position 8)
+        let line2Start = index.lineAndColumn(utf16Offset: 8)
+        XCTAssertEqual(line2Start.line, 2)
+        XCTAssertEqual(line2Start.column, 1)
+        
+        // Line 3
+        let line3Start = index.lineAndColumn(utf16Offset: 16)
+        XCTAssertEqual(line3Start.line, 3)
+        XCTAssertEqual(line3Start.column, 1)
+    }
+    
+    // MARK: - Test 6: testLineAndColumnMixedEndings
+    /// Mixed \n and \r\n line endings
+    func testLineAndColumnMixedEndings() {
+        let text = "Unix\nWindows\r\nMac\rUnixAgain\n"
+        let index = LineIndex(text)
+        
+        // Should handle 4 lines with different endings
+        // Line 1: "Unix\n" (5 chars)
+        // Line 2: "Windows\r\n" (10 chars)  
+        // Line 3: "Mac\r" (4 chars)
+        // Line 4: "UnixAgain\n" (10 chars)
+        
+        XCTAssertGreaterThanOrEqual(index.lineCount, 4)
+        
+        // Verify each line starts at correct position
+        let line1Start = index.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(line1Start.line, 1)
+        
+        // Line 2 starts after "Unix\n" = position 5
+        let line2Start = index.lineAndColumn(utf16Offset: 5)
+        XCTAssertEqual(line2Start.line, 2)
+        XCTAssertEqual(line2Start.column, 1)
+        
+        // Verify line text retrieval
+        let line1Text = index.lineText(line: 1)
+        XCTAssertEqual(line1Text, "Unix")
+        
+        let line2Text = index.lineText(line: 2)
+        XCTAssertEqual(line2Text, "Windows")
+        
+        let line3Text = index.lineText(line: 3)
+        XCTAssertEqual(line3Text, "Mac")
+        
+        let line4Text = index.lineText(line: 4)
+        XCTAssertEqual(line4Text, "UnixAgain")
+    }
+    
+    // MARK: - Test 7: testLineTextRetrieval
+    /// Getting line content by number
+    func testLineTextRetrieval() {
+        let text = "First line\nSecond line\nThird line with content"
+        let index = LineIndex(text)
+        
+        // Basic retrieval
+        XCTAssertEqual(index.lineText(line: 1), "First line")
+        XCTAssertEqual(index.lineText(line: 2), "Second line")
+        XCTAssertEqual(index.lineText(line: 3), "Third line with content")
+        
+        // Edge cases
+        XCTAssertEqual(index.lineText(line: 0), "") // Below valid range
+        XCTAssertEqual(index.lineText(line: -1), "") // Negative
+        XCTAssertEqual(index.lineText(line: 100), "") // Beyond range
+        XCTAssertEqual(index.lineText(line: 4), "") // Just beyond
+        
+        // Single line without newline
+        let singleLine = LineIndex("Just one line")
+        XCTAssertEqual(singleLine.lineText(line: 1), "Just one line")
+        XCTAssertEqual(singleLine.lineCount, 1)
+        
+        // Empty lines
+        let withEmpty = LineIndex("Line 1\n\nLine 3")
+        XCTAssertEqual(withEmpty.lineText(line: 1), "Line 1")
+        XCTAssertEqual(withEmpty.lineText(line: 2), "") // Empty line
+        XCTAssertEqual(withEmpty.lineText(line: 3), "Line 3")
+    }
+    
+    // MARK: - Test 8: testLineIndexBinarySearch
+    /// Verify binary search efficiency and correctness
+    func testLineIndexBinarySearch() {
+        // Create a large file with many lines
+        var lines: [String] = []
+        for i in 1...1000 {
+            lines.append("This is line number \(i) with some content to make it realistic")
+        }
+        let text = lines.joined(separator: "\n")
+        let index = LineIndex(text)
+        
+        XCTAssertEqual(index.lineCount, 1000)
+        
+        // Test binary search at various positions
+        
+        // Start of file
+        let start = index.lineAndColumn(utf16Offset: 0)
+        XCTAssertEqual(start.line, 1)
+        XCTAssertEqual(start.column, 1)
+        
+        // End of file - find offset of last character
+        let nsText = text as NSString
+        let endOffset = nsText.length - 1
+        let end = index.lineAndColumn(utf16Offset: endOffset)
+        XCTAssertEqual(end.line, 1000)
+        
+        // Middle of file (around line 500)
+        let line500Start = index.lineStartOffsets[499] // 0-indexed
+        let middle = index.lineAndColumn(utf16Offset: line500Start)
+        XCTAssertEqual(middle.line, 500)
+        XCTAssertEqual(middle.column, 1)
+        
+        // Test at exact line boundaries
+        for lineNum in [1, 100, 250, 500, 750, 999, 1000] {
+            let offset = index.lineStartOffsets[lineNum - 1]
+            let result = index.lineAndColumn(utf16Offset: offset)
+            XCTAssertEqual(result.line, lineNum, "Line \(lineNum) start should be at line \(lineNum)")
+            XCTAssertEqual(result.column, 1, "Line \(lineNum) should start at column 1")
+        }
+        
+        // Verify line text for various lines
+        XCTAssertTrue(index.lineText(line: 1).contains("line number 1"))
+        XCTAssertTrue(index.lineText(line: 500).contains("line number 500"))
+        XCTAssertTrue(index.lineText(line: 1000).contains("line number 1000"))
+    }
+    
+    // MARK: - Additional Edge Cases
+    
+    /// Test file ending without newline
+    func testNoFinalNewline() {
+        let text = "Line 1\nLine 2\nNo newline at end"
+        let index = LineIndex(text)
+        
+        XCTAssertEqual(index.lineCount, 3)
+        XCTAssertEqual(index.lineText(line: 3), "No newline at end")
+        
+        // Last character position
+        let nsText = text as NSString
+        let lastOffset = nsText.length - 1
+        let lastChar = index.lineAndColumn(utf16Offset: lastOffset)
+        XCTAssertEqual(lastChar.line, 3)
+        XCTAssertEqual(lastChar.column, "No newline at end".count)
+    }
+    
+    /// Test single newline only
+    func testOnlyNewline() {
+        let text = "\n"
+        let index = LineIndex(text)
+        
+        // Line 1 should be empty (just the newline)
+        let line1Text = index.lineText(line: 1)
+        XCTAssertEqual(line1Text, "")
+    }
+    
+    /// Test multiple consecutive newlines
+    func testMultipleConsecutiveNewlines() {
+        let text = "Line 1\n\n\nLine 4"
+        let index = LineIndex(text)
+        
+        XCTAssertEqual(index.lineCount, 4)
+        XCTAssertEqual(index.lineText(line: 1), "Line 1")
+        XCTAssertEqual(index.lineText(line: 2), "")
+        XCTAssertEqual(index.lineText(line: 3), "")
+        XCTAssertEqual(index.lineText(line: 4), "Line 4")
+    }
+    
+    /// Test tab characters and special whitespace
+    func testSpecialCharacters() {
+        let text = "Line with\ttab\nand\r\nWindows"
+        let index = LineIndex(text)
+        
+        XCTAssertGreaterThanOrEqual(index.lineCount, 3)
+        XCTAssertTrue(index.lineText(line: 1).contains("tab"))
+        XCTAssertTrue(index.lineText(line: 2).contains("and"))
+    }
+}
+#endif

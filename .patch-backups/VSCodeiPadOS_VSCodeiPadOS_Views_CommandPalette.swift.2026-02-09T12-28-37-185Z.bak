@@ -1,0 +1,701 @@
+//
+//  CommandPalette.swift
+//  VSCodeiPadOS
+//
+//  VS Code-style Command Palette with fuzzy search
+//
+
+import SwiftUI
+
+// MARK: - Command Definition
+
+struct Command: Identifiable, Equatable {
+    let id = UUID()
+    let name: String
+    let shortcut: String?
+    let icon: String
+    let category: CommandCategory
+    let action: () -> Void
+    
+    static func == (lhs: Command, rhs: Command) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+enum CommandCategory: String, CaseIterable {
+    case file = "File"
+    case edit = "Edit"
+    case selection = "Selection"
+    case view = "View"
+    case go = "Go"
+    case run = "Run"
+    case terminal = "Terminal"
+    case preferences = "Preferences"
+    case help = "Help"
+    
+    var icon: String {
+        switch self {
+        case .file: return "doc"
+        case .edit: return "pencil"
+        case .selection: return "selection.pin.in.out"
+        case .view: return "rectangle.3.group"
+        case .go: return "arrow.right"
+        case .run: return "play"
+        case .terminal: return "terminal"
+        case .preferences: return "gear"
+        case .help: return "questionmark.circle"
+        }
+    }
+}
+
+// MARK: - Recent Commands Manager
+
+class RecentCommandsManager: ObservableObject {
+    @Published var recentCommands: [String] = []
+    private let maxRecent = 5
+    private let storageKey = "recentCommands"
+    
+    init() {
+        loadRecent()
+    }
+    
+    func addRecent(_ commandName: String) {
+        recentCommands.removeAll { $0 == commandName }
+        recentCommands.insert(commandName, at: 0)
+        if recentCommands.count > maxRecent {
+            recentCommands = Array(recentCommands.prefix(maxRecent))
+        }
+        saveRecent()
+    }
+    
+    private func loadRecent() {
+        if let saved = UserDefaults.standard.stringArray(forKey: storageKey) {
+            recentCommands = saved
+        }
+    }
+    
+    private func saveRecent() {
+        UserDefaults.standard.set(recentCommands, forKey: storageKey)
+    }
+}
+
+// MARK: - Fuzzy Search
+
+struct FuzzyMatcher {
+    static func score(query: String, target: String) -> Int? {
+        guard !query.isEmpty else { return 1000 }
+        
+        let queryLower = query.lowercased()
+        let targetLower = target.lowercased()
+        
+        // Exact match gets highest score
+        if targetLower == queryLower { return 10000 }
+        
+        // Contains full query
+        if targetLower.contains(queryLower) {
+            // Bonus for starting with query
+            if targetLower.hasPrefix(queryLower) {
+                return 5000 + (1000 - target.count)
+            }
+            return 3000 + (1000 - target.count)
+        }
+        
+        // Fuzzy character matching
+        var queryIndex = queryLower.startIndex
+        var targetIndex = targetLower.startIndex
+        var score = 0
+        var consecutiveBonus = 0
+        var lastMatchIndex: String.Index? = nil
+        
+        while queryIndex < queryLower.endIndex && targetIndex < targetLower.endIndex {
+            if queryLower[queryIndex] == targetLower[targetIndex] {
+                score += 100 + consecutiveBonus
+                
+                // Bonus for consecutive matches
+                if let lastIdx = lastMatchIndex,
+                   targetLower.index(after: lastIdx) == targetIndex {
+                    consecutiveBonus += 50
+                } else {
+                    consecutiveBonus = 0
+                }
+                
+                // Bonus for matching at word boundaries
+                if targetIndex == targetLower.startIndex ||
+                   !targetLower[targetLower.index(before: targetIndex)].isLetter {
+                    score += 75
+                }
+                
+                lastMatchIndex = targetIndex
+                queryIndex = queryLower.index(after: queryIndex)
+            }
+            targetIndex = targetLower.index(after: targetIndex)
+        }
+        
+        // All query characters must be found
+        guard queryIndex == queryLower.endIndex else { return nil }
+        
+        return score
+    }
+    
+    static func highlight(query: String, in text: String) -> [(String, Bool)] {
+        guard !query.isEmpty else { return [(text, false)] }
+        
+        var result: [(String, Bool)] = []
+        let queryLower = query.lowercased()
+        let textLower = text.lowercased()
+        
+        var queryIndex = queryLower.startIndex
+        var currentSegment = ""
+        var isMatch = false
+        
+        for (i, char) in text.enumerated() {
+            let textIndex = textLower.index(textLower.startIndex, offsetBy: i)
+            
+            if queryIndex < queryLower.endIndex && 
+               textLower[textIndex] == queryLower[queryIndex] {
+                if !isMatch && !currentSegment.isEmpty {
+                    result.append((currentSegment, false))
+                    currentSegment = ""
+                }
+                isMatch = true
+                currentSegment.append(char)
+                queryIndex = queryLower.index(after: queryIndex)
+            } else {
+                if isMatch && !currentSegment.isEmpty {
+                    result.append((currentSegment, true))
+                    currentSegment = ""
+                }
+                isMatch = false
+                currentSegment.append(char)
+            }
+        }
+        
+        if !currentSegment.isEmpty {
+            result.append((currentSegment, isMatch))
+        }
+        
+        return result
+    }
+}
+
+// MARK: - Command Palette View
+
+struct CommandPaletteView: View {
+    @ObservedObject var editorCore: EditorCore
+    @Binding var showSettings: Bool
+    @Binding var showTerminal: Bool
+    @StateObject private var recentManager = RecentCommandsManager()
+    
+    @State private var searchText = ""
+    @State private var selectedIndex = 0
+    @FocusState private var isSearchFocused: Bool
+    
+    private var allCommands: [Command] {
+        [
+            // File Commands
+            Command(name: "New File", shortcut: "⌘N", icon: "doc.badge.plus", category: .file) {
+                editorCore.addTab()
+                dismiss()
+            },
+            Command(name: "New Window", shortcut: "⌘⇧N", icon: "macwindow.badge.plus", category: .file) {
+                dismiss()
+            },
+            Command(name: "Open File", shortcut: "⌘O", icon: "doc", category: .file) {
+                editorCore.showFilePicker = true
+                dismiss()
+            },
+            Command(name: "Open Folder", shortcut: "⌘⇧O", icon: "folder", category: .file) {
+                dismiss()
+            },
+            Command(name: "Save", shortcut: "⌘S", icon: "square.and.arrow.down", category: .file) {
+                editorCore.saveActiveTab()
+                dismiss()
+            },
+            Command(name: "Save As...", shortcut: "⌘⇧S", icon: "square.and.arrow.down.on.square", category: .file) {
+                dismiss()
+            },
+            Command(name: "Save All", shortcut: "⌘⌥S", icon: "square.and.arrow.down.fill", category: .file) {
+                editorCore.saveAllTabs()
+                dismiss()
+            },
+            Command(name: "Close Editor", shortcut: "⌘W", icon: "xmark.square", category: .file) {
+                if let tabId = editorCore.activeTabId {
+                    editorCore.closeTab(id: tabId)
+                }
+                dismiss()
+            },
+            Command(name: "Close All Editors", shortcut: "⌘K ⌘W", icon: "xmark.square.fill", category: .file) {
+                editorCore.closeAllTabs()
+                dismiss()
+            },
+            
+            // Edit Commands
+            Command(name: "Undo", shortcut: "⌘Z", icon: "arrow.uturn.backward", category: .edit) {
+                dismiss()
+            },
+            Command(name: "Redo", shortcut: "⌘⇧Z", icon: "arrow.uturn.forward", category: .edit) {
+                dismiss()
+            },
+            Command(name: "Cut", shortcut: "⌘X", icon: "scissors", category: .edit) {
+                dismiss()
+            },
+            Command(name: "Copy", shortcut: "⌘C", icon: "doc.on.doc", category: .edit) {
+                dismiss()
+            },
+            Command(name: "Paste", shortcut: "⌘V", icon: "doc.on.clipboard", category: .edit) {
+                dismiss()
+            },
+            Command(name: "Find", shortcut: "⌘F", icon: "magnifyingglass", category: .edit) {
+                editorCore.showSearch = true
+                dismiss()
+            },
+            Command(name: "Replace", shortcut: "⌘⌥F", icon: "arrow.left.arrow.right", category: .edit) {
+                editorCore.showSearch = true
+                dismiss()
+            },
+            Command(name: "Find in Files", shortcut: "⌘⇧F", icon: "doc.text.magnifyingglass", category: .edit) {
+                dismiss()
+            },
+            
+            // Selection Commands
+            Command(name: "Select All", shortcut: "⌘A", icon: "selection.pin.in.out", category: .selection) {
+                dismiss()
+            },
+            Command(name: "Expand Selection", shortcut: "⌃⇧⌘→", icon: "arrow.up.left.and.arrow.down.right", category: .selection) {
+                dismiss()
+            },
+            Command(name: "Shrink Selection", shortcut: "⌃⇧⌘←", icon: "arrow.down.right.and.arrow.up.left", category: .selection) {
+                dismiss()
+            },
+            Command(name: "Add Cursor Above", shortcut: "⌥⌘↑", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
+                dismiss()
+            },
+            Command(name: "Add Cursor Below", shortcut: "⌥⌘↓", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
+                dismiss()
+            },
+            
+            // View Commands
+            Command(name: "Toggle Sidebar", shortcut: "⌘B", icon: "sidebar.left", category: .view) {
+                editorCore.toggleSidebar()
+                dismiss()
+            },
+            Command(name: "Toggle Terminal", shortcut: "⌘`", icon: "terminal", category: .view) {
+                showTerminal.toggle()
+                dismiss()
+            },
+            Command(name: "Toggle Full Screen", shortcut: "⌃⌘F", icon: "arrow.up.left.and.arrow.down.right", category: .view) {
+                dismiss()
+            },
+            Command(name: "Zoom In", shortcut: "⌘+", icon: "plus.magnifyingglass", category: .view) {
+                dismiss()
+            },
+            Command(name: "Zoom Out", shortcut: "⌘-", icon: "minus.magnifyingglass", category: .view) {
+                dismiss()
+            },
+            Command(name: "Reset Zoom", shortcut: "⌘0", icon: "1.magnifyingglass", category: .view) {
+                dismiss()
+            },
+            Command(name: "Show Command Palette", shortcut: "⌘⇧P", icon: "command", category: .view) {
+                dismiss()
+            },
+            Command(name: "Quick Open", shortcut: "⌘P", icon: "magnifyingglass", category: .view) {
+                editorCore.showQuickOpen = true
+                dismiss()
+            },
+            
+            // Go Commands
+            Command(name: "Go to File", shortcut: "⌘P", icon: "doc.text.magnifyingglass", category: .go) {
+                editorCore.showQuickOpen = true
+                dismiss()
+            },
+            Command(name: "Go to Symbol", shortcut: "⌘⇧O", icon: "number", category: .go) {
+                editorCore.showGoToSymbol = true
+                dismiss()
+            },
+            Command(name: "Go to Line", shortcut: "⌘G", icon: "arrow.right.to.line", category: .go) {
+                editorCore.showGoToLine = true
+                dismiss()
+            },
+            Command(name: "Go to Definition", shortcut: "F12", icon: "arrow.right.circle", category: .go) {
+                dismiss()
+            },
+            Command(name: "Go Back", shortcut: "⌃-", icon: "chevron.backward", category: .go) {
+                dismiss()
+            },
+            Command(name: "Go Forward", shortcut: "⌃⇧-", icon: "chevron.forward", category: .go) {
+                dismiss()
+            },
+            Command(name: "Next Editor", shortcut: "⌃Tab", icon: "arrow.right.square", category: .go) {
+                editorCore.nextTab()
+                dismiss()
+            },
+            Command(name: "Previous Editor", shortcut: "⌃⇧Tab", icon: "arrow.left.square", category: .go) {
+                editorCore.previousTab()
+                dismiss()
+            },
+            
+            // Run Commands
+            Command(name: "Start Debugging", shortcut: "F5", icon: "play.fill", category: .run) {
+                dismiss()
+            },
+            Command(name: "Run Without Debugging", shortcut: "⌃F5", icon: "play", category: .run) {
+                dismiss()
+            },
+            Command(name: "Stop", shortcut: "⇧F5", icon: "stop.fill", category: .run) {
+                dismiss()
+            },
+            Command(name: "Restart", shortcut: "⌃⇧F5", icon: "arrow.clockwise", category: .run) {
+                dismiss()
+            },
+            
+            // Terminal Commands
+            Command(name: "New Terminal", shortcut: "⌃⇧`", icon: "terminal.fill", category: .terminal) {
+                showTerminal = true
+                dismiss()
+            },
+            Command(name: "Clear Terminal", shortcut: nil, icon: "trash", category: .terminal) {
+                dismiss()
+            },
+            Command(name: "Kill Terminal", shortcut: nil, icon: "xmark.circle", category: .terminal) {
+                showTerminal = false
+                dismiss()
+            },
+            
+            // Preferences Commands
+            Command(name: "Settings", shortcut: "⌘,", icon: "gear", category: .preferences) {
+                showSettings = true
+                dismiss()
+            },
+            Command(name: "Keyboard Shortcuts", shortcut: "⌘K ⌘S", icon: "keyboard", category: .preferences) {
+                dismiss()
+            },
+            Command(name: "Color Theme", shortcut: nil, icon: "paintpalette", category: .preferences) {
+                dismiss()
+            },
+            Command(name: "File Icon Theme", shortcut: nil, icon: "doc.badge.gearshape", category: .preferences) {
+                dismiss()
+            },
+            
+            // Help Commands
+            Command(name: "Welcome", shortcut: nil, icon: "hand.wave", category: .help) {
+                dismiss()
+            },
+            Command(name: "Documentation", shortcut: nil, icon: "book", category: .help) {
+                dismiss()
+            },
+            Command(name: "AI Assistant", shortcut: "⌘⇧A", icon: "brain", category: .help) {
+                editorCore.showAIAssistant = true
+                dismiss()
+            }
+        ]
+    }
+    
+    private var filteredCommands: [Command] {
+        if searchText.isEmpty {
+            // Show recent commands first, then all commands
+            let recentNames = Set(recentManager.recentCommands)
+            let recent = allCommands.filter { recentNames.contains($0.name) }
+                .sorted { a, b in
+                    let aIdx = recentManager.recentCommands.firstIndex(of: a.name) ?? Int.max
+                    let bIdx = recentManager.recentCommands.firstIndex(of: b.name) ?? Int.max
+                    return aIdx < bIdx
+                }
+            let others = allCommands.filter { !recentNames.contains($0.name) }
+            return recent + others
+        }
+        
+        return allCommands
+            .compactMap { cmd -> (Command, Int)? in
+                guard let score = FuzzyMatcher.score(query: searchText, target: cmd.name) else {
+                    return nil
+                }
+                return (cmd, score)
+            }
+            .sorted { $0.1 > $1.1 }
+            .map { $0.0 }
+    }
+    
+    private func dismiss() {
+        editorCore.showCommandPalette = false
+    }
+    
+    private func executeCommand(_ command: Command) {
+        recentManager.addRecent(command.name)
+        command.action()
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Search Header
+            HStack(spacing: 12) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.secondary)
+                
+                TextField("", text: $searchText, prompt: Text("Type a command or search...").foregroundColor(.secondary))
+                    .font(.system(size: 14))
+                    .textFieldStyle(.plain)
+                    .focused($isSearchFocused)
+                    .onSubmit {
+                        if let command = filteredCommands[safe: selectedIndex] {
+                            executeCommand(command)
+                        }
+                    }
+                
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(UIColor.secondarySystemBackground))
+            
+            Divider()
+            
+            // Commands List
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        // Recent section header
+                        if searchText.isEmpty && !recentManager.recentCommands.isEmpty {
+                            HStack {
+                                Text("recently used")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .textCase(.uppercase)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Color(UIColor.tertiarySystemBackground))
+                        }
+                        
+                        ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { index, command in
+                            CommandRowView(
+                                command: command,
+                                searchQuery: searchText,
+                                isSelected: index == selectedIndex,
+                                isRecent: recentManager.recentCommands.contains(command.name)
+                            )
+                            .id(index)
+                            .onTapGesture {
+                                executeCommand(command)
+                            }
+                            
+                            // Category divider after recent commands
+                            if searchText.isEmpty && 
+                               index == recentManager.recentCommands.count - 1 && 
+                               !recentManager.recentCommands.isEmpty {
+                                HStack {
+                                    Text("all commands")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                        .textCase(.uppercase)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 6)
+                                .background(Color(UIColor.tertiarySystemBackground))
+                            }
+                        }
+                    }
+                }
+                .onChange(of: selectedIndex) { newIndex in
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
+            }
+            .frame(maxHeight: 400)
+            
+            // Footer
+            HStack(spacing: 16) {
+                FooterHint(keys: ["↑", "↓"], description: "navigate")
+                FooterHint(keys: ["↵"], description: "select")
+                FooterHint(keys: ["esc"], description: "close")
+                Spacer()
+                Text("\(filteredCommands.count) commands")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(UIColor.tertiarySystemBackground))
+        }
+        .frame(width: 600)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.3), radius: 30, x: 0, y: 10)
+        .onAppear {
+            isSearchFocused = true
+            selectedIndex = 0
+        }
+        .onChange(of: searchText) { _ in
+            selectedIndex = 0
+        }
+        .onKeyPress(.upArrow) {
+            if selectedIndex > 0 {
+                selectedIndex -= 1
+            }
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            if selectedIndex < filteredCommands.count - 1 {
+                selectedIndex += 1
+            }
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            dismiss()
+            return .handled
+        }
+    }
+}
+
+// MARK: - Command Row View
+
+struct CommandRowView: View {
+    let command: Command
+    let searchQuery: String
+    let isSelected: Bool
+    let isRecent: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Category icon
+            Image(systemName: command.icon)
+                .font(.system(size: 14))
+                .foregroundColor(isSelected ? .white : .accentColor)
+                .frame(width: 24)
+            
+            // Command name with highlighting
+            highlightedName
+            
+            Spacer()
+            
+            // Recent indicator
+            if isRecent && searchQuery.isEmpty {
+                Image(systemName: "clock")
+                    .font(.system(size: 10))
+                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+            }
+            
+            // Category badge
+            Text(command.category.rawValue)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isSelected ? Color.white.opacity(0.2) : Color(UIColor.tertiarySystemFill))
+                )
+            
+            // Keyboard shortcut
+            if let shortcut = command.shortcut {
+                ShortcutBadge(shortcut: shortcut, isSelected: isSelected)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor : Color.clear)
+        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 1)
+        .contentShape(Rectangle())
+    }
+    
+    @ViewBuilder
+    private var highlightedName: some View {
+        if searchQuery.isEmpty {
+            Text(command.name)
+                .font(.system(size: 13))
+                .foregroundColor(isSelected ? .white : .primary)
+        } else {
+            let parts = FuzzyMatcher.highlight(query: searchQuery, in: command.name)
+            HStack(spacing: 0) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                    Text(part.0)
+                        .font(.system(size: 13, weight: part.1 ? .bold : .regular))
+                        .foregroundColor(isSelected ? .white : (part.1 ? .accentColor : .primary))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Shortcut Badge
+
+struct ShortcutBadge: View {
+    let shortcut: String
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(shortcut.components(separatedBy: " "), id: \.self) { key in
+                Text(key)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(isSelected ? Color.white.opacity(0.2) : Color(UIColor.tertiarySystemFill))
+                    )
+            }
+        }
+    }
+}
+
+// MARK: - Footer Hint
+
+struct FooterHint: View {
+    let keys: [String]
+    let description: String
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(keys, id: \.self) { key in
+                Text(key)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+            }
+            Text(description)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Safe Array Access
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    ZStack {
+        Color.black.opacity(0.5)
+        CommandPaletteView(
+            editorCore: EditorCore(),
+            showSettings: .constant(false),
+            showTerminal: .constant(false)
+        )
+    }
+}

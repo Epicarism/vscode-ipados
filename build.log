@@ -1,0 +1,4 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj -scheme VSCodeiPadOS -destination "platform=iOS Simulator,name=iPad Pro (12.9-inch) (6th generation)" clean build
+
+** BUILD INTERRUPTED **

@@ -1,0 +1,183 @@
+import SwiftUI
+
+// MARK: - Git View (Source Control Panel)
+
+struct GitView: View {
+    @ObservedObject private var gitManager = GitManager.shared
+    @EnvironmentObject var editorCore: EditorCore
+    @State private var commitMessage = ""
+    @State private var selectedEntry: GitStatusEntry?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("SOURCE CONTROL")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: refreshGit) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            
+            Divider()
+            
+            // Commit input
+            VStack(spacing: 8) {
+                TextField("Message", text: $commitMessage)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                
+                Button(action: commitChanges) {
+                    HStack {
+                        Image(systemName: "checkmark")
+                        Text("Commit")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(commitMessage.isEmpty ? Color.gray.opacity(0.3) : Color.accentColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .disabled(commitMessage.isEmpty)
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            
+            Divider()
+            
+            // Changes list
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    if !gitManager.status.isEmpty {
+                        sectionHeader("Changes", count: gitManager.status.count)
+                        ForEach(gitManager.status) { entry in
+                            changeRow(entry)
+                        }
+                    } else {
+                        Text("No changes")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .padding()
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+            
+            Spacer()
+            
+            // Bottom actions
+            HStack(spacing: 12) {
+                Button(action: pullChanges) {
+                    Image(systemName: "arrow.down.circle")
+                    Text("Pull")
+                }
+                .font(.system(size: 11))
+                .buttonStyle(.plain)
+                
+                Button(action: pushChanges) {
+                    Image(systemName: "arrow.up.circle")
+                    Text("Push")
+                }
+                .font(.system(size: 11))
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Text(gitManager.currentBranch)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+        }
+        .background(Color(UIColor.systemBackground))
+    }
+    
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text("\(count)")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.2))
+                .cornerRadius(8)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private func changeRow(_ entry: GitStatusEntry) -> some View {
+        HStack(spacing: 8) {
+            Text(entry.kind.rawValue.prefix(1).uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(colorForKind(entry.kind))
+                .frame(width: 16)
+            
+            Text(entry.path.components(separatedBy: "/").last ?? entry.path)
+                .font(.system(size: 12))
+                .lineLimit(1)
+            
+            Spacer()
+            
+            Button(action: { stageFile(entry.path) }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(selectedEntry?.id == entry.id ? Color.accentColor.opacity(0.2) : Color.clear)
+        .cornerRadius(4)
+        .onTapGesture {
+            selectedEntry = entry
+        }
+    }
+    
+    private func colorForKind(_ kind: GitChangeKind) -> Color {
+        switch kind {
+        case .added: return .green
+        case .modified: return .orange
+        case .deleted: return .red
+        case .renamed: return .blue
+        case .untracked: return .gray
+        case .copied: return .cyan
+        case .unmerged: return .red
+        case .typeChanged: return .purple
+        case .unknown: return .secondary
+        }
+    }
+    
+    private func refreshGit() {
+        Task { await gitManager.refresh() }
+    }
+    
+    private func stageFile(_ path: String) {
+        Task { try? await gitManager.stage(file: path) }
+    }
+    
+    private func commitChanges() {
+        guard !commitMessage.isEmpty else { return }
+        Task {
+            try? await gitManager.commit(message: commitMessage)
+            await MainActor.run { commitMessage = "" }
+        }
+    }
+    
+    private func pullChanges() {
+        Task { try? await gitManager.pull() }
+    }
+    
+    private func pushChanges() {
+        Task { try? await gitManager.push() }
+    }
+}

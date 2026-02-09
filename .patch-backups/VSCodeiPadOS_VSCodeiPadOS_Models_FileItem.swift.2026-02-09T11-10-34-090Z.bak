@@ -1,0 +1,114 @@
+import Foundation
+import SwiftUI
+
+// MARK: - File Icon Helper
+func fileIcon(for filename: String, isDirectory: Bool, isExpanded: Bool) -> String {
+    if isDirectory {
+        return isExpanded ? "folder.fill" : "folder"
+    }
+    
+    let ext = (filename as NSString).pathExtension.lowercased()
+    switch ext {
+    case "swift": return "swift"
+    case "js", "jsx": return "curlybraces"
+    case "ts", "tsx": return "t.square"
+    case "json": return "curlybraces.square"
+    case "html", "htm": return "globe"
+    case "css", "scss", "sass", "less": return "paintbrush"
+    case "py": return "chevron.left.forwardslash.chevron.right"
+    case "rb": return "diamond"
+    case "java", "kt": return "cup.and.saucer"
+    case "c", "cpp", "h", "hpp": return "c.square"
+    case "m", "mm": return "m.square"
+    case "go": return "g.square"
+    case "rs": return "r.square"
+    case "php": return "p.square"
+    case "md", "markdown": return "doc.richtext"
+    case "txt": return "doc.text"
+    case "pdf": return "doc.fill"
+    case "png", "jpg", "jpeg", "gif", "svg", "webp": return "photo"
+    case "mp3", "wav", "aac", "flac": return "music.note"
+    case "mp4", "mov", "avi", "mkv": return "film"
+    case "zip", "tar", "gz", "rar": return "archivebox"
+    case "sh", "bash", "zsh": return "terminal"
+    case "yml", "yaml": return "doc.badge.gearshape"
+    case "xml": return "chevron.left.forwardslash.chevron.right"
+    case "gitignore", "gitattributes": return "arrow.triangle.branch"
+    case "dockerfile": return "shippingbox"
+    case "lock": return "lock"
+    default: return "doc"
+    }
+}
+
+// MARK: - File Color Helper
+func fileColor(for filename: String, isDirectory: Bool) -> Color {
+    if isDirectory {
+        return .blue
+    }
+    
+    let ext = (filename as NSString).pathExtension.lowercased()
+    switch ext {
+    case "swift": return .orange
+    case "js", "jsx": return .yellow
+    case "ts", "tsx": return .blue
+    case "json": return .yellow
+    case "html", "htm": return .orange
+    case "css", "scss", "sass", "less": return .blue
+    case "py": return .green
+    case "rb": return .red
+    case "java", "kt": return .orange
+    case "c", "cpp", "h", "hpp": return .blue
+    case "m", "mm": return .blue
+    case "go": return .cyan
+    case "rs": return .orange
+    case "php": return .purple
+    case "md", "markdown": return .blue
+    case "png", "jpg", "jpeg", "gif", "svg", "webp": return .purple
+    case "mp3", "wav", "aac", "flac": return .pink
+    case "mp4", "mov", "avi", "mkv": return .pink
+    case "gitignore", "gitattributes": return .orange
+    case "yml", "yaml": return .red
+    default: return .gray
+    }
+}
+
+/// Represents a file or directory in the file system
+struct FileItem: Identifiable, Hashable {
+    let id: UUID
+    var name: String
+    var url: URL?
+    var path: String
+    var isDirectory: Bool
+    var children: [FileItem]?
+    var isExpanded: Bool
+    
+    init(
+        id: UUID = UUID(),
+        name: String,
+        url: URL? = nil,
+        path: String = "",
+        isDirectory: Bool = false,
+        children: [FileItem]? = nil,
+        isExpanded: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.url = url
+        self.path = path.isEmpty ? (url?.path ?? "") : path
+        self.isDirectory = isDirectory
+        self.children = children
+        self.isExpanded = isExpanded
+    }
+    
+    var fileExtension: String {
+        (name as NSString).pathExtension.lowercased()
+    }
+    
+    var icon: String {
+        fileIcon(for: name, isDirectory: isDirectory, isExpanded: isExpanded)
+    }
+    
+    var iconColor: Color {
+        fileColor(for: name, isDirectory: isDirectory)
+    }
+}

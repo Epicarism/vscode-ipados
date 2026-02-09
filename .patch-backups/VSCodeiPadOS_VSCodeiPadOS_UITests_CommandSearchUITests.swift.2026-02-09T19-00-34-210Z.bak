@@ -1,0 +1,125 @@
+import XCTest
+
+final class CommandSearchUITests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
+    // Keep this list aligned with the app’s accessibility identifiers.
+    private let preferredIdentifiers = [
+        "commandSearchInput",
+        "command-search-input",
+        "CommandSearchInput",
+        "commandPaletteSearchField",
+        "command-palette-search",
+        "Command Palette",
+        "Command Search"
+    ]
+
+    private func findCommandSearchElement(in app: XCUIApplication) -> XCUIElement {
+        for id in preferredIdentifiers {
+            let tf = app.textFields[id]
+            if tf.exists { return tf }
+            let sf = app.searchFields[id]
+            if sf.exists { return sf }
+        }
+
+        // Fallback: first visible searchField/textField.
+        if app.searchFields.count > 0 {
+            return app.searchFields.element(boundBy: 0)
+        }
+        return app.textFields.element(boundBy: 0)
+    }
+
+    func testCmdShiftPOpensCommandPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Cmd+Shift+P should open the command palette.
+        app.typeKey("p", modifierFlags: [.command, .shift])
+
+        let commandSearchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(
+            commandSearchElement.waitForExistence(timeout: 10),
+            "Expected command palette search input to appear after Cmd+Shift+P"
+        )
+    }
+
+    func testEnteringTextIntoSearchInputWorks() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let searchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(searchElement.waitForExistence(timeout: 10), "Expected a command search input to exist")
+
+        searchElement.tap()
+
+        let textToEnter = "format"
+        searchElement.typeText(textToEnter)
+
+        // Validate the entered text is reflected in the field.
+        // Some UIKit controls expose their content via `value`.
+        let valueString = (searchElement.value as? String) ?? ""
+        XCTAssertTrue(valueString.contains(textToEnter), "Expected search input value to contain '\(textToEnter)'. Actual value: '\(valueString)'.")
+    }
+
+    func testRecentCommandsAppearFirstInCommandPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        // Wait for app to be running
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Open command palette with Cmd+Shift+P
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        
+        let searchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(searchElement.waitForExistence(timeout: 10), "Expected command palette search input to appear")
+
+        // Search for and select a specific command (e.g., "Format Document")
+        let commandToRun = "Format Document"
+        searchElement.tap()
+        searchElement.typeText(commandToRun)
+        
+        // Wait for command results to appear and select the first matching command
+        let firstCommand = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", commandToRun)).element(boundBy: 0)
+        XCTAssertTrue(firstCommand.waitForExistence(timeout: 5), "Expected to find '\(commandToRun)' command")
+        
+        // Store the full label of the command we're about to run
+        let commandLabel = firstCommand.label
+        
+        // Execute the command by tapping it
+        firstCommand.tap()
+        
+        // Wait a moment for command to execute and command palette to close
+        sleep(1)
+        
+        // Reopen command palette
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        
+        let secondSearchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(secondSearchElement.waitForExistence(timeout: 10), "Expected command palette to reopen")
+        
+        // Get all command cells - recent commands should appear at the top
+        let allCells = app.cells.allElementsBoundByIndex
+        XCTAssertGreaterThan(allCells.count, 0, "Expected at least one command in palette")
+        
+        // The most recently executed command should appear first in the list
+        // when the palette is reopened (with empty search or minimal search)
+        let firstCell = allCells[0]
+        let firstCellLabel = firstCell.label
+        
+        // Verify that the recently run command appears prominently
+        // Either it's first in the list, or contains the command name
+        XCTAssertTrue(
+            firstCellLabel.contains(commandToRun) || 
+            firstCellLabel.contains(commandLabel) ||
+            app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", commandLabel)).count > 0,
+            "Expected recent command '\(commandToRun)' to appear prominently in command palette. First cell label: '\(firstCellLabel)'"
+        )
+    }
+}

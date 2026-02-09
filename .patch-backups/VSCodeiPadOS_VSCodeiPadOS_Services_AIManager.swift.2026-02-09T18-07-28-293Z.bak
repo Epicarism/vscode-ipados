@@ -1,0 +1,964 @@
+import Foundation
+import SwiftUI
+
+// MARK: - AI Provider Enum
+
+enum AIProvider: String, CaseIterable, Identifiable {
+    case openai = "OpenAI"
+    case anthropic = "Anthropic"
+    case google = "Google"
+    case kimi = "Kimi"
+    case glm = "GLM"
+    case groq = "Groq"
+    case deepseek = "DeepSeek"
+    case mistral = "Mistral"
+    case ollama = "Ollama (Local)"
+    
+    var id: String { rawValue }
+    
+    var models: [AIModel] {
+        switch self {
+        case .openai:
+            return [
+                AIModel(id: "gpt-4o", name: "GPT-4o", provider: .openai),
+                AIModel(id: "gpt-4o-mini", name: "GPT-4o Mini", provider: .openai),
+                AIModel(id: "gpt-4-turbo", name: "GPT-4 Turbo", provider: .openai),
+                AIModel(id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo", provider: .openai)
+            ]
+        case .anthropic:
+            return [
+                AIModel(id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: .anthropic),
+                AIModel(id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", provider: .anthropic),
+                AIModel(id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", provider: .anthropic),
+                AIModel(id: "claude-3-opus-20240229", name: "Claude 3 Opus", provider: .anthropic)
+            ]
+        case .google:
+            return [
+                AIModel(id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", provider: .google),
+                AIModel(id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", provider: .google),
+                AIModel(id: "gemini-pro", name: "Gemini Pro", provider: .google)
+            ]
+        case .kimi:
+            return [
+                AIModel(id: "moonshot-v1-8k", name: "Moonshot V1 8K", provider: .kimi),
+                AIModel(id: "moonshot-v1-32k", name: "Moonshot V1 32K", provider: .kimi),
+                AIModel(id: "moonshot-v1-128k", name: "Moonshot V1 128K", provider: .kimi)
+            ]
+        case .glm:
+            return [
+                AIModel(id: "glm-4", name: "GLM-4", provider: .glm),
+                AIModel(id: "glm-4-flash", name: "GLM-4 Flash", provider: .glm),
+                AIModel(id: "glm-3-turbo", name: "GLM-3 Turbo", provider: .glm)
+            ]
+        case .ollama:
+            return [
+                AIModel(id: "codellama", name: "Code Llama", provider: .ollama),
+                AIModel(id: "llama3", name: "Llama 3", provider: .ollama),
+                AIModel(id: "mistral", name: "Mistral", provider: .ollama),
+                AIModel(id: "deepseek-coder", name: "DeepSeek Coder", provider: .ollama)
+            ]
+        case .groq:
+            return [
+                AIModel(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", provider: .groq),
+                AIModel(id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", provider: .groq),
+                AIModel(id: "mixtral-8x7b-32768", name: "Mixtral 8x7B 32768", provider: .groq),
+                AIModel(id: "gemma-2-9b-it", name: "Gemma 2 9B IT", provider: .groq)
+            ]
+        case .deepseek:
+            return [
+                AIModel(id: "deepseek-chat", name: "DeepSeek Chat", provider: .deepseek),
+                AIModel(id: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: .deepseek),
+                AIModel(id: "deepseek-coder", name: "DeepSeek Coder", provider: .deepseek)
+            ]
+        case .mistral:
+            return [
+                AIModel(id: "mistral-large-latest", name: "Mistral Large", provider: .mistral),
+                AIModel(id: "pixtral-large-latest", name: "Pixtral Large", provider: .mistral),
+                AIModel(id: "codestral-latest", name: "Codestral", provider: .mistral),
+                AIModel(id: "ministral-8b-latest", name: "Ministral 8B", provider: .mistral)
+            ]
+        }
+    }
+    
+    var baseURL: String {
+        switch self {
+        case .openai: return "https://api.openai.com/v1"
+        case .anthropic: return "https://api.anthropic.com/v1"
+        case .google: return "https://generativelanguage.googleapis.com/v1beta"
+        case .kimi: return "https://api.moonshot.cn/v1"
+        case .glm: return "https://open.bigmodel.cn/api/paas/v4"
+        case .groq: return "https://api.groq.com/openai/v1"
+        case .deepseek: return "https://api.deepseek.com/v1"
+        case .mistral: return "https://api.mistral.ai/v1"
+        case .ollama: return "http://localhost:11434/api"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .openai: return "brain.head.profile"
+        case .anthropic: return "sparkles"
+        case .google: return "g.circle"
+        case .kimi: return "message.circle"
+        case .glm: return "brain.fill"
+        case .groq: return "bolt.fill"
+        case .deepseek: return "fish.fill"
+        case .mistral: return "wind"
+        case .ollama: return "laptopcomputer"
+        }
+    }
+}
+
+// MARK: - AI Model
+
+struct AIModel: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let provider: AIProvider
+}
+
+// MARK: - Chat Message
+
+struct ChatMessage: Identifiable, Codable {
+    let id: UUID
+    let role: MessageRole
+    let content: String
+    let timestamp: Date
+    var codeBlocks: [CodeBlock]
+    
+    init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = Date(), codeBlocks: [CodeBlock] = []) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.timestamp = timestamp
+        self.codeBlocks = codeBlocks
+    }
+}
+
+enum MessageRole: String, Codable {
+    case user
+    case assistant
+    case system
+}
+
+struct CodeBlock: Identifiable, Codable {
+    let id: UUID
+    let language: String
+    let code: String
+    
+    init(id: UUID = UUID(), language: String, code: String) {
+        self.id = id
+        self.language = language
+        self.code = code
+    }
+}
+
+// MARK: - Chat Session
+
+struct ChatSession: Identifiable, Codable {
+    let id: UUID
+    var title: String
+    var messages: [ChatMessage]
+    let createdAt: Date
+    var updatedAt: Date
+    
+    init(id: UUID = UUID(), title: String = "New Chat", messages: [ChatMessage] = [], createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id
+        self.title = title
+        self.messages = messages
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+// MARK: - AI Manager
+
+class AIManager: ObservableObject {
+    // API Keys stored in UserDefaults (consider Keychain for production)
+    @AppStorage("openai_api_key") var openAIKey: String = ""
+    @AppStorage("anthropic_api_key") var anthropicKey: String = ""
+    @AppStorage("google_api_key") var googleKey: String = ""
+    @AppStorage("kimi_api_key") var kimiKey: String = ""
+    @AppStorage("glm_api_key") var glmKey: String = ""
+    @AppStorage("groq_api_key") var groqKey: String = ""
+    @AppStorage("deepseek_api_key") var deepseekKey: String = ""
+    @AppStorage("mistral_api_key") var mistralKey: String = ""
+    @AppStorage("ollama_host") var ollamaHost: String = "http://localhost:11434"
+    
+    @AppStorage("selected_provider") private var selectedProviderRaw: String = AIProvider.openai.rawValue
+    @AppStorage("selected_model_id") private var selectedModelId: String = "gpt-4o"
+    
+    @Published var currentSession: ChatSession = ChatSession()
+    @Published var sessions: [ChatSession] = []
+    @Published var isLoading = false
+    @Published var error: String?
+    @Published var streamingResponse = ""
+    
+    var selectedProvider: AIProvider {
+        get { AIProvider(rawValue: selectedProviderRaw) ?? .openai }
+        set { selectedProviderRaw = newValue.rawValue }
+    }
+    
+    var selectedModel: AIModel {
+        get {
+            selectedProvider.models.first { $0.id == selectedModelId } ?? selectedProvider.models[0]
+        }
+        set { selectedModelId = newValue.id }
+    }
+    
+    init() {
+        loadSessions()
+        if sessions.isEmpty {
+            createNewSession()
+        } else {
+            currentSession = sessions[0]
+        }
+    }
+    
+    // MARK: - Session Management
+    
+    func createNewSession() {
+        let session = ChatSession()
+        sessions.insert(session, at: 0)
+        currentSession = session
+        saveSessions()
+    }
+    
+    func selectSession(_ session: ChatSession) {
+        currentSession = session
+    }
+    
+    func deleteSession(_ session: ChatSession) {
+        sessions.removeAll { $0.id == session.id }
+        if currentSession.id == session.id {
+            currentSession = sessions.first ?? ChatSession()
+            if sessions.isEmpty {
+                sessions.append(currentSession)
+            }
+        }
+        saveSessions()
+    }
+    
+    func clearCurrentSession() {
+        currentSession.messages.removeAll()
+        updateSession()
+    }
+    
+    private func updateSession() {
+        currentSession.updatedAt = Date()
+        if let index = sessions.firstIndex(where: { $0.id == currentSession.id }) {
+            sessions[index] = currentSession
+        }
+        saveSessions()
+    }
+    
+    // MARK: - Persistence
+    
+    private func saveSessions() {
+        if let encoded = try? JSONEncoder().encode(sessions) {
+            UserDefaults.standard.set(encoded, forKey: "ai_chat_sessions")
+        }
+    }
+    
+    private func loadSessions() {
+        if let data = UserDefaults.standard.data(forKey: "ai_chat_sessions"),
+           let decoded = try? JSONDecoder().decode([ChatSession].self, from: data) {
+            sessions = decoded
+        }
+    }
+    
+    // MARK: - API Key Validation
+    
+    func hasValidAPIKey() -> Bool {
+        switch selectedProvider {
+        case .openai: return !openAIKey.isEmpty
+        case .anthropic: return !anthropicKey.isEmpty
+        case .google: return !googleKey.isEmpty
+        case .kimi: return !kimiKey.isEmpty
+        case .glm: return !glmKey.isEmpty
+        case .groq: return !groqKey.isEmpty
+        case .deepseek: return !deepseekKey.isEmpty
+        case .mistral: return !mistralKey.isEmpty
+        case .ollama: return true // Ollama doesn't require API key
+        }
+    }
+    
+    func getAPIKey() -> String {
+        switch selectedProvider {
+        case .openai: return openAIKey
+        case .anthropic: return anthropicKey
+        case .google: return googleKey
+        case .kimi: return kimiKey
+        case .glm: return glmKey
+        case .groq: return groqKey
+        case .deepseek: return deepseekKey
+        case .mistral: return mistralKey
+        case .ollama: return ""
+        }
+    }
+    
+    // MARK: - Send Message
+    
+    @MainActor
+    func sendMessage(_ content: String, context: String? = nil) async {
+        guard hasValidAPIKey() else {
+            error = "Please set your API key in settings"
+            return
+        }
+        
+        let userMessage = ChatMessage(role: .user, content: content)
+        currentSession.messages.append(userMessage)
+        updateSession()
+        
+        // Update title if first message
+        if currentSession.messages.count == 1 {
+            currentSession.title = String(content.prefix(50))
+            updateSession()
+        }
+        
+        isLoading = true
+        error = nil
+        streamingResponse = ""
+        
+        do {
+            let response = try await makeAPIRequest(messages: currentSession.messages, context: context)
+            let assistantMessage = ChatMessage(role: .assistant, content: response, codeBlocks: extractCodeBlocks(from: response))
+            currentSession.messages.append(assistantMessage)
+            updateSession()
+        } catch {
+            self.error = error.localizedDescription
+        }
+        
+        isLoading = false
+    }
+    
+    // MARK: - Code Actions
+    
+    @MainActor
+    func explainCode(_ code: String, language: String) async -> String {
+        let prompt = "Explain the following \(language) code in detail. What does it do, and how does it work?\n\n```\(language)\n\(code)\n```"
+        return await sendAndGetResponse(prompt)
+    }
+    
+    @MainActor
+    func fixCode(_ code: String, language: String, errorMessage: String? = nil) async -> String {
+        var prompt = "Fix any issues in the following \(language) code and explain what was wrong:\n\n```\(language)\n\(code)\n```"
+        if let error = errorMessage {
+            prompt += "\n\nError message: \(error)"
+        }
+        return await sendAndGetResponse(prompt)
+    }
+    
+    @MainActor
+    func generateTests(_ code: String, language: String) async -> String {
+        let prompt = "Generate comprehensive unit tests for the following \(language) code. Include edge cases and typical usage:\n\n```\(language)\n\(code)\n```"
+        return await sendAndGetResponse(prompt)
+    }
+    
+    @MainActor
+    func refactorCode(_ code: String, language: String, instruction: String) async -> String {
+        let prompt = "Refactor the following \(language) code according to this instruction: \(instruction)\n\n```\(language)\n\(code)\n```"
+        return await sendAndGetResponse(prompt)
+    }
+    
+    @MainActor
+    func documentCode(_ code: String, language: String) async -> String {
+        let prompt = "Add comprehensive documentation/comments to the following \(language) code:\n\n```\(language)\n\(code)\n```"
+        return await sendAndGetResponse(prompt)
+    }
+    
+    @MainActor
+    private func sendAndGetResponse(_ prompt: String) async -> String {
+        guard hasValidAPIKey() else {
+            return "Error: Please set your API key in settings"
+        }
+        
+        isLoading = true
+        error = nil
+        
+        do {
+            let messages = [ChatMessage(role: .user, content: prompt)]
+            let response = try await makeAPIRequest(messages: messages, context: nil)
+            isLoading = false
+            return response
+        } catch {
+            isLoading = false
+            return "Error: \(error.localizedDescription)"
+        }
+    }
+    
+    // MARK: - API Request
+    
+    private func makeAPIRequest(messages: [ChatMessage], context: String?) async throws -> String {
+        switch selectedProvider {
+        case .openai:
+            return try await callOpenAI(messages: messages, context: context)
+        case .anthropic:
+            return try await callAnthropic(messages: messages, context: context)
+        case .google:
+            return try await callGoogle(messages: messages, context: context)
+        case .kimi:
+            return try await callKimi(messages: messages, context: context)
+        case .glm:
+            return try await callGLM(messages: messages, context: context)
+        case .groq:
+            return try await callGroq(messages: messages, context: context)
+        case .deepseek:
+            return try await callDeepSeek(messages: messages, context: context)
+        case .mistral:
+            return try await callMistral(messages: messages, context: context)
+        case .ollama:
+            return try await callOllama(messages: messages, context: context)
+        }
+    }
+    
+    // MARK: - OpenAI API
+    
+    private func callOpenAI(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.openai.baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message with context
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add conversation messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "max_tokens": 4096,
+            "temperature": 0.7
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - Anthropic API
+    
+    private func callAnthropic(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(anthropicKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        for msg in messages where msg.role != .system {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let systemPrompt = buildSystemPrompt(context: context)
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "max_tokens": 4096,
+            "system": systemPrompt,
+            "messages": apiMessages
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let content = json?["content"] as? [[String: Any]],
+              let firstContent = content.first,
+              let text = firstContent["text"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return text
+    }
+    
+    // MARK: - Google API
+    
+    private func callGoogle(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.google.baseURL)/models/\(selectedModel.id):generateContent?key=\(googleKey)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var parts: [[String: Any]] = []
+        
+        // Add system context
+        let systemPrompt = buildSystemPrompt(context: context)
+        parts.append(["text": "System: \(systemPrompt)"])
+        
+        // Add messages
+        for msg in messages {
+            let role = msg.role == .assistant ? "Model" : "User"
+            parts.append(["text": "\(role): \(msg.content)"])
+        }
+        
+        let body: [String: Any] = [
+            "contents": [
+                ["parts": parts]
+            ],
+            "generationConfig": [
+                "maxOutputTokens": 4096,
+                "temperature": 0.7
+            ]
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let candidates = json?["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let firstPart = parts.first,
+              let text = firstPart["text"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return text
+    }
+    
+    // MARK: - Ollama API
+    
+    private func callOllama(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(ollamaHost)/api/chat")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "stream": false
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let message = json?["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - Kimi API (Moonshot)
+    
+    private func callKimi(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.kimi.baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(kimiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message with context
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add conversation messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "max_tokens": 4096,
+            "temperature": 0.7
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - GLM API (Zhipu)
+    
+    private func callGLM(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.glm.baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(glmKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message with context
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add conversation messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "max_tokens": 4096,
+            "temperature": 0.7
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - Groq API
+    
+    private func callGroq(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.groq.baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(groqKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message with context
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add conversation messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "max_tokens": 4096,
+            "temperature": 0.7
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - DeepSeek API
+    
+    private func callDeepSeek(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.deepseek.baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(deepseekKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message with context
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add conversation messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "max_tokens": 4096,
+            "temperature": 0.7
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - Mistral API
+    
+    private func callMistral(messages: [ChatMessage], context: String?) async throws -> String {
+        let url = URL(string: "\(AIProvider.mistral.baseURL)/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(mistralKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var apiMessages: [[String: String]] = []
+        
+        // Add system message with context
+        let systemPrompt = buildSystemPrompt(context: context)
+        apiMessages.append(["role": "system", "content": systemPrompt])
+        
+        // Add conversation messages
+        for msg in messages {
+            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        let body: [String: Any] = [
+            "model": selectedModel.id,
+            "messages": apiMessages,
+            "max_tokens": 4096,
+            "temperature": 0.7
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIError.invalidResponse
+        }
+        
+        if httpResponse.statusCode != 200 {
+            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let error = errorJson["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                throw AIError.apiError(message)
+            }
+            throw AIError.httpError(httpResponse.statusCode)
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let choices = json?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIError.invalidResponse
+        }
+        
+        return content
+    }
+    
+    // MARK: - Helpers
+    
+    private func buildSystemPrompt(context: String?) -> String {
+        var prompt = """
+You are an expert coding assistant integrated into a code editor on iPadOS. You help developers write, debug, explain, and improve their code.
+
+Guidelines:
+- Provide clear, concise explanations
+- Use code blocks with proper language tags for code snippets
+- Suggest best practices and optimizations
+- Be helpful with debugging and error resolution
+- When generating code, ensure it's complete and runnable
+"""
+        
+        if let context = context, !context.isEmpty {
+            prompt += "\n\nCurrent file context:\n```\n\(context)\n```"
+        }
+        
+        return prompt
+    }
+    
+    private func extractCodeBlocks(from text: String) -> [CodeBlock] {
+        var blocks: [CodeBlock] = []
+        let pattern = "```(\\w*)\\n([\\s\\S]*?)```"
+        
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return blocks
+        }
+        
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+        
+        for match in matches {
+            if let langRange = Range(match.range(at: 1), in: text),
+               let codeRange = Range(match.range(at: 2), in: text) {
+                let language = String(text[langRange])
+                let code = String(text[codeRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                blocks.append(CodeBlock(language: language.isEmpty ? "text" : language, code: code))
+            }
+        }
+        
+        return blocks
+    }
+}
+
+// MARK: - AI Errors
+
+enum AIError: LocalizedError {
+    case invalidResponse
+    case httpError(Int)
+    case apiError(String)
+    case noAPIKey
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse: return "Invalid response from AI service"
+        case .httpError(let code): return "HTTP Error: \(code)"
+        case .apiError(let message): return message
+        case .noAPIKey: return "No API key configured"
+        }
+    }
+}

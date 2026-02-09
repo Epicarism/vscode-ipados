@@ -1,0 +1,145 @@
+import SwiftUI
+import UIKit
+
+/// Debug Console (REPL-style) panel.
+///
+/// Backed by `DebugManager` which is currently UI-only.
+struct DebugConsoleView: View {
+    @ObservedObject private var debugManager = DebugManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
+
+    @State private var input: String = ""
+
+    private var theme: Theme { themeManager.currentTheme }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            Divider()
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(debugManager.consoleEntries) { entry in
+                            HStack(alignment: .top, spacing: 6) {
+                                Text(entry.prefix)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(theme.comment)
+                                    .frame(width: 18, alignment: .leading)
+
+                                Text(entry.text)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(color(for: entry.kind))
+                                    .textSelection(.enabled)
+
+                                Spacer(minLength: 0)
+                            }
+                            .id(entry.id)
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(theme.editorBackground)
+                .onChange(of: debugManager.consoleEntries.count) { _ in
+                    if let last = debugManager.consoleEntries.last {
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            inputBar
+        }
+        .background(theme.editorBackground)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text("DEBUG CONSOLE")
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(theme.tabActiveForeground)
+
+            Spacer()
+
+            Button {
+                debugManager.copyConsoleToClipboard()
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .buttonStyle(.plain)
+            .help("Copy Console")
+
+            Button(role: .destructive) {
+                debugManager.clearConsole()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.plain)
+            .help("Clear")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(theme.editorBackground)
+    }
+
+    private var inputBar: some View {
+        HStack(spacing: 8) {
+            Text(">")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(theme.keyword)
+
+            TextField("Evaluate expression…", text: $input)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(theme.editorForeground)
+                .accentColor(theme.cursor)
+                .disableAutocorrection(true)
+                .autocapitalization(.none)
+                .onSubmit {
+                    submit()
+                }
+
+            Button("Run") {
+                submit()
+            }
+            .buttonStyle(.bordered)
+            .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(theme.tabBarBackground)
+    }
+
+    private func submit() {
+        let expr = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !expr.isEmpty else { return }
+        debugManager.submitConsole(input: expr)
+        input = ""
+    }
+
+    private func color(for kind: DebugManager.ConsoleEntry.Kind) -> Color {
+        switch kind {
+        case .input:
+            return theme.editorForeground
+        case .output:
+            return theme.editorForeground.opacity(0.9)
+        case .error:
+            return .red
+        case .warning:
+            return .orange
+        case .info:
+            return .blue
+        case .system:
+            return theme.comment
+        }
+    }
+}
+
+#Preview {
+    DebugConsoleView()
+}

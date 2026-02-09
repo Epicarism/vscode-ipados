@@ -1,0 +1,396 @@
+import SwiftUI
+
+struct SettingsView: View {
+    @ObservedObject var themeManager: ThemeManager
+    @State private var searchText = ""
+    @State private var selectedCategory: SettingsCategory? = .editor
+    
+    init(themeManager: ThemeManager = ThemeManager.shared) {
+        self.themeManager = themeManager
+    }
+    
+    enum SettingsCategory: String, CaseIterable, Identifiable {
+        case editor = "Editor"
+        case workbench = "Workbench"
+        case features = "Features"
+        
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .editor: return "text.cursor"
+            case .workbench: return "sidebar.left"
+            case .features: return "star"
+            }
+        }
+    }
+    
+    var body: some View {
+        if #available(iOS 16.0, *) {
+            NavigationSplitView {
+                List(SettingsCategory.allCases, selection: $selectedCategory) {
+                    category in
+                    NavigationLink(value: category) {
+                        Label(category.rawValue, systemImage: category.icon)
+                    }
+                }
+                .navigationTitle("Settings")
+                .listStyle(.sidebar)
+            } detail: {
+                if let category = selectedCategory {
+                    SettingsDetailView(category: category, searchText: searchText, themeManager: themeManager)
+                } else {
+                    Text("Select a category")
+                        .foregroundColor(.secondary)
+                }
+            }
+            .searchable(text: $searchText, placement: .sidebar)
+        } else {
+            NavigationView {
+                List(SettingsCategory.allCases, selection: $selectedCategory) {
+                    category in
+                    NavigationLink(
+                        destination: SettingsDetailView(category: category, searchText: searchText, themeManager: themeManager),
+                        tag: category,
+                        selection: $selectedCategory
+                    ) {
+                        Label(category.rawValue, systemImage: category.icon)
+                    }
+                }
+                .navigationTitle("Settings")
+                .listStyle(SidebarListStyle())
+                
+                // Initial detail view
+                SettingsDetailView(category: .editor, searchText: searchText, themeManager: themeManager)
+            }
+            .searchable(text: $searchText)
+        }
+    }
+}
+
+struct SettingsDetailView: View {
+    let category: SettingsView.SettingsCategory
+    let searchText: String
+    @ObservedObject var themeManager: ThemeManager
+    
+    @AppStorage("fontSize") private var fontSize: Double = 14
+    @AppStorage("fontFamily") private var fontFamily: String = "Menlo"
+    @AppStorage("tabSize") private var tabSize: Int = 4
+    @AppStorage("wordWrap") private var wordWrap: Bool = true
+    @AppStorage("autoSave") private var autoSave: String = "off"
+    @AppStorage("minimapEnabled") private var minimapEnabled: Bool = true
+    @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
+    @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
+    
+    var body: some View {
+        Form {
+            if shouldShow(category: .editor) {
+                Section(header: Text("Editor")) {
+                    if matchesSearch("Font Size") {
+                        VStack(alignment: .leading) {
+                            Text("Font Size: \(Int(fontSize))")
+                            Slider(value: $fontSize, in: 8...32, step: 1) {
+                                Text("Font Size")
+                            } minimumValueLabel: {
+                                Text("8")
+                            } maximumValueLabel: {
+                                Text("32")
+                            }
+                        }
+                    }
+                    
+                    if matchesSearch("Font Family") {
+                        Picker("Font Family", selection: $fontFamily) {
+                            Text("Menlo").tag("Menlo")
+                            Text("Courier New").tag("Courier New")
+                            Text("SF Mono").tag("SF Mono")
+                            Text("Fira Code").tag("Fira Code")
+                            Text("JetBrains Mono").tag("JetBrains Mono")
+                        }
+                    }
+                    
+                    if matchesSearch("Tab Size") {
+                        Stepper("Tab Size: \(tabSize)", value: $tabSize, in: 1...8)
+                    }
+                    
+                    if matchesSearch("Word Wrap") {
+                        Toggle("Word Wrap", isOn: $wordWrap)
+                    }
+                    
+                    if matchesSearch("Minimap") {
+                        Toggle("Minimap", isOn: $minimapEnabled)
+                    }
+                    
+                    if matchesSearch("Line Numbers") {
+                        Picker("Line Numbers", selection: $lineNumbersStyle) {
+                            Text("On").tag("on")
+                            Text("Off").tag("off")
+                            Text("Relative").tag("relative")
+                            Text("Interval").tag("interval")
+                        }
+                        // Sync with boolean for backward compatibility
+                        .onChange(of: lineNumbersStyle) { newValue in
+                            showLineNumbers = (newValue != "off")
+                        }
+                    }
+                }
+            }
+            
+            if shouldShow(category: .workbench) {
+                Section(header: Text("Workbench")) {
+                    if matchesSearch("Theme") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Color Theme").font(.headline)
+                            
+                            // Dark Themes
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Dark Themes").font(.subheadline).foregroundColor(.secondary)
+                                ForEach(Theme.allThemes.filter { $0.isDark }) { theme in
+                                    ThemeRow(theme: theme, isSelected: themeManager.currentTheme.id == theme.id) {
+                                        themeManager.switchTheme(to: theme.id)
+                                    }
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            // Light Themes
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Light Themes").font(.subheadline).foregroundColor(.secondary)
+                                ForEach(Theme.allThemes.filter { !$0.isDark }) { theme in
+                                    ThemeRow(theme: theme, isSelected: themeManager.currentTheme.id == theme.id) {
+                                        themeManager.switchTheme(to: theme.id)
+                                    }
+                                }
+                            }
+                            
+                            // Theme Preview
+                            ThemePreviewView(theme: themeManager.currentTheme)
+                                .frame(height: 120)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+            }
+            
+            if shouldShow(category: .features) {
+                Section(header: Text("Features")) {
+                    if matchesSearch("Auto Save") {
+                        Picker("Auto Save", selection: $autoSave) {
+                            Text("Off").tag("off")
+                            Text("After Delay").tag("afterDelay")
+                            Text("On Focus Change").tag("onFocusChange")
+                            Text("On Window Change").tag("onWindowChange")
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(searchText.isEmpty ? category.rawValue : "Search Results")
+    }
+    
+    private func shouldShow(category: SettingsView.SettingsCategory) -> Bool {
+        if !searchText.isEmpty {
+            if category == .editor {
+                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Line Numbers")
+            }
+            if category == .workbench {
+                return matchesSearch("Theme")
+            }
+            if category == .features {
+                return matchesSearch("Auto Save")
+            }
+        }
+        return self.category == category
+    }
+    
+    private func matchesSearch(_ item: String) -> Bool {
+        searchText.isEmpty || item.localizedCaseInsensitiveContains(searchText)
+    }
+}
+
+struct ThemeRow: View {
+    let theme: Theme
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Circle()
+                    .fill(theme.editorBackground)
+                    .frame(width: 24, height: 24)
+                    .overlay(
+                        Circle()
+                            .stroke(theme.statusBarBackground, lineWidth: 2)
+                    )
+                Text(theme.name)
+                    .foregroundColor(.primary)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ThemePreviewView: View {
+    let theme: Theme
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Activity Bar
+            Rectangle()
+                .fill(theme.activityBarBackground)
+                .frame(width: 40)
+                .overlay(
+                    VStack(spacing: 15) {
+                        Image(systemName: "doc.on.doc")
+                        Image(systemName: "magnifyingglass")
+                        Image(systemName: "gearshape")
+                        Spacer()
+                    }
+                    .foregroundColor(theme.activityBarForeground)
+                    .padding(.top, 20)
+                )
+            
+            // Sidebar
+            Rectangle()
+                .fill(theme.sidebarBackground)
+                .frame(width: 80)
+                .overlay(
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("EXPLORER")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(theme.sidebarForeground.opacity(0.7))
+                            .padding(.top, 10)
+                            .padding(.leading, 8)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                Text("Project")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(theme.sidebarForeground)
+                            
+                            HStack(spacing: 4) {
+                                Image(systemName: "swift")
+                                    .font(.caption2)
+                                Text("App.swift")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(theme.sidebarForeground)
+                            .padding(.leading, 12)
+                        }
+                        .padding(.leading, 8)
+                        
+                        Spacer()
+                    }
+                )
+            
+            // Editor
+            Rectangle()
+                .fill(theme.editorBackground)
+                .overlay(
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Tabs
+                        HStack(spacing: 0) {
+                            Rectangle()
+                                .fill(theme.tabActiveBackground)
+                                .frame(width: 80, height: 25)
+                                .overlay(
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "swift")
+                                            .font(.caption2)
+                                            .foregroundColor(theme.tabActiveForeground)
+                                        Text("App.swift")
+                                            .font(.caption2)
+                                            .foregroundColor(theme.tabActiveForeground)
+                                    }
+                                )
+                            Rectangle()
+                                .fill(theme.tabBarBackground)
+                        }
+                        .frame(height: 25)
+                        
+                        // Content
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 0) {
+                                Text("1")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.lineNumber)
+                                    .frame(width: 20)
+                                Text("import")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.keyword)
+                                Text(" SwiftUI")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.editorForeground)
+                            }
+                            
+                            HStack(spacing: 0) {
+                                Text("2")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.lineNumber)
+                                    .frame(width: 20)
+                            }
+                            
+                            HStack(spacing: 0) {
+                                Text("3")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.lineNumberActive)
+                                    .frame(width: 20)
+                                Text("struct")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.keyword)
+                                Text(" App")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.type)
+                                Text(": ")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.editorForeground)
+                                Text("View")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.type)
+                                Text(" {")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.editorForeground)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(4)
+                        
+                        // Status Bar
+                        HStack {
+                            Text("main")
+                                .font(.caption2)
+                            Spacer()
+                            Text("Ln 3, Col 1")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(theme.statusBarForeground)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(theme.statusBarBackground)
+                    }
+                )
+        }
+    }
+}
+
+#Preview {
+    SettingsView()
+}

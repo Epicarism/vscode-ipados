@@ -1,0 +1,958 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+// MARK: - Helper Functions
+// Moved to Extensions/FileHelpers.swift
+
+// MARK: - Main Content View
+
+struct ContentView: View {
+    @StateObject private var editorCore = EditorCore()
+    @StateObject private var fileNavigator = FileSystemNavigator()
+    @State private var showingDocumentPicker = false
+    @State private var showingFolderPicker = false
+    @State private var showSettings = false
+    @State private var showPanel = false
+    @State private var panelHeight: CGFloat = 200
+    @State private var selectedSidebarTab = 0
+    
+    var body: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    IDEActivityBar(editorCore: editorCore, selectedTab: $selectedSidebarTab, showSettings: $showSettings, showPanel: $showPanel)
+                    
+                    if editorCore.showSidebar {
+                        sidebarContent.frame(width: editorCore.sidebarWidth)
+                    }
+                    
+                    VStack(spacing: 0) {
+                        IDETabBar(editorCore: editorCore)
+                        
+                        if let tab = editorCore.activeTab {
+                            IDEEditorView(editorCore: editorCore, tab: tab)
+                        } else {
+                            IDEWelcomeView(editorCore: editorCore, showFolderPicker: $showingFolderPicker)
+                        }
+                        
+                        if showPanel {
+                            PanelView(isVisible: $showPanel, height: $panelHeight)
+                        }
+                        
+                        StatusBarView(editorCore: editorCore)
+                    }
+                }
+            }
+            .background(Color(UIColor.systemBackground))
+            
+            // Overlays - Command Palette (Cmd+Shift+P)
+            if editorCore.showCommandPalette {
+                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showCommandPalette = false }
+                CommandPaletteView(editorCore: editorCore, showSettings: $showSettings, showPanel: $showPanel)
+            }
+            
+            // Quick Open (Cmd+P)
+            if editorCore.showQuickOpen {
+                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showQuickOpen = false }
+                QuickOpenView(editorCore: editorCore, fileNavigator: fileNavigator)
+            }
+            
+            // Go To Symbol (Cmd+Shift+O)
+            if editorCore.showGoToSymbol {
+                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToSymbol = false }
+                GoToSymbolView(editorCore: editorCore, onGoToLine: { _ in })
+            }
+            
+            // AI Assistant
+            if editorCore.showAIAssistant {
+                HStack { Spacer(); IDEAIAssistant(editorCore: editorCore).frame(width: 400, height: 500).padding() }
+            }
+            
+            // Go To Line (Ctrl+G)
+            if editorCore.showGoToLine {
+                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToLine = false }
+                GoToLineView(isPresented: $editorCore.showGoToLine, onGoToLine: { _ in })
+            }
+        }
+        .sheet(isPresented: $showingDocumentPicker) { IDEDocumentPicker(editorCore: editorCore) }
+        .sheet(isPresented: $showingFolderPicker) { IDEFolderPicker(fileNavigator: fileNavigator) }
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
+    }
+    
+    @ViewBuilder
+    private var sidebarContent: some View {
+        switch selectedSidebarTab {
+        case 0:
+            IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker)
+        case 1:
+            SidebarSearchView()
+        case 2:
+            GitView()
+        case 3:
+            DebugView()
+        default:
+            IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker)
+        }
+    }
+}
+
+// MARK: - Activity Bar
+
+struct IDEActivityBar: View {
+    @ObservedObject var editorCore: EditorCore
+    @Binding var selectedTab: Int
+    @Binding var showSettings: Bool
+    @Binding var showPanel: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            BarButton(icon: "doc.text", isSelected: selectedTab == 0) {
+                selectedTab = 0
+                if !editorCore.showSidebar { editorCore.toggleSidebar() }
+            }
+            BarButton(icon: "magnifyingglass", isSelected: selectedTab == 1) {
+                selectedTab = 1
+                if !editorCore.showSidebar { editorCore.toggleSidebar() }
+            }
+            BarButton(icon: "arrow.triangle.branch", isSelected: selectedTab == 2) {
+                selectedTab = 2
+                if !editorCore.showSidebar { editorCore.toggleSidebar() }
+            }
+            BarButton(icon: "play.fill", isSelected: selectedTab == 3) {
+                selectedTab = 3
+                if !editorCore.showSidebar { editorCore.toggleSidebar() }
+            }
+            BarButton(icon: "terminal", isSelected: showPanel) {
+                showPanel.toggle()
+            }
+            Spacer()
+            BarButton(icon: "brain", isSelected: editorCore.showAIAssistant) {
+                editorCore.toggleAIAssistant()
+            }
+            BarButton(icon: "gear", isSelected: false) {
+                showSettings = true
+            }
+        }
+        .frame(width: 48).background(Color(UIColor.secondarySystemBackground))
+    }
+}
+
+struct BarButton: View {
+    let icon: String; let isSelected: Bool; let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 22)).foregroundColor(isSelected ? .accentColor : .secondary).frame(width: 48, height: 48)
+        }
+    }
+}
+
+// MARK: - Sidebar with Real File System
+
+struct IDESidebarFiles: View {
+    @ObservedObject var editorCore: EditorCore
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @Binding var showFolderPicker: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("EXPLORER").font(.caption).fontWeight(.semibold).foregroundColor(.secondary)
+                Spacer()
+                Button(action: { showFolderPicker = true }) {
+                    Image(systemName: "folder.badge.plus").font(.caption)
+                }
+                Button(action: { editorCore.showFilePicker = true }) {
+                    Image(systemName: "doc.badge.plus").font(.caption)
+                }
+                if fileNavigator.fileTree != nil {
+                    Button(action: { fileNavigator.refreshFileTree() }) {
+                        Image(systemName: "arrow.clockwise").font(.caption)
+                    }
+                }
+            }.padding(.horizontal, 12).padding(.vertical, 8)
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let tree = fileNavigator.fileTree {
+                        RealFileTreeView(node: tree, level: 0, fileNavigator: fileNavigator, editorCore: editorCore)
+                    } else {
+                        // Demo files when no folder opened
+                        DemoFileTree(editorCore: editorCore)
+                    }
+                }.padding(.horizontal, 8)
+            }
+        }.background(Color(UIColor.secondarySystemBackground))
+    }
+}
+
+struct RealFileTreeView: View {
+    let node: FileTreeNode
+    let level: Int
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @ObservedObject var editorCore: EditorCore
+    
+    var isExpanded: Bool { fileNavigator.expandedPaths.contains(node.url.path) }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                if node.isDirectory {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2).frame(width: 12)
+                        .onTapGesture { fileNavigator.toggleExpanded(path: node.url.path) }
+                } else {
+                    Spacer().frame(width: 12)
+                }
+                Image(systemName: node.isDirectory ? "folder.fill" : fileIcon(for: node.name))
+                    .font(.caption)
+                    .foregroundColor(node.isDirectory ? .yellow : fileColor(for: node.name))
+                Text(node.name).font(.system(.caption)).lineLimit(1)
+                Spacer()
+            }
+            .padding(.leading, CGFloat(level * 16)).padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if node.isDirectory {
+                    fileNavigator.toggleExpanded(path: node.url.path)
+                } else {
+                    editorCore.openFile(from: node.url)
+                }
+            }
+            
+            if isExpanded && node.isDirectory {
+                ForEach(node.children) { child in
+                    RealFileTreeView(node: child, level: level + 1, fileNavigator: fileNavigator, editorCore: editorCore)
+                }
+            }
+        }
+    }
+}
+
+struct DemoFileTree: View {
+    @ObservedObject var editorCore: EditorCore
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Open a folder to browse files")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.vertical, 8)
+            
+            // Demo files
+            DemoFileRow(name: "main.swift", editorCore: editorCore)
+            DemoFileRow(name: "ContentView.swift", editorCore: editorCore)
+            DemoFileRow(name: "README.md", editorCore: editorCore)
+        }
+    }
+}
+
+struct DemoFileRow: View {
+    let name: String
+    @ObservedObject var editorCore: EditorCore
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Spacer().frame(width: 12)
+            Image(systemName: fileIcon(for: name)).font(.caption).foregroundColor(fileColor(for: name))
+            Text(name).font(.system(.caption)).lineLimit(1)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            editorCore.addTab(fileName: name, content: "// \(name)\n\n")
+        }
+    }
+}
+
+// MARK: - Tab Bar
+
+struct IDETabBar: View {
+    @ObservedObject var editorCore: EditorCore
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(editorCore.tabs) { tab in
+                    IDETabItem(tab: tab, isSelected: editorCore.activeTabId == tab.id, editorCore: editorCore)
+                }
+                Button(action: { editorCore.addTab() }) {
+                    Image(systemName: "plus").font(.caption).foregroundColor(.secondary).padding(8)
+                }
+            }.padding(.horizontal, 4)
+        }.frame(height: 36).background(Color(UIColor.secondarySystemBackground))
+    }
+}
+
+struct IDETabItem: View {
+    let tab: Tab; let isSelected: Bool
+    @ObservedObject var editorCore: EditorCore
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: fileIcon(for: tab.fileName)).font(.caption).foregroundColor(fileColor(for: tab.fileName))
+            Text(tab.fileName).font(.system(size: 12)).lineLimit(1)
+            if tab.isUnsaved { Circle().fill(Color.orange).frame(width: 6, height: 6) }
+            Button(action: { editorCore.closeTab(id: tab.id) }) {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .medium)).foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? Color(UIColor.systemBackground) : Color.clear))
+        .onTapGesture { editorCore.selectTab(id: tab.id) }
+    }
+}
+
+// MARK: - Line Number Display Mode
+
+enum LineNumberMode: String, CaseIterable {
+    case absolute = "Absolute"
+    case relative = "Relative"
+    case off = "Off"
+    
+    var icon: String {
+        switch self {
+        case .absolute: return "number"
+        case .relative: return "number.circle"
+        case .off: return "eye.slash"
+        }
+    }
+}
+
+// MARK: - Editor with Syntax Highlighting + Autocomplete + Folding
+
+struct IDEEditorView: View {
+    @ObservedObject var editorCore: EditorCore
+    let tab: Tab
+    @State private var text: String = ""
+    @State private var scrollPosition: Int = 0
+    @State private var totalLines: Int = 1
+    @State private var visibleLines: Int = 20
+    @State private var currentLineNumber: Int = 1
+    @State private var currentColumn: Int = 1
+    @State private var lineHeight: CGFloat = 17
+    @State private var lineNumberMode: LineNumberMode = .absolute
+    @State private var showLineNumberMenu = false
+    @State private var stickyScrollContext: String = ""
+    @State private var requestedLineSelection: Int? = nil
+    
+    // Autocomplete
+    @StateObject private var autocomplete = AutocompleteManager()
+    @State private var showAutocomplete = false
+    
+    // Code Folding
+    @StateObject private var foldingManager = CodeFoldingManager()
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            BreadcrumbsView(editorCore: editorCore, tab: tab)
+            
+            // Sticky Scroll - shows current scope/context
+            if !stickyScrollContext.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down.to.line")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(stickyScrollContext)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(UIColor.tertiarySystemBackground).opacity(0.9))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.secondary.opacity(0.2)),
+                    alignment: .bottom
+                )
+            }
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .topLeading) {
+                HStack(spacing: 0) {
+                    // Line numbers with fold buttons
+                    if lineNumberMode != .off {
+                        LineNumbersWithFolding(
+                            fileId: tab.url?.path ?? tab.fileName,
+                            totalLines: totalLines,
+                            currentLine: currentLineNumber,
+                            scrollOffset: CGFloat(scrollPosition) * lineHeight,
+                            lineHeight: lineHeight,
+                            foldingManager: foldingManager,
+                            displayMode: lineNumberMode,
+                            onLineSelected: { line in
+                                requestedLineSelection = line
+                            },
+                            onShowMenu: {
+                                showLineNumberMenu = true
+                            }
+                        )
+                        .frame(width: lineNumberMode == .relative ? 70 : 60)
+                        .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+                    }
+                    
+                    // Syntax highlighted editor
+                    SyntaxHighlightingTextView(
+                        text: $text,
+                        filename: tab.fileName,
+                        scrollPosition: $scrollPosition,
+                        totalLines: $totalLines,
+                        visibleLines: $visibleLines,
+                        currentLineNumber: $currentLineNumber,
+                        currentColumn: $currentColumn,
+                        lineHeight: $lineHeight,
+                        isActive: true,
+                        requestedLineSelection: $requestedLineSelection
+                    )
+                    .onChange(of: text) { newValue in
+                        editorCore.updateActiveTabContent(newValue)
+                        editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)
+                        autocomplete.updateSuggestions(for: newValue, cursorPosition: newValue.count)
+                        showAutocomplete = autocomplete.showSuggestions
+                        foldingManager.detectFoldableRegions(in: newValue)
+                        updateStickyScrollContext(newValue)
+                    }
+                    .onChange(of: scrollPosition) { _ in
+                        updateStickyScrollContext(text)
+                    }
+                    
+                    // Minimap
+                    MinimapView(
+                        content: text,
+                        scrollOffset: .constant(CGFloat(scrollPosition) * lineHeight),
+                        scrollViewHeight: .constant(geometry.size.height),
+                        totalContentHeight: CGFloat(totalLines) * lineHeight
+                    )
+                    .frame(width: 80)
+                }
+                
+                // Autocomplete popup
+                if showAutocomplete && !autocomplete.suggestions.isEmpty {
+                    AutocompletePopup(suggestions: autocomplete.suggestions, selectedIndex: autocomplete.selectedIndex) { selected in
+                        insertAutocomplete(selected)
+                        showAutocomplete = false
+                    }
+                    .offset(x: lineNumberMode != .off ? (lineNumberMode == .relative ? 80 : 70) : 10, y: CGFloat(currentLineNumber) * lineHeight)
+                }
+                
+                // Line number mode menu
+                if showLineNumberMenu {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            showLineNumberMenu = false
+                        }
+                    
+                    LineNumberModeMenu(
+                        selectedMode: $lineNumberMode,
+                        onDismiss: { showLineNumberMenu = false }
+                    )
+                    .offset(x: 10, y: 10)
+                }
+            }
+        }
+        }
+        .onAppear {
+            text = tab.content
+            foldingManager.detectFoldableRegions(in: text)
+            updateStickyScrollContext(text)
+        }
+        .onChange(of: tab.id) { _ in
+            text = tab.content
+            foldingManager.detectFoldableRegions(in: text)
+            updateStickyScrollContext(text)
+        }
+        .onChange(of: currentLineNumber) { line in
+            editorCore.cursorPosition = CursorPosition(line: line, column: currentColumn)
+            updateStickyScrollContext(text)
+        }
+        .onChange(of: currentColumn) { col in
+            editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: col)
+        }
+    }
+    
+    private func insertAutocomplete(_ suggestion: String) {
+        // Simple insertion - in real impl would replace current word
+        text += suggestion
+    }
+    
+    private func updateStickyScrollContext(_ content: String) {
+        let lines = content.components(separatedBy: .newlines)
+        guard scrollPosition < lines.count else {
+            stickyScrollContext = ""
+            return
+        }
+        
+        // Find the current scope/function/class
+        var context = ""
+        for i in (0..<min(scrollPosition + 1, lines.count)).reversed() {
+            let line = lines[i].trimmingCharacters(in: .whitespaces)
+            
+            // Detect function/class/struct declarations
+            if line.contains("func ") || line.contains("class ") || 
+               line.contains("struct ") || line.contains("enum ") ||
+               line.contains("extension ") || line.contains("protocol ") {
+                // Extract the declaration
+                if let funcRange = line.range(of: #"(func|class|struct|enum|extension|protocol)\s+\w+"#, options: .regularExpression) {
+                    context = String(line[funcRange])
+                    break
+                }
+            }
+        }
+        
+        stickyScrollContext = context
+    }
+}
+
+// MARK: - Line Number Mode Menu
+
+struct LineNumberModeMenu: View {
+    @Binding var selectedMode: LineNumberMode
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Line Numbers")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+            
+            Divider()
+            
+            ForEach(LineNumberMode.allCases, id: \.self) { mode in
+                Button(action: {
+                    selectedMode = mode
+                    onDismiss()
+                }) {
+                    HStack {
+                        Image(systemName: mode.icon)
+                            .font(.caption)
+                            .foregroundColor(selectedMode == mode ? .accentColor : .secondary)
+                            .frame(width: 20)
+                        Text(mode.rawValue)
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if selectedMode == mode {
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                                .foregroundColor(.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: 180)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(8)
+        .shadow(radius: 10)
+    }
+}
+
+// MARK: - Line Numbers with Folding
+
+struct LineNumbersWithFolding: View {
+    let fileId: String
+    let totalLines: Int
+    let currentLine: Int
+    let scrollOffset: CGFloat
+    let lineHeight: CGFloat
+    @ObservedObject var foldingManager: CodeFoldingManager
+    @ObservedObject private var debugManager = DebugManager.shared
+    
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .trailing, spacing: 0) {
+                ForEach(0..<totalLines, id: \.self) { lineIndex in
+                    if !foldingManager.isLineFolded(line: lineIndex) {
+                        HStack(spacing: 2) {
+                            // Breakpoint toggle
+                            Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
+                                Circle()
+                                    .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color.red : Color.clear)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.red.opacity(0.6), lineWidth: 1)
+                                            .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
+                                    )
+                                    .frame(width: 10, height: 10)
+                                    .padding(.leading, 2)
+                            }
+                            .buttonStyle(.plain)
+                            .frame(width: 14, height: lineHeight)
+                            
+                            // Fold button
+                            if foldingManager.isFoldable(line: lineIndex) {
+                                Button(action: { foldingManager.toggleFold(at: lineIndex) }) {
+                                    Image(systemName: foldingManager.foldRegions.first(where: { $0.startLine == lineIndex })?.isFolded == true ? "chevron.right" : "chevron.down")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(.gray)
+                                }
+                                .buttonStyle(.plain)
+                                .frame(width: 14, height: lineHeight)
+                            } else {
+                                Spacer().frame(width: 14)
+                            }
+                            
+                            Text("\(lineIndex + 1)")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(lineIndex + 1 == currentLine ? .primary : .secondary.opacity(0.6))
+                                .frame(height: lineHeight)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing, 4)
+                    }
+                }
+            }
+            .offset(y: -scrollOffset)
+        }
+    }
+}
+
+// MARK: - Autocomplete Popup
+
+struct AutocompletePopup: View {
+    let suggestions: [String]
+    let selectedIndex: Int
+    let onSelect: (String) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(suggestions.indices, id: \.self) { index in
+                HStack {
+                    Image(systemName: "textformat").font(.caption).foregroundColor(.blue)
+                    Text(suggestions[index]).font(.system(size: 12, design: .monospaced))
+                    Spacer()
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(index == selectedIndex ? Color.accentColor.opacity(0.2) : Color.clear)
+                .onTapGesture { onSelect(suggestions[index]) }
+            }
+        }
+        .frame(width: 200)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(6)
+        .shadow(radius: 8)
+    }
+}
+
+// MARK: - Welcome View
+
+struct IDEWelcomeView: View {
+    @ObservedObject var editorCore: EditorCore
+    @Binding var showFolderPicker: Bool
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 80)).foregroundColor(.secondary)
+            Text("VS Code for iPadOS").font(.largeTitle).fontWeight(.bold)
+            VStack(alignment: .leading, spacing: 12) {
+                WelcomeBtn(icon: "doc.badge.plus", title: "New File", shortcut: "⌘N") { editorCore.addTab() }
+                WelcomeBtn(icon: "folder", title: "Open Folder", shortcut: "⌘⇧O") { showFolderPicker = true }
+                WelcomeBtn(icon: "doc", title: "Open File", shortcut: "⌘O") { editorCore.showFilePicker = true }
+                WelcomeBtn(icon: "terminal", title: "Command Palette", shortcut: "⌘⇧P") { editorCore.showCommandPalette = true }
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(UIColor.systemBackground))
+    }
+}
+
+struct WelcomeBtn: View {
+    let icon: String; let title: String; let shortcut: String; let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack { Image(systemName: icon).frame(width: 24); Text(title); Spacer(); Text(shortcut).font(.caption).foregroundColor(.secondary) }
+            .padding().frame(width: 280).background(Color(UIColor.secondarySystemFill)).cornerRadius(8)
+        }.buttonStyle(.plain)
+    }
+}
+
+// MARK: - Command Palette
+
+struct IDECommandPalette: View {
+    @ObservedObject var editorCore: EditorCore
+    @Binding var showSettings: Bool
+    @Binding var showPanel: Bool
+    @State private var searchText = ""
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                TextField("Type a command...", text: $searchText).textFieldStyle(.plain)
+            }.padding().background(Color(UIColor.secondarySystemBackground))
+            Divider()
+            ScrollView {
+                VStack(spacing: 0) {
+                    CommandRow(icon: "doc.badge.plus", name: "New File", shortcut: "⌘N") { editorCore.addTab(); editorCore.showCommandPalette = false }
+                    CommandRow(icon: "folder", name: "Open File", shortcut: "⌘O") { editorCore.showFilePicker = true; editorCore.showCommandPalette = false }
+                    CommandRow(icon: "square.and.arrow.down", name: "Save File", shortcut: "⌘S") { editorCore.saveActiveTab(); editorCore.showCommandPalette = false }
+                    CommandRow(icon: "sidebar.left", name: "Toggle Sidebar", shortcut: "⌘B") { editorCore.toggleSidebar(); editorCore.showCommandPalette = false }
+                    CommandRow(icon: "brain", name: "AI Assistant", shortcut: "⌘⇧A") { editorCore.showAIAssistant = true; editorCore.showCommandPalette = false }
+                    CommandRow(icon: "terminal", name: "Toggle Terminal", shortcut: "⌘`") { showPanel.toggle(); editorCore.showCommandPalette = false }
+                    CommandRow(icon: "gear", name: "Settings", shortcut: "⌘,") { showSettings = true; editorCore.showCommandPalette = false }
+                    CommandRow(icon: "number", name: "Go to Line", shortcut: "⌘G") { editorCore.showGoToLine = true; editorCore.showCommandPalette = false }
+                }.padding(.vertical, 8)
+            }
+        }.frame(width: 500, height: 400).background(Color(UIColor.systemBackground)).cornerRadius(12).shadow(radius: 20)
+    }
+}
+
+struct CommandRow: View {
+    let icon: String; let name: String; let shortcut: String; let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon).foregroundColor(.accentColor).frame(width: 24)
+                Text(name).foregroundColor(.primary)
+                Spacer()
+                Text(shortcut).font(.caption).foregroundColor(.secondary).padding(.horizontal, 8).padding(.vertical, 4).background(Color(UIColor.tertiarySystemFill)).cornerRadius(4)
+            }.padding(.horizontal).padding(.vertical, 12).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
+}
+
+// MARK: - Quick Open
+
+struct IDEQuickOpen: View {
+    @ObservedObject var editorCore: EditorCore
+    @State private var searchText = ""
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundColor(.gray)
+                TextField("Search files...", text: $searchText).textFieldStyle(.plain)
+            }.padding().background(Color(UIColor.secondarySystemBackground))
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(editorCore.tabs) { tab in
+                        QuickOpenRow(name: tab.fileName, path: "") {
+                            editorCore.selectTab(id: tab.id)
+                            editorCore.showQuickOpen = false
+                        }
+                    }
+                }
+            }.frame(maxHeight: 350)
+        }.frame(width: 500).background(Color(UIColor.systemBackground)).cornerRadius(12).shadow(radius: 20)
+    }
+}
+
+struct QuickOpenRow: View {
+    let name: String; let path: String; let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: fileIcon(for: name)).foregroundColor(fileColor(for: name)).frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) { Text(name).font(.system(size: 14)); Text(path + name).font(.system(size: 11)).foregroundColor(.secondary) }
+                Spacer()
+            }.padding(.horizontal).padding(.vertical, 8).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
+}
+
+// MARK: - AI Assistant
+
+struct IDEAIAssistant: View {
+    @ObservedObject var editorCore: EditorCore
+    @State private var userInput = ""
+    @State private var messages: [(id: UUID, role: String, content: String)] = [(UUID(), "assistant", "Hello! I'm your AI coding assistant. How can I help?")]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "brain").foregroundColor(.blue)
+                Text("AI Assistant").font(.headline)
+                Spacer()
+                Button(action: { editorCore.showAIAssistant = false }) { Image(systemName: "xmark.circle.fill").foregroundColor(.gray) }
+            }.padding().background(Color(UIColor.secondarySystemBackground))
+            
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(messages, id: \.id) { msg in
+                        HStack {
+                            if msg.role == "user" { Spacer(minLength: 60) }
+                            Text(msg.content).padding(12).background(RoundedRectangle(cornerRadius: 12).fill(msg.role == "user" ? Color.blue : Color(UIColor.secondarySystemFill))).foregroundColor(msg.role == "user" ? .white : .primary)
+                            if msg.role == "assistant" { Spacer(minLength: 60) }
+                        }
+                    }
+                }.padding()
+            }
+            
+            HStack(spacing: 12) {
+                TextField("Ask about your code...", text: $userInput).textFieldStyle(.roundedBorder)
+                Button(action: { sendMessage() }) { Image(systemName: "paperplane.fill").foregroundColor(userInput.isEmpty ? .gray : .blue) }.disabled(userInput.isEmpty)
+            }.padding().background(Color(UIColor.secondarySystemBackground))
+        }.background(Color(UIColor.systemBackground)).cornerRadius(12).shadow(radius: 20)
+    }
+    
+    func sendMessage() {
+        guard !userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        messages.append((UUID(), "user", userInput))
+        let input = userInput
+        userInput = ""
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            messages.append((UUID(), "assistant", "I can help with '\(input)'! What specifically would you like to know?"))
+        }
+    }
+}
+
+// MARK: - Folder Picker
+
+struct IDEFolderPicker: UIViewControllerRepresentable {
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator { Coordinator(fileNavigator: fileNavigator) }
+    
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let fileNavigator: FileSystemNavigator
+        init(fileNavigator: FileSystemNavigator) { self.fileNavigator = fileNavigator }
+        
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            if let url = urls.first {
+                _ = url.startAccessingSecurityScopedResource()
+                fileNavigator.loadFileTree(at: url)
+            }
+        }
+    }
+}
+
+// MARK: - Document Picker
+
+struct IDEDocumentPicker: UIViewControllerRepresentable {
+    @ObservedObject var editorCore: EditorCore
+    
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.text, .sourceCode, .json, .plainText, .data])
+        picker.allowsMultipleSelection = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator { Coordinator(editorCore: editorCore) }
+    
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let editorCore: EditorCore
+        init(editorCore: EditorCore) { self.editorCore = editorCore }
+        
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            for url in urls { editorCore.openFile(from: url) }
+            editorCore.showFilePicker = false
+        }
+        
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            editorCore.showFilePicker = false
+        }
+    }
+}
+
+// MARK: - Sidebar Search View
+
+struct SidebarSearchView: View {
+    @State private var searchText = ""
+    @State private var replaceText = ""
+    @State private var showReplace = false
+    @State private var searchResults: [(fileName: String, line: Int, preview: String)] = []
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("SEARCH").font(.caption).fontWeight(.semibold).foregroundColor(.secondary)
+                Spacer()
+            }.padding(.horizontal, 12).padding(.vertical, 8)
+            
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass").foregroundColor(.secondary).font(.caption)
+                TextField("Search", text: $searchText).textFieldStyle(.plain).font(.system(size: 13))
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color(UIColor.tertiarySystemFill))
+            .cornerRadius(6)
+            .padding(.horizontal, 12)
+            
+            HStack {
+                Button(action: { showReplace.toggle() }) {
+                    Image(systemName: showReplace ? "chevron.down" : "chevron.right").font(.caption2)
+                    Text("Replace").font(.caption)
+                }.foregroundColor(.secondary)
+                Spacer()
+            }.padding(.horizontal, 12).padding(.vertical, 6)
+            
+            if showReplace {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.right").foregroundColor(.secondary).font(.caption)
+                    TextField("Replace", text: $replaceText).textFieldStyle(.plain).font(.system(size: 13))
+                }
+                .padding(8)
+                .background(Color(UIColor.tertiarySystemFill))
+                .cornerRadius(6)
+                .padding(.horizontal, 12)
+            }
+            
+            Divider().padding(.top, 8)
+            
+            if searchText.isEmpty {
+                VStack(spacing: 8) {
+                    Spacer()
+                    Image(systemName: "magnifyingglass").font(.largeTitle).foregroundColor(.secondary.opacity(0.5))
+                    Text("Search in files").font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                }.frame(maxWidth: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<searchResults.count, id: \.self) { i in
+                            let result = searchResults[i]
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Image(systemName: "doc.text").font(.caption2).foregroundColor(.secondary)
+                                    Text(result.fileName).font(.system(size: 11, weight: .medium))
+                                    Spacer()
+                                    Text(":\(result.line)").font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
+                                }
+                                Text(result.preview).font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary).lineLimit(1)
+                            }.padding(.horizontal, 12).padding(.vertical, 6)
+                        }
+                    }
+                }
+            }
+        }
+        .background(Color(UIColor.secondarySystemBackground))
+        .onChange(of: searchText) { query in
+            if query.isEmpty { searchResults = [] }
+            else { searchResults = [("ContentView.swift", 15, "Text(\"\(query)\")"), ("main.swift", 8, "// \(query)")] }
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    ContentView()
+}

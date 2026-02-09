@@ -1,0 +1,366 @@
+import Foundation
+import Foundation
+import SwiftUI
+
+// MARK: - Output Panel Integration
+
+enum OutputChannel: String, CaseIterable, Identifiable {
+    case tasks = "Tasks"
+    case git = "Git"
+    case extensions = "Extensions"
+
+    var id: String { rawValue }
+}
+
+@MainActor
+final class OutputPanelManager: ObservableObject {
+    static let shared = OutputPanelManager()
+
+    @Published var selectedChannel: OutputChannel = .tasks
+
+    // Channel -> log lines
+    @Published private(set) var logs: [OutputChannel: [String]] = [
+        .tasks: [],
+        .git: [],
+        .extensions: []
+    ]
+
+    private init() {}
+
+    func clear(_ channel: OutputChannel) {
+        logs[channel] = []
+    }
+
+    func append(_ text: String, to channel: OutputChannel) {
+        let lines = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+
+        var current = logs[channel] ?? []
+        current.append(contentsOf: lines)
+        logs[channel] = current
+    }
+
+    func appendLine(_ line: String, to channel: OutputChannel) {
+        var current = logs[channel] ?? []
+        current.append(line)
+        logs[channel] = current
+    }
+
+    func lines(for channel: OutputChannel) -> [String] {
+        logs[channel] ?? []
+    }
+}
+
+// MARK: - Task Model
+
+enum VSCodeTaskType: String, Codable, CaseIterable, Identifiable {
+    case shell
+    case process
+
+    var id: String { rawValue }
+}
+
+enum VSCodeTaskGroup: String, Codable, CaseIterable, Identifiable {
+    case build
+    case test
+
+    var id: String { rawValue }
+}
+
+struct VSCodeTask: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+
+    var label: String
+    var type: VSCodeTaskType
+    var command: String
+    var args: [String]?
+    var group: VSCodeTaskGroup?
+
+    enum CodingKeys: String, CodingKey {
+        case label, type, command, args, group
+    }
+
+    init(
+        id: UUID = UUID(),
+        label: String,
+        type: VSCodeTaskType,
+        command: String,
+        args: [String]? = nil,
+        group: VSCodeTaskGroup? = nil
+    ) {
+        self.id = id
+        self.label = label
+        self.type = type
+        self.command = command
+        self.args = args
+        self.group = group
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = UUID()
+        self.label = try container.decode(String.self, forKey: .label)
+        self.type = (try? container.decode(VSCodeTaskType.self, forKey: .type)) ?? .shell
+        self.command = try container.decode(String.self, forKey: .command)
+        self.args = try container.decodeIfPresent([String].self, forKey: .args)
+
+        // VS Code supports either string or object for group.
+        if let groupString = try? container.decode(String.self, forKey: .group) {
+            self.group = VSCodeTaskGroup(rawValue: groupString)
+        } else if let groupObj = try? container.decode([String: String].self, forKey: .group),
+                  let kind = groupObj["kind"] {
+            self.group = VSCodeTaskGroup(rawValue: kind)
+        } else {
+            self.group = nil
+        }
+    }
+}
+
+// MARK: - Tasks JSON Container
+
+private struct TasksJSON: Codable {
+    var version: String?
+    var tasks: [VSCodeTask]
+}
+
+// MARK: - Tasks Manager
+
+@MainActor
+final class TasksManager: ObservableObject {
+    static let shared = TasksManager()
+
+    @Published private(set) var tasks: [VSCodeTask] = VSCodeTask.builtInTemplates
+    @Published private(set) var workspaceRootURL: URL?
+
+    @Published var lastErrorMessage: String?
+    @Published var isRunning: Bool = false
+    @Published var runningTaskLabel: String?
+
+    private init() {}
+
+    func setWorkspaceRoot(_ url: URL?) {
+        workspaceRootURL = url
+        reload()
+    }
+
+    func reload() {
+        lastErrorMessage = nil
+
+        guard let workspaceRootURL else {
+            tasks = VSCodeTask.builtInTemplates
+            return
+        }
+
+        let tasksURL = workspaceRootURL
+            .appendingPathComponent(".vscode", isDirectory: true)
+            .appendingPathComponent("tasks.json", isDirectory: false)
+
+        do {
+            let data = try Data(contentsOf: tasksURL)
+            let raw = String(decoding: data, as: UTF8.self)
+            let stripped = Self.stripJSONComments(raw)
+            let decoded = try JSONDecoder().decode(TasksJSON.self, from: Data(stripped.utf8))
+            tasks = decoded.tasks
+            if tasks.isEmpty {
+                tasks = VSCodeTask.builtInTemplates
+            }
+        } catch {
+            // Fall back to templates if the file doesn't exist or can't be read.
+            tasks = VSCodeTask.builtInTemplates
+            lastErrorMessage = "Couldn’t load .vscode/tasks.json"
+        }
+    }
+
+    func addTemplate(_ template: VSCodeTask) {
+        tasks.append(template)
+    }
+
+    func task(named label: String) -> VSCodeTask? {
+        tasks.first { $0.label == label }
+    }
+
+    // MARK: - Run Task
+
+    func run(_ task: VSCodeTask) {
+        OutputPanelManager.shared.selectedChannel = .tasks
+        OutputPanelManager.shared.appendLine("[Task] \(task.label)", to: .tasks)
+
+        isRunning = true
+        runningTaskLabel = task.label
+
+        // Perform in the background.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let start = Date()
+
+            do {
+                try Self.runWithProcess(task: task, workspaceRootURL: self.workspaceRootURL) { chunk in
+                    Task { @MainActor in
+                        OutputPanelManager.shared.append(chunk, to: .tasks)
+                    }
+                }
+
+                let elapsed = Date().timeIntervalSince(start)
+                Task { @MainActor in
+                    OutputPanelManager.shared.appendLine(String(format: "[Task] Finished (%.2fs)", elapsed), to: .tasks)
+                    self.isRunning = false
+                    self.runningTaskLabel = nil
+                }
+            } catch {
+                Task { @MainActor in
+                    OutputPanelManager.shared.appendLine("[Task] Error: \(error.localizedDescription)", to: .tasks)
+                    self.lastErrorMessage = error.localizedDescription
+                    self.isRunning = false
+                    self.runningTaskLabel = nil
+                }
+            }
+        }
+    }
+
+    private static func runWithProcess(
+        task: VSCodeTask,
+        workspaceRootURL: URL?,
+        onOutput: @escaping (String) -> Void
+    ) throws {
+#if os(macOS)
+        let process = Process()
+
+        if let cwd = workspaceRootURL {
+            process.currentDirectoryURL = cwd
+        }
+
+        let expandedCommand = expandVariables(task.command, workspaceRootURL: workspaceRootURL)
+        let expandedArgs = (task.args ?? []).map { expandVariables($0, workspaceRootURL: workspaceRootURL) }
+
+        switch task.type {
+        case .shell:
+            // Use a login shell so things like `swift`/`npm` resolve from PATH (where supported).
+            // Note: This is expected to work on macOS / Mac Catalyst. On iPadOS, spawning processes
+            // may be restricted; errors will be reported to the output panel.
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            let commandLine = ([expandedCommand] + expandedArgs)
+                .map(shellEscape)
+                .joined(separator: " ")
+            process.arguments = ["-lc", commandLine]
+
+        case .process:
+            // Use /usr/bin/env so a bare command name can be resolved via PATH.
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = [expandedCommand] + expandedArgs
+        }
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let lock = NSLock()
+        func forward(_ data: Data) {
+            guard !data.isEmpty else { return }
+            if let s = String(data: data, encoding: .utf8), !s.isEmpty {
+                lock.lock()
+                onOutput(s)
+                lock.unlock()
+            }
+        }
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+            forward(handle.availableData)
+        }
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            forward(handle.availableData)
+        }
+
+        try process.run()
+        process.waitUntilExit()
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+        // Flush any remaining data.
+        forward(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+        forward(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+
+        if process.terminationStatus != 0 {
+            throw NSError(
+                domain: "TasksManager",
+                code: Int(process.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: "Task exited with code \(process.terminationStatus)"]
+            )
+        }
+#else
+        // Process execution not available on iOS
+        onOutput("Error: Task execution is not available on iOS\n")
+        throw NSError(
+            domain: "TasksManager",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Task execution is not available on iOS"]
+        )
+#endif
+    }
+
+    // MARK: - JSONC helpers
+
+    /// VS Code `tasks.json` often uses JSON with comments (JSONC). This strips
+    /// both `//` line comments and `/* ... */` block comments.
+    private static func stripJSONComments(_ input: String) -> String {
+        let blockPattern = "/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*/"
+        let linePattern = "(?m)//.*$"
+
+        let withoutBlocks = input.replacingOccurrences(of: blockPattern, with: "", options: .regularExpression)
+        let withoutLines = withoutBlocks.replacingOccurrences(of: linePattern, with: "", options: .regularExpression)
+        return withoutLines
+    }
+
+    // MARK: - Variable expansion
+
+    private static func expandVariables(_ value: String, workspaceRootURL: URL?) -> String {
+        var out = value
+        if let workspaceRootURL {
+            out = out.replacingOccurrences(of: "${workspaceFolder}", with: workspaceRootURL.path)
+        }
+        // `${file}` is not currently resolved (needs active editor tab), but we keep it intact.
+        return out
+    }
+
+    private static func shellEscape(_ s: String) -> String {
+        if s.isEmpty { return "''" }
+        // Basic single-quote escaping for zsh/bash.
+        if s.contains(where: { $0.isWhitespace || $0 == "\"" || $0 == "'" || $0 == "\\" || $0 == "(" || $0 == ")" }) {
+            return "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
+        return s
+    }
+}
+
+// MARK: - Built-in Templates
+
+extension VSCodeTask {
+    static var builtInTemplates: [VSCodeTask] {
+        [
+            VSCodeTask(
+                label: "swift-build",
+                type: .shell,
+                command: "swift",
+                args: ["build"],
+                group: .build
+            ),
+            VSCodeTask(
+                label: "npm-run-build",
+                type: .shell,
+                command: "npm",
+                args: ["run", "build"],
+                group: .build
+            ),
+            VSCodeTask(
+                label: "python-script",
+                type: .shell,
+                command: "python3",
+                args: ["${file}"],
+                group: .test
+            )
+        ]
+    }
+}

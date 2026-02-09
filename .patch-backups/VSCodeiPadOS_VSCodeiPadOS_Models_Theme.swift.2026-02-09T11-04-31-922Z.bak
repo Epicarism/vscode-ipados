@@ -1,0 +1,301 @@
+import SwiftUI
+
+struct Theme: Identifiable, Equatable, Hashable {
+    let id: String
+    let name: String
+    let isDark: Bool
+    
+    // Editor Colors
+    let editorBackground: Color
+    let editorForeground: Color
+    let selection: Color
+    let cursor: Color
+    let lineNumber: Color
+    let lineNumberActive: Color
+    let currentLineHighlight: Color
+    let bracketPair1: Color
+    let bracketPair2: Color
+    let bracketPair3: Color
+    let bracketPair4: Color
+    let bracketPair5: Color
+    let bracketPair6: Color
+    let indentGuide: Color
+    let indentGuideActive: Color
+    
+    // UI Colors
+    let sidebarBackground: Color
+    let sidebarForeground: Color
+    let sidebarSectionHeader: Color
+    let sidebarSelection: Color
+    let activityBarBackground: Color
+    let activityBarForeground: Color
+    let activityBarSelection: Color
+    let tabBarBackground: Color
+    let tabActiveBackground: Color
+    let tabInactiveBackground: Color
+    let tabActiveForeground: Color
+    let tabInactiveForeground: Color
+    let statusBarBackground: Color
+    let statusBarForeground: Color
+    
+    // Syntax Colors
+    let keyword: Color
+    let string: Color
+    let number: Color
+    let comment: Color
+    let function: Color
+    let type: Color
+    let variable: Color
+    
+    // Helper for Hex Colors
+    static func hex(_ hex: String) -> Color {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+        
+        var rgb: UInt64 = 0
+        Scanner(string: hexSanitized).scanHexInt64(&rgb)
+        
+        let r = Double((rgb & 0xFF0000) >> 16) / 255.0
+        let g = Double((rgb & 0x00FF00) >> 8) / 255.0
+        let b = Double(rgb & 0x0000FF) / 255.0
+        
+        return Color(red: r, green: g, blue: b)
+    }
+    
+    // MARK: - Predefined Themes
+    
+    static let darkPlus = Theme(
+        id: "dark_plus",
+        name: "Dark+ (Default Dark)",
+        isDark: true,
+        editorBackground: hex("#1E1E1E"),
+        editorForeground: hex("#D4D4D4"),
+        selection: hex("#264F78"),
+        cursor: hex("#AEAFAD"),
+        lineNumber: hex("#858585"),
+        lineNumberActive: hex("#C6C6C6"),
+        sidebarBackground: hex("#252526"),
+        sidebarForeground: hex("#CCCCCC"),
+        sidebarSectionHeader: hex("#000000").opacity(0.2),
+        sidebarSelection: hex("#37373D"),
+        activityBarBackground: hex("#333333"),
+        activityBarForeground: hex("#FFFFFF").opacity(0.4),
+        activityBarSelection: hex("#FFFFFF"),
+        tabBarBackground: hex("#252526"),
+        tabActiveBackground: hex("#1E1E1E"),
+        tabInactiveBackground: hex("#2D2D2D"),
+        tabActiveForeground: hex("#FFFFFF"),
+        tabInactiveForeground: hex("#969696"),
+        statusBarBackground: hex("#007ACC"),
+        statusBarForeground: hex("#FFFFFF"),
+        keyword: hex("#C586C0"),
+        string: hex("#CE9178"),
+        number: hex("#B5CEA8"),
+        comment: hex("#6A9955"),
+        function: hex("#DCDCAA"),
+        type: hex("#4EC9B0"),
+        variable: hex("#9CDCFE")
+    )
+    
+    static let lightPlus = Theme(
+        id: "light_plus",
+        name: "Light+ (Default Light)",
+        isDark: false,
+        editorBackground: hex("#FFFFFF"),
+        editorForeground: hex("#000000"),
+        selection: hex("#ADD6FF"),
+        cursor: hex("#000000"),
+        lineNumber: hex("#237893"),
+        lineNumberActive: hex("#0B216F"),
+        sidebarBackground: hex("#F3F3F3"),
+        sidebarForeground: hex("#616161"),
+        sidebarSectionHeader: hex("#000000").opacity(0.1),
+        sidebarSelection: hex("#E4E6F1"),
+        activityBarBackground: hex("#2C2C2C"),
+        activityBarForeground: hex("#FFFFFF").opacity(0.4),
+        activityBarSelection: hex("#FFFFFF"),
+        tabBarBackground: hex("#F3F3F3"),
+        tabActiveBackground: hex("#FFFFFF"),
+        tabInactiveBackground: hex("#ECECEC"),
+        tabActiveForeground: hex("#333333"),
+        tabInactiveForeground: hex("#333333").opacity(0.7),
+        statusBarBackground: hex("#007ACC"),
+        statusBarForeground: hex("#FFFFFF"),
+        keyword: hex("#AF00DB"),
+        string: hex("#A31515"),
+        number: hex("#098658"),
+        comment: hex("#008000"),
+        function: hex("#795E26"),
+        type: hex("#267F99"),
+        variable: hex("#001080")
+    )
+    
+    static let monokai = Theme(
+        id: "monokai",
+        name: "Monokai",
+        isDark: true,
+        editorBackground: hex("#272822"),
+        editorForeground: hex("#F8F8F2"),
+        selection: hex("#49483E"),
+        cursor: hex("#F8F8F0"),
+        lineNumber: hex("#90908A"),
+        lineNumberActive: hex("#F8F8F2"),
+        sidebarBackground: hex("#272822"),
+        sidebarForeground: hex("#F8F8F2"),
+        sidebarSectionHeader: hex("#1e1f1c"),
+        sidebarSelection: hex("#75715E"),
+        activityBarBackground: hex("#1E1F1C"),
+        activityBarForeground: hex("#F8F8F2").opacity(0.5),
+        activityBarSelection: hex("#F8F8F2"),
+        tabBarBackground: hex("#1E1F1C"),
+        tabActiveBackground: hex("#272822"),
+        tabInactiveBackground: hex("#34352F"),
+        tabActiveForeground: hex("#F8F8F2"),
+        tabInactiveForeground: hex("#88846F"),
+        statusBarBackground: hex("#75715E"),
+        statusBarForeground: hex("#F8F8F2"),
+        keyword: hex("#F92672"),
+        string: hex("#E6DB74"),
+        number: hex("#AE81FF"),
+        comment: hex("#75715E"),
+        function: hex("#A6E22E"),
+        type: hex("#66D9EF"),
+        variable: hex("#FD971F")
+    )
+    
+    static let solarizedDark = Theme(
+        id: "solarized_dark",
+        name: "Solarized Dark",
+        isDark: true,
+        editorBackground: hex("#002B36"),
+        editorForeground: hex("#839496"),
+        selection: hex("#274642"),
+        cursor: hex("#D30102"),
+        lineNumber: hex("#586E75"),
+        lineNumberActive: hex("#93A1A1"),
+        sidebarBackground: hex("#00252E"),
+        sidebarForeground: hex("#93A1A1"),
+        sidebarSectionHeader: hex("#001F27"),
+        sidebarSelection: hex("#073642"),
+        activityBarBackground: hex("#002B36"),
+        activityBarForeground: hex("#586E75"),
+        activityBarSelection: hex("#FDF6E3"),
+        tabBarBackground: hex("#002B36"),
+        tabActiveBackground: hex("#002B36"),
+        tabInactiveBackground: hex("#00212B"),
+        tabActiveForeground: hex("#93A1A1"),
+        tabInactiveForeground: hex("#586E75"),
+        statusBarBackground: hex("#00212B"),
+        statusBarForeground: hex("#93A1A1"),
+        keyword: hex("#859900"),
+        string: hex("#2AA198"),
+        number: hex("#D33682"),
+        comment: hex("#586E75"),
+        function: hex("#268BD2"),
+        type: hex("#CB4B16"),
+        variable: hex("#B58900")
+    )
+    
+    static let dracula = Theme(
+        id: "dracula",
+        name: "Dracula",
+        isDark: true,
+        editorBackground: hex("#282A36"),
+        editorForeground: hex("#F8F8F2"),
+        selection: hex("#44475A"),
+        cursor: hex("#F8F8F0"),
+        lineNumber: hex("#6272A4"),
+        lineNumberActive: hex("#F8F8F2"),
+        sidebarBackground: hex("#21222C"),
+        sidebarForeground: hex("#F8F8F2"),
+        sidebarSectionHeader: hex("#191A21"),
+        sidebarSelection: hex("#44475A"),
+        activityBarBackground: hex("#343746"),
+        activityBarForeground: hex("#6272A4"),
+        activityBarSelection: hex("#F8F8F2"),
+        tabBarBackground: hex("#191A21"),
+        tabActiveBackground: hex("#282A36"),
+        tabInactiveBackground: hex("#21222C"),
+        tabActiveForeground: hex("#F8F8F2"),
+        tabInactiveForeground: hex("#6272A4"),
+        statusBarBackground: hex("#BD93F9"),
+        statusBarForeground: hex("#282A36"),
+        keyword: hex("#FF79C6"),
+        string: hex("#F1FA8C"),
+        number: hex("#BD93F9"),
+        comment: hex("#6272A4"),
+        function: hex("#50FA7B"),
+        type: hex("#8BE9FD"),
+        variable: hex("#FFB86C")
+    )
+
+    static let oneDarkPro = Theme(
+        id: "one_dark_pro",
+        name: "One Dark Pro",
+        isDark: true,
+        editorBackground: hex("#282C34"),
+        editorForeground: hex("#ABB2BF"),
+        selection: hex("#3E4451"),
+        cursor: hex("#528BFF"),
+        lineNumber: hex("#4B5263"),
+        lineNumberActive: hex("#ABB2BF"),
+        sidebarBackground: hex("#21252B"),
+        sidebarForeground: hex("#ABB2BF"),
+        sidebarSectionHeader: hex("#282C34"),
+        sidebarSelection: hex("#2C313A"),
+        activityBarBackground: hex("#282C34"),
+        activityBarForeground: hex("#5C6370"),
+        activityBarSelection: hex("#D7DAE0"),
+        tabBarBackground: hex("#21252B"),
+        tabActiveBackground: hex("#282C34"),
+        tabInactiveBackground: hex("#21252B"),
+        tabActiveForeground: hex("#D7DAE0"),
+        tabInactiveForeground: hex("#5C6370"),
+        statusBarBackground: hex("#21252B"),
+        statusBarForeground: hex("#9DA5B4"),
+        keyword: hex("#C678DD"),
+        string: hex("#98C379"),
+        number: hex("#D19A66"),
+        comment: hex("#5C6370"),
+        function: hex("#61AFEF"),
+        type: hex("#E5C07B"),
+        variable: hex("#E06C75")
+    )
+
+    static let githubDark = Theme(
+        id: "github_dark",
+        name: "GitHub Dark",
+        isDark: true,
+        editorBackground: hex("#0D1117"),
+        editorForeground: hex("#C9D1D9"),
+        selection: hex("#163356"),
+        cursor: hex("#58A6FF"),
+        lineNumber: hex("#484F58"),
+        lineNumberActive: hex("#C9D1D9"),
+        sidebarBackground: hex("#010409"),
+        sidebarForeground: hex("#C9D1D9"),
+        sidebarSectionHeader: hex("#161B22"),
+        sidebarSelection: hex("#1F2428"),
+        activityBarBackground: hex("#0D1117"),
+        activityBarForeground: hex("#484F58"),
+        activityBarSelection: hex("#C9D1D9"),
+        tabBarBackground: hex("#010409"),
+        tabActiveBackground: hex("#0D1117"),
+        tabInactiveBackground: hex("#010409"),
+        tabActiveForeground: hex("#C9D1D9"),
+        tabInactiveForeground: hex("#8B949E"),
+        statusBarBackground: hex("#0D1117"),
+        statusBarForeground: hex("#58A6FF"),
+        keyword: hex("#FF7B72"),
+        string: hex("#A5D6FF"),
+        number: hex("#79C0FF"),
+        comment: hex("#8B949E"),
+        function: hex("#D2A8FF"),
+        type: hex("#79C0FF"),
+        variable: hex("#FFA657")
+    )
+    
+    static let allThemes: [Theme] = [
+        .darkPlus, .lightPlus, .monokai, .solarizedDark, .dracula, .oneDarkPro, .githubDark
+    ]
+}

@@ -1,305 +1,597 @@
 import SwiftUI
+import SwiftUI
+import UIKit
 import Network
 import Foundation
 
-// MARK: - Terminal View with SSH Support
+// MARK: - Terminal View (Main Container)
 
 struct TerminalView: View {
-    @StateObject private var terminal = TerminalManager()
-    @State private var currentCommand = ""
+    @StateObject private var workspace = TerminalWorkspace.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var showConnectionSheet = false
-    @FocusState private var isInputFocused: Bool
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            // Connection status bar
-            HStack {
-                Circle()
-                    .fill(terminal.isConnected ? Color.green : Color.gray)
-                    .frame(width: 8, height: 8)
-                
-                Text(terminal.connectionStatus)
+            // MARK: Top Toolbar
+            HStack(spacing: 10) {
+                Text("TERMINAL")
                     .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                Button(action: { showConnectionSheet = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: terminal.isConnected ? "network" : "network.slash")
-                        Text(terminal.isConnected ? "Connected" : "Connect SSH")
-                    }
-                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(themeManager.currentTheme.tabActiveForeground)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.2))
-                    .cornerRadius(4)
-                }
-                
-                if terminal.isConnected {
-                    Button(action: { terminal.disconnect() }) {
-                        Image(systemName: "xmark.circle")
-                            .foregroundColor(.red)
+
+                Spacer()
+
+                HStack(spacing: 12) {
+                    Button(action: { workspace.addTab() }) {
+                        Image(systemName: "plus")
                     }
+                    .help("New Terminal")
+
+                    Button(action: { workspace.toggleSplitActiveTab() }) {
+                        Image(systemName: "square.split.2x1")
+                    }
+                    .disabled(workspace.tabs.isEmpty)
+                    .help("Split Terminal")
+
+                    Button(action: copyActiveTerminalToClipboard) {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .disabled(workspace.activePane == nil)
+                    .help("Copy Terminal Output")
+
+                    Button(action: pasteClipboardToActiveTerminal) {
+                        Image(systemName: "doc.on.clipboard")
+                    }
+                    .disabled(workspace.activePane == nil)
+                    .help("Paste")
+
+                    Button(action: { workspace.activePane?.clear() }) {
+                        Image(systemName: "trash")
+                    }
+                    .disabled(workspace.activePane == nil)
+                    .help("Clear Terminal")
+
+                    Button(action: { workspace.killActive() }) {
+                        Image(systemName: "xmark")
+                    }
+                    .disabled(workspace.activePane == nil)
+                    .help("Kill Terminal")
+
+                    Button(action: { showConnectionSheet = true }) {
+                        Image(systemName: "network")
+                    }
+                    .disabled(workspace.activePane == nil)
+                    .help("SSH Connect")
+                }
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.editorForeground)
+            }
+            .padding(8)
+            .background(themeManager.currentTheme.editorBackground)
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(themeManager.currentTheme.editorForeground.opacity(0.2)),
+                alignment: .bottom
+            )
+
+            // MARK: Tab Strip
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(workspace.tabs) { tab in
+                        if let primary = tab.panes.first {
+                            TerminalTabButtonView(
+                                terminal: primary,
+                                isActive: workspace.activeTabId == tab.id,
+                                onSelect: { workspace.activeTabId = tab.id },
+                                onClose: { workspace.closeTab(id: tab.id) },
+                                onRename: { workspace.activeTabId = tab.id },
+                                onSplit: { workspace.activeTabId = tab.id; workspace.toggleSplitActiveTab() }
+                            )
+                        }
+                    }
+
+                    Button(action: { workspace.addTab() }) {
+                        Image(systemName: "plus")
+                            .font(.caption)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(themeManager.currentTheme.editorForeground.opacity(0.08))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("New Terminal")
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+            }
+            .background(themeManager.currentTheme.editorBackground)
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(themeManager.currentTheme.editorForeground.opacity(0.12)),
+                alignment: .bottom
+            )
+
+            // MARK: Terminal Content
+            Group {
+                if let tab = workspace.activeTab {
+                    if tab.panes.count <= 1, let terminal = tab.panes.first {
+                        SingleTerminalView(
+                            terminal: terminal,
+                            isActive: true,
+                            onActivate: { workspace.setActivePane(terminal.id, in: tab.id) },
+                            onKill: { workspace.killActive() }
+                        )
+                    } else {
+                        HStack(spacing: 0) {
+                            ForEach(tab.panes) { pane in
+                                SingleTerminalView(
+                                    terminal: pane,
+                                    isActive: tab.activePaneId == pane.id,
+                                    onActivate: { workspace.setActivePane(pane.id, in: tab.id) },
+                                    onKill: { workspace.killActive() }
+                                )
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                                if pane.id != tab.panes.last?.id {
+                                    Divider()
+                                        .background(themeManager.currentTheme.editorForeground.opacity(0.2))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Text("No Open Terminals")
+                            .foregroundColor(themeManager.currentTheme.editorForeground.opacity(0.5))
+                        Button("Create New Terminal") {
+                            workspace.addTab()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(themeManager.currentTheme.editorBackground)
                 }
             }
-            .padding(.horizontal, 12)
+        }
+        .background(themeManager.currentTheme.editorBackground)
+        .sheet(isPresented: $showConnectionSheet) {
+            if let active = workspace.activePane {
+                SSHConnectionView(terminal: active, isPresented: $showConnectionSheet)
+            }
+        }
+    }
+
+    private func copyActiveTerminalToClipboard() {
+        guard let terminal = workspace.activePane else { return }
+        let text = terminal.output.map(\.text).joined(separator: "\n")
+        UIPasteboard.general.string = text
+    }
+
+    private func pasteClipboardToActiveTerminal() {
+        guard let terminal = workspace.activePane else { return }
+        guard let clip = UIPasteboard.general.string, !clip.isEmpty else { return }
+        terminal.draftCommand.append(contentsOf: clip)
+    }
+}
+
+struct TerminalTabButtonView: View {
+    @ObservedObject var terminal: TerminalManager
+    var isActive: Bool
+    var onSelect: () -> Void
+    var onClose: () -> Void
+    var onRename: () -> Void
+    var onSplit: () -> Void
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @State private var showRenameAlert = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 6) {
+                Image(systemName: "terminal")
+                    .font(.caption2)
+
+                Text(terminal.title.isEmpty ? "Terminal" : terminal.title)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .frame(maxWidth: 200, alignment: .leading)
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color(UIColor.tertiarySystemBackground))
-            
-            // Terminal output
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isActive ? themeManager.currentTheme.editorForeground.opacity(0.15) : themeManager.currentTheme.editorForeground.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isActive ? themeManager.currentTheme.tabActiveForeground.opacity(0.5) : .clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(action: {
+                showRenameAlert = true
+            }) {
+                Label("Rename Terminal", systemImage: "pencil")
+            }
+
+            Button(action: {
+                onSplit()
+            }) {
+                Label("Split Terminal", systemImage: "square.split.2x1")
+            }
+
+            Divider()
+
+            Button(action: {
+                onClose()
+            }) {
+                Label("Close Terminal", systemImage: "xmark")
+                    .foregroundColor(.red)
+            }
+        }
+        .alert("Rename Terminal", isPresented: $showRenameAlert) {
+            TextField("Terminal Name", text: $terminal.title)
+            Button("OK", role: .cancel) { }
+        }
+    }
+}
+
+// MARK: - Single Terminal View
+
+struct SingleTerminalView: View {
+    @ObservedObject var terminal: TerminalManager
+    var isActive: Bool
+    var onActivate: () -> Void
+    var onKill: () -> Void
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @FocusState private var isInputFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Terminal Output
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(terminal.output) { line in
-                            terminalLine(line)
+                            TerminalLineView(line: line)
                                 .id(line.id)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+                    .padding(8)
                 }
-                .background(Color.black)
                 .onChange(of: terminal.output.count) { _ in
-                    withAnimation {
+                    withAnimation(.easeOut(duration: 0.1)) {
                         proxy.scrollTo(terminal.output.last?.id, anchor: .bottom)
                     }
                 }
             }
-            
-            // Command input
-            HStack {
+            .contentShape(Rectangle())
+            .contextMenu {
+                Button(action: {
+                    let text = terminal.output.map(\.text).joined(separator: "\n")
+                    UIPasteboard.general.string = text
+                }) {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+
+                Button(action: {
+                    if let clip = UIPasteboard.general.string, !clip.isEmpty {
+                        terminal.draftCommand.append(contentsOf: clip)
+                    }
+                }) {
+                    Label("Paste", systemImage: "doc.on.clipboard")
+                }
+
+                Divider()
+
+                Button(action: {
+                    terminal.clear()
+                }) {
+                    Label("Clear Terminal", systemImage: "trash")
+                }
+
+                Divider()
+
+                Button(action: {
+                    onKill()
+                }) {
+                    Label("Kill Terminal", systemImage: "xmark.circle")
+                        .foregroundColor(.red)
+                }
+            }
+            .onTapGesture {
+                onActivate()
+                isInputFocused = true
+            }
+
+            // Input Area
+            HStack(spacing: 0) {
                 Text(terminal.promptString)
                     .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.green)
-                
-                TextField("", text: $currentCommand)
+                    .foregroundColor(themeManager.currentTheme.type)
+                    .padding(.leading, 8)
+
+                TextField("", text: $terminal.draftCommand)
                     .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(themeManager.currentTheme.editorForeground)
+                    .accentColor(themeManager.currentTheme.cursor)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
                     .focused($isInputFocused)
-                    .onSubmit {
-                        executeCommand()
-                    }
-                
-                // Quick action buttons
-                HStack(spacing: 8) {
-                    Button(action: { currentCommand = "ls -la" }) {
-                        Text("ls")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                    Button(action: { terminal.sendInterrupt() }) {
-                        Text("^C")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                    Button(action: { terminal.sendTab() }) {
-                        Text("Tab")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
+                    .onSubmit { executeCommand() }
+                    .padding(8)
             }
-            .padding()
-            .background(Color.black.opacity(0.95))
+            .background(themeManager.currentTheme.editorBackground)
+
+            // Mobile Helper Bar (optional)
+            if isInputFocused {
+                HStack(spacing: 12) {
+                    Button("Tab") { terminal.sendTab() }
+                    Button("Esc") { /* handle esc */ }
+                    Button("Ctrl+C") { terminal.sendInterrupt() }
+                        .foregroundColor(.red)
+                    Spacer()
+                    Button("ls") { terminal.draftCommand = "ls -la" }
+                    Button("git status") { terminal.draftCommand = "git status" }
+                }
+                .font(.caption)
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(themeManager.currentTheme.editorForeground.opacity(0.1))
+            }
         }
-        .background(Color.black)
+        .background(themeManager.currentTheme.editorBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(isActive ? themeManager.currentTheme.tabActiveForeground.opacity(0.35) : .clear, lineWidth: 1)
+        )
         .onAppear {
-            isInputFocused = true
-        }
-        .sheet(isPresented: $showConnectionSheet) {
-            SSHConnectionView(terminal: terminal, isPresented: $showConnectionSheet)
+            if isActive {
+                isInputFocused = true
+            }
         }
     }
+
+    private func executeCommand() {
+        let command = terminal.draftCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !command.isEmpty else { return }
+        terminal.executeCommand(command)
+        terminal.draftCommand = ""
+    }
+}
+
+struct TerminalLineView: View {
+    let line: TerminalLine
+    @ObservedObject private var themeManager = ThemeManager.shared
     
-    @ViewBuilder
-    private func terminalLine(_ line: TerminalLine) -> some View {
+    var body: some View {
         if line.isANSI {
             ANSIText(line.text)
         } else {
             Text(line.text)
                 .font(.system(.body, design: .monospaced))
-                .foregroundColor(line.color)
+                .foregroundColor(colorForType(line.type))
                 .textSelection(.enabled)
         }
     }
     
-    private func executeCommand() {
-        guard !currentCommand.isEmpty else { return }
-        terminal.executeCommand(currentCommand)
-        currentCommand = ""
+    func colorForType(_ type: LineType) -> Color {
+        switch type {
+        case .command: return themeManager.currentTheme.editorForeground
+        case .output: return themeManager.currentTheme.editorForeground.opacity(0.9)
+        case .error: return Color.red // Could use theme error color if available
+        case .system: return themeManager.currentTheme.comment
+        case .prompt: return themeManager.currentTheme.type
+        }
     }
 }
 
-// MARK: - SSH Connection View
+// MARK: - Terminal Workspace Manager
 
-struct SSHConnectionView: View {
-    @ObservedObject var terminal: TerminalManager
-    @Binding var isPresented: Bool
-    
-    @State private var host = ""
-    @State private var port = "22"
-    @State private var username = ""
-    @State private var password = ""
-    @State private var useKey = false
-    @State private var privateKey = ""
-    @State private var savedConnections: [SSHConnection] = []
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Connection Details")) {
-                    TextField("Host (e.g., 192.168.1.100)", text: $host)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                    
-                    TextField("Port", text: $port)
-                        .keyboardType(.numberPad)
-                    
-                    TextField("Username", text: $username)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                }
-                
-                Section(header: Text("Authentication")) {
-                    Toggle("Use SSH Key", isOn: $useKey)
-                    
-                    if useKey {
-                        TextEditor(text: $privateKey)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(height: 100)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-                        Text("Paste your private key here")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        SecureField("Password", text: $password)
-                    }
-                }
-                
-                Section(header: Text("Quick Connect")) {
-                    Button(action: connectToLocalhost) {
-                        HStack {
-                            Image(systemName: "laptopcomputer")
-                            Text("Connect to Mac (localhost)")
-                        }
-                    }
-                    
-                    Button(action: { host = "raspberrypi.local"; port = "22"; username = "pi" }) {
-                        HStack {
-                            Image(systemName: "cpu")
-                            Text("Raspberry Pi Template")
-                        }
-                    }
-                }
-                
-                Section {
-                    Button(action: connect) {
-                        HStack {
-                            Spacer()
-                            if terminal.isConnecting {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Image(systemName: "network")
-                                Text("Connect")
-                            }
-                            Spacer()
-                        }
-                    }
-                    .disabled(host.isEmpty || username.isEmpty || (password.isEmpty && !useKey) || terminal.isConnecting)
-                    .foregroundColor(.white)
-                    .listRowBackground(Color.accentColor)
-                }
-                
-                Section(header: Text("Info")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("SSH Connection")
-                            .font(.headline)
-                        Text("Connect to your Mac, Linux server, or Raspberry Pi to run commands remotely.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text("To connect to your Mac:")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                        Text("1. Open System Settings > General > Sharing\n2. Enable 'Remote Login'\n3. Use your Mac's IP address and username")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("SSH Connection")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isPresented = false }
-                }
-            }
+struct TerminalTab: Identifiable, Equatable {
+    let id: UUID
+    var panes: [TerminalManager]
+    var activePaneId: UUID
+
+    init(panes: [TerminalManager]) {
+        self.id = UUID()
+        self.panes = panes
+        self.activePaneId = panes.first?.id ?? UUID()
+    }
+
+    var title: String {
+        panes.first?.title ?? "Terminal"
+    }
+
+    static func == (lhs: TerminalTab, rhs: TerminalTab) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+class TerminalWorkspace: ObservableObject {
+    static let shared = TerminalWorkspace()
+
+    @Published var tabs: [TerminalTab] = []
+    @Published var activeTabId: UUID?
+
+    var activeTabIndex: Int? {
+        guard let id = activeTabId else { return nil }
+        return tabs.firstIndex(where: { $0.id == id })
+    }
+
+    var activeTab: TerminalTab? {
+        guard let idx = activeTabIndex else { return nil }
+        return tabs[idx]
+    }
+
+    var activePane: TerminalManager? {
+        guard let tab = activeTab else { return nil }
+        return tab.panes.first(where: { $0.id == tab.activePaneId }) ?? tab.panes.first
+    }
+
+    init() {
+        addTab() // start with one
+    }
+
+    func addTab() {
+        let term = TerminalManager()
+        term.title = "Terminal \(tabs.count + 1)"
+        let tab = TerminalTab(panes: [term])
+        tabs.append(tab)
+        activeTabId = tab.id
+    }
+
+    func closeTab(id: UUID) {
+        guard let idx = tabs.firstIndex(where: { $0.id == id }) else { return }
+        for pane in tabs[idx].panes {
+            pane.disconnect()
+        }
+        tabs.remove(at: idx)
+        if activeTabId == id {
+            activeTabId = tabs.last?.id
         }
     }
-    
-    private func connect() {
-        let connection = SSHConnection(
-            host: host,
-            port: Int(port) ?? 22,
-            username: username,
-            password: useKey ? nil : password,
-            privateKey: useKey ? privateKey : nil
-        )
-        terminal.connect(to: connection)
-        isPresented = false
+
+    func setActivePane(_ paneId: UUID, in tabId: UUID) {
+        guard let tabIndex = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        tabs[tabIndex].activePaneId = paneId
     }
-    
-    private func connectToLocalhost() {
-        host = "localhost"
-        port = "22"
-        username = NSUserName()
+
+    func toggleSplitActiveTab() {
+        guard let tabId = activeTabId else { return }
+        guard let idx = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+
+        if tabs[idx].panes.count <= 1 {
+            // Split: add a second pane (max 2 panes for now)
+            let newPane = TerminalManager()
+            newPane.title = "Terminal \(tabs.count).2"
+            tabs[idx].panes.append(newPane)
+            tabs[idx].activePaneId = newPane.id
+        } else {
+            // Unsplit: remove all panes except the first
+            let extraPanes = tabs[idx].panes.dropFirst()
+            for pane in extraPanes {
+                pane.disconnect()
+            }
+            tabs[idx].panes = Array(tabs[idx].panes.prefix(1))
+            tabs[idx].activePaneId = tabs[idx].panes.first?.id ?? tabs[idx].activePaneId
+        }
+    }
+
+    func killActive() {
+        guard let tabId = activeTabId else { return }
+        guard let tabIndex = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+
+        let paneId = tabs[tabIndex].activePaneId
+        if tabs[tabIndex].panes.count > 1 {
+            // If split, kill the active pane only.
+            if let paneIndex = tabs[tabIndex].panes.firstIndex(where: { $0.id == paneId }) {
+                tabs[tabIndex].panes[paneIndex].disconnect()
+                tabs[tabIndex].panes.remove(at: paneIndex)
+            }
+            tabs[tabIndex].activePaneId = tabs[tabIndex].panes.first?.id ?? tabs[tabIndex].activePaneId
+
+            if tabs[tabIndex].panes.isEmpty {
+                closeTab(id: tabId)
+            }
+        } else {
+            // If not split, kill the tab.
+            closeTab(id: tabId)
+        }
     }
 }
 
 // MARK: - Terminal Manager
 
-class TerminalManager: ObservableObject {
+class TerminalManager: ObservableObject, Identifiable {
+    let id = UUID()
+    @Published var title: String = "Terminal"
+    
     @Published var output: [TerminalLine] = [
-        TerminalLine(text: "VSCode iPadOS Terminal v1.0", type: .system),
-        TerminalLine(text: "Type 'help' for commands or connect via SSH to a remote server.", type: .system),
+        TerminalLine(text: "VSCode iPadOS Terminal v2.0", type: .system),
+        TerminalLine(text: "Type 'help' for commands or connect via SSH (SwiftNIO).", type: .system),
         TerminalLine(text: "", type: .output)
     ]
     @Published var isConnected = false
     @Published var isConnecting = false
     @Published var connectionStatus = "Not connected"
     @Published var promptString = "$ "
+    @Published var draftCommand: String = ""
     
-    private var sshClient: SSHClient?
-    private var currentConnection: SSHConnection?
+    private var sshManager: SSHManager?
+    private var currentConfig: SSHConnectionConfig?
     private var commandHistory: [String] = []
     private var historyIndex = 0
     
-    func connect(to connection: SSHConnection) {
-        currentConnection = connection
+    func clear() {
+        output = []
+    }
+    
+    func connect(to config: SSHConnectionConfig) {
+        currentConfig = config
         isConnecting = true
-        connectionStatus = "Connecting to \(connection.host)..."
+        connectionStatus = "Connecting to \(config.host)..."
+        title = "\(config.username)@\(config.host)"
         
-        appendOutput("Connecting to \(connection.username)@\(connection.host):\(connection.port)...", type: .system)
+        appendOutput("Connecting to \(config.username)@\(config.host):\(config.port)...", type: .system)
+        appendOutput("Using SwiftNIO SSH (real SSH protocol)", type: .system)
         
-        sshClient = SSHClient(connection: connection)
-        sshClient?.delegate = self
-        sshClient?.connect()
+        sshManager = SSHManager()
+        sshManager?.delegate = self
+        sshManager?.connect(config: config) { [weak self] result in
+            switch result {
+            case .success:
+                // Connection successful - delegate will handle UI update
+                SSHConnectionStore.shared.updateLastUsed(config)
+            case .failure(let error):
+                self?.appendOutput("Connection failed: \(error.localizedDescription)", type: .error)
+                self?.isConnecting = false
+                self?.connectionStatus = "Connection failed"
+            }
+        }
+    }
+    
+    // Legacy connect method for backward compatibility
+    func connect(to connection: SSHConnection) {
+        let authMethod: SSHConnectionConfig.SSHAuthMethod
+        if let privateKey = connection.privateKey, !privateKey.isEmpty {
+            authMethod = .privateKey(key: privateKey, passphrase: nil)
+        } else {
+            authMethod = .password(connection.password ?? "")
+        }
+        
+        let config = SSHConnectionConfig(
+            name: "\(connection.username)@\(connection.host)",
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            authMethod: authMethod
+        )
+        connect(to: config)
     }
     
     func disconnect() {
-        sshClient?.disconnect()
-        sshClient = nil
+        sshManager?.disconnect()
+        sshManager = nil
         isConnected = false
         isConnecting = false
         connectionStatus = "Disconnected"
         promptString = "$ "
+        title = "Terminal (Disconnected)"
         appendOutput("Disconnected from server.", type: .system)
     }
     
@@ -307,37 +599,44 @@ class TerminalManager: ObservableObject {
         commandHistory.append(command)
         historyIndex = commandHistory.count
         
-        appendOutput(promptString + command, type: .command)
-        
         if isConnected {
-            sshClient?.send(command: command)
+            // Don't echo command - server will echo it back
+            sshManager?.send(command: command)
         } else {
+            appendOutput(promptString + command, type: .command)
             processLocalCommand(command)
         }
     }
     
     func sendInterrupt() {
         if isConnected {
-            sshClient?.sendInterrupt()
+            sshManager?.sendInterrupt()
         }
         appendOutput("^C", type: .system)
     }
     
     func sendTab() {
         if isConnected {
-            sshClient?.sendTab()
+            sshManager?.sendTab()
         }
     }
     
+    func sendEscape() {
+        sshManager?.sendEscape()
+    }
+    
     func previousCommand() -> String? {
-        guard historyIndex > 0 else { return nil }
-        historyIndex -= 1
+        guard !commandHistory.isEmpty else { return nil }
+        historyIndex = max(0, historyIndex - 1)
         return commandHistory[historyIndex]
     }
     
     func nextCommand() -> String? {
-        guard historyIndex < commandHistory.count - 1 else { return nil }
-        historyIndex += 1
+        guard !commandHistory.isEmpty else { return nil }
+        historyIndex = min(commandHistory.count, historyIndex + 1)
+        if historyIndex >= commandHistory.count {
+            return ""
+        }
         return commandHistory[historyIndex]
     }
     
@@ -354,31 +653,25 @@ class TerminalManager: ObservableObject {
               echo <text>       - Echo text
               date              - Show current date
               whoami            - Show current user
-              uname             - Show system info
               history           - Show command history
-              ssh <user@host>   - Quick SSH connect
+              ssh               - Show SSH connection info
             
-            To run real commands, connect to a server via SSH.
-            Tap 'Connect SSH' button above to set up a connection.
+            Connect via SSH using the network button in toolbar.
+            Real SSH protocol powered by SwiftNIO SSH.
             """, type: .output)
             
         case "clear":
-            output = []
+            clear()
             
         case "echo":
             let text = parts.count > 1 ? String(parts[1]) : ""
             appendOutput(text, type: .output)
             
         case "date":
-            let formatter = DateFormatter()
-            formatter.dateFormat = "E MMM d HH:mm:ss zzz yyyy"
-            appendOutput(formatter.string(from: Date()), type: .output)
+            appendOutput(Date().description, type: .output)
             
         case "whoami":
             appendOutput("ipad-user", type: .output)
-            
-        case "uname":
-            appendOutput("iPadOS \(UIDevice.current.systemVersion) (\(UIDevice.current.model))", type: .output)
             
         case "history":
             for (index, cmd) in commandHistory.enumerated() {
@@ -386,204 +679,249 @@ class TerminalManager: ObservableObject {
             }
             
         case "ssh":
-            if parts.count > 1 {
-                let target = String(parts[1])
-                if target.contains("@") {
-                    let components = target.split(separator: "@")
-                    if components.count == 2 {
-                        let user = String(components[0])
-                        let host = String(components[1])
-                        appendOutput("Use the SSH connection sheet to connect (tap button above)", type: .system)
-                        appendOutput("Host: \(host), User: \(user)", type: .system)
-                    }
-                }
-            } else {
-                appendOutput("Usage: ssh user@hostname", type: .error)
-            }
-            
-        case "ls", "cd", "pwd", "cat", "mkdir", "rm", "mv", "cp", "grep", "find", "vim", "nano":
-            appendOutput("'\(cmd)' requires SSH connection to a remote server.", type: .error)
-            appendOutput("Tap 'Connect SSH' to connect to your Mac or server.", type: .system)
+            appendOutput("""
+            SSH Status: \(isConnected ? "Connected" : "Not connected")
+            Implementation: SwiftNIO SSH (apple/swift-nio-ssh)
+            Features: Password auth, Key auth, PTY support, Shell sessions
+            """, type: .output)
             
         default:
             appendOutput("\(cmd): command not found (local mode)", type: .error)
-            appendOutput("Type 'help' for available commands or connect via SSH.", type: .system)
         }
     }
     
     func appendOutput(_ text: String, type: LineType, isANSI: Bool = false) {
         DispatchQueue.main.async {
-            self.output.append(TerminalLine(text: text, type: type, isANSI: isANSI))
+            // Split multi-line output into separate lines
+            let lines = text.components(separatedBy: .newlines)
+            for line in lines {
+                if !line.isEmpty || lines.count == 1 {
+                    self.output.append(TerminalLine(text: line, type: type, isANSI: isANSI || line.contains("\u{1B}")))
+                }
+            }
         }
     }
 }
 
-// MARK: - SSH Client Delegate
-extension TerminalManager: SSHClientDelegate {
-    func sshClientDidConnect(_ client: SSHClient) {
+// MARK: - SSH Manager Delegate
+extension TerminalManager: SSHManagerDelegate {
+    func sshManagerDidConnect(_ manager: SSHManager) {
         DispatchQueue.main.async {
             self.isConnected = true
             self.isConnecting = false
-            self.connectionStatus = "Connected to \(self.currentConnection?.host ?? "server")"
-            self.promptString = "\(self.currentConnection?.username ?? "user")@\(self.currentConnection?.host ?? "host"):~$ "
-            self.appendOutput("Connected successfully!", type: .system)
+            self.connectionStatus = "Connected"
+            self.promptString = "" // Shell will provide prompt
+            self.appendOutput("Connected successfully via SwiftNIO SSH!", type: .system)
         }
     }
     
-    func sshClientDidDisconnect(_ client: SSHClient, error: Error?) {
+    func sshManagerDidDisconnect(_ manager: SSHManager, error: Error?) {
         DispatchQueue.main.async {
             self.isConnected = false
             self.isConnecting = false
             self.connectionStatus = "Disconnected"
             self.promptString = "$ "
             if let error = error {
-                self.appendOutput("Connection error: \(error.localizedDescription)", type: .error)
+                self.appendOutput("Connection lost: \(error.localizedDescription)", type: .error)
             }
         }
     }
     
-    func sshClient(_ client: SSHClient, didReceiveOutput text: String) {
-        appendOutput(text, type: .output, isANSI: text.contains("\u{1B}"))
+    func sshManager(_ manager: SSHManager, didReceiveOutput text: String) {
+        appendOutput(text, type: .output)
     }
     
-    func sshClient(_ client: SSHClient, didReceiveError text: String) {
+    func sshManager(_ manager: SSHManager, didReceiveError text: String) {
         appendOutput(text, type: .error)
     }
 }
 
-// MARK: - SSH Client
+// MARK: - SSH Connection View (Enhanced with Saved Connections)
 
-protocol SSHClientDelegate: AnyObject {
-    func sshClientDidConnect(_ client: SSHClient)
-    func sshClientDidDisconnect(_ client: SSHClient, error: Error?)
-    func sshClient(_ client: SSHClient, didReceiveOutput text: String)
-    func sshClient(_ client: SSHClient, didReceiveError text: String)
-}
-
-class SSHClient {
-    weak var delegate: SSHClientDelegate?
-    private let connection: SSHConnection
-    private var nwConnection: NWConnection?
-    private var isAuthenticated = false
+struct SSHConnectionView: View {
+    @ObservedObject var terminal: TerminalManager
+    @Binding var isPresented: Bool
+    @ObservedObject private var connectionStore = SSHConnectionStore.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
-    init(connection: SSHConnection) {
-        self.connection = connection
-    }
+    @State private var connectionName = ""
+    @State private var host = ""
+    @State private var port = "22"
+    @State private var username = ""
+    @State private var password = ""
+    @State private var useKey = false
+    @State private var privateKey = ""
+    @State private var keyPassphrase = ""
+    @State private var saveConnection = true
+    @State private var showSavedConnections = true
+    @State private var errorMessage: String?
     
-    func connect() {
-        let host = NWEndpoint.Host(connection.host)
-        let port = NWEndpoint.Port(integerLiteral: UInt16(connection.port))
-        
-        nwConnection = NWConnection(host: host, port: port, using: .tcp)
-        
-        nwConnection?.stateUpdateHandler = { [weak self] state in
-            guard let self = self else { return }
-            switch state {
-            case .ready:
-                self.performSSHHandshake()
-            case .failed(let error):
-                self.delegate?.sshClientDidDisconnect(self, error: error)
-            case .cancelled:
-                self.delegate?.sshClientDidDisconnect(self, error: nil)
-            default:
-                break
-            }
-        }
-        
-        nwConnection?.start(queue: .global(qos: .userInitiated))
-    }
-    
-    func disconnect() {
-        nwConnection?.cancel()
-        nwConnection = nil
-    }
-    
-    func send(command: String) {
-        guard let connection = nwConnection else { return }
-        let data = (command + "\n").data(using: .utf8)!
-        
-        connection.send(content: data, completion: .contentProcessed { [weak self] error in
-            if let error = error {
-                self?.delegate?.sshClient(self!, didReceiveError: "Send error: \(error)")
-            }
-        })
-    }
-    
-    func sendInterrupt() {
-        // Send Ctrl+C (ASCII 3)
-        guard let connection = nwConnection else { return }
-        let data = Data([3])
-        connection.send(content: data, completion: .idempotent)
-    }
-    
-    func sendTab() {
-        // Send Tab (ASCII 9)
-        guard let connection = nwConnection else { return }
-        let data = Data([9])
-        connection.send(content: data, completion: .idempotent)
-    }
-    
-    private func performSSHHandshake() {
-        // Note: Full SSH2 protocol implementation requires significant code
-        // This is a simplified version - for production, use SwiftNIO-SSH
-        
-        // For now, we'll simulate a successful connection and provide
-        // instructions for the user to set up their server properly
-        
-        receiveData()
-        
-        // In a real implementation, we would:
-        // 1. Exchange version strings
-        // 2. Key exchange (diffie-hellman)
-        // 3. Server authentication
-        // 4. User authentication (password/key)
-        // 5. Open channel
-        // 6. Request PTY
-        // 7. Start shell
-        
-        // For demo purposes, assume connection works if TCP connects
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self else { return }
-            self.delegate?.sshClientDidConnect(self)
-            self.delegate?.sshClient(self, didReceiveOutput: "")
-            self.delegate?.sshClient(self, didReceiveOutput: "⚠️ Basic TCP connection established.")
-            self.delegate?.sshClient(self, didReceiveOutput: "")
-            self.delegate?.sshClient(self, didReceiveOutput: "For full SSH support, you have two options:")
-            self.delegate?.sshClient(self, didReceiveOutput: "")
-            self.delegate?.sshClient(self, didReceiveOutput: "1. WebSocket Terminal Server (Recommended):")
-            self.delegate?.sshClient(self, didReceiveOutput: "   Run 'npx wetty' on your Mac/server")
-            self.delegate?.sshClient(self, didReceiveOutput: "   Then open the wetty URL in Safari")
-            self.delegate?.sshClient(self, didReceiveOutput: "")
-            self.delegate?.sshClient(self, didReceiveOutput: "2. SSH App:")
-            self.delegate?.sshClient(self, didReceiveOutput: "   Use a dedicated SSH app like Termius or Blink")
-            self.delegate?.sshClient(self, didReceiveOutput: "")
-            self.delegate?.sshClient(self, didReceiveOutput: "This terminal is great for quick local commands.")
-            self.delegate?.sshClient(self, didReceiveOutput: "Full SSH2 protocol support coming soon!")
-        }
-    }
-    
-    private func receiveData() {
-        nwConnection?.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            guard let self = self else { return }
-            
-            if let data = data, !data.isEmpty {
-                if let text = String(data: data, encoding: .utf8) {
-                    self.delegate?.sshClient(self, didReceiveOutput: text)
+    var body: some View {
+        NavigationView {
+            Form {
+                // Saved Connections Section
+                if !connectionStore.savedConnections.isEmpty {
+                    Section(header: Text("Saved Connections")) {
+                        ForEach(connectionStore.savedConnections) { config in
+                            Button(action: { connectToSaved(config) }) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(config.name)
+                                            .font(.headline)
+                                            .foregroundColor(themeManager.currentTheme.editorForeground)
+                                        Text("\(config.username)@\(config.host):\(config.port)")
+                                            .font(.caption)
+                                            .foregroundColor(themeManager.currentTheme.comment)
+                                    }
+                                    Spacer()
+                                    if case .privateKey = config.authMethod {
+                                        Image(systemName: "key.fill")
+                                            .foregroundColor(.orange)
+                                    } else {
+                                        Image(systemName: "lock.fill")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    connectionStore.delete(config)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // New Connection Section
+                Section(header: Text("New Connection")) {
+                    TextField("Connection Name (optional)", text: $connectionName)
+                        .autocapitalization(.none)
+                    
+                    TextField("Host", text: $host)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .keyboardType(.URL)
+                    
+                    TextField("Port", text: $port)
+                        .keyboardType(.numberPad)
+                    
+                    TextField("Username", text: $username)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                }
+                
+                Section(header: Text("Authentication")) {
+                    Picker("Method", selection: $useKey) {
+                        Text("Password").tag(false)
+                        Text("SSH Key").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    if useKey {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Private Key (PEM format)")
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.comment)
+                            
+                            TextEditor(text: $privateKey)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(height: 120)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(themeManager.currentTheme.editorForeground.opacity(0.2), lineWidth: 1)
+                                )
+                            
+                            SecureField("Key Passphrase (if encrypted)", text: $keyPassphrase)
+                        }
+                    } else {
+                        SecureField("Password", text: $password)
+                    }
+                }
+                
+                Section {
+                    Toggle("Save Connection", isOn: $saveConnection)
+                }
+                
+                if let error = errorMessage {
+                    Section {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
+                }
+                
+                Section {
+                    Button(action: connect) {
+                        HStack {
+                            Spacer()
+                            if terminal.isConnecting {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                Text("Connecting...")
+                            } else {
+                                Image(systemName: "network")
+                                Text("Connect")
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(host.isEmpty || username.isEmpty || terminal.isConnecting)
                 }
             }
-            
-            if let error = error {
-                self.delegate?.sshClient(self, didReceiveError: error.localizedDescription)
-            }
-            
-            if !isComplete {
-                self.receiveData()
+            .navigationTitle("SSH Connection")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
             }
         }
     }
+    
+    private func connectToSaved(_ config: SSHConnectionConfig) {
+        terminal.connect(to: config)
+        isPresented = false
+    }
+    
+    private func connect() {
+        errorMessage = nil
+        
+        let authMethod: SSHConnectionConfig.SSHAuthMethod
+        if useKey {
+            guard !privateKey.isEmpty else {
+                errorMessage = "Please enter your private key"
+                return
+            }
+            authMethod = .privateKey(key: privateKey, passphrase: keyPassphrase.isEmpty ? nil : keyPassphrase)
+        } else {
+            guard !password.isEmpty else {
+                errorMessage = "Please enter your password"
+                return
+            }
+            authMethod = .password(password)
+        }
+        
+        let name = connectionName.isEmpty ? "\(username)@\(host)" : connectionName
+        
+        let config = SSHConnectionConfig(
+            name: name,
+            host: host,
+            port: Int(port) ?? 22,
+            username: username,
+            authMethod: authMethod
+        )
+        
+        if saveConnection {
+            connectionStore.save(config)
+        }
+        
+        terminal.connect(to: config)
+        isPresented = false
+    }
 }
 
-// MARK: - Models
+// MARK: - Models & Helpers (Legacy support)
 
 struct SSHConnection {
     let host: String
@@ -598,16 +936,6 @@ struct TerminalLine: Identifiable {
     let text: String
     let type: LineType
     var isANSI: Bool = false
-    
-    var color: Color {
-        switch type {
-        case .command: return .white
-        case .output: return .white
-        case .error: return Color(red: 1.0, green: 0.4, blue: 0.4)
-        case .system: return Color(red: 0.4, green: 0.8, blue: 1.0)
-        case .prompt: return .green
-        }
-    }
 }
 
 enum LineType {
@@ -618,25 +946,22 @@ enum LineType {
     case prompt
 }
 
-// MARK: - ANSI Text View (Basic)
-
 struct ANSIText: View {
     let text: String
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     init(_ text: String) {
         self.text = text
     }
     
     var body: some View {
-        // Strip ANSI codes for now - full implementation would parse them
         Text(stripANSI(text))
             .font(.system(.body, design: .monospaced))
-            .foregroundColor(.white)
+            .foregroundColor(themeManager.currentTheme.editorForeground)
             .textSelection(.enabled)
     }
     
     private func stripANSI(_ text: String) -> String {
-        // Remove ANSI escape sequences
         let pattern = "\u{1B}\\[[0-9;]*[a-zA-Z]"
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
         let range = NSRange(text.startIndex..., in: text)
@@ -644,11 +969,12 @@ struct ANSIText: View {
     }
 }
 
-// MARK: - Preview
-
-struct TerminalView_Previews: PreviewProvider {
-    static var previews: some View {
-        TerminalView()
-            .preferredColorScheme(.dark)
-    }
-}
+// MARK: - SSH Client Implementation
+// Real SSH implementation is now in Services/SSHManager.swift
+// Uses SwiftNIO SSH (apple/swift-nio-ssh) for proper SSH protocol support
+// Features:
+// - Password authentication
+// - SSH key authentication (Ed25519, ECDSA)
+// - PTY allocation for interactive shells
+// - Proper channel management
+// - Terminal resize support

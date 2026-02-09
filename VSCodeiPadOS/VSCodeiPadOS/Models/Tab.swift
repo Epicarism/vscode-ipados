@@ -10,7 +10,7 @@ import Foundation
 import SwiftUI
 
 /// Represents an open editor tab containing file content
-struct Tab: Identifiable, Equatable, Hashable {
+struct Tab: Identifiable, Equatable, Hashable, Codable {
     // MARK: - Properties
     
     /// Unique identifier for the tab
@@ -34,6 +34,12 @@ struct Tab: Identifiable, Equatable, Hashable {
     /// Whether this tab is currently active/selected
     var isActive: Bool
     
+    /// Whether this tab is pinned
+    var isPinned: Bool
+    
+    /// Whether this tab is in preview mode
+    var isPreview: Bool
+    
     // MARK: - Initialization
     
     /// Creates a new tab
@@ -45,6 +51,8 @@ struct Tab: Identifiable, Equatable, Hashable {
     ///   - url: File system URL (nil for new unsaved files)
     ///   - isUnsaved: Whether file has unsaved changes (false by default)
     ///   - isActive: Whether this is the active tab (false by default)
+    ///   - isPinned: Whether the tab is pinned (false by default)
+    ///   - isPreview: Whether the tab is in preview mode (false by default)
     init(
         id: UUID = UUID(),
         fileName: String,
@@ -52,7 +60,9 @@ struct Tab: Identifiable, Equatable, Hashable {
         language: CodeLanguage? = nil,
         url: URL? = nil,
         isUnsaved: Bool = false,
-        isActive: Bool = false
+        isActive: Bool = false,
+        isPinned: Bool = false,
+        isPreview: Bool = false
     ) {
         self.id = id
         self.fileName = fileName
@@ -60,6 +70,8 @@ struct Tab: Identifiable, Equatable, Hashable {
         self.url = url
         self.isUnsaved = isUnsaved
         self.isActive = isActive
+        self.isPinned = isPinned
+        self.isPreview = isPreview
         
         // Auto-detect language from file extension if not provided
         if let language = language {
@@ -78,7 +90,9 @@ struct Tab: Identifiable, Equatable, Hashable {
         language: String,
         url: URL? = nil,
         isUnsaved: Bool = false,
-        isActive: Bool = false
+        isActive: Bool = false,
+        isPinned: Bool = false,
+        isPreview: Bool = false
     ) {
         self.init(
             id: id,
@@ -87,7 +101,9 @@ struct Tab: Identifiable, Equatable, Hashable {
             language: CodeLanguage(from: language),
             url: url,
             isUnsaved: isUnsaved,
-            isActive: isActive
+            isActive: isActive,
+            isPinned: isPinned,
+            isPreview: isPreview
         )
     }
     

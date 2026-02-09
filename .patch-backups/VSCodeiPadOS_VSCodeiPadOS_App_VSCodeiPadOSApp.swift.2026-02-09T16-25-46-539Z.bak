@@ -1,0 +1,47 @@
+import SwiftUI
+
+@main
+struct VSCodeiPadOSApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var editorCore = EditorCore()
+    @State private var showSettings = false
+    @State private var showTerminal = false
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(editorCore)
+                .focusedSceneValue(\.menuEditorCore, editorCore)
+        }
+        .commands {
+            // VS Code-style menu bar
+            FileMenuCommands()
+            EditMenuCommands()
+            SelectionMenuCommands(editorCore: editorCore)
+            ViewMenuCommands()
+            GoMenuCommands()
+            RunMenuCommands(editorCore: editorCore)
+            TerminalMenuCommands()
+            HelpMenuCommands()
+        }
+    }
+}
+
+struct FileMenuCommands: Commands {
+    var body: some Commands {
+        CommandMenu("File") {
+            Button("New Window") {
+                WindowStateManager.shared.requestNewWindow()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            
+            Divider()
+        }
+    }
+}
+
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        return true
+    }
+}

@@ -1,0 +1,1081 @@
+//
+//  NavigationManager.swift
+//  VSCodeiPadOS
+//
+//  Go to Definition support with Cmd+Click and F12
+//  FEAT-134: Symbol table tracking and navigation
+//
+
+import Foundation
+import SwiftUI
+
+// MARK: - Symbol Location Model
+
+/// Represents a location in a source file
+struct SymbolLocation: Identifiable, Equatable, Hashable {
+    let id = UUID()
+    let file: String           // File path or identifier
+    let fileName: String       // Display name
+    let line: Int              // 1-based line number
+    let column: Int            // 1-based column number
+    let endLine: Int?          // Optional end line for range
+    let endColumn: Int?        // Optional end column for range
+    
+    init(file: String, line: Int, column: Int = 1, endLine: Int? = nil, endColumn: Int? = nil) {
+        self.file = file
+        self.fileName = (file as NSString).lastPathComponent
+        self.line = line
+        self.column = column
+        self.endLine = endLine
+        self.endColumn = endColumn
+    }
+    
+    var displayString: String {
+        "\(fileName):\(line):\(column)"
+    }
+}
+
+// MARK: - Symbol Definition Model
+
+/// Represents a symbol definition with its location and metadata
+struct SymbolDefinition: Identifiable, Equatable {
+    let id = UUID()
+    let name: String                  // Symbol name
+    let kind: SymbolKind              // Type of symbol
+    let location: SymbolLocation      // Where it's defined
+    let signature: String?            // Optional function signature or type info
+    let documentation: String?        // Optional doc comment
+    let containerName: String?        // Parent class/struct/module
+    
+    static func == (lhs: SymbolDefinition, rhs: SymbolDefinition) -> Bool {
+        lhs.name == rhs.name && lhs.location == rhs.location
+    }
+}
+
+// MARK: - Symbol Kind
+
+enum SymbolKind: String, CaseIterable {
+    case function = "function"
+    case method = "method"
+    case property = "property"
+    case variable = "variable"
+    case constant = "constant"
+    case `class` = "class"
+    case `struct` = "struct"
+    case `enum` = "enum"
+    case enumCase = "enumCase"
+    case `protocol` = "protocol"
+    case interface = "interface"
+    case type = "type"
+    case namespace = "namespace"
+    case module = "module"
+    case field = "field"
+    case constructor = "constructor"
+    case parameter = "parameter"
+    case typeParameter = "typeParameter"
+    case unknown = "unknown"
+    
+    var icon: String {
+        switch self {
+        case .function, .method: return "f.square"
+        case .property, .field: return "p.square"
+        case .variable: return "v.square"
+        case .constant: return "c.square"
+        case .class: return "c.square.fill"
+        case .struct: return "s.square.fill"
+        case .enum, .enumCase: return "e.square.fill"
+        case .protocol, .interface: return "i.square"
+        case .type, .typeParameter: return "t.square"
+        case .namespace, .module: return "n.square"
+        case .constructor: return "hammer"
+        case .parameter: return "p.circle"
+        case .unknown: return "questionmark.square"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .function, .method: return .purple
+        case .property, .field: return .blue
+        case .variable: return .cyan
+        case .constant: return .orange
+        case .class: return .yellow
+        case .struct: return .green
+        case .enum, .enumCase: return .mint
+        case .protocol, .interface: return .pink
+        case .type, .typeParameter: return .indigo
+        case .namespace, .module: return .brown
+        case .constructor: return .red
+        case .parameter: return .teal
+        case .unknown: return .gray
+        }
+    }
+}
+
+// MARK: - Navigation Result
+
+enum NavigationResult {
+    case found(SymbolLocation)
+    case multipleFound([SymbolDefinition])
+    case notFound(reason: String)
+}
+
+// MARK: - Navigation Manager
+
+/// Manages symbol tracking and Go to Definition functionality
+@MainActor
+final class NavigationManager: ObservableObject {
+    static let shared = NavigationManager()
+    
+    // MARK: - Published State
+    
+    @Published var isNavigating = false
+    @Published var lastNavigationError: String?
+    @Published var definitionPreview: SymbolDefinition?
+    @Published var showDefinitionPicker = false
+    @Published var multipleDefinitions: [SymbolDefinition] = []
+    
+    // MARK: - Symbol Table
+    
+    /// Symbol table: maps symbol names to their definitions
+    /// Key: symbol name, Value: array of definitions (can have multiple for overloads)
+    private var symbolTable: [String: [SymbolDefinition]] = [:]
+    
+    /// File index: maps file paths to their symbols for quick lookup
+    private var fileSymbols: [String: [SymbolDefinition]] = [:]
+    
+    /// Cache of parsed file contents (hash -> symbols)
+    private var parseCache: [Int: [SymbolDefinition]] = [:]
+    
+    // MARK: - Navigation History
+    
+    private var navigationHistory: [SymbolLocation] = []
+    private var historyIndex: Int = -1
+    private let maxHistorySize = 50
+    
+    // MARK: - Initialization
+    
+    private init() {}
+    
+    // MARK: - Symbol Table Management
+    
+    /// Register a symbol definition in the symbol table
+    func registerSymbol(_ definition: SymbolDefinition) {
+        // Add to symbol table
+        if symbolTable[definition.name] == nil {
+            symbolTable[definition.name] = []
+        }
+        
+        // Avoid duplicates
+        if !symbolTable[definition.name]!.contains(where: { $0.location == definition.location }) {
+            symbolTable[definition.name]!.append(definition)
+        }
+        
+        // Add to file index
+        let filePath = definition.location.file
+        if fileSymbols[filePath] == nil {
+            fileSymbols[filePath] = []
+        }
+        if !fileSymbols[filePath]!.contains(where: { $0.location == definition.location }) {
+            fileSymbols[filePath]!.append(definition)
+        }
+    }
+    
+    /// Remove all symbols for a specific file (for refresh)
+    func clearSymbols(for file: String) {
+        // Remove from file index
+        let removed = fileSymbols.removeValue(forKey: file) ?? []
+        
+        // Remove from symbol table
+        for definition in removed {
+            symbolTable[definition.name]?.removeAll { $0.location.file == file }
+            if symbolTable[definition.name]?.isEmpty == true {
+                symbolTable.removeValue(forKey: definition.name)
+            }
+        }
+    }
+    
+    /// Clear all symbols
+    func clearAllSymbols() {
+        symbolTable.removeAll()
+        fileSymbols.removeAll()
+        parseCache.removeAll()
+    }
+    
+    // MARK: - Find Definition
+    
+    /// Find the definition of a symbol
+    /// - Parameters:
+    ///   - symbol: The symbol name to find
+    ///   - context: Optional context (current file) for prioritizing results
+    /// - Returns: NavigationResult with the definition location(s) or error
+    func findDefinition(symbol: String, in context: String? = nil) -> NavigationResult {
+        let trimmedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSymbol.isEmpty else {
+            return .notFound(reason: "Empty symbol name")
+        }
+        
+        guard let definitions = symbolTable[trimmedSymbol], !definitions.isEmpty else {
+            return .notFound(reason: "No definition found for '\(trimmedSymbol)'")
+        }
+        
+        // If only one definition, return it directly
+        if definitions.count == 1 {
+            return .found(definitions[0].location)
+        }
+        
+        // Multiple definitions - prioritize current file if context provided
+        if let context = context {
+            let inCurrentFile = definitions.filter { $0.location.file == context }
+            if inCurrentFile.count == 1 {
+                return .found(inCurrentFile[0].location)
+            }
+        }
+        
+        // Return multiple definitions for user to choose
+        return .multipleFound(definitions)
+    }
+    
+    /// Find definitions matching a partial name (for autocomplete/suggestions)
+    func findDefinitions(matching prefix: String, limit: Int = 20) -> [SymbolDefinition] {
+        let lowercasePrefix = prefix.lowercased()
+        
+        return symbolTable.flatMap { (name, definitions) -> [SymbolDefinition] in
+            if name.lowercased().hasPrefix(lowercasePrefix) {
+                return definitions
+            }
+            return []
+        }
+        .prefix(limit)
+        .map { $0 }
+    }
+    
+    /// Get all symbols in a file
+    func getSymbols(in file: String) -> [SymbolDefinition] {
+        return fileSymbols[file] ?? []
+    }
+    
+    // MARK: - Parse File for Symbols
+    
+    /// Parse a file's content and extract symbol definitions
+    /// - Parameters:
+    ///   - content: The source code content
+    ///   - file: The file path/identifier
+    ///   - language: The programming language
+    func parseAndIndexFile(content: String, file: String, language: CodeLanguage) {
+        // Check cache
+        let contentHash = content.hashValue
+        if let cached = parseCache[contentHash] {
+            // Re-register cached symbols with new file path
+            for var definition in cached {
+                registerSymbol(definition)
+            }
+            return
+        }
+        
+        // Clear existing symbols for this file
+        clearSymbols(for: file)
+        
+        // Parse based on language
+        let definitions: [SymbolDefinition]
+        switch language {
+        case .swift:
+            definitions = parseSwiftDefinitions(content: content, file: file)
+        case .javascript, .typescript:
+            definitions = parseJavaScriptDefinitions(content: content, file: file)
+        case .python:
+            definitions = parsePythonDefinitions(content: content, file: file)
+        default:
+            definitions = parseGenericDefinitions(content: content, file: file)
+        }
+        
+        // Register all definitions
+        for definition in definitions {
+            registerSymbol(definition)
+        }
+        
+        // Cache the results
+        parseCache[contentHash] = definitions
+    }
+    
+    // MARK: - Swift Parser
+    
+    private func parseSwiftDefinitions(content: String, file: String) -> [SymbolDefinition] {
+        var definitions: [SymbolDefinition] = []
+        let lines = content.components(separatedBy: .newlines)
+        var currentContainer: String? = nil
+        var braceDepth = 0
+        var containerDepths: [(name: String, depth: Int)] = []
+        
+        // Regex patterns for Swift
+        let patterns: [(pattern: String, kind: SymbolKind, nameGroup: Int)] = [
+            // Functions
+            (#"^\s*(public |private |internal |fileprivate |open )?(static |class )?(override )?func\s+(\w+)"#, .function, 4),
+            // Classes
+            (#"^\s*(public |private |internal |fileprivate |open )?(final )?class\s+(\w+)"#, .class, 3),
+            // Structs
+            (#"^\s*(public |private |internal |fileprivate |open )?struct\s+(\w+)"#, .struct, 2),
+            // Enums
+            (#"^\s*(public |private |internal |fileprivate |open )?enum\s+(\w+)"#, .enum, 2),
+            // Enum cases
+            (#"^\s*case\s+(\w+)"#, .enumCase, 1),
+            // Protocols
+            (#"^\s*(public |private |internal |fileprivate |open )?protocol\s+(\w+)"#, .protocol, 2),
+            // Type aliases
+            (#"^\s*(public |private |internal |fileprivate |open )?typealias\s+(\w+)"#, .type, 2),
+            // Properties (var/let)
+            (#"^\s*(public |private |internal |fileprivate |open )?(static |class |lazy )?(var|let)\s+(\w+)"#, .property, 4),
+            // Init
+            (#"^\s*(public |private |internal |fileprivate |open )?(required |convenience )?init\s*[\(<]"#, .constructor, -1),
+        ]
+        
+        for (lineIndex, line) in lines.enumerated() {
+            // Track brace depth for container context
+            let openBraces = line.filter { $0 == "{" }.count
+            let closeBraces = line.filter { $0 == "}" }.count
+            
+            // Check for container end
+            if closeBraces > 0 && !containerDepths.isEmpty {
+                for _ in 0..<closeBraces {
+                    braceDepth -= 1
+                    if let last = containerDepths.last, last.depth >= braceDepth {
+                        containerDepths.removeLast()
+                        currentContainer = containerDepths.last?.name
+                    }
+                }
+            }
+            
+            // Parse for definitions
+            for (pattern, kind, nameGroup) in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
+                guard let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) else { continue }
+                
+                var name: String
+                var signature: String? = nil
+                
+                if kind == .constructor {
+                    name = "init"
+                    // Extract init signature
+                    if let parenStart = line.firstIndex(of: "("),
+                       let parenEnd = line.lastIndex(of: ")") {
+                        let params = String(line[line.index(after: parenStart)..<parenEnd])
+                        signature = "init(\(params))"
+                        // Extract parameter names for display
+                        let paramNames = extractSwiftParameterNames(from: params)
+                        if !paramNames.isEmpty {
+                            name = "init(\(paramNames.joined(separator: ":")):)"
+                        }
+                    }
+                } else if nameGroup > 0 && nameGroup < match.numberOfRanges,
+                          let range = Range(match.range(at: nameGroup), in: line) {
+                    name = String(line[range])
+                } else {
+                    continue
+                }
+                
+                // Calculate column
+                let column = (line.range(of: name)?.lowerBound.utf16Offset(in: line) ?? 0) + 1
+                
+                let definition = SymbolDefinition(
+                    name: name,
+                    kind: kind,
+                    location: SymbolLocation(file: file, line: lineIndex + 1, column: column),
+                    signature: signature,
+                    documentation: extractDocComment(lines: lines, beforeLine: lineIndex),
+                    containerName: currentContainer
+                )
+                
+                definitions.append(definition)
+                
+                // Track containers
+                if [.class, .struct, .enum, .protocol].contains(kind) && line.contains("{") {
+                    containerDepths.append((name: name, depth: braceDepth))
+                    currentContainer = name
+                }
+                
+                break
+            }
+            
+            // Update brace depth after parsing
+            braceDepth += openBraces
+        }
+        
+        return definitions
+    }
+    
+    private func extractSwiftParameterNames(from params: String) -> [String] {
+        let parts = params.components(separatedBy: ",")
+        return parts.compactMap { part -> String? in
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            // Get external parameter name (or _ for no external name)
+            let components = trimmed.components(separatedBy: ":")
+            guard let first = components.first else { return nil }
+            let names = first.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
+            return names.first
+        }
+    }
+    
+    // MARK: - JavaScript/TypeScript Parser
+    
+    private func parseJavaScriptDefinitions(content: String, file: String) -> [SymbolDefinition] {
+        var definitions: [SymbolDefinition] = []
+        let lines = content.components(separatedBy: .newlines)
+        var currentContainer: String? = nil
+        
+        let patterns: [(pattern: String, kind: SymbolKind, nameGroup: Int)] = [
+            // Functions
+            (#"^\s*(export\s+)?(async\s+)?function\s+(\w+)"#, .function, 3),
+            // Arrow functions assigned to const/let/var
+            (#"^\s*(export\s+)?(const|let|var)\s+(\w+)\s*=\s*(async\s+)?\([^)]*\)\s*=>"#, .function, 3),
+            (#"^\s*(export\s+)?(const|let|var)\s+(\w+)\s*=\s*(async\s+)?\w+\s*=>"#, .function, 3),
+            // Classes
+            (#"^\s*(export\s+)?(default\s+)?class\s+(\w+)"#, .class, 3),
+            // Interfaces (TypeScript)
+            (#"^\s*(export\s+)?interface\s+(\w+)"#, .interface, 2),
+            // Types (TypeScript)
+            (#"^\s*(export\s+)?type\s+(\w+)"#, .type, 2),
+            // Enums (TypeScript)
+            (#"^\s*(export\s+)?enum\s+(\w+)"#, .enum, 2),
+            // Variables
+            (#"^\s*(export\s+)?(const|let|var)\s+(\w+)\s*="#, .variable, 3),
+            // Methods (in class)
+            (#"^\s*(static\s+)?(async\s+)?(get\s+|set\s+)?(\w+)\s*\([^)]*\)\s*\{"#, .method, 4),
+        ]
+        
+        for (lineIndex, line) in lines.enumerated() {
+            for (pattern, kind, nameGroup) in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
+                guard let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) else { continue }
+                
+                guard nameGroup > 0 && nameGroup < match.numberOfRanges,
+                      let range = Range(match.range(at: nameGroup), in: line) else { continue }
+                
+                let name = String(line[range])
+                
+                // Skip keywords
+                guard !["if", "else", "for", "while", "switch", "catch", "return", "constructor"].contains(name) else { continue }
+                
+                let column = (line.range(of: name)?.lowerBound.utf16Offset(in: line) ?? 0) + 1
+                
+                let definition = SymbolDefinition(
+                    name: name,
+                    kind: kind,
+                    location: SymbolLocation(file: file, line: lineIndex + 1, column: column),
+                    signature: nil,
+                    documentation: extractDocComment(lines: lines, beforeLine: lineIndex),
+                    containerName: currentContainer
+                )
+                
+                definitions.append(definition)
+                
+                // Track class containers
+                if kind == .class {
+                    currentContainer = name
+                }
+                
+                break
+            }
+        }
+        
+        return definitions
+    }
+    
+    // MARK: - Python Parser
+    
+    private func parsePythonDefinitions(content: String, file: String) -> [SymbolDefinition] {
+        var definitions: [SymbolDefinition] = []
+        let lines = content.components(separatedBy: .newlines)
+        var currentClass: String? = nil
+        
+        let patterns: [(pattern: String, kind: SymbolKind, nameGroup: Int)] = [
+            // Classes
+            (#"^class\s+(\w+)"#, .class, 1),
+            // Functions/Methods
+            (#"^(\s*)def\s+(\w+)"#, .function, 2),
+            // Async functions
+            (#"^(\s*)async\s+def\s+(\w+)"#, .function, 2),
+        ]
+        
+        for (lineIndex, line) in lines.enumerated() {
+            // Track class context based on indentation
+            if !line.hasPrefix(" ") && !line.hasPrefix("\t") {
+                if !line.trimmingCharacters(in: .whitespaces).hasPrefix("def") {
+                    currentClass = nil
+                }
+            }
+            
+            for (pattern, kind, nameGroup) in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
+                guard let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) else { continue }
+                
+                guard nameGroup > 0 && nameGroup < match.numberOfRanges,
+                      let range = Range(match.range(at: nameGroup), in: line) else { continue }
+                
+                let name = String(line[range])
+                let isMethod = line.hasPrefix(" ") || line.hasPrefix("\t")
+                let actualKind: SymbolKind = (kind == .function && isMethod) ? .method : kind
+                
+                let column = range.lowerBound.utf16Offset(in: line) + 1
+                
+                let definition = SymbolDefinition(
+                    name: name,
+                    kind: actualKind,
+                    location: SymbolLocation(file: file, line: lineIndex + 1, column: column),
+                    signature: extractPythonSignature(from: line),
+                    documentation: extractPythonDocstring(lines: lines, afterLine: lineIndex),
+                    containerName: isMethod ? currentClass : nil
+                )
+                
+                definitions.append(definition)
+                
+                // Track class
+                if kind == .class {
+                    currentClass = name
+                }
+                
+                break
+            }
+        }
+        
+        return definitions
+    }
+    
+    private func extractPythonSignature(from line: String) -> String? {
+        guard let start = line.firstIndex(of: "("),
+              let end = line.lastIndex(of: ")") else { return nil }
+        return String(line[start...end])
+    }
+    
+    private func extractPythonDocstring(lines: [String], afterLine: Int) -> String? {
+        guard afterLine + 1 < lines.count else { return nil }
+        let nextLine = lines[afterLine + 1].trimmingCharacters(in: .whitespaces)
+        if nextLine.hasPrefix("\"\"\"") || nextLine.hasPrefix("'''") {
+            return nextLine.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        }
+        return nil
+    }
+    
+    // MARK: - Generic Parser
+    
+    private func parseGenericDefinitions(content: String, file: String) -> [SymbolDefinition] {
+        var definitions: [SymbolDefinition] = []
+        let lines = content.components(separatedBy: .newlines)
+        
+        let patterns: [(pattern: String, kind: SymbolKind, nameGroup: Int)] = [
+            (#"function\s+(\w+)"#, .function, 1),
+            (#"class\s+(\w+)"#, .class, 1),
+            (#"def\s+(\w+)"#, .function, 1),
+        ]
+        
+        for (lineIndex, line) in lines.enumerated() {
+            for (pattern, kind, nameGroup) in patterns {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { continue }
+                guard let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) else { continue }
+                guard nameGroup < match.numberOfRanges,
+                      let range = Range(match.range(at: nameGroup), in: line) else { continue }
+                
+                let name = String(line[range])
+                let column = range.lowerBound.utf16Offset(in: line) + 1
+                
+                definitions.append(SymbolDefinition(
+                    name: name,
+                    kind: kind,
+                    location: SymbolLocation(file: file, line: lineIndex + 1, column: column),
+                    signature: nil,
+                    documentation: nil,
+                    containerName: nil
+                ))
+                
+                break
+            }
+        }
+        
+        return definitions
+    }
+    
+    // MARK: - Doc Comment Extraction
+    
+    private func extractDocComment(lines: [String], beforeLine: Int) -> String? {
+        guard beforeLine > 0 else { return nil }
+        
+        var docLines: [String] = []
+        var lineIndex = beforeLine - 1
+        
+        while lineIndex >= 0 {
+            let line = lines[lineIndex].trimmingCharacters(in: .whitespaces)
+            
+            // Swift/JS doc comment
+            if line.hasPrefix("///") {
+                docLines.insert(String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces), at: 0)
+                lineIndex -= 1
+            }
+            // Block comment end
+            else if line.hasSuffix("*/") {
+                // Find block comment start and extract
+                while lineIndex >= 0 {
+                    let blockLine = lines[lineIndex]
+                    if blockLine.contains("/**") || blockLine.contains("/*") {
+                        break
+                    }
+                    let cleaned = blockLine
+                        .trimmingCharacters(in: .whitespaces)
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "*/ "))
+                    if !cleaned.isEmpty {
+                        docLines.insert(cleaned, at: 0)
+                    }
+                    lineIndex -= 1
+                }
+                break
+            }
+            // Python-style comment
+            else if line.hasPrefix("#") {
+                docLines.insert(String(line.dropFirst()).trimmingCharacters(in: .whitespaces), at: 0)
+                lineIndex -= 1
+            }
+            else {
+                break
+            }
+        }
+        
+        return docLines.isEmpty ? nil : docLines.joined(separator: " ")
+    }
+    
+    // MARK: - Navigation History
+    
+    /// Record a navigation for back/forward support
+    func recordNavigation(to location: SymbolLocation) {
+        // Remove any forward history when navigating
+        if historyIndex < navigationHistory.count - 1 {
+            navigationHistory = Array(navigationHistory.prefix(historyIndex + 1))
+        }
+        
+        navigationHistory.append(location)
+        historyIndex = navigationHistory.count - 1
+        
+        // Limit history size
+        if navigationHistory.count > maxHistorySize {
+            navigationHistory.removeFirst()
+            historyIndex -= 1
+        }
+    }
+    
+    /// Navigate back in history
+    func navigateBack() -> SymbolLocation? {
+        guard historyIndex > 0 else { return nil }
+        historyIndex -= 1
+        return navigationHistory[historyIndex]
+    }
+    
+    /// Navigate forward in history
+    func navigateForward() -> SymbolLocation? {
+        guard historyIndex < navigationHistory.count - 1 else { return nil }
+        historyIndex += 1
+        return navigationHistory[historyIndex]
+    }
+    
+    /// Check if back navigation is possible
+    var canNavigateBack: Bool {
+        historyIndex > 0
+    }
+    
+    /// Check if forward navigation is possible
+    var canNavigateForward: Bool {
+        historyIndex < navigationHistory.count - 1
+    }
+    
+    // MARK: - Word at Position
+    
+    /// Extract the word/symbol at a given position in text
+    func getWordAtPosition(_ position: Int, in text: String) -> String? {
+        guard position >= 0 && position <= text.count else { return nil }
+        
+        let nsText = text as NSString
+        let wordCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+        
+        // Find start of word
+        var start = position
+        while start > 0 {
+            let char = nsText.substring(with: NSRange(location: start - 1, length: 1))
+            if char.unicodeScalars.allSatisfy({ wordCharacters.contains($0) }) {
+                start -= 1
+            } else {
+                break
+            }
+        }
+        
+        // Find end of word
+        var end = position
+        while end < nsText.length {
+            let char = nsText.substring(with: NSRange(location: end, length: 1))
+            if char.unicodeScalars.allSatisfy({ wordCharacters.contains($0) }) {
+                end += 1
+            } else {
+                break
+            }
+        }
+        
+        if start == end {
+            return nil
+        }
+        
+        return nsText.substring(with: NSRange(location: start, length: end - start))
+    }
+}
+
+// MARK: - EditorCore Integration Extension
+
+extension EditorCore {
+    /// Navigate to a symbol definition (F12 / Cmd+Click)
+    @MainActor
+    func goToDefinition(at position: Int) {
+        guard let tab = activeTab else { return }
+        
+        let navigationManager = NavigationManager.shared
+        
+        // Get the word at cursor position
+        guard let symbol = navigationManager.getWordAtPosition(position, in: tab.content) else {
+            return
+        }
+        
+        // Find the definition
+        let result = navigationManager.findDefinition(symbol: symbol, in: tab.url?.path ?? tab.fileName)
+        
+        switch result {
+        case .found(let location):
+            navigateToLocation(location)
+            
+        case .multipleFound(let definitions):
+            // Show picker for multiple definitions
+            navigationManager.multipleDefinitions = definitions
+            navigationManager.showDefinitionPicker = true
+            
+        case .notFound(let reason):
+            navigationManager.lastNavigationError = reason
+        }
+    }
+    
+    /// Navigate to a specific location
+    @MainActor
+    func navigateToLocation(_ location: SymbolLocation) {
+        let navigationManager = NavigationManager.shared
+        
+        // Record current position in history
+        if let currentTab = activeTab {
+            let currentLocation = SymbolLocation(
+                file: currentTab.url?.path ?? currentTab.fileName,
+                line: cursorPosition.line,
+                column: cursorPosition.column
+            )
+            navigationManager.recordNavigation(to: currentLocation)
+        }
+        
+        // If it's a different file, open it first
+        if let tab = tabs.first(where: { $0.url?.path == location.file || $0.fileName == location.fileName }) {
+            activeTabId = tab.id
+        }
+        
+        // Update cursor position
+        cursorPosition = CursorPosition(line: location.line, column: location.column)
+        
+        // Record the navigation destination
+        navigationManager.recordNavigation(to: location)
+    }
+    
+    /// Go back to previous location (Ctrl+-)
+    @MainActor
+    func navigateBack() {
+        let navigationManager = NavigationManager.shared
+        guard let location = navigationManager.navigateBack() else { return }
+        
+        // Navigate without recording (we're going back)
+        if let tab = tabs.first(where: { $0.url?.path == location.file || $0.fileName == location.fileName }) {
+            activeTabId = tab.id
+        }
+        cursorPosition = CursorPosition(line: location.line, column: location.column)
+    }
+    
+    /// Go forward (Ctrl+Shift+-)
+    @MainActor  
+    func navigateForward() {
+        let navigationManager = NavigationManager.shared
+        guard let location = navigationManager.navigateForward() else { return }
+        
+        if let tab = tabs.first(where: { $0.url?.path == location.file || $0.fileName == location.fileName }) {
+            activeTabId = tab.id
+        }
+        cursorPosition = CursorPosition(line: location.line, column: location.column)
+    }
+    
+    /// Parse and index the current active tab
+    func indexActiveTab() {
+        guard let tab = activeTab else { return }
+        let navigationManager = NavigationManager.shared
+        navigationManager.parseAndIndexFile(
+            content: tab.content,
+            file: tab.url?.path ?? tab.fileName,
+            language: tab.language
+        )
+    }
+}
+
+// MARK: - Go To Definition Picker View
+
+/// View for selecting from multiple definition locations
+struct GoToDefinitionPicker: View {
+    @ObservedObject var navigationManager = NavigationManager.shared
+    @ObservedObject var editorCore: EditorCore
+    
+    @State private var selectedIndex = 0
+    @FocusState private var isFocused: Bool
+    
+    private var definitions: [SymbolDefinition] {
+        navigationManager.multipleDefinitions
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Image(systemName: "arrow.right.circle.fill")
+                    .foregroundColor(.accentColor)
+                Text("Go to Definition")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                if let first = definitions.first {
+                    Text("'\(first.name)'")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                Text("×")
+                    .font(.system(size: 16, weight: .light))
+                    .foregroundColor(.secondary)
+                    .onTapGesture { dismiss() }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(UIColor.secondarySystemBackground))
+            
+            Divider()
+            
+            // Definitions list
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(definitions.enumerated()), id: \.element.id) { index, definition in
+                            DefinitionRow(
+                                definition: definition,
+                                isSelected: index == selectedIndex
+                            )
+                            .id(index)
+                            .onTapGesture {
+                                selectDefinition(definition)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .onChange(of: selectedIndex) { newIndex in
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
+            }
+            .frame(maxHeight: 300)
+            
+            Divider()
+            
+            // Footer with hints
+            HStack(spacing: 16) {
+                KeyboardHint(keys: ["↑", "↓"], description: "navigate")
+                KeyboardHint(keys: ["↵"], description: "go to")
+                KeyboardHint(keys: ["esc"], description: "close")
+                Spacer()
+                Text("\(definitions.count) definitions")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(UIColor.tertiarySystemBackground))
+        }
+        .frame(width: 500)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+        .focused($isFocused)
+        .onAppear {
+            isFocused = true
+            selectedIndex = 0
+        }
+        .onKeyPress(.upArrow) {
+            if selectedIndex > 0 { selectedIndex -= 1 }
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            if selectedIndex < definitions.count - 1 { selectedIndex += 1 }
+            return .handled
+        }
+        .onKeyPress(.return) {
+            if let def = definitions[safe: selectedIndex] {
+                selectDefinition(def)
+            }
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            dismiss()
+            return .handled
+        }
+    }
+    
+    private func selectDefinition(_ definition: SymbolDefinition) {
+        editorCore.navigateToLocation(definition.location)
+        dismiss()
+    }
+    
+    private func dismiss() {
+        navigationManager.showDefinitionPicker = false
+        navigationManager.multipleDefinitions = []
+    }
+}
+
+// MARK: - Definition Row View
+
+struct DefinitionRow: View {
+    let definition: SymbolDefinition
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Kind icon
+            Image(systemName: definition.kind.icon)
+                .font(.system(size: 14))
+                .foregroundColor(isSelected ? .white : definition.kind.color)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                // Name with container
+                HStack(spacing: 4) {
+                    Text(definition.name)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundColor(isSelected ? .white : .primary)
+                    
+                    if let container = definition.containerName {
+                        Text("in \(container)")
+                            .font(.system(size: 11))
+                            .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    }
+                }
+                
+                // Location
+                HStack(spacing: 8) {
+                    Text(definition.location.fileName)
+                        .font(.system(size: 11))
+                        .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    
+                    Text(":\(definition.location.line)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(isSelected ? .white.opacity(0.5) : .secondary.opacity(0.7))
+                }
+                
+                // Signature if available
+                if let signature = definition.signature {
+                    Text(signature)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary.opacity(0.8))
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer()
+            
+            // Kind badge
+            Text(definition.kind.rawValue)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(isSelected ? .white.opacity(0.8) : definition.kind.color)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isSelected ? Color.white.opacity(0.2) : definition.kind.color.opacity(0.15))
+                )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor : Color.clear)
+        )
+        .padding(.horizontal, 8)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Keyboard Hint View
+
+struct KeyboardHint: View {
+    let keys: [String]
+    let description: String
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(keys, id: \.self) { key in
+                Text(key)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color(UIColor.tertiarySystemFill))
+                    .cornerRadius(3)
+            }
+            Text(description)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+// MARK: - Cmd+Click Gesture Support
+
+/// Modifier to detect Cmd+Click for Go to Definition
+struct CommandClickGestureModifier: ViewModifier {
+    let getText: () -> String
+    let getPosition: (CGPoint) -> Int?
+    let onGoToDefinition: (Int) -> Void
+    
+    @GestureState private var isDetectingPress = false
+    
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(
+                TapGesture()
+                    .modifiers(.command)
+                    .onEnded { _ in
+                        // Cmd+Click detected - would need position from tap
+                        // This is handled via the editor's tap handling
+                    }
+            )
+    }
+}
+
+extension View {
+    /// Enable Cmd+Click to go to definition
+    func commandClickToDefinition(
+        getText: @escaping () -> String,
+        getPosition: @escaping (CGPoint) -> Int?,
+        onGoToDefinition: @escaping (Int) -> Void
+    ) -> some View {
+        modifier(CommandClickGestureModifier(
+            getText: getText,
+            getPosition: getPosition,
+            onGoToDefinition: onGoToDefinition
+        ))
+    }
+}
+
+// MARK: - Safe Array Subscript
+
+extension Collection {
+    /// Returns the element at the specified index if it exists, otherwise nil.
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}

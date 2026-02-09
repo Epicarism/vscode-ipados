@@ -1,0 +1,260 @@
+import SwiftUI
+
+/// File Menu Commands for VSCode iPadOS
+/// Provides all file-related menu items with keyboard shortcuts
+struct FileMenuCommands: Commands {
+    // MARK: - Environment
+    
+    /// Reference to the EditorCore for accessing file operations
+    /// Uses FocusedValue to access the EditorCore from the active scene
+    @FocusedValue(\.menuEditorCore) private var editorCore: EditorCore?
+    
+    /// Focus state for the active window (used for New Window)
+    @FocusedValue(\.windowFocus) private var windowFocus
+    
+    // Recent files tracking
+    @State private var recentFiles: [URL] = []
+    
+    // MARK: - Body
+    
+    var body: some Commands {
+        CommandMenu("File") {
+            // MARK: - New
+            
+            Button("New File") {
+                createNewFile()
+            }
+            .keyboardShortcut("n", modifiers: [.command])
+            
+            Button("New Window") {
+                createNewWindow()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .option])
+            
+            Divider()
+            
+            // MARK: - Open
+            
+            Button("Open File...") {
+                openFile()
+            }
+            .keyboardShortcut("o", modifiers: [.command])
+            
+            Button("Open Folder...") {
+                openFolder()
+            }
+            
+            // MARK: - Open Recent Submenu
+            
+            Menu("Open Recent") {
+                if recentFiles.isEmpty {
+                    Text("No Recent Files")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(recentFiles, id: \.self) { url in
+                        Button(url.lastPathComponent) {
+                            openRecentFile(url)
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    Button("Clear Recent") {
+                        clearRecentFiles()
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // MARK: - Save
+            
+            Button("Save") {
+                saveActiveTab()
+            }
+            .keyboardShortcut("s", modifiers: [.command])
+            
+            Button("Save As...") {
+                saveActiveTabAs()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            
+            Button("Save All") {
+                saveAllTabs()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .option])
+            
+            Divider()
+            
+            // MARK: - Close
+            
+            Button("Close Editor") {
+                closeActiveTab()
+            }
+            .keyboardShortcut("w", modifiers: [.command])
+            
+            Button("Close Folder") {
+                closeFolder()
+            }
+            
+            Button("Close All") {
+                closeAllTabs()
+            }
+            .keyboardShortcut("w", modifiers: [.command, .option, .shift])
+        }
+    }
+    
+    // MARK: - Actions
+    
+    /// Creates a new untitled file tab
+    private func createNewFile() {
+        // Access EditorCore from environment or through app state
+        // This would typically be injected via @EnvironmentObject in the view
+        editorCore?.addTab(fileName: "Untitled.swift", content: "")
+    }
+    
+    /// Creates a new editor window
+    private func createNewWindow() {
+        // On iPadOS, this might open a new scene
+        // Implementation depends on window management system
+        NotificationCenter.default.post(
+            name: .newWindowRequested,
+            object: nil
+        )
+    }
+    
+    /// Opens the file picker for selecting a file
+    private func openFile() {
+        editorCore?.showFilePicker = true
+    }
+    
+    /// Opens a folder in the workspace
+    private func openFolder() {
+        // Trigger folder picker
+        NotificationCenter.default.post(
+            name: .openFolderRequested,
+            object: nil
+        )
+    }
+    
+    /// Opens a recently used file
+    /// - Parameter url: The URL of the recent file to open
+    private func openRecentFile(_ url: URL) {
+        editorCore?.openFile(from: url)
+        
+        // Move to top of recent files
+        if let index = recentFiles.firstIndex(of: url) {
+            recentFiles.remove(at: index)
+            recentFiles.insert(url, at: 0)
+        }
+    }
+    
+    /// Clears the recent files list
+    private func clearRecentFiles() {
+        recentFiles.removeAll()
+        
+        // Persist to UserDefaults
+        UserDefaults.standard.set([], forKey: "RecentFiles")
+    }
+    
+    /// Saves the currently active tab
+    private func saveActiveTab() {
+        editorCore?.saveActiveTab()
+    }
+    
+    /// Saves the currently active tab with a new name/location
+    private func saveActiveTabAs() {
+        // Trigger save as dialog
+        if let activeTab = editorCore?.activeTab {
+            NotificationCenter.default.post(
+                name: .saveAsRequested,
+                object: activeTab
+            )
+        }
+    }
+    
+    /// Saves all open tabs with unsaved changes
+    private func saveAllTabs() {
+        editorCore?.saveAllTabs()
+    }
+    
+    /// Closes the currently active tab
+    private func closeActiveTab() {
+        if let activeTabId = editorCore?.activeTabId {
+            editorCore?.closeTab(id: activeTabId)
+        }
+    }
+    
+    /// Closes the currently open folder/workspace
+    private func closeFolder() {
+        NotificationCenter.default.post(
+            name: .closeFolderRequested,
+            object: nil
+        )
+    }
+    
+    /// Closes all open tabs
+    private func closeAllTabs() {
+        editorCore?.closeAllTabs()
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let newWindowRequested = Notification.Name("newWindowRequested")
+    static let openFolderRequested = Notification.Name("openFolderRequested")
+    static let closeFolderRequested = Notification.Name("closeFolderRequested")
+    static let saveAsRequested = Notification.Name("saveAsRequested")
+}
+
+// MARK: - Uses MenuFocusedValues.swift for EditorCore access
+
+// MARK: - Recent Files Persistence
+
+extension FileMenuCommands {
+    /// Loads recent files from UserDefaults
+    func loadRecentFiles() {
+        if let data = UserDefaults.standard.data(forKey: "RecentFiles"),
+           let urls = try? JSONDecoder().decode([URL].self, from: data) {
+            recentFiles = urls
+        }
+    }
+    
+    /// Saves recent files to UserDefaults
+    func saveRecentFiles() {
+        if let data = try? JSONEncoder().encode(recentFiles) {
+            UserDefaults.standard.set(data, forKey: "RecentFiles")
+        }
+    }
+    
+    /// Adds a file to the recent files list
+    /// - Parameter url: The URL of the file to add
+    func addToRecentFiles(_ url: URL) {
+        // Remove if already exists
+        recentFiles.removeAll { $0 == url }
+        
+        // Add to beginning
+        recentFiles.insert(url, at: 0)
+        
+        // Keep only last 10
+        if recentFiles.count > 10 {
+            recentFiles = Array(recentFiles.prefix(10))
+        }
+        
+        saveRecentFiles()
+    }
+}
+
+// MARK: - Preview
+
+struct FileMenuCommands_Previews: PreviewProvider {
+    static var previews: some View {
+        Text("File Menu Commands")
+            .fileImporter(
+                isPresented: .constant(false),
+                allowedContentTypes: [.text, .sourceCode],
+                allowsMultipleSelection: false
+            ) { _ in }
+    }
+}

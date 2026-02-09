@@ -1,0 +1,10 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+// MARK: - Helper Functions
+
+func fileIcon(for filename: String) -> String {
+    let ext = (filename as NSString).pathExtension.lowercased()
+    switch ext {
+    case "swift": return "swift"
+    case "js\

@@ -1,8 +1,70 @@
-import SwiftUI
 import UniformTypeIdentifiers
+import SwiftUI
+
+// MARK: - Navigation Location
+struct NavigationLocation {
+    let tabId: UUID
+    let line: Int
+    let column: Int
+}
+
+// MARK: - Sidebar Panel (renamed from SidebarView to avoid conflict with SidebarView struct in Views)
+enum SidebarPanel {
+    case explorer
+    case git
+    case search
+    case extensions
+}
+
+// MARK: - Terminal Session Stub
+struct TerminalSession: Identifiable {
+    let id: UUID
+    var title: String
+    var output: String
+    
+    init(id: UUID = UUID(), title: String = "Terminal", output: String = "") {
+        self.id = id
+        self.title = title
+        self.output = output
+    }
+}
+
+// MARK: - Debug State Stubs
+struct DebugSessionState {
+    var isPaused: Bool = false
+    var currentLine: Int?
+    var currentFile: String?
+    var callStack: [String] = []
+    var variables: [String: String] = [:]
+}
+
+struct DebugBreakpoint: Identifiable, Equatable {
+    let id: UUID
+    var file: String
+    var line: Int
+    var isEnabled: Bool
+    var condition: String?
+    
+    init(id: UUID = UUID(), file: String, line: Int, isEnabled: Bool = true, condition: String? = nil) {
+        self.id = id
+        self.file = file
+        self.line = line
+        self.isEnabled = isEnabled
+        self.condition = condition
+    }
+}
+
+// MARK: - Peek Definition State
+struct PeekState: Equatable {
+    let file: String
+    let line: Int
+    let content: String
+    let sourceLine: Int // The line where peek was triggered
+}
 
 // MARK: - Editor Core (Central State Manager)
 class EditorCore: ObservableObject {
+    @Published var peekState: PeekState?
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
     @Published var showSidebar = true
@@ -14,18 +76,67 @@ class EditorCore: ObservableObject {
     @Published var showQuickOpen = false
     @Published var showAIAssistant = false
     @Published var showGoToLine = false
-    
+    @Published var showGoToSymbol = false
+    @Published var editorFontSize: CGFloat = 14.0
+    @Published var isZenMode = false
+    @Published var isFocusMode = false
+
+    // Snippet picker support
+    @Published var showSnippetPicker = false
+    @Published var pendingSnippetInsertion: Snippet?
+
     // Cursor tracking
     @Published var cursorPosition = CursorPosition()
-    
+
+    // Multi-cursor support
+    @Published var multiCursorState = MultiCursorState()
+    @Published var currentSelection: String = ""
+    @Published var currentSelectionRange: NSRange?
+
+    // Selection request for find/replace navigation
+    @Published var requestedSelection: NSRange?
+
+    // UI Panel state
+    @Published var showPanel = false
+    @Published var showRenameSymbol = false
+    @Published var focusedSidebarTab = 0
+
+    // Terminal state
+    @Published var terminalSessions: [TerminalSession] = []
+    @Published var activeTerminalId: UUID?
+    @Published var isTerminalMaximized: Bool = false
+    @Published var terminalPanelHeight: CGFloat = 200
+
+    // Debug state
+    @Published var isDebugging: Bool = false
+    @Published var isRunning: Bool = false
+    @Published var canStartDebugging: Bool = true
+    @Published var showAddConfiguration: Bool = false
+    @Published var debugSessionState: DebugSessionState?
+    @Published var breakpoints: [DebugBreakpoint] = []
+
+    // Focused sidebar panel
+    @Published var focusedView: SidebarPanel = .explorer
+
+    // Reference to file navigator for workspace search
+    weak var fileNavigator: FileSystemNavigator?
+
+    // Navigation history
+    private var navigationHistory: [NavigationLocation] = []
+    private var navigationIndex = -1
+
+    /// Track active security-scoped URL access while files are open in tabs.
+    /// This avoids losing access after opening a document (common on iPadOS).
+    private var securityScopedAccessCounts: [URL: Int] = [:]
+
     var activeTab: Tab? {
         tabs.first { $0.id == activeTabId }
     }
-    
+
     var activeTabIndex: Int? {
         tabs.firstIndex { $0.id == activeTabId }
     }
-    
+
     init() {
         // Create a default welcome tab
         let defaultTab = Tab(
@@ -62,26 +173,31 @@ struct ContentView: View {
         tabs.append(defaultTab)
         activeTabId = defaultTab.id
     }
-    
+
     // MARK: - Tab Management
-    
+
     func addTab(fileName: String = "Untitled.swift", content: String = "", url: URL? = nil) {
         // Check if file is already open
         if let url = url, let existingTab = tabs.first(where: { $0.url == url }) {
             activeTabId = existingTab.id
             return
         }
-        
+
         let newTab = Tab(fileName: fileName, content: content, url: url)
         tabs.append(newTab)
         activeTabId = newTab.id
     }
-    
+
     func closeTab(id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        
+
+        // Release security-scoped access if this tab was holding it.
+        if let url = tabs[index].url {
+            releaseSecurityScopedAccess(to: url)
+        }
+
         tabs.remove(at: index)
-        
+
         // Update active tab if we closed the active one
         if activeTabId == id {
             if tabs.isEmpty {
@@ -93,39 +209,53 @@ struct ContentView: View {
             }
         }
     }
-    
+
     func closeAllTabs() {
+        // Release security-scoped access held by any open tabs.
+        for tab in tabs {
+            if let url = tab.url {
+                releaseSecurityScopedAccess(to: url)
+            }
+        }
+
         tabs.removeAll()
         activeTabId = nil
     }
-    
+
     func closeOtherTabs(except id: UUID) {
+        // Release security-scoped access for tabs being closed.
+        for tab in tabs where tab.id != id {
+            if let url = tab.url {
+                releaseSecurityScopedAccess(to: url)
+            }
+        }
+
         tabs.removeAll { $0.id != id }
         activeTabId = id
     }
-    
+
     func selectTab(id: UUID) {
         activeTabId = id
     }
-    
+
     func nextTab() {
         guard let currentIndex = activeTabIndex, tabs.count > 1 else { return }
         let nextIndex = (currentIndex + 1) % tabs.count
         activeTabId = tabs[nextIndex].id
     }
-    
+
     func previousTab() {
         guard let currentIndex = activeTabIndex, tabs.count > 1 else { return }
         let prevIndex = currentIndex == 0 ? tabs.count - 1 : currentIndex - 1
         activeTabId = tabs[prevIndex].id
     }
-    
+
     func moveTab(from source: IndexSet, to destination: Int) {
         tabs.move(fromOffsets: source, toOffset: destination)
     }
-    
+
     // MARK: - Content Management
-    
+
     func updateActiveTabContent(_ content: String) {
         guard let index = activeTabIndex else { return }
         tabs[index].content = content
@@ -133,11 +263,15 @@ struct ContentView: View {
             tabs[index].isUnsaved = true
         }
     }
-    
+
     func saveActiveTab() {
         guard let index = activeTabIndex,
               let url = tabs[index].url else { return }
-        
+
+        // Ensure we have access when writing, even if this URL wasn't opened via openFile().
+        let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
+        defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+
         do {
             try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
             tabs[index].isUnsaved = false
@@ -145,11 +279,15 @@ struct ContentView: View {
             print("Error saving file: \(error)")
         }
     }
-    
+
     func saveAllTabs() {
         for index in tabs.indices {
             guard let url = tabs[index].url, tabs[index].isUnsaved else { continue }
-            
+
+            // Ensure we have access when writing, even if this URL wasn't opened via openFile().
+            let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
+            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+
             do {
                 try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
                 tabs[index].isUnsaved = false
@@ -158,21 +296,66 @@ struct ContentView: View {
             }
         }
     }
-    
+
     // MARK: - File Operations
-    
+
+    /// Retain security scoped access for as long as a tab referencing the URL is open.
+    /// - Returns: `true` if access was retained (either already retained or started successfully).
+    @discardableResult
+    private func retainSecurityScopedAccess(to url: URL) -> Bool {
+        if let count = securityScopedAccessCounts[url] {
+            securityScopedAccessCounts[url] = count + 1
+            return true
+        }
+
+        let started = url.startAccessingSecurityScopedResource()
+        if started {
+            securityScopedAccessCounts[url] = 1
+            return true
+        }
+
+        // Not all URLs are security-scoped; startAccessing may legitimately return false.
+        return false
+    }
+
+    private func releaseSecurityScopedAccess(to url: URL) {
+        guard let count = securityScopedAccessCounts[url] else { return }
+        if count <= 1 {
+            securityScopedAccessCounts.removeValue(forKey: url)
+            url.stopAccessingSecurityScopedResource()
+        } else {
+            securityScopedAccessCounts[url] = count - 1
+        }
+    }
+
     func openFile(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
-        
+        // If already open, just activate it (and avoid re-reading / re-requesting access).
+        if let existingTab = tabs.first(where: { $0.url == url }) {
+            activeTabId = existingTab.id
+            return
+        }
+
+        // IMPORTANT (BUG-005):
+        // Do not early-return if startAccessingSecurityScopedResource() fails.
+        // For many URLs (non-security-scoped, or when parent scope is active), this may return false,
+        // but the file is still readable. We retain access if available.
+        let retained = retainSecurityScopedAccess(to: url)
+
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
             addTab(fileName: url.lastPathComponent, content: content, url: url)
+
+            // Index the file in Spotlight for search
+            SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
         } catch {
             print("Error opening file: \(error)")
+            if retained {
+                // We retained access but failed to open; release our retain.
+                releaseSecurityScopedAccess(to: url)
+            }
         }
     }
-    
+
     func openFile(_ fileItem: FileItem) {
         guard let url = fileItem.url else {
             // Try path
@@ -184,28 +367,333 @@ struct ContentView: View {
         }
         openFile(from: url)
     }
-    
+
+    // MARK: - File System Event Handlers
+
+    /// Called when a file or folder is moved/renamed in the file system.
+    /// Updates any open tabs that reference the old URL.
+    func handleFileSystemItemMoved(from oldURL: URL, to newURL: URL) {
+        for index in tabs.indices {
+            guard let tabURL = tabs[index].url else { continue }
+
+            // Check if tab URL matches the moved item or is inside it (for folders)
+            let oldPath = oldURL.standardizedFileURL.path
+            let tabPath = tabURL.standardizedFileURL.path
+
+            if tabPath == oldPath {
+                // Direct match - update URL
+                tabs[index].url = newURL
+                tabs[index].fileName = newURL.lastPathComponent
+            } else if tabPath.hasPrefix(oldPath + "/") {
+                // Tab is inside a moved folder - update the path prefix
+                let relativePath = String(tabPath.dropFirst(oldPath.count))
+                let newTabURL = URL(fileURLWithPath: newURL.path + relativePath)
+                tabs[index].url = newTabURL
+            }
+        }
+    }
+
+    /// Called when a file or folder is deleted from the file system.
+    /// Closes any open tabs that reference the deleted item.
+    func handleFileSystemItemDeleted(at url: URL) {
+        let deletedPath = url.standardizedFileURL.path
+
+        // Find all tabs that should be closed
+        let tabsToClose = tabs.filter { tab in
+            guard let tabURL = tab.url else { return false }
+            let tabPath = tabURL.standardizedFileURL.path
+            // Close if exact match or if tab is inside deleted folder
+            return tabPath == deletedPath || tabPath.hasPrefix(deletedPath + "/")
+        }
+
+        // Close the tabs (release security access)
+        for tab in tabsToClose {
+            closeTab(id: tab.id)
+        }
+    }
+
     // MARK: - UI Toggles
-    
+
     func toggleSidebar() {
         withAnimation(.spring(response: 0.3)) {
             showSidebar.toggle()
         }
     }
-    
+
     func toggleCommandPalette() {
         showCommandPalette.toggle()
     }
-    
+
     func toggleQuickOpen() {
         showQuickOpen.toggle()
     }
-    
+
     func toggleSearch() {
         showSearch.toggle()
     }
-    
+
     func toggleAIAssistant() {
         showAIAssistant.toggle()
     }
+
+    func toggleGoToSymbol() {
+        showGoToSymbol.toggle()
+    }
+
+    func toggleZenMode() {
+        isZenMode.toggle()
+    }
+
+    func toggleFocusMode() {
+        isFocusMode.toggle()
+    }
+
+    func togglePanel() {
+        withAnimation(.spring(response: 0.3)) {
+            showPanel.toggle()
+        }
+    }
+
+    func addSelectionToNextFindMatch() {
+        addNextOccurrence()
+    }
+
+    func zoomIn() {
+        editorFontSize = min(editorFontSize + 2, 32)
+    }
+
+    func zoomOut() {
+        editorFontSize = max(editorFontSize - 2, 8)
+    }
+
+    func focusExplorer() {
+        focusedView = .explorer
+        focusedSidebarTab = 0
+        withAnimation {
+            showSidebar = true
+        }
+    }
+
+    func focusGit() {
+        focusedView = .git
+        focusedSidebarTab = 1
+        withAnimation {
+            showSidebar = true
+        }
+    }
+
+    func renameSymbol() {
+        showRenameSymbol.toggle()
+    }
+
+    // NOTE:
+    // goToDefinitionAtCursor(), peekDefinitionAtCursor(), navigateBack(), and navigateForward()
+    // are implemented in an EditorCore extension in Services/NavigationManager.swift.
+
+    // MARK: - Peek Definition
+
+    func triggerPeekDefinition(file: String, line: Int, content: String, sourceLine: Int) {
+        peekState = PeekState(file: file, line: line, content: content, sourceLine: sourceLine)
+    }
+
+    func closePeekDefinition() {
+        peekState = nil
+    }
+
+    // MARK: - Multi-Cursor Operations
+
+    /// Add cursor at a specific position (Option+Click)
+    func addCursorAtPosition(_ position: Int) {
+        multiCursorState.addCursor(at: position)
+    }
+
+    /// Add next occurrence of current selection (Cmd+D)
+    func addNextOccurrence() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+
+        // Get the word/selection to search for
+        let searchText: String
+        let startPosition: Int
+
+        if let range = currentSelectionRange, range.length > 0,
+           let swiftRange = Range(range, in: content) {
+            searchText = String(content[swiftRange])
+            startPosition = range.location + range.length
+        } else if let primary = multiCursorState.primaryCursor {
+            // No selection - select the word under cursor
+            let wordRange = findWordAtPosition(primary.position, in: content)
+            if let range = wordRange, range.length > 0,
+               let swiftRange = Range(range, in: content) {
+                searchText = String(content[swiftRange])
+                startPosition = range.location + range.length
+
+                // First Cmd+D selects the word under cursor
+                multiCursorState.cursors = [Cursor(position: range.location + range.length, anchor: range.location, isPrimary: true)]
+                currentSelectionRange = range
+                currentSelection = searchText
+                return
+            } else {
+                return
+            }
+        } else {
+            return
+        }
+
+        // Find next occurrence
+        if let nextRange = content.findNextOccurrence(of: searchText, after: startPosition) {
+            // Check if this occurrence is already selected
+            let alreadySelected = multiCursorState.cursors.contains { cursor in
+                if let selRange = cursor.selectionRange {
+                    return selRange.location == nextRange.location
+                }
+                return false
+            }
+
+            if !alreadySelected {
+                multiCursorState.addCursorWithSelection(
+                    position: nextRange.location + nextRange.length,
+                    anchor: nextRange.location
+                )
+            }
+        }
+    }
+
+    /// Select all occurrences of current selection (Cmd+Shift+L)
+    func selectAllOccurrences() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+
+        // Get the word/selection to search for
+        let searchText: String
+
+        if let range = currentSelectionRange, range.length > 0,
+           let swiftRange = Range(range, in: content) {
+            searchText = String(content[swiftRange])
+        } else if let primary = multiCursorState.primaryCursor {
+            // No selection - use word under cursor
+            let wordRange = findWordAtPosition(primary.position, in: content)
+            if let range = wordRange, range.length > 0,
+               let swiftRange = Range(range, in: content) {
+                searchText = String(content[swiftRange])
+            } else {
+                return
+            }
+        } else {
+            return
+        }
+
+        // Find all occurrences
+        let allRanges = content.findAllOccurrences(of: searchText)
+
+        guard !allRanges.isEmpty else { return }
+
+        // Create cursors for all occurrences
+        multiCursorState.cursors = allRanges.enumerated().map { index, range in
+            Cursor(
+                position: range.location + range.length,
+                anchor: range.location,
+                isPrimary: index == 0
+            )
+        }
+
+        currentSelection = searchText
+    }
+
+    /// Reset to single cursor
+    func resetToSingleCursor(at position: Int) {
+        multiCursorState.reset(to: position)
+        currentSelectionRange = nil
+        currentSelection = ""
+    }
+
+    /// Update selection from text view
+    func updateSelection(range: NSRange?, text: String) {
+        currentSelectionRange = range
+        if let range = range, range.length > 0,
+           let index = activeTabIndex {
+            let content = tabs[index].content
+            if let swiftRange = Range(range, in: content) {
+                currentSelection = String(content[swiftRange])
+            }
+        } else {
+            currentSelection = ""
+        }
+    }
+
+    /// Find word boundaries at a given position
+    func findWordAtPosition(_ position: Int, in text: String) -> NSRange? {
+        guard position >= 0 && position <= text.count else { return nil }
+
+        let nsText = text as NSString
+        let wordCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+
+        // Find start of word
+        var start = position
+        while start > 0 {
+            let char = nsText.substring(with: NSRange(location: start - 1, length: 1))
+            if char.unicodeScalars.allSatisfy({ wordCharacters.contains($0) }) {
+                start -= 1
+            } else {
+                break
+            }
+        }
+
+        // Find end of word
+        var end = position
+        while end < nsText.length {
+            let char = nsText.substring(with: NSRange(location: end, length: 1))
+            if char.unicodeScalars.allSatisfy({ wordCharacters.contains($0) }) {
+                end += 1
+            } else {
+                break
+            }
+        }
+
+        if start == end {
+            return nil
+        }
+
+        return NSRange(location: start, length: end - start)
+    }
+
+    /// Escape multi-cursor mode
+    func escapeMultiCursor() {
+        if multiCursorState.isMultiCursor {
+            if let primary = multiCursorState.primaryCursor {
+                resetToSingleCursor(at: primary.position)
+            }
+        }
+    }
+
+    // MARK: - Code Folding
+
+    /// Collapse all foldable regions in the active editor
+    func collapseAllFolds() {
+        guard let index = activeTabIndex else { return }
+        // Post notification that will be picked up by the editor view
+        NotificationCenter.default.post(
+            name: .collapseAllFolds,
+            object: nil,
+            userInfo: ["tabId": tabs[index].id]
+        )
+    }
+
+    /// Expand all collapsed regions in the active editor
+    func expandAllFolds() {
+        guard let index = activeTabIndex else { return }
+        // Post notification that will be picked up by the editor view
+        NotificationCenter.default.post(
+            name: .expandAllFolds,
+            object: nil,
+            userInfo: ["tabId": tabs[index].id]
+        )
+    }
+}
+
+// MARK: - Notification Names for Code Folding
+
+extension Notification.Name {
+    static let collapseAllFolds = Notification.Name("collapseAllFolds")
+    static let expandAllFolds = Notification.Name("expandAllFolds")
 }

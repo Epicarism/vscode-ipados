@@ -1,110 +1,1131 @@
 import SwiftUI
 import UIKit
 
-// Efficient NSMutableAttributedString-based syntax highlighter
-class NSAttributedStringSyntaxHighlighter {
-    // Color scheme for syntax highlighting
+// Efficient NSMutableAttributedString-based syntax highlighter (regex-based).
+//
+// Color mapping (per requirements):
+// - Keywords: blue
+// - Types: cyan
+// - Strings: orange
+// - Comments: gray
+// - Numbers: green
+// - Functions: yellow
+final class NSAttributedStringSyntaxHighlighter {
+
+    // MARK: - Language
+
+    // NOTE: This file cannot use the name `Language` because the project already defines a global `Language`
+    // enum elsewhere (VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift).
+    enum SyntaxLanguage {
+        case swift, javascript, typescript, jsx, tsx
+        case python, ruby, go, rust
+        case java, kotlin
+        case c, cpp, objc
+        case html, css, scss
+        case json, xml, yaml
+        case sql, shell, dockerfile, graphql
+        case markdown, php, dotenv
+        case plainText
+    }
+
+    // MARK: - Colors
+
     private struct ColorScheme {
         static let keyword = UIColor.systemBlue
-        static let string = UIColor.systemGreen
+        static let type = UIColor.systemCyan
+        static let string = UIColor.systemOrange
         static let comment = UIColor.systemGray
-        static let number = UIColor.systemPurple
+        static let number = UIColor.systemGreen
         static let function = UIColor.systemYellow
-        static let variable = UIColor.systemOrange
         static let defaultText = UIColor.label
     }
-    
-    // Common Swift keywords
-    private static let swiftKeywords = Set([
-        "func", "var", "let", "if", "else", "for", "while", "switch", "case",
-        "return", "import", "class", "struct", "enum", "protocol", "extension",
-        "private", "public", "internal", "static", "self", "init", "deinit",
-        "throw", "throws", "try", "catch", "guard", "defer", "async", "await",
-        "override", "final", "lazy", "weak", "unowned", "mutating", "nonmutating",
-        "typealias", "associatedtype", "where", "true", "false", "nil"
-    ])
-    
-    // Efficient highlighting using NSMutableAttributedString
+
+    // MARK: - Public API
+
+    /// Backwards-compatible entrypoint (defaults to Swift).
     static func highlightCode(_ code: String) -> NSAttributedString {
-        let attributedString = NSMutableAttributedString(string: code)
+        highlightCode(code, filename: nil, language: .swift)
+    }
+
+    /// Highlights `code` using either an explicit `language` or a detected one from `filename`.
+    static func highlightCode(_ code: String, filename: String? = nil, language: SyntaxLanguage? = nil) -> NSAttributedString {
+        let attributed = NSMutableAttributedString(string: code)
         let fullRange = NSRange(location: 0, length: code.utf16.count)
-        
-        // Set default attributes
-        attributedString.addAttributes([
+
+        attributed.addAttributes([
             .font: UIFont.monospacedSystemFont(ofSize: 14, weight: .regular),
             .foregroundColor: ColorScheme.defaultText
         ], range: fullRange)
-        
-        // Apply syntax highlighting
-        highlightComments(in: attributedString, text: code)
-        highlightStrings(in: attributedString, text: code)
-        highlightKeywords(in: attributedString, text: code)
-        highlightNumbers(in: attributedString, text: code)
-        highlightFunctions(in: attributedString, text: code)
-        
-        return attributedString
+
+        let resolvedLanguage: SyntaxLanguage = {
+            if let language { return language }
+            if let filename { return detectLanguage(fromFilename: filename) }
+            return .plainText
+        }()
+
+        highlight(code: code, language: resolvedLanguage, into: attributed)
+        return attributed
     }
-    
-    private static func highlightComments(in attributedString: NSMutableAttributedString, text: String) {
-        // Single-line comments
-        let singleLinePattern = "//[^\n]*"
-        applyHighlighting(pattern: singleLinePattern, color: ColorScheme.comment, to: attributedString, in: text)
-        
-        // Multi-line comments
-        let multiLinePattern = "/\\*[\\s\\S]*?\\*/"
-        applyHighlighting(pattern: multiLinePattern, color: ColorScheme.comment, to: attributedString, in: text)
-    }
-    
-    private static func highlightStrings(in attributedString: NSMutableAttributedString, text: String) {
-        // Double-quoted strings
-        let doubleQuotePattern = "\"(?:[^\"\\\\]|\\\\.)*\""
-        applyHighlighting(pattern: doubleQuotePattern, color: ColorScheme.string, to: attributedString, in: text)
-        
-        // Triple-quoted strings
-        let tripleQuotePattern = "\"\"\"[\\s\\S]*?\"\"\""
-        applyHighlighting(pattern: tripleQuotePattern, color: ColorScheme.string, to: attributedString, in: text)
-    }
-    
-    private static func highlightKeywords(in attributedString: NSMutableAttributedString, text: String) {
-        for keyword in swiftKeywords {
-            let pattern = "\\b\(keyword)\\b"
-            applyHighlighting(pattern: pattern, color: ColorScheme.keyword, to: attributedString, in: text)
+
+    // MARK: - Language detection
+
+    private static func detectLanguage(fromFilename filename: String) -> SyntaxLanguage {
+        let lower = filename.lowercased()
+        let base = (lower as NSString).lastPathComponent
+        let ext = (base as NSString).pathExtension
+
+        // Special basenames (no extension).
+        if base == "dockerfile" || base.hasPrefix("dockerfile.") { return .dockerfile }
+        if base == ".env" || base.hasPrefix(".env.") || ext == "env" { return .dotenv }
+
+        switch ext {
+        case "swift": return .swift
+        case "js", "mjs", "cjs": return .javascript
+        case "jsx": return .jsx
+        case "ts": return .typescript
+        case "tsx": return .tsx
+        case "py", "pyw": return .python
+        case "rb", "ruby": return .ruby
+        case "go": return .go
+        case "rs": return .rust
+        case "java": return .java
+        case "kt", "kts": return .kotlin
+        case "c": return .c
+        case "cc", "cpp", "cxx", "hpp", "hh", "hxx", "h": return .cpp
+        case "m", "mm": return .objc
+        case "html", "htm": return .html
+        case "css": return .css
+        case "scss", "sass": return .scss
+        case "json", "jsonc": return .json
+        case "xml", "plist", "svg": return .xml
+        case "yml", "yaml": return .yaml
+        case "sql": return .sql
+        case "sh", "bash", "zsh", "fish": return .shell
+        case "php": return .php
+        case "gql", "graphql": return .graphql
+        case "md", "markdown": return .markdown
+        default: return .plainText
         }
     }
-    
-    private static func highlightNumbers(in attributedString: NSMutableAttributedString, text: String) {
-        let numberPattern = "\\b\\d+(?:\\.\\d+)?\\b"
-        applyHighlighting(pattern: numberPattern, color: ColorScheme.number, to: attributedString, in: text)
+
+    // MARK: - Pipeline
+
+    private struct CapturePattern {
+        let pattern: String
+        let captureGroup: Int?
+        let options: NSRegularExpression.Options
     }
-    
-    private static func highlightFunctions(in attributedString: NSMutableAttributedString, text: String) {
-        // Function calls
-        let functionCallPattern = "\\b\\w+(?=\\s*\\()"
-        applyHighlighting(pattern: functionCallPattern, color: ColorScheme.function, to: attributedString, in: text)
-        
-        // Function definitions
-        let functionDefPattern = "(?<=func\\s)\\w+"
-        applyHighlighting(pattern: functionDefPattern, color: ColorScheme.function, to: attributedString, in: text)
+
+    private struct LanguageRules {
+        let keywords: [String]
+        let typePatterns: [CapturePattern]
+        let stringPatterns: [String]
+        let stringRegexOptions: NSRegularExpression.Options
+        let commentPatterns: [String]
+        let commentRegexOptions: NSRegularExpression.Options
+        let numberPattern: String?
+        let numberRegexOptions: NSRegularExpression.Options
+        let keywordRegexOptions: NSRegularExpression.Options
+        let functionPatterns: [CapturePattern]
     }
-    
-    private static func applyHighlighting(pattern: String, color: UIColor, to attributedString: NSMutableAttributedString, in text: String) {
+
+    private static func highlight(code: String, language: SyntaxLanguage, into attributed: NSMutableAttributedString) {
+        let rules = languageRules(for: language)
+
+        // 1) Strings first
+        let stringRanges = rules.stringPatterns.flatMap { pattern in
+            applyHighlighting(
+                pattern: pattern,
+                options: rules.stringRegexOptions,
+                color: ColorScheme.string,
+                to: attributed,
+                in: code,
+                captureGroup: nil,
+                excluding: []
+            )
+        }
+
+        // 2) Comments (exclude matches inside strings)
+        let commentRanges = rules.commentPatterns.flatMap { pattern in
+            applyHighlighting(
+                pattern: pattern,
+                options: rules.commentRegexOptions,
+                color: ColorScheme.comment,
+                to: attributed,
+                in: code,
+                captureGroup: nil,
+                excluding: stringRanges
+            )
+        }
+
+        let protectedRanges = stringRanges + commentRanges
+
+        // 3) Numbers
+        if let numberPattern = rules.numberPattern {
+            _ = applyHighlighting(
+                pattern: numberPattern,
+                options: rules.numberRegexOptions,
+                color: ColorScheme.number,
+                to: attributed,
+                in: code,
+                captureGroup: nil,
+                excluding: protectedRanges
+            )
+        }
+
+        // 4) Types
+        for typePattern in rules.typePatterns {
+            _ = applyHighlighting(
+                pattern: typePattern.pattern,
+                options: typePattern.options,
+                color: ColorScheme.type,
+                to: attributed,
+                in: code,
+                captureGroup: typePattern.captureGroup,
+                excluding: protectedRanges
+            )
+        }
+
+        // 5) Keywords
+        if !rules.keywords.isEmpty {
+            let keywordPattern = "\\b(?:" + rules.keywords.map(NSRegularExpression.escapedPattern).joined(separator: "|") + ")\\b"
+            _ = applyHighlighting(
+                pattern: keywordPattern,
+                options: rules.keywordRegexOptions,
+                color: ColorScheme.keyword,
+                to: attributed,
+                in: code,
+                captureGroup: nil,
+                excluding: protectedRanges
+            )
+        }
+
+        // 6) Functions
+        for fnPattern in rules.functionPatterns {
+            _ = applyHighlighting(
+                pattern: fnPattern.pattern,
+                options: fnPattern.options,
+                color: ColorScheme.function,
+                to: attributed,
+                in: code,
+                captureGroup: fnPattern.captureGroup,
+                excluding: protectedRanges
+            )
+        }
+    }
+
+    // MARK: - Language rules
+
+    private static func languageRules(for language: SyntaxLanguage) -> LanguageRules {
+
+        // Numeric literal coverage (hex, float, exponent, underscores).
+        let commonNumber = "\\b(?:0x[0-9A-Fa-f_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?)\\b"
+
+        // C-like strings: "..." and '...'
+        let cLikeStrings = [
+            "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+            "'(?:[^'\\\\\\n]|\\\\.)*'"
+        ]
+
+        // C-like comments
+        let cLikeComments = [
+            "//[^\\n]*",
+            "/\\*[\\s\\S]*?\\*/"
+        ]
+
+        // Common function call: name(
+        let commonFunctionCall = CapturePattern(
+            pattern: "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+            captureGroup: 1,
+            options: []
+        )
+
+        switch language {
+
+        case .swift:
+            return LanguageRules(
+                keywords: [
+                    "func", "var", "let", "if", "else", "for", "while", "repeat", "switch", "case", "default",
+                    "return", "import", "class", "struct", "enum", "protocol", "extension", "actor",
+                    "private", "fileprivate", "public", "internal", "open", "static", "final", "override",
+                    "self", "super", "init", "deinit",
+                    "throw", "throws", "rethrows", "try", "catch", "do", "guard", "defer",
+                    "async", "await",
+                    "weak", "unowned", "mutating", "nonmutating",
+                    "typealias", "associatedtype", "where", "in", "is", "as", "Any", "some", "any",
+                    "true", "false", "nil"
+                ],
+                typePatterns: [
+                    CapturePattern(
+                        pattern: "\\b(?:String|Int|Int8|Int16|Int32|Int64|UInt|UInt8|UInt16|UInt32|UInt64|Double|Float|Bool|Character|Void|AnyObject|Never|Data|Date|URL|UUID|CGFloat)\\b",
+                        captureGroup: nil,
+                        options: []
+                    ),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ["\"\"\"[\\s\\S]*?\"\"\""] + cLikeStrings,
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bfunc\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        case .javascript:
+            return LanguageRules(
+                keywords: [
+                    "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete",
+                    "do", "else", "export", "extends", "finally", "for", "function", "if", "import", "in",
+                    "instanceof", "let", "new", "return", "super", "switch", "this", "throw", "try", "typeof",
+                    "var", "void", "while", "with", "yield", "async", "await", "of", "true", "false", "null", "undefined"
+                ],
+                typePatterns: [CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])],
+                stringPatterns: cLikeStrings + [
+                    "`(?:[^`\\\\]|\\\\.|\\$\\{[\\s\\S]*?\\})*`"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bfunction\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b(?:const|let|var)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|[A-Za-z_][A-Za-z0-9_]*)?\\s*=>", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        case .typescript:
+            return LanguageRules(
+                keywords: [
+                    // JS
+                    "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete",
+                    "do", "else", "export", "extends", "finally", "for", "function", "if", "import", "in",
+                    "instanceof", "let", "new", "return", "super", "switch", "this", "throw", "try", "typeof",
+                    "var", "void", "while", "with", "yield", "async", "await", "of", "true", "false", "null", "undefined",
+                    // TS
+                    "interface", "type", "enum", "implements", "namespace", "abstract", "declare", "readonly",
+                    "private", "protected", "public", "keyof", "infer", "unknown", "never", "any", "as", "satisfies"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:string|number|boolean|any|unknown|never|void|object|bigint|symbol)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: cLikeStrings + ["`(?:[^`\\\\]|\\\\.|\\$\\{[\\s\\S]*?\\})*`"],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bfunction\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        case .tsx:
+            // TSX = TypeScript + JSX tags/attributes as "types" (cyan).
+            let ts = languageRules(for: .typescript)
+            return LanguageRules(
+                keywords: ts.keywords,
+                typePatterns: ts.typePatterns + [
+                    CapturePattern(pattern: "<\\/?\\s*([A-Za-z][A-Za-z0-9:_-]*)", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Za-z_:][A-Za-z0-9:._-]*)(?=\\s*=)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ts.stringPatterns,
+                stringRegexOptions: ts.stringRegexOptions,
+                commentPatterns: ts.commentPatterns,
+                commentRegexOptions: ts.commentRegexOptions,
+                numberPattern: ts.numberPattern,
+                numberRegexOptions: ts.numberRegexOptions,
+                keywordRegexOptions: ts.keywordRegexOptions,
+                functionPatterns: ts.functionPatterns
+            )
+
+        case .jsx:
+            // JSX = JS plus tag/attribute as "types" for cyan.
+            let js = languageRules(for: .javascript)
+            return LanguageRules(
+                keywords: js.keywords,
+                typePatterns: js.typePatterns + [
+                    CapturePattern(pattern: "<\\/?\\s*([A-Za-z][A-Za-z0-9:_-]*)", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Za-z_:][A-Za-z0-9:._-]*)(?=\\s*=)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: js.stringPatterns,
+                stringRegexOptions: js.stringRegexOptions,
+                commentPatterns: js.commentPatterns,
+                commentRegexOptions: js.commentRegexOptions,
+                numberPattern: js.numberPattern,
+                numberRegexOptions: js.numberRegexOptions,
+                keywordRegexOptions: js.keywordRegexOptions,
+                functionPatterns: js.functionPatterns
+            )
+
+        case .python:
+            return LanguageRules(
+                keywords: [
+                    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class",
+                    "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global",
+                    "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return",
+                    "try", "while", "with", "yield", "match", "case"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:int|float|bool|str|bytes|list|tuple|set|dict|object)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    "'''[\\s\\S]*?'''",
+                    "\"\"\"[\\s\\S]*?\"\"\"",
+                    "(?i)\\b(?:r|u|f|fr|rf|b|br|rb)?'(?:[^'\\\\\\n]|\\\\.)*'",
+                    "(?i)\\b(?:r|u|f|fr|rf|b|br|rb)?\"(?:[^\"\\\\\\n]|\\\\.)*\""
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: ["#[^\\n]*"],
+                commentRegexOptions: [],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bdef\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        // FEAT-023 Ruby syntax (gpt52 regex patterns)
+        case .ruby:
+            // Numeric literals (underscores, bases, float/exponent) plus rational/complex suffix.
+            let rbNumber = "(?<![\\w$@])(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|0[oO]?[0-7_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?|\\.\\d[\\d_]*(?:[eE][+-]?\\d[\\d_]*)?)(?:r|i)?(?!\\w)"
+
+            // Strings: quotes, backticks, % literals (common delimiters), and a best-effort heredoc.
+            let rbStrings: [String] = [
+                // Heredoc: <<, <<-, <<~ with optional quotes around terminator
+                "<<[-~]?['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?\\n[\\s\\S]*?\\n\\1",
+                "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                "'(?:[^'\\\\\\n]|\\\\.)*'",
+                "`(?:[^`\\\\\\n]|\\\\.)*`",
+                "%[qQwWxrs]?\\{[\\s\\S]*?\\}",
+                "%[qQwWxrs]?\\([\\s\\S]*?\\)",
+                "%[qQwWxrs]?\\[[\\s\\S]*?\\]",
+                "%[qQwWxrs]?<[\\s\\S]*?>",
+                "%[qQwWxrs]?\\|[\\s\\S]*?\\|"
+            ]
+
+            return LanguageRules(
+                keywords: [
+                    "BEGIN", "END", "alias", "and", "begin", "break", "case", "class", "def", "defined?",
+                    "do", "else", "elsif", "end", "ensure", "false", "for", "if", "in", "module", "next",
+                    "nil", "not", "or", "redo", "rescue", "retry", "return", "self", "super", "then",
+                    "true", "undef", "unless", "until", "when", "while", "yield",
+                    "private", "protected", "public"
+                ],
+                typePatterns: [
+                    // Constants
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: rbStrings,
+                stringRegexOptions: [.dotMatchesLineSeparators, .anchorsMatchLines],
+                commentPatterns: [
+                    "#[^\\n]*",
+                    // =begin/=end must be at line start
+                    "^=begin\\b[\\s\\S]*?^=end\\b"
+                ],
+                commentRegexOptions: [.dotMatchesLineSeparators, .anchorsMatchLines],
+                numberPattern: rbNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    // def foo / def foo? / def foo! / def foo= / def self.foo / def SomeClass.foo
+                    CapturePattern(pattern: "\\bdef\\s+(?:self\\.|[A-Z][A-Za-z0-9_]*\\.)?([A-Za-z_][A-Za-z0-9_]*[!?=]?)\\b", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        case .go:
+            return LanguageRules(
+                keywords: [
+                    "break", "default", "func", "interface", "select", "case", "defer", "go", "map", "struct",
+                    "chan", "else", "goto", "package", "switch", "const", "fallthrough", "if", "range", "type",
+                    "continue", "for", "import", "return", "var", "true", "false", "nil"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:string|bool|byte|rune|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|uintptr|float32|float64|complex64|complex128|error)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ["`[\\s\\S]*?`", "\"(?:[^\"\\\\\\n]|\\\\.)*\"", "'(?:[^'\\\\\\n]|\\\\.)*'"],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bfunc\\s+(?:\\([^)]*\\)\\s*)?([A-Za-z_][A-Za-z0-9_]*)\\s*\\(", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        case .rust:
+            // FEAT-019 Rust (gpt52 regex patterns)
+            let rustNumber = "\\b(?:0b[01_]+|0o[0-7_]+|0x[0-9A-Fa-f_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?)(?:u(?:8|16|32|64|128|size)|i(?:8|16|32|64|128|size)|f(?:32|64))?\\b"
+            return LanguageRules(
+                keywords: [
+                    // Strict/used keywords
+                    "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn", "for",
+                    "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return",
+                    "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use",
+                    "where", "while", "async", "await", "dyn",
+                    // Common/reserved (best-effort)
+                    "union", "macro_rules", "yield", "try", "box", "abstract", "become", "do", "final", "override",
+                    "priv", "typeof", "unsized", "virtual"
+                ],
+                typePatterns: [
+                    CapturePattern(
+                        pattern: "\\b(?:i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|char|str|String|Option|Result|Vec|Box|Rc|Arc|HashMap|HashSet|BTreeMap|BTreeSet)\\b",
+                        captureGroup: nil,
+                        options: []
+                    ),
+                    // Lifetimes: 'a, 'static (avoid matching char literals like 'a')
+                    CapturePattern(pattern: "\\B'([A-Za-z_][A-Za-z0-9_]*)(?!')", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    "r(#*)\"[\\s\\S]*?\"\\1",
+                    "br(#*)\"[\\s\\S]*?\"\\1",
+                    "b\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "b'(?:[^'\\\\\\n]|\\\\.)*'",
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: [
+                    "//[^\\n]*",
+                    "/\\*[\\s\\S]*?\\*/"
+                ],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: rustNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bfn\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Za-z_][A-Za-z0-9_]*)!\\s*(?=\\()", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        // FEAT-022 Java syntax (gpt52 regex patterns)
+        case .java:
+            // Java numeric literals: binary/hex/dec, hex-floats with p/P exponent, optional suffix.
+            let javaNumber = "(?<!\\w)(?:0[bB][01_]+|0[xX][0-9A-Fa-f_]+(?:\\.[0-9A-Fa-f_]*)?(?:[pP][+-]?\\d[\\d_]*)[fFdD]?|0[xX][0-9A-Fa-f_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?|\\.\\d[\\d_]*(?:[eE][+-]?\\d[\\d_]*)?)(?:[lLfFdD])?(?!\\w)"
+
+            return LanguageRules(
+                keywords: [
+                    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
+                    "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
+                    "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
+                    "interface", "long", "native", "new", "package", "private", "protected", "public",
+                    "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
+                    "throw", "throws", "transient", "try", "void", "volatile", "while",
+                    "true", "false", "null",
+                    // newer/common
+                    "var", "record", "sealed", "permits", "non-sealed"
+                ],
+                typePatterns: [
+                    CapturePattern(
+                        pattern: "\\b(?:boolean|byte|char|short|int|long|float|double|void|String|Object|Integer|Long|Double|Float|Boolean|Character|List|Map|Set|Optional)\\b",
+                        captureGroup: nil,
+                        options: []
+                    ),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    // Java text blocks
+                    "\"\"\"[\\s\\S]*?\"\"\"",
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: javaNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    // Best-effort method declarations (with annotations/modifiers) at line-start
+                    CapturePattern(
+                        pattern: "^(?:\\s*@\\w+(?:\\([^)]*\\))?\\s*)*(?:\\s*(?:public|protected|private|static|final|abstract|synchronized|native|strictfp|default)\\s+)*(?:<[^>]+>\\s*)?(?:[A-Za-z_][A-Za-z0-9_$.<>\\[\\], ?]+\\s+)+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines]
+                    ),
+                    commonFunctionCall
+                ]
+            )
+
+        // FEAT-022 Kotlin syntax (gpt52 regex patterns)
+        case .kotlin:
+            let ktNumber = "(?<!\\w)(?:0[bB][01_]+|0[xX][0-9A-Fa-f_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?|\\.\\d[\\d_]*(?:[eE][+-]?\\d[\\d_]*)?)(?:(?:[fF]|[dD])|(?:[lL])|(?:[uU](?:[lL])?))?(?!\\w)"
+
+            return LanguageRules(
+                keywords: [
+                    "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in",
+                    "interface", "is", "null", "object", "package", "return", "super", "this", "throw",
+                    "true", "try", "typealias", "val", "var", "when", "while",
+                    "by", "catch", "constructor", "delegate", "finally", "get", "import", "init", "set", "where",
+                    "actual", "abstract", "annotation", "companion", "const", "crossinline", "data", "enum",
+                    "expect", "external", "final", "infix", "inline", "inner", "internal", "lateinit",
+                    "noinline", "open", "operator", "out", "override", "private", "protected", "public",
+                    "reified", "sealed", "suspend", "tailrec", "vararg"
+                ],
+                typePatterns: [
+                    CapturePattern(
+                        pattern: "\\b(?:Int|Long|Short|Byte|Float|Double|Boolean|Char|String|Unit|Any|Nothing|List|MutableList|Map|MutableMap|Set|MutableSet)\\b",
+                        captureGroup: nil,
+                        options: []
+                    ),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    "\"\"\"[\\s\\S]*?\"\"\"",
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: ktNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    // fun foo(...) / fun Receiver.foo(...)
+                    CapturePattern(pattern: "\\bfun\\s+(?:<[^>]+>\\s*)?(?:[A-Za-z_][A-Za-z0-9_]*\\.)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+
+        case .c:
+            return LanguageRules(
+                keywords: [
+                    "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else",
+                    "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register",
+                    "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef",
+                    "union", "unsigned", "void", "volatile", "while", "_Bool", "_Complex", "_Imaginary"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:char|short|int|long|float|double|void|size_t|ssize_t|bool)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: cLikeStrings,
+                stringRegexOptions: [],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [commonFunctionCall]
+            )
+
+        case .cpp:
+            return LanguageRules(
+                keywords: [
+                    "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break",
+                    "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept",
+                    "const", "consteval", "constexpr", "constinit", "continue", "co_await", "co_return", "co_yield",
+                    "default", "delete", "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern",
+                    "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace",
+                    "new", "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private", "protected",
+                    "public", "register", "reinterpret_cast", "requires", "return", "short", "signed", "sizeof",
+                    "static", "static_assert", "static_cast", "struct", "switch", "template", "this", "thread_local",
+                    "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using", "virtual",
+                    "void", "volatile", "wchar_t", "while", "xor", "xor_eq", "final", "override"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:bool|char|short|int|long|float|double|void|wchar_t|size_t|ssize_t|string|std::[A-Za-z0-9_:]+)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: cLikeStrings,
+                stringRegexOptions: [],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [commonFunctionCall]
+            )
+
+        case .objc:
+            return LanguageRules(
+                keywords: [
+                    "@interface", "@implementation", "@end", "@property", "@synthesize", "@dynamic", "@protocol",
+                    "@class", "@public", "@private", "@protected", "@package",
+                    "@try", "@catch", "@finally", "@throw", "@autoreleasepool",
+                    "@selector", "@encode", "@import", "@available",
+                    "if", "else", "for", "while", "switch", "case", "default", "break", "continue", "return",
+                    "struct", "typedef", "enum", "static", "const", "void", "int", "char", "float", "double",
+                    "BOOL", "YES", "NO", "nil", "self", "super"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:id|instancetype|SEL|Class|BOOL|NSInteger|NSUInteger|CGFloat|NSString|NSNumber|NSArray|NSDictionary|NSData|NSDate|NSURL|NSError)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: cLikeStrings + ["@\"(?:[^\"\\\\\\n]|\\\\.)*\""],
+                stringRegexOptions: [],
+                commentPatterns: cLikeComments,
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [commonFunctionCall]
+            )
+
+        case .html:
+            return LanguageRules(
+                keywords: ["DOCTYPE", "html", "head", "body", "script", "style"],
+                typePatterns: [
+                    CapturePattern(pattern: "<\\/?\\s*([A-Za-z][A-Za-z0-9:-]*)", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Za-z_:][A-Za-z0-9:._-]*)(?=\\s*=)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ["\"(?:[^\"\\\\\\n]|\\\\.)*\"", "'(?:[^'\\\\\\n]|\\\\.)*'"],
+                stringRegexOptions: [],
+                commentPatterns: ["<!--[\\s\\S]*?-->"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: []
+            )
+        case .xml:
+            // FEAT-025 XML/SVG (gpt52 regex patterns)
+            let xmlNumber = "(?:" + commonNumber + "|&#\\d+;|&#x[0-9A-Fa-f]+;)"
+
+            return LanguageRules(
+                keywords: [
+                    "xml", "version", "encoding", "standalone", "CDATA",
+                    "DOCTYPE", "ELEMENT", "ATTLIST", "ENTITY", "SYSTEM", "PUBLIC",
+                    "xmlns", "xlink"
+                ],
+                typePatterns: [
+                    // Tag names
+                    CapturePattern(pattern: "<\\/?\\s*([A-Za-z_][A-Za-z0-9:._-]*)", captureGroup: 1, options: []),
+                    // Attribute names
+                    CapturePattern(pattern: "\\b([A-Za-z_:][A-Za-z0-9:._-]*)(?=\\s*=)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'"
+                ],
+                stringRegexOptions: [],
+                commentPatterns: [
+                    "<!--[\\s\\S]*?-->",
+                    "<!\\[CDATA\\[[\\s\\S]*?\\]\\]>",
+                    // Processing instructions (best-effort)
+                    "<\\?[\\s\\S]*?\\?>",
+                    // DOCTYPE subset (best-effort)
+                    "<!DOCTYPE[\\s\\S]*?>"
+                ],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: xmlNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: [
+                    // Entity references: &name;
+                    CapturePattern(pattern: "&([A-Za-z_:][A-Za-z0-9:._-]*);", captureGroup: 1, options: [])
+                ]
+            )
+
+
+
+        case .css:
+            return LanguageRules(
+                keywords: ["@import", "@media", "@supports", "@keyframes", "@font-face", "@page", "@layer", "important"],
+                typePatterns: [
+                    CapturePattern(pattern: "(?:\\.|#)([A-Za-z_-][A-Za-z0-9_-]*)\\b", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Za-z_-][A-Za-z0-9_-]*)\\b(?=\\s*\\{)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ["\"(?:[^\"\\\\\\n]|\\\\.)*\"", "'(?:[^'\\\\\\n]|\\\\.)*'"],
+                stringRegexOptions: [],
+                commentPatterns: ["/\\*[\\s\\S]*?\\*/"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: "\\b\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:%|px|em|rem|vw|vh|vmin|vmax|fr|ch|ex|cm|mm|in|pt|pc)?\\b",
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\b([A-Za-z_-][A-Za-z0-9_-]*)\\s*(?=:)", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\b([A-Za-z_-][A-Za-z0-9_-]*)\\s*(?=\\()", captureGroup: 1, options: [])
+                ]
+            )
+
+        case .scss:
+            let css = languageRules(for: .css)
+            return LanguageRules(
+                keywords: css.keywords + ["@mixin", "@include", "@extend", "@function", "@return", "@if", "@else", "@for", "@each", "@while"],
+                typePatterns: css.typePatterns,
+                stringPatterns: css.stringPatterns,
+                stringRegexOptions: css.stringRegexOptions,
+                commentPatterns: ["/\\*[\\s\\S]*?\\*/", "//[^\\n]*"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: css.numberPattern,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: css.functionPatterns
+            )
+
+        case .json:
+            return LanguageRules(
+                keywords: ["true", "false", "null"],
+                typePatterns: [],
+                stringPatterns: ["\"(?:[^\"\\\\\\n]|\\\\.)*\""],
+                stringRegexOptions: [],
+                commentPatterns: ["//[^\\n]*", "/\\*[\\s\\S]*?\\*/"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: []
+            )
+
+        case .yaml:
+            return LanguageRules(
+                keywords: ["true", "false", "null", "yes", "no", "on", "off"],
+                typePatterns: [
+                    CapturePattern(pattern: "([&*][A-Za-z0-9_-]+)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ["\"(?:[^\"\\\\\\n]|\\\\.)*\"", "'(?:[^'\\\\\\n]|\\\\.)*'"],
+                stringRegexOptions: [],
+                commentPatterns: ["#[^\\n]*"],
+                commentRegexOptions: [],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: [
+                    CapturePattern(pattern: "^\\s*([A-Za-z0-9_-]+)\\s*:(?=\\s|$)", captureGroup: 1, options: [.anchorsMatchLines])
+                ]
+            )
+
+        case .sql:
+            return LanguageRules(
+                keywords: [
+                    "select", "from", "where", "group", "by", "having", "order", "limit", "offset",
+                    "insert", "into", "values", "update", "set", "delete",
+                    "join", "inner", "left", "right", "full", "outer", "cross", "on",
+                    "as", "distinct", "union", "all", "and", "or", "not", "null", "is", "in", "exists", "like", "between",
+                    "create", "alter", "drop", "table", "view", "index", "primary", "key", "foreign", "references",
+                    "case", "when", "then", "else", "end",
+                    "begin", "commit", "rollback"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:int|integer|smallint|bigint|serial|bigserial|decimal|numeric|real|double|float|money|boolean|bool|date|time|timestamp|timestamptz|varchar|char|text|uuid|json|jsonb)\\b", captureGroup: nil, options: [.caseInsensitive])
+                ],
+                stringPatterns: ["'(?:''|[^'])*'", "\"(?:\"\"|[^\"])*\""],
+                stringRegexOptions: [],
+                commentPatterns: ["--[^\\n]*", "/\\*[\\s\\S]*?\\*/"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()", captureGroup: 1, options: [.caseInsensitive])
+                ]
+            )
+        case .shell:
+            // FEAT-018 Shell/Bash (gpt52 regex patterns)
+            return LanguageRules(
+                keywords: [
+                    // Reserved words
+                    "if", "then", "elif", "else", "fi", "for", "in", "do", "done", "case", "esac", "while", "until",
+                    "select", "function", "time", "coproc", "break", "continue", "return", "exit",
+                    // Common builtins
+                    "export", "readonly", "local", "declare", "typeset", "unset", "shift", "trap", "set", "alias", "unalias"
+                ],
+                typePatterns: [
+                    // Assignment keys (KEY=...) including export/local prefixes
+                    CapturePattern(
+                        pattern: "^\\s*(?:(?:export|readonly|local|declare|typeset)\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?==)",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines]
+                    ),
+                    // ${VAR}
+                    CapturePattern(pattern: "\\$\\{([A-Za-z_][A-Za-z0-9_]*)[^}]*\\}", captureGroup: 1, options: []),
+                    // $VAR
+                    CapturePattern(pattern: "\\$([A-Za-z_][A-Za-z0-9_]*)", captureGroup: 1, options: []),
+                    // Special parameters: $1, $?, $#, $@, $*, $$, $!, $-, $_
+                    CapturePattern(pattern: "\\$(\\d+|\\?|#|@|\\*|\\$|!|-|_)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    // Heredoc (best-effort): <<, <<-, <<~
+                    "<<[-~]?\\s*'?([A-Za-z_][A-Za-z0-9_]*)'?\\s*\\n[\\s\\S]*?\\n\\1",
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'[^'\\n]*'",
+                    "\\$'(?:[^'\\\\\\n]|\\\\.)*'",
+                    "`(?:[^`\\\\\\n]|\\\\.)*`",
+                    // Command substitution (single-line best-effort)
+                    "\\$\\([^\\n]*?\\)"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators, .anchorsMatchLines],
+                commentPatterns: ["#[^\\n]*"],
+                commentRegexOptions: [],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    // foo() { ... }
+                    CapturePattern(pattern: "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\(\\s*\\)\\s*\\{", captureGroup: 1, options: []),
+                    // function foo { ... }
+                    CapturePattern(pattern: "\\bfunction\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+        case .dockerfile:
+            // FEAT-026 Dockerfile (gpt52 regex patterns)
+            return LanguageRules(
+                keywords: [
+                    "FROM", "AS", "RUN", "CMD", "LABEL", "MAINTAINER", "EXPOSE", "ENV", "ADD", "COPY", "ENTRYPOINT",
+                    "VOLUME", "USER", "WORKDIR", "ARG", "ONBUILD", "STOPSIGNAL", "HEALTHCHECK", "SHELL"
+                ],
+                typePatterns: [
+                    // FROM image reference (first token after FROM, ignoring flags)
+                    CapturePattern(
+                        pattern: "^\\s*FROM\\s+(?:--[A-Za-z0-9-]+(?:=[^\\s]+)?\\s+)*([^\\s]+)",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines, .caseInsensitive]
+                    ),
+                    // Stage name after AS
+                    CapturePattern(
+                        pattern: "^\\s*FROM\\s+[^\\n]*?\\bAS\\s+([A-Za-z0-9._-]+)\\b",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines, .caseInsensitive]
+                    ),
+                    // ENV/ARG key
+                    CapturePattern(
+                        pattern: "^\\s*(?:ENV|ARG)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines, .caseInsensitive]
+                    ),
+                    // $VAR / ${VAR}
+                    CapturePattern(
+                        pattern: "\\$\\{?([A-Za-z_][A-Za-z0-9_]*)\\}?",
+                        captureGroup: 1,
+                        options: []
+                    )
+                ],
+                stringPatterns: [
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'",
+                    // Exec-form JSON array (best-effort, single-line)
+                    "\\[[^\\n]*?\\]"
+                ],
+                stringRegexOptions: [],
+                commentPatterns: [
+                    // Only treat as comment when # is the first non-whitespace
+                    "^\\s*#.*$"
+                ],
+                commentRegexOptions: [.anchorsMatchLines],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: [
+                    // Command name after RUN/CMD/ENTRYPOINT (best-effort)
+                    CapturePattern(
+                        pattern: "^\\s*(?:RUN|CMD|ENTRYPOINT)\\s+(?:\\[\\s*)?([A-Za-z0-9_./-]+)",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines, .caseInsensitive]
+                    )
+                ]
+            )
+
+
+
+        case .graphql:
+            return LanguageRules(
+                keywords: [
+                    "query", "mutation", "subscription", "fragment", "on",
+                    "schema", "type", "interface", "union", "enum", "input", "extend", "directive", "implements",
+                    "scalar", "true", "false", "null"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:Int|Float|String|Boolean|ID)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: ["\"\"\"[\\s\\S]*?\"\"\"", "\"(?:[^\"\\\\\\n]|\\\\.)*\""],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: ["#[^\\n]*"],
+                commentRegexOptions: [],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: []
+            )
+
+        case .markdown:
+            return LanguageRules(
+                keywords: [],
+                typePatterns: [],
+                stringPatterns: [
+                    "```[\\s\\S]*?```",
+                    "~~~[\\s\\S]*?~~~",
+                    "`[^`\\n]+`"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators],
+                commentPatterns: ["<!--[\\s\\S]*?-->"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: nil,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: []
+            )
+        case .php:
+            // FEAT-024 PHP (gpt52 regex patterns)
+            let phpNumber = "\\b(?:0x[0-9A-Fa-f_]+|0b[01_]+|0o[0-7_]+|\\d[\\d_]*(?:\\.\\d[\\d_]*)?(?:[eE][+-]?\\d[\\d_]*)?)\\b"
+
+            return LanguageRules(
+                keywords: [
+                    "abstract", "and", "array", "as", "break", "callable", "case", "catch", "class", "clone",
+                    "const", "continue", "declare", "default", "die", "do", "echo", "else", "elseif", "empty",
+                    "enddeclare", "endfor", "endforeach", "endif", "endswitch", "endwhile", "enum", "eval", "exit",
+                    "extends", "final", "finally", "fn", "for", "foreach", "function", "global", "goto", "if",
+                    "implements", "include", "include_once", "instanceof", "insteadof", "interface", "isset",
+                    "list", "match", "namespace", "new", "or", "print", "private", "protected", "public", "readonly",
+                    "require", "require_once", "return", "static", "switch", "throw", "trait", "try", "unset", "use",
+                    "var", "while", "xor", "yield", "true", "false", "null"
+                ],
+                typePatterns: [
+                    CapturePattern(pattern: "\\b(?:int|float|string|bool|array|object|callable|iterable|mixed|void|never)\\b", captureGroup: nil, options: []),
+                    CapturePattern(pattern: "\\b([A-Z][A-Za-z0-9_]*)\\b", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    // Heredoc/nowdoc (best-effort)
+                    "<<<\\s*'?([A-Za-z_][A-Za-z0-9_]*)'?\\s*\\n[\\s\\S]*?\\n\\1;?",
+                    "`(?:[^`\\\\\\n]|\\\\.)*`",
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'"
+                ],
+                stringRegexOptions: [.dotMatchesLineSeparators, .anchorsMatchLines],
+                commentPatterns: cLikeComments + ["#[^\\n]*"],
+                commentRegexOptions: [.dotMatchesLineSeparators],
+                numberPattern: phpNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: [
+                    CapturePattern(pattern: "\\bfunction\\s+([A-Za-z_][A-Za-z0-9_]*)\\b", captureGroup: 1, options: []),
+                    // $obj->method(...)
+                    CapturePattern(pattern: "->\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()", captureGroup: 1, options: []),
+                    // Class::method(...)
+                    CapturePattern(pattern: "\\b[A-Za-z_][A-Za-z0-9_]*::\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()", captureGroup: 1, options: []),
+                    commonFunctionCall
+                ]
+            )
+        case .dotenv:
+            // FEAT-027 .env (dotenv) (gpt52 regex patterns)
+            return LanguageRules(
+                keywords: ["export"],
+                typePatterns: [
+                    // Keys in KEY=value or export KEY=value
+                    CapturePattern(
+                        pattern: "^\\s*(?:export\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?==)",
+                        captureGroup: 1,
+                        options: [.anchorsMatchLines, .caseInsensitive]
+                    ),
+                    // $KEY / ${KEY}
+                    CapturePattern(pattern: "\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\$([A-Za-z_][A-Za-z0-9_]*)", captureGroup: 1, options: [])
+                ],
+                stringPatterns: [
+                    "\"(?:[^\"\\\\\\n]|\\\\.)*\"",
+                    "'(?:[^'\\\\\\n]|\\\\.)*'"
+                ],
+                stringRegexOptions: [],
+                commentPatterns: [
+                    "^\\s*#.*$",
+                    // Inline comment after whitespace (best-effort)
+                    "(?<=\\s)#[^\\n]*"
+                ],
+                commentRegexOptions: [.anchorsMatchLines],
+                numberPattern: commonNumber,
+                numberRegexOptions: [],
+                keywordRegexOptions: [.caseInsensitive],
+                functionPatterns: [
+                    // Highlight variable references in values
+                    CapturePattern(pattern: "\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}", captureGroup: 1, options: []),
+                    CapturePattern(pattern: "\\$([A-Za-z_][A-Za-z0-9_]*)", captureGroup: 1, options: [])
+                ]
+            )
+
+
+
+        case .plainText:
+            return LanguageRules(
+                keywords: [],
+                typePatterns: [],
+                stringPatterns: [],
+                stringRegexOptions: [],
+                commentPatterns: [],
+                commentRegexOptions: [],
+                numberPattern: nil,
+                numberRegexOptions: [],
+                keywordRegexOptions: [],
+                functionPatterns: []
+            )
+        }
+    }
+
+    // MARK: - Regex application helpers
+
+    @discardableResult
+    private static func applyHighlighting(
+        pattern: String,
+        options: NSRegularExpression.Options,
+        color: UIColor,
+        to attributedString: NSMutableAttributedString,
+        in text: String,
+        captureGroup: Int?,
+        excluding excludedRanges: [NSRange]
+    ) -> [NSRange] {
         do {
-            let regex = try NSRegularExpression(pattern: pattern, options: [])
+            let regex = try NSRegularExpression(pattern: pattern, options: options)
             let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-            
+
+            var applied: [NSRange] = []
+            applied.reserveCapacity(matches.count)
+
             for match in matches {
-                attributedString.addAttribute(.foregroundColor, value: color, range: match.range)
+                let range: NSRange = {
+                    if let captureGroup, captureGroup <= match.numberOfRanges - 1 {
+                        return match.range(at: captureGroup)
+                    }
+                    return match.range
+                }()
+
+                guard range.location != NSNotFound, range.length > 0 else { continue }
+                if intersectsAny(range, excludedRanges) { continue }
+
+                attributedString.addAttribute(.foregroundColor, value: color, range: range)
+                applied.append(range)
             }
+
+            return applied
         } catch {
             print("Regex error for pattern \(pattern): \(error)")
+            return []
         }
+    }
+
+    private static func intersectsAny(_ range: NSRange, _ excludedRanges: [NSRange]) -> Bool {
+        for ex in excludedRanges where NSIntersectionRange(range, ex).length > 0 {
+            return true
+        }
+        return false
     }
 }
 
 // SwiftUI wrapper for NSAttributedString
 struct AttributedTextView: UIViewRepresentable {
     let attributedText: NSAttributedString
-    
+
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
         textView.isEditable = false
@@ -113,7 +1134,7 @@ struct AttributedTextView: UIViewRepresentable {
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         return textView
     }
-    
+
     func updateUIView(_ uiView: UITextView, context: Context) {
         uiView.attributedText = attributedText
     }
@@ -121,7 +1142,11 @@ struct AttributedTextView: UIViewRepresentable {
 
 // Extension to make it easy to use in SwiftUI
 extension View {
-    func syntaxHighlighted(code: String) -> some View {
-        AttributedTextView(attributedText: NSAttributedStringSyntaxHighlighter.highlightCode(code))
+    func syntaxHighlighted(
+        code: String,
+        filename: String? = nil,
+        language: NSAttributedStringSyntaxHighlighter.SyntaxLanguage? = nil
+    ) -> some View {
+        AttributedTextView(attributedText: NSAttributedStringSyntaxHighlighter.highlightCode(code, filename: filename, language: language))
     }
 }

@@ -1,0 +1,77 @@
+import SwiftUI
+
+// MARK: - Search View (Sidebar / Panel)
+
+struct SearchView: View {
+    @ObservedObject var editorCore: EditorCore
+    @ObservedObject var fileNavigator: FileSystemNavigator
+
+    @StateObject private var searchManager = SearchManager.shared
+
+    @State private var query: String = ""
+    @State private var replaceText: String = ""
+
+    @State private var includePatterns: String = ""
+    @State private var excludePatterns: String = ""\.appending("**/.git/**, **/build/**, **/*.xcassets/**")
+
+    @State private var options = SearchOptions()
+    @State private var isReplaceMode: Bool = false
+
+    @FocusState private var queryFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            fields
+            optionsRow
+            scopeRow
+            patterns
+            Divider().padding(.top, 8)
+            results
+        }
+        .background(Color(UIColor.secondarySystemBackground))
+        .onAppear {
+            // If user was already searching from history, keep it; otherwise start empty.
+        }
+        .onChange(of: query) { _ in
+            runWorkspaceSearch()
+        }
+        .onChange(of: options) { _ in
+            runWorkspaceSearch()
+        }
+        .onChange(of: includePatterns) { _ in
+            runWorkspaceSearch(debounced: true)
+        }
+        .onChange(of: excludePatterns) { _ in
+            runWorkspaceSearch(debounced: true)
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            Text("SEARCH")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            Spacer()
+            Button {
+                isReplaceMode.toggle()
+            } label: {
+                Image(systemName: isReplaceMode ? "arrow.triangle.2.circlepath" : "arrow.left.arrow.right")
+                    .font(.caption)
+            }
+            .foregroundColor(.secondary)
+            .help("Toggle replace")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var fields: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+
+                TextField("Find\

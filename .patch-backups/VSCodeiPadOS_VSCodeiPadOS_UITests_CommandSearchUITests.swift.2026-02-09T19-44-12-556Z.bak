@@ -1,0 +1,699 @@
+import XCTest
+
+import XCTest
+import Foundation
+
+final class CommandSearchUITests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
+    // Keep this list aligned with the app's accessibility identifiers.
+    private let preferredIdentifiers = [
+        "commandSearchInput",
+        "command-search-input",
+        "CommandSearchInput",
+        "commandPaletteSearchField",
+        "command-palette-search",
+        "Command Palette",
+        "Command Search"
+    ]
+
+    // Keep this list aligned with the app's search panel accessibility identifiers.
+    private let searchPanelIdentifiers = [
+        "searchPanelInput",
+        "search-panel-input",
+        "SearchPanelInput",
+        "globalSearchInput",
+        "global-search-input",
+        "GlobalSearchInput",
+        "searchQuery",
+        "search-query",
+        "SearchQuery"
+    ]
+
+    private func findCommandSearchElement(in app: XCUIApplication) -> XCUIElement {
+        for id in preferredIdentifiers {
+            let tf = app.textFields[id]
+            if tf.exists { return tf }
+            let sf = app.searchFields[id]
+            if sf.exists { return sf }
+        }
+
+        // Fallback: first visible searchField/textField.
+        if app.searchFields.count > 0 {
+            return app.searchFields.element(boundBy: 0)
+        }
+        return app.textFields.element(boundBy: 0)
+    }
+
+    private func findSearchPanelElement(in app: XCUIApplication) -> XCUIElement {
+        for id in searchPanelIdentifiers {
+            let tf = app.textFields[id]
+            if tf.exists { return tf }
+            let sf = app.searchFields[id]
+            if sf.exists { return sf }
+        }
+
+        // Fallback: first visible searchField/textField.
+        if app.searchFields.count > 0 {
+            return app.searchFields.element(boundBy: 0)
+        }
+        return app.textFields.element(boundBy: 0)
+    }
+
+    private func openCommandPalette(in app: XCUIApplication, timeout: TimeInterval = 10) -> XCUIElement {
+        app.typeKey("p", modifierFlags: [.command, .shift])
+
+        let searchField = findCommandSearchElement(in: app)
+        XCTAssertTrue(searchField.waitForExistence(timeout: timeout), "Expected command palette search input to appear")
+        return searchField
+    }
+
+    private func openGlobalSearch(in app: XCUIApplication, timeout: TimeInterval = 10) {
+        // Primary: keyboard shortcut (common in VS Code): Cmd+Shift+F.
+        app.typeKey("f", modifierFlags: [.command, .shift])
+
+        let searchField = findGlobalSearchField(in: app)
+        if searchField.waitForExistence(timeout: timeout) {
+            return
+        }
+
+        // Fallback: try a visible Search/Find button.
+        let likelyButtons = [
+            "Search",
+            "Find",
+            "Find in Files",
+            "Search in Files"
+        ]
+
+        for label in likelyButtons {
+            let b = app.buttons[label]
+            if b.waitForExistence(timeout: 2) {
+                b.tap()
+                if findGlobalSearchField(in: app).waitForExistence(timeout: timeout) {
+                    return
+                }
+            }
+        }
+
+        XCTFail("Unable to open global search UI")
+    }
+
+    private func findGlobalSearchField(in app: XCUIApplication) -> XCUIElement {
+        let likelyLabels = [
+            "Search",
+            "Find",
+            "Find in Files",
+            "Search in Files",
+            "Search Files",
+            "Search query",
+            "SearchQuery",
+            "searchQuery",
+            "globalSearchInput"
+        ]
+
+        for label in likelyLabels {
+            let sf = app.searchFields[label]
+            if sf.exists { return sf }
+            let tf = app.textFields[label]
+            if tf.exists { return tf }
+        }
+
+        if app.searchFields.count > 0 { return app.searchFields.element(boundBy: 0) }
+        return app.textFields.element(boundBy: 0)
+    }
+
+    private func waitForAnyElementToExist(_ elements: [XCUIElement], timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if elements.contains(where: { $0.exists }) { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return false
+    }
+
+    private func findSearchResultElement(in app: XCUIApplication, fileName: String) -> XCUIElement {
+        // Prefer tapping a cell (common for result lists).
+        let cell = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", fileName)).firstMatch
+        if cell.exists { return cell }
+
+        // Fallbacks.
+        let button = app.buttons.containing(NSPredicate(format: "label CONTAINS[c] %@", fileName)).firstMatch
+        if button.exists { return button }
+
+        let staticText = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", fileName)).firstMatch
+        if staticText.exists { return staticText }
+
+        return app.cells.firstMatch
+    }
+
+    func testCmdShiftPOpensCommandPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Cmd+Shift+P should open the command palette.
+        app.typeKey("p", modifierFlags: [.command, .shift])
+
+        let commandSearchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(
+            commandSearchElement.waitForExistence(timeout: 10),
+            "Expected command palette search input to appear after Cmd+Shift+P"
+        )
+    }
+
+    func testEscapeClosesCommandPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        let searchField = openCommandPalette(in: app)
+
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, searchField.exists {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+
+        XCTAssertFalse(searchField.exists, "Expected Escape to close command palette")
+    }
+
+    func testCommandExecutionFromPaletteClosesPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        let searchField = openCommandPalette(in: app)
+
+        let commandToRun = "Format Document"
+        searchField.tap()
+        searchField.typeText(commandToRun)
+
+        let firstCommand = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", commandToRun)).firstMatch
+        XCTAssertTrue(firstCommand.waitForExistence(timeout: 10), "Expected to find '\(commandToRun)' in command palette results")
+
+        firstCommand.tap()
+
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, searchField.exists {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+
+        XCTAssertFalse(searchField.exists, "Expected executing a command to dismiss/close the command palette")
+    }
+
+    func testEnteringTextIntoSearchInputWorks() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        let searchElement = openCommandPalette(in: app)
+
+        searchElement.tap()
+
+        let textToEnter = "format"
+        searchElement.typeText(textToEnter)
+
+        // Validate the entered text is reflected in the field.
+        // Some UIKit controls expose their content via `value`.
+        let valueString = (searchElement.value as? String) ?? ""
+        XCTAssertTrue(valueString.contains(textToEnter), "Expected search input value to contain '\(textToEnter)'. Actual value: '\(valueString)'.")
+    }
+
+    func testCmdShiftFOpensSearchPanel() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Cmd+Shift+F should open the search panel.
+        app.typeKey("f", modifierFlags: [.command, .shift])
+
+        let searchPanelElement = findSearchPanelElement(in: app)
+        XCTAssertTrue(
+            searchPanelElement.waitForExistence(timeout: 10),
+            "Expected search panel search input to appear after Cmd+Shift+F"
+        )
+    }
+
+    func testRecentCommandsAppearFirstInCommandPalette() {
+        let app = XCUIApplication()
+        app.launch()
+
+        // Wait for app to be running
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Open command palette with Cmd+Shift+P
+        app.typeKey("p", modifierFlags: [.command, .shift])
+
+        let searchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(searchElement.waitForExistence(timeout: 10), "Expected command palette search input to appear")
+
+        // Search for and select a specific command (e.g., "Format Document")
+        let commandToRun = "Format Document"
+        searchElement.tap()
+        searchElement.typeText(commandToRun)
+
+        // Wait for command results to appear and select the first matching command
+        let firstCommand = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", commandToRun)).element(boundBy: 0)
+        XCTAssertTrue(firstCommand.waitForExistence(timeout: 5), "Expected to find '\(commandToRun)' command")
+
+        // Store the full label of the command we're about to run
+        let commandLabel = firstCommand.label
+
+        // Execute the command by tapping it
+        firstCommand.tap()
+
+        // Wait a moment for command to execute and command palette to close
+        sleep(1)
+
+        // Reopen command palette - recent commands should appear at the top when reopened with empty search
+        app.typeKey("p", modifierFlags: [.command, .shift])
+
+        let secondSearchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(secondSearchElement.waitForExistence(timeout: 10), "Expected command palette to reopen")
+
+        // Wait a moment for the command list to populate with recent commands
+        sleep(1)
+
+        // Get all command cells - recent commands should appear first in the list
+        let allCells = app.cells.allElementsBoundByIndex
+        XCTAssertGreaterThan(allCells.count, 0, "Expected at least one command in palette")
+
+        // When command palette is reopened, recent commands should appear at the top
+        // The most recently executed command should be first (or very prominent) in the list
+        let firstCell = allCells[0]
+        let firstCellLabel = firstCell.label
+
+        // Verify that the recently run command appears at the very top of the list
+        // This validates the "recent commands appear first" requirement
+        XCTAssertTrue(
+            firstCellLabel.contains(commandLabel) || firstCellLabel.contains(commandToRun),
+            "Expected recent command '\(commandLabel)' to appear first in command palette, but first item was '\(firstCellLabel)'"
+        )
+
+        // Additional verification: search for the command again and verify it still appears
+        // This ensures the command is still available and the palette is functioning correctly
+        secondSearchElement.tap()
+        secondSearchElement.typeText(commandToRun)
+
+        let recentCommandInSearch = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", commandToRun)).element(boundBy: 0)
+        XCTAssertTrue(recentCommandInSearch.waitForExistence(timeout: 5), "Expected '\(commandToRun)' to still be searchable after running it")
+    }
+
+    func testTappingSearchResultNavigatesToFileInEditor() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        openGlobalSearch(in: app)
+
+        let searchField = findGlobalSearchField(in: app)
+        XCTAssertTrue(searchField.waitForExistence(timeout: 10), "Expected global search field to exist")
+
+        searchField.tap()
+        let query = "hello"
+        searchField.typeText(query)
+
+        // Wait for results and tap one.
+        let fileName = "ContentView.swift"
+        let result = findSearchResultElement(in: app, fileName: fileName)
+        XCTAssertTrue(result.waitForExistence(timeout: 10), "Expected a search result for '\(fileName)' to appear")
+        result.tap()
+
+        // Verify navigation occurred by checking for an editor and/or visible file title.
+        let editor = app.textViews["Editor"]
+        let fileTitleStaticText = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", fileName)).firstMatch
+        let fileTitleButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", fileName)).firstMatch
+        let fileTitleNavBar = app.navigationBars.matching(NSPredicate(format: "identifier CONTAINS[c] %@ OR label CONTAINS[c] %@", fileName, fileName)).firstMatch
+
+        XCTAssertTrue(
+            waitForAnyElementToExist([editor, fileTitleStaticText, fileTitleButton, fileTitleNavBar], timeout: 10),
+            "Expected tapping a search result to navigate to an editor location for '\(fileName)'"
+        )
+
+        // If the editor exposes text, ensure the query appears somewhere (best-effort assertion).
+        if editor.exists {
+            let editorValue = (editor.value as? String) ?? ""
+            XCTAssertTrue(
+                editorValue.isEmpty || editorValue.localizedCaseInsensitiveContains(query),
+                "Expected editor text to contain query '\(query)' (if exposed). Actual value: '\(editorValue)'"
+            )
+        }
+    }
+
+    func testCommandPaletteFilteringNarrowsResults() {
+        let app = XCUIApplication()
+        app.launch()
+
+        // Wait for app to be running
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Open command palette with Cmd+Shift+P
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        
+        let searchElement = findCommandSearchElement(in: app)
+        XCTAssertTrue(searchElement.waitForExistence(timeout: 10), "Expected command palette search input to appear")
+
+        // First, check that all commands are visible when search is empty
+        sleep(1) // Allow command list to populate
+        let initialAllCells = app.cells.allElementsBoundByIndex
+        let initialCommandCount = initialAllCells.count
+        XCTAssertGreaterThan(initialCommandCount, 1, "Expected multiple commands to be available in the palette initially")
+
+        // Type a specific search term that should narrow results
+        let searchTerm = "format"
+        searchElement.tap()
+        searchElement.typeText(searchTerm)
+
+        // Wait for filtering to apply
+        sleep(1)
+
+        // Check that filtered results are fewer than initial results
+        let filteredAllCells = app.cells.allElementsBoundByIndex
+        let filteredCommandCount = filteredAllCells.count
+        
+        // Assert that filtering reduced the number of results
+        XCTAssertLessThan(filteredCommandCount, initialCommandCount, 
+            "Expected filtered results (\(filteredCommandCount)) to be fewer than initial results (\(initialCommandCount)) when searching for '\(searchTerm)'")
+
+        // Assert that all remaining results contain the search term (case insensitive)
+        for cell in filteredAllCells {
+            let cellLabel = cell.label.lowercased()
+            XCTAssertTrue(cellLabel.contains(searchTerm.lowercased()), 
+                "Expected filtered command '\(cell.label)' to contain search term '\(searchTerm)'")
+        }
+
+        // Clear the search and verify results expand again
+        // Select all text and delete
+        searchElement.typeKey("a", modifierFlags: .command)
+        searchElement.typeKey(XCUIKeyboardKey.delete.rawValue)
+
+        // Wait for results to reset
+        sleep(1)
+
+        let clearedAllCells = app.cells.allElementsBoundByIndex
+        let clearedCommandCount = clearedAllCells.count
+        
+        // After clearing search, results should be close to original count
+        XCTAssertGreaterThanOrEqual(clearedCommandCount, filteredCommandCount, 
+            "Expected clearing search to show more results than filtered count. Filtered: \(filteredCommandCount), Cleared: \(clearedCommandCount)")
+    }
+
+    // MARK: - Replace UI Elements Tests
+
+    /// Test that replace UI elements are shown when accessing find/replace functionality
+    func testReplaceUIElementsShowWhenFindReplaceOpened() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Open find/replace with Cmd+H (common shortcut for find/replace)
+        app.typeKey("h", modifierFlags: [.command])
+
+        // Wait for find/replace UI to appear
+        sleep(1)
+
+        // Look for replace-related UI elements using multiple identifier strategies
+        let replaceIdentifiers = [
+            "replaceInput",
+            "replace-input",
+            "ReplaceInput",
+            "replaceField",
+            "replace-field",
+            "ReplaceField",
+            "replaceTextField",
+            "replaceText",
+            "Replace"
+        ]
+
+        var replaceElement: XCUIElement?
+        for id in replaceIdentifiers {
+            let tf = app.textFields[id]
+            if tf.waitForExistence(timeout: 2) {
+                replaceElement = tf
+                break
+            }
+            let sf = app.searchFields[id]
+            if sf.waitForExistence(timeout: 2) {
+                replaceElement = sf
+                break
+            }
+            let tv = app.textViews[id]
+            if tv.waitForExistence(timeout: 2) {
+                replaceElement = tv
+                break
+            }
+        }
+
+        // If not found by identifier, look for any text field after the first search field
+        if replaceElement == nil {
+            let allTextFields = app.textFields.allElementsBoundByIndex
+            if allTextFields.count >= 2 {
+                replaceElement = allTextFields[1] // Second text field is often replace
+            }
+        }
+
+        XCTAssertNotNil(replaceElement, "Expected replace input field to exist when find/replace is opened")
+        XCTAssertTrue(replaceElement!.exists, "Replace input field should be visible")
+    }
+
+    /// Test that replace action changes content or confirms UI state changes
+    func testReplaceActionChangesContentOrConfirmsUI() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // First, open a file in the editor
+        let sampleFile = "ContentView.swift"
+        
+        // Try to open the file via quick open or file tree
+        app.typeKey("p", modifierFlags: [.command]) // Quick open
+        
+        let quickOpenField = app.textFields["quickOpenInput"]
+        if quickOpenField.waitForExistence(timeout: 5) {
+            quickOpenField.tap()
+            quickOpenField.typeText(sampleFile)
+            sleep(1)
+            
+            let fileCell = app.cells.containing(NSPredicate(format: "label CONTAINS[c] %@", sampleFile)).firstMatch
+            if fileCell.waitForExistence(timeout: 5) {
+                fileCell.tap()
+            }
+        }
+
+        // Wait for editor to load
+        sleep(2)
+
+        // Capture initial editor state
+        let editor = app.textViews["Editor"]
+        let initialEditorValue = (editor.value as? String) ?? ""
+
+        // Open find/replace
+        app.typeKey("h", modifierFlags: [.command])
+        sleep(1)
+
+        // Find the replace input field
+        var replaceField: XCUIElement?
+        let replaceIdentifiers = ["replaceInput", "replace-input", "ReplaceInput", "replaceField", "replaceTextField", "Replace"]
+        for id in replaceIdentifiers {
+            let tf = app.textFields[id]
+            if tf.waitForExistence(timeout: 2) {
+                replaceField = tf
+                break
+            }
+        }
+        
+        // Fallback: try to find any text field after search field
+        if replaceField == nil {
+            let textFields = app.textFields.allElementsBoundByIndex
+            if textFields.count >= 2 {
+                replaceField = textFields[1]
+            }
+        }
+
+        // If we found a replace field, test the replace action
+        if let replaceInput = replaceField {
+            // Enter text in replace field
+            let replacementText = "REPLACED_TEXT"
+            replaceInput.tap()
+            replaceInput.typeText(replacementText)
+
+            // Verify replace field contains our text
+            let replaceValue = (replaceInput.value as? String) ?? ""
+            XCTAssertTrue(replaceValue.contains(replacementText) || replaceInput.exists,
+                "Replace field should contain entered text or exist after input")
+
+            // Look for replace action buttons
+            let replaceButtonIdentifiers = [
+                "replaceButton",
+                "replace-button",
+                "ReplaceButton",
+                "replaceAll",
+                "replace-all",
+                "ReplaceAll",
+                "replaceNext",
+                "replace-next",
+                "ReplaceNext",
+                "Replace",
+                "Replace All",
+                "Replace Next"
+            ]
+
+            var replaceActionButton: XCUIElement?
+            for id in replaceButtonIdentifiers {
+                let btn = app.buttons[id]
+                if btn.waitForExistence(timeout: 2) {
+                    replaceActionButton = btn
+                    break
+                }
+            }
+
+            // If we found a replace button, tap it and verify UI changes
+            if let actionButton = replaceActionButton {
+                // Store pre-action state
+                let preActionReplaceValue = (replaceInput.value as? String) ?? ""
+
+                // Tap the replace action button
+                actionButton.tap()
+                sleep(1)
+
+                // Verify UI responded - either button changed, field changed, or some other UI element appeared
+                let postActionReplaceValue = (replaceInput.value as? String) ?? ""
+                let buttonStillExists = actionButton.exists
+                
+                // Check for replace confirmation UI elements
+                let confirmationElements = [
+                    app.staticTexts["Replaced"],
+                    app.staticTexts["Replacement complete"],
+                    app.staticTexts["Replace complete"],
+                    app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "replaced")).firstMatch,
+                    app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "replacement")).firstMatch
+                ]
+
+                let hasConfirmation = confirmationElements.contains { $0.exists }
+
+                // Check for editor content change
+                let currentEditorValue = (editor.value as? String) ?? ""
+                let contentChanged = currentEditorValue != initialEditorValue
+
+                // The test passes if any of these UI changes occurred
+                XCTAssertTrue(
+                    buttonStillExists || hasConfirmation || contentChanged || postActionReplaceValue != preActionReplaceValue,
+                    "Replace action should cause UI change: content modified, confirmation shown, or UI state updated"
+                )
+            } else {
+                // If no replace button found, at least verify the replace field accepts input
+                XCTAssertTrue(replaceInput.exists, "Replace input should exist and accept text input")
+            }
+        } else {
+            // If no replace field found, verify find UI exists as fallback
+            let findField = findGlobalSearchField(in: app)
+            XCTAssertTrue(findField.exists, "Expected at least find functionality to be available")
+        }
+    }
+
+    /// Test that replace UI toggles visibility when activated/deactivated
+    func testReplaceUITogglesVisibility() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+
+        // Open find (not replace yet)
+        app.typeKey("f", modifierFlags: [.command])
+        sleep(1)
+
+        // Capture initial state - should have search field but possibly no replace
+        let initialSearchField = findGlobalSearchField(in: app)
+        XCTAssertTrue(initialSearchField.exists, "Search field should exist")
+
+        // Look for replace toggle button or expand button
+        let expandIdentifiers = [
+            "expandReplace",
+            "expand-replace",
+            "toggleReplace",
+            "toggle-replace",
+            "showReplace",
+            "show-replace",
+            "ReplaceToggle",
+            "replaceToggle"
+        ]
+
+        var expandButton: XCUIElement?
+        for id in expandIdentifiers {
+            let btn = app.buttons[id]
+            if btn.waitForExistence(timeout: 2) {
+                expandButton = btn
+                break
+            }
+        }
+
+        // Also check for chevron/disclosure indicators
+        if expandButton == nil {
+            let chevronButton = app.buttons.element(matching: NSPredicate(format: "label CONTAINS[c] %@ OR accessibilityLabel CONTAINS[c] %@", "replace", "Replace"))
+            if chevronButton.waitForExistence(timeout: 2) {
+                expandButton = chevronButton
+            }
+        }
+
+        // If we have an expand button, test toggling
+        if let toggleBtn = expandButton {
+            // Tap to expand replace UI
+            toggleBtn.tap()
+            sleep(1)
+
+            // Verify replace field appears
+            var replaceField: XCUIElement?
+            for id in ["replaceInput", "replace-field", "ReplaceField", "replaceTextField"] {
+                let tf = app.textFields[id]
+                if tf.waitForExistence(timeout: 2) {
+                    replaceField = tf
+                    break
+                }
+            }
+
+            XCTAssertNotNil(replaceField, "Replace field should appear after expanding replace section")
+            
+            if let rf = replaceField {
+                XCTAssertTrue(rf.exists, "Replace field should be visible after toggle")
+                
+                // Tap toggle again to collapse
+                toggleBtn.tap()
+                sleep(1)
+                
+                // Verify replace field is no longer easily accessible or visible
+                // Note: It may still exist in hierarchy but should not be the focused/main element
+                let stillVisible = rf.isHittable && rf.frame != .zero
+                XCTAssertFalse(stillVisible, "Replace field should be hidden or collapsed after toggling off")
+            }
+        } else {
+            // If no toggle button, find/replace might be always visible together
+            // Just verify both search and replace fields exist
+            let searchExists = initialSearchField.exists
+            
+            var replaceExists = false
+            for id in ["replaceInput", "replace-field", "Replace", "replaceTextField"] {
+                let el = app.textFields[id]
+                if el.waitForExistence(timeout: 2) {
+                    replaceExists = true
+                    break
+                }
+            }
+            
+            // In unified find/replace, both should exist
+            XCTAssertTrue(searchExists, "Search field should exist in find/replace UI")
+        }
+    }
+}

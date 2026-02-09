@@ -1,0 +1,788 @@
+//
+//  GitManager.swift
+//  VSCodeiPadOS
+//
+//  Real Git Manager - uses native .git parsing for local repos
+//  and SSH for remote operations
+//
+
+import SwiftUI
+import Combine
+
+// MARK: - Git Errors
+
+enum GitManagerError: Error, LocalizedError {
+    case noRepository
+    case gitExecutableNotFound
+    case commandFailed(args: [String], exitCode: Int32, message: String)
+    case notAvailableOnIOS
+    case sshNotConnected
+    case invalidRepository
+    
+    var errorDescription: String? {
+        switch self {
+        case .noRepository:
+            return "No git repository configured"
+        case .gitExecutableNotFound:
+            return "Git executable not found"
+        case let .commandFailed(args, exitCode, message):
+            return "git \(args.joined(separator: " ")) failed (\(exitCode)): \(message)"
+        case .notAvailableOnIOS:
+            return "Git operations require a server backend on iOS"
+        case .sshNotConnected:
+            return "SSH connection required for remote operations"
+        case .invalidRepository:
+            return "Invalid git repository"
+        }
+    }
+}
+
+enum GitChangeKind: String, Hashable, CaseIterable {
+    case modified
+    case added
+    case deleted
+    case renamed
+    case copied
+    case untracked
+    case unmerged
+    case typeChanged
+    case unknown
+    
+    var icon: String {
+        switch self {
+        case .modified: return "pencil"
+        case .added: return "plus"
+        case .deleted: return "minus"
+        case .renamed: return "arrow.right"
+        case .copied: return "doc.on.doc"
+        case .untracked: return "questionmark"
+        case .unmerged: return "exclamationmark.triangle"
+        case .typeChanged: return "arrow.triangle.2.circlepath"
+        case .unknown: return "questionmark.circle"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .added: return .green
+        case .modified: return .orange
+        case .deleted: return .red
+        case .renamed: return .blue
+        case .untracked: return .gray
+        case .copied: return .cyan
+        case .unmerged: return .red
+        case .typeChanged: return .purple
+        case .unknown: return .secondary
+        }
+    }
+}
+
+struct GitStatusEntry: Identifiable, Hashable {
+    let id = UUID()
+    let path: String
+    let kind: GitChangeKind
+    let staged: Bool
+    
+    init(path: String, kind: GitChangeKind, staged: Bool = false) {
+        self.path = path
+        self.kind = kind
+        self.staged = staged
+    }
+}
+
+struct GitBranch: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let isCurrent: Bool
+    let isRemote: Bool
+    let upstream: String?
+    
+    init(name: String, isCurrent: Bool, isRemote: Bool, upstream: String? = nil) {
+        self.name = name
+        self.isCurrent = isCurrent
+        self.isRemote = isRemote
+        self.upstream = upstream
+    }
+}
+
+struct GitCommit: Identifiable, Hashable {
+    let id: String // SHA
+    let message: String
+    let author: String
+    let date: Date
+    
+    var shortSHA: String {
+        String(id.prefix(7))
+    }
+}
+
+struct GitFileChange: Identifiable, Hashable {
+    let id = UUID()
+    let path: String
+    let kind: GitChangeKind
+    let staged: Bool
+    
+    init(path: String, kind: GitChangeKind, staged: Bool = false) {
+        self.path = path
+        self.kind = kind
+        self.staged = staged
+    }
+}
+
+struct GitStashEntry: Identifiable, Hashable {
+    let id = UUID()
+    let index: Int
+    let message: String
+    let date: Date
+}
+
+// MARK: - Repository Source
+
+enum GitRepositorySource {
+    case local(URL)           // Local .git directory
+    case ssh(path: String)    // Remote via SSH
+    
+    var displayName: String {
+        switch self {
+        case .local(let url):
+            return url.lastPathComponent
+        case .ssh(let path):
+            return path.components(separatedBy: "/").last ?? path
+        }
+    }
+}
+
+// MARK: - Git Manager
+
+/// Real Git manager - parses .git directory natively for local repos
+/// Uses SSH commands for remote operations (push/pull/clone)
+class GitManager: ObservableObject {
+    static let shared = GitManager()
+    
+    // MARK: - Published State
+    
+    @Published var isRepository: Bool = false
+    @Published var currentBranch: String = "main"
+    @Published var branches: [GitBranch] = []
+    @Published var stagedChanges: [GitStatusEntry] = []
+    @Published var unstagedChanges: [GitStatusEntry] = []
+    @Published var status: [GitStatusEntry] = []  // Combined for backward compat
+    @Published var recentCommits: [GitCommit] = []
+    @Published var hasUncommittedChanges: Bool = false
+    @Published var isLoading: Bool = false
+    @Published var error: String? = nil
+    @Published var aheadCount: Int = 0
+    @Published var behindCount: Int = 0
+    @Published var stashes: [GitStashEntry] = []
+    
+    // MARK: - Private State
+    
+    private var source: GitRepositorySource?
+    private var nativeReader: NativeGitReader?
+    private var sshClient: SSHGitClient?
+    private var sshPath: String?
+    
+    private init() {}
+    
+    // MARK: - Repository Setup
+    
+    /// Set working directory for a local repository
+    func setWorkingDirectory(_ url: URL?) {
+        guard let url = url else {
+            clearRepository()
+            return
+        }
+        
+        // Try to initialize native git reader
+        if let reader = NativeGitReader(repositoryURL: url) {
+            self.source = .local(url)
+            self.nativeReader = reader
+            self.isRepository = true
+            
+            // Load initial data
+            Task {
+                await refresh()
+            }
+        } else {
+            // Not a git repository
+            clearRepository()
+        }
+    }
+    
+    /// Set up SSH connection for remote git operations
+    func setSSHConnection(sshManager: SSHManager, remotePath: String) {
+        self.sshClient = SSHGitClient(sshManager: sshManager)
+        self.sshPath = remotePath
+        self.source = .ssh(path: remotePath)
+        self.isRepository = true
+        
+        Task {
+            await refresh()
+        }
+    }
+    
+    private func clearRepository() {
+        source = nil
+        nativeReader = nil
+        isRepository = false
+        currentBranch = ""
+        branches = []
+        stagedChanges = []
+        unstagedChanges = []
+        status = []
+        recentCommits = []
+        hasUncommittedChanges = false
+        aheadCount = 0
+        behindCount = 0
+        stashes = []
+    }
+    
+    // MARK: - Refresh
+    
+    func refresh() async {
+        await MainActor.run { isLoading = true }
+        
+        do {
+            switch source {
+            case .local:
+                try await refreshLocal()
+            case .ssh(let path):
+                try await refreshSSH(path: path)
+            case .none:
+                break
+            }
+            
+            await MainActor.run {
+                self.error = nil
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = error.localizedDescription
+                self.isLoading = false
+            }
+        }
+    }
+    
+    private func refreshLocal() async throws {
+        guard let reader = nativeReader else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Read current branch
+        let branch = reader.currentBranch() ?? "HEAD"
+        
+        // Read all branches
+        let localBranches = reader.localBranches()
+        let remoteBranches = reader.remoteBranches()
+        
+        var allBranches: [GitBranch] = []
+        for name in localBranches {
+            allBranches.append(GitBranch(
+                name: name,
+                isCurrent: name == branch,
+                isRemote: false
+            ))
+        }
+        for (remote, branchName) in remoteBranches {
+            allBranches.append(GitBranch(
+                name: "\(remote)/\(branchName)",
+                isCurrent: false,
+                isRemote: true
+            ))
+        }
+        
+        // Read status
+        let fileStatuses = reader.status()
+        var staged: [GitStatusEntry] = []
+        var unstaged: [GitStatusEntry] = []
+        
+        for fileStatus in fileStatuses {
+            if let stagedType = fileStatus.staged {
+                staged.append(GitStatusEntry(
+                    path: fileStatus.path,
+                    kind: mapStatusType(stagedType),
+                    staged: true
+                ))
+            }
+            if let workingType = fileStatus.working {
+                unstaged.append(GitStatusEntry(
+                    path: fileStatus.path,
+                    kind: mapStatusType(workingType),
+                    staged: false
+                ))
+            }
+        }
+        
+        // Read recent commits
+        let commits = reader.recentCommits(count: 20).map { info in
+            GitCommit(
+                id: info.sha,
+                message: info.message,
+                author: info.author,
+                date: info.authorDate
+            )
+        }
+        
+        // Update UI on main thread
+        await MainActor.run {
+            self.currentBranch = branch
+            self.branches = allBranches
+            self.stagedChanges = staged
+            self.unstagedChanges = unstaged
+            self.status = staged + unstaged
+            self.recentCommits = commits
+            self.hasUncommittedChanges = !staged.isEmpty || !unstaged.isEmpty
+        }
+    }
+    
+    private func refreshSSH(path: String) async throws {
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        // Get status via SSH
+        let sshStatus = try await client.status(path: path)
+        
+        // Get branches
+        let sshBranches = try await client.branches(path: path)
+        
+        // Get commits
+        let sshCommits = try await client.log(path: path, count: 20)
+        
+        // Get stashes
+        let sshStashes = try await client.stashList(in: path)
+        
+        // Convert to our types
+        let branches = sshBranches.map { b in
+            GitBranch(
+                name: b.name,
+                isCurrent: b.isCurrent,
+                isRemote: b.isRemote,
+                upstream: b.upstream
+            )
+        }
+        
+        var staged: [GitStatusEntry] = []
+        var unstaged: [GitStatusEntry] = []
+        
+        for change in sshStatus.staged {
+            staged.append(GitStatusEntry(
+                path: change.path,
+                kind: mapSSHStatus(change.status),
+                staged: true
+            ))
+        }
+        
+        for change in sshStatus.unstaged {
+            unstaged.append(GitStatusEntry(
+                path: change.path,
+                kind: mapSSHStatus(change.status),
+                staged: false
+            ))
+        }
+        
+        for path in sshStatus.untracked {
+            unstaged.append(GitStatusEntry(
+                path: path,
+                kind: .untracked,
+                staged: false
+            ))
+        }
+        
+        let commits = sshCommits.map { c in
+            GitCommit(
+                id: c.sha,
+                message: c.message,
+                author: c.author,
+                date: c.date
+            )
+        }
+        
+        let stashes = sshStashes.map { s in
+            GitStashEntry(
+                index: s.index,
+                message: s.message,
+                date: s.date
+            )
+        }
+        
+        await MainActor.run {
+            self.currentBranch = sshStatus.branch
+            self.branches = branches
+            self.stagedChanges = staged
+            self.unstagedChanges = unstaged
+            self.status = staged + unstaged
+            self.recentCommits = commits
+            self.hasUncommittedChanges = !staged.isEmpty || !unstaged.isEmpty || !sshStatus.untracked.isEmpty
+            self.aheadCount = sshStatus.ahead
+            self.behindCount = sshStatus.behind
+            self.stashes = stashes
+        }
+    }
+    
+    // MARK: - Staging Operations
+    
+    func stage(file: String) async throws {
+        switch source {
+        case .local(let url):
+            // For local repos, we need to modify the index
+            // This is complex - for now, track in memory and use SSH for actual staging
+            print("[GitManager] Local staging not yet implemented for: \(file)")
+            // Move from unstaged to staged in memory
+            await MainActor.run {
+                if let idx = unstagedChanges.firstIndex(where: { $0.path == file }) {
+                    let entry = unstagedChanges[idx]
+                    unstagedChanges.remove(at: idx)
+                    stagedChanges.append(GitStatusEntry(path: entry.path, kind: entry.kind, staged: true))
+                    status = stagedChanges + unstagedChanges
+                }
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.stage(file: file, in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    func stageAll() async throws {
+        switch source {
+        case .local:
+            // Move all unstaged to staged
+            await MainActor.run {
+                for entry in unstagedChanges {
+                    stagedChanges.append(GitStatusEntry(path: entry.path, kind: entry.kind, staged: true))
+                }
+                unstagedChanges.removeAll()
+                status = stagedChanges + unstagedChanges
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.stageAll(in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    func unstage(file: String) async throws {
+        switch source {
+        case .local:
+            await MainActor.run {
+                if let idx = stagedChanges.firstIndex(where: { $0.path == file }) {
+                    let entry = stagedChanges[idx]
+                    stagedChanges.remove(at: idx)
+                    unstagedChanges.append(GitStatusEntry(path: entry.path, kind: entry.kind, staged: false))
+                    status = stagedChanges + unstagedChanges
+                }
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.unstage(file: file, in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    // MARK: - Commit
+    
+    func commit(message: String) async throws {
+        guard !message.isEmpty else { return }
+        
+        switch source {
+        case .local:
+            // Creating commits requires writing objects - complex for native
+            // For now, show what would be committed
+            print("[GitManager] Local commit not yet implemented")
+            print("[GitManager] Would commit \(stagedChanges.count) files with message: \(message)")
+            
+            await MainActor.run {
+                let newCommit = GitCommit(
+                    id: UUID().uuidString.prefix(40).lowercased(),
+                    message: message,
+                    author: "Local User",
+                    date: Date()
+                )
+                recentCommits.insert(newCommit, at: 0)
+                stagedChanges.removeAll()
+                status = stagedChanges + unstagedChanges
+                hasUncommittedChanges = !unstagedChanges.isEmpty
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            let sha = try await client.commit(message: message, in: path)
+            print("[GitManager] Committed: \(sha)")
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    // MARK: - Branch Operations
+    
+    func checkout(branch: String) async throws {
+        switch source {
+        case .local:
+            // Checkout requires updating HEAD and working directory
+            // Track in memory for now
+            print("[GitManager] Local checkout not yet implemented for: \(branch)")
+            await MainActor.run {
+                currentBranch = branch
+                for i in branches.indices {
+                    branches[i] = GitBranch(
+                        name: branches[i].name,
+                        isCurrent: branches[i].name == branch,
+                        isRemote: branches[i].isRemote,
+                        upstream: branches[i].upstream
+                    )
+                }
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.checkout(branch: branch, in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    func createBranch(name: String, checkout: Bool = true) async throws {
+        switch source {
+        case .local:
+            print("[GitManager] Local branch creation not yet implemented for: \(name)")
+            await MainActor.run {
+                let newBranch = GitBranch(name: name, isCurrent: checkout, isRemote: false)
+                branches.append(newBranch)
+                if checkout {
+                    currentBranch = name
+                }
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.createBranch(name: name, checkout: checkout, in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    func deleteBranch(name: String, force: Bool = false) async throws {
+        guard name != currentBranch else {
+            throw GitManagerError.commandFailed(args: ["branch", "-d", name], exitCode: 1, message: "Cannot delete current branch")
+        }
+        
+        switch source {
+        case .local:
+            await MainActor.run {
+                branches.removeAll { $0.name == name }
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.deleteBranch(name: name, force: force, in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    // MARK: - Remote Operations (SSH only)
+    
+    func pull() async throws {
+        guard case .ssh(let path) = source else {
+            // Local repos need SSH setup for pull
+            print("[GitManager] Pull requires SSH connection")
+            await MainActor.run { isLoading = true }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await MainActor.run { isLoading = false }
+            return
+        }
+        
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        await MainActor.run { isLoading = true }
+        let output = try await client.pull(in: path)
+        print("[GitManager] Pull output: \(output)")
+        await refresh()
+    }
+    
+    func push() async throws {
+        guard case .ssh(let path) = source else {
+            print("[GitManager] Push requires SSH connection")
+            await MainActor.run { isLoading = true }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            await MainActor.run { isLoading = false }
+            return
+        }
+        
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        await MainActor.run { isLoading = true }
+        let output = try await client.push(in: path)
+        print("[GitManager] Push output: \(output)")
+        await refresh()
+    }
+    
+    func fetch() async throws {
+        guard case .ssh(let path) = source else {
+            print("[GitManager] Fetch requires SSH connection")
+            return
+        }
+        
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        try await client.fetch(in: path)
+        await refresh()
+    }
+    
+    // MARK: - Discard Changes
+    
+    func discardChanges(file: String) async throws {
+        switch source {
+        case .local:
+            await MainActor.run {
+                unstagedChanges.removeAll { $0.path == file }
+                status = stagedChanges + unstagedChanges
+                hasUncommittedChanges = !stagedChanges.isEmpty || !unstagedChanges.isEmpty
+            }
+            
+        case .ssh(let path):
+            guard let client = sshClient else {
+                throw GitManagerError.sshNotConnected
+            }
+            try await client.discardChanges(file: file, in: path)
+            await refresh()
+            
+        case .none:
+            throw GitManagerError.noRepository
+        }
+    }
+    
+    // Legacy compatibility
+    func discard(file: String) async throws {
+        try await discardChanges(file: file)
+    }
+    
+    // MARK: - Stash Operations
+    
+    func stashSave(message: String? = nil) async throws {
+        guard case .ssh(let path) = source else {
+            print("[GitManager] Stash requires SSH connection")
+            return
+        }
+        
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        try await client.stash(message: message, in: path)
+        await refresh()
+    }
+    
+    func stashApply(index: Int) async throws {
+        guard case .ssh(let path) = source else { return }
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        try await client.stashApply(index: index, in: path)
+        await refresh()
+    }
+    
+    func stashPop(index: Int) async throws {
+        guard case .ssh(let path) = source else { return }
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        try await client.stashPop(index: index, in: path)
+        await refresh()
+    }
+    
+    func stashDrop(index: Int) async throws {
+        guard case .ssh(let path) = source else { return }
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        try await client.stashDrop(index: index, in: path)
+        await refresh()
+    }
+    
+    // MARK: - Diff
+    
+    func diff(file: String? = nil, staged: Bool = false) async throws -> String {
+        guard case .ssh(let path) = source else {
+            return "Diff requires SSH connection"
+        }
+        
+        guard let client = sshClient else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        return try await client.diff(file: file, staged: staged, in: path)
+    }
+    
+    // MARK: - Helpers
+    
+    private func mapStatusType(_ type: GitStatusType) -> GitChangeKind {
+        switch type {
+        case .modified: return .modified
+        case .added: return .added
+        case .deleted: return .deleted
+        case .renamed: return .renamed
+        case .copied: return .copied
+        case .untracked: return .untracked
+        case .ignored: return .unknown
+        }
+    }
+    
+    private func mapSSHStatus(_ status: SSHGitChangeStatus) -> GitChangeKind {
+        switch status {
+        case .modified: return .modified
+        case .added: return .added
+        case .deleted: return .deleted
+        case .renamed: return .renamed
+        case .copied: return .copied
+        case .typeChanged: return .typeChanged
+        case .unmerged: return .unmerged
+        case .unknown: return .unknown
+        }
+    }
+}

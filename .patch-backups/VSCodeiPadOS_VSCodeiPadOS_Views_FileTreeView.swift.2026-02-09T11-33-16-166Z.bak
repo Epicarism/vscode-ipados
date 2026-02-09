@@ -1,0 +1,121 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+// MARK: - File Tree View
+
+struct FileTreeView: View {
+    let root: FileTreeNode
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @ObservedObject var editorCore: EditorCore
+    
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                FileTreeRowView(
+                    node: root,
+                    level: 0,
+                    fileNavigator: fileNavigator,
+                    editorCore: editorCore
+                )
+            }
+        }
+    }
+}
+
+// MARK: - File Tree Row View
+
+struct FileTreeRowView: View {
+    let node: FileTreeNode
+    let level: Int
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @ObservedObject var editorCore: EditorCore
+    
+    @State private var isHovered = false
+    
+    private var isExpanded: Bool {
+        fileNavigator.expandedPaths.contains(node.url.path)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Row content
+            HStack(spacing: 4) {
+                // Indentation
+                if level > 0 {
+                    Spacer()
+                        .frame(width: CGFloat(level) * 16)
+                }
+                
+                // Expand/collapse button for directories
+                if node.isDirectory {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            fileNavigator.toggleExpanded(path: node.url.path)
+                        }
+                    } label: {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .frame(width: 12)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Spacer().frame(width: 12)
+                }
+                
+                // File/folder icon
+                Image(systemName: node.isDirectory ? (isExpanded ? "folder.fill" : "folder") : "doc")
+                    .foregroundColor(node.isDirectory ? .blue : .gray)
+                    .frame(width: 16)
+                
+                // Name
+                Text(node.name)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+            }
+            .padding(.vertical, 2)
+            .padding(.horizontal, 4)
+            .background(isHovered ? Color.gray.opacity(0.2) : Color.clear)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if node.isDirectory {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        fileNavigator.toggleExpanded(path: node.url.path)
+                    }
+                } else {
+                    editorCore.openFile(from: node.url)
+                }
+            }
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            
+            // Children
+            if node.isDirectory && isExpanded, let children = node.children {
+                ForEach(children.sorted(by: { lhs, rhs in
+                    // Directories first, then alphabetical
+                    if lhs.isDirectory != rhs.isDirectory {
+                        return lhs.isDirectory
+                    }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                })) { child in
+                    FileTreeRowView(
+                        node: child,
+                        level: level + 1,
+                        fileNavigator: fileNavigator,
+                        editorCore: editorCore
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - UTType Extension
+
+extension UTType {
+    static let vscodeFilePathPayload = UTType(exportedAs: "com.vscode.ipados.filepath")
+}

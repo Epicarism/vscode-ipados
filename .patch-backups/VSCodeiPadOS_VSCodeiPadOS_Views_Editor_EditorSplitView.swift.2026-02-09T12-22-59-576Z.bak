@@ -1,0 +1,33 @@
+import SwiftUI
+
+struct EditorSplitView: View {
+    @ObservedObject var editorCore: EditorCore
+    let tab: Tab
+    let theme: Theme
+    @State private var showPreview = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
+                .frame(maxWidth: showPreview ? UIScreen.main.bounds.width * 0.5 : .infinity)
+            
+            if showPreview {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 1)
+                
+                MarkdownPreviewWrapper(editorCore: editorCore, tab: tab)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .toolbar {
+            if tab.fileName.lowercased().hasSuffix(".md") {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showPreview.toggle() }) {
+                        Image(systemName: showPreview ? "eye.slash" : "eye")
+                    }
+                }
+            }
+        }
+    }
+}

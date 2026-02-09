@@ -1,0 +1,257 @@
+import SwiftUI
+
+/// Run and Debug sidebar.
+struct DebugView: View {
+    @ObservedObject private var debugManager = DebugManager.shared
+
+    @State private var newWatchExpression: String = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            debugToolbar
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    sessionStatus
+
+                    breakpointsSection
+                    watchSection
+                    variablesSection
+                    callStackSection
+                }
+                .padding(12)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.secondarySystemBackground))
+    }
+
+    // MARK: - Toolbar
+
+    private var debugToolbar: some View {
+        HStack(spacing: 10) {
+            Button(action: { debugManager.play() }) {
+                Image(systemName: "play.fill")
+            }
+            .buttonStyle(.plain)
+            .disabled(!debugManager.state.canPlay)
+            .help("Play / Continue")
+
+            Button(action: { debugManager.stepOver() }) {
+                Image(systemName: "arrow.right")
+            }
+            .buttonStyle(.plain)
+            .disabled(!debugManager.state.canStep)
+            .help("Step Over")
+
+            Button(action: { debugManager.stepInto() }) {
+                Image(systemName: "arrow.down")
+            }
+            .buttonStyle(.plain)
+            .disabled(!debugManager.state.canStep)
+            .help("Step Into")
+
+            Button(action: { debugManager.stop() }) {
+                Image(systemName: "stop.fill")
+            }
+            .buttonStyle(.plain)
+            .disabled(!debugManager.state.canStop)
+            .help("Stop")
+
+            Spacer()
+
+            Text(debugManager.state.displayName)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(UIColor.tertiarySystemFill))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundColor(.primary)
+    }
+
+    // MARK: - Panels
+
+    private var sessionStatus: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("RUN AND DEBUG")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+            Text("UI-only debug session. Real debugging implementation will be added later.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var breakpointsSection: some View {
+        GroupBox {
+            let breakpoints = debugManager.allBreakpointsSorted()
+
+            if breakpoints.isEmpty {
+                Text("No breakpoints")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(breakpoints.enumerated()), id: \.offset) { _, bp in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+
+                            Text(bp.file)
+                                .font(.system(size: 12, design: .monospaced))
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Text("\(bp.line + 1)")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text("Breakpoints")
+                .font(.system(size: 12, weight: .semibold))
+        }
+    }
+
+    private var watchSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    TextField("Add watch expression", text: $newWatchExpression)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+
+                    Button("Add") {
+                        let expr = newWatchExpression.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !expr.isEmpty else { return }
+                        debugManager.watchExpressions.append(.init(expression: expr, value: "—"))
+                        newWatchExpression = ""
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(newWatchExpression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                if debugManager.watchExpressions.isEmpty {
+                    Text("No watch expressions")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(debugManager.watchExpressions) { watch in
+                            HStack(spacing: 8) {
+                                Text(watch.expression)
+                                    .font(.system(size: 12, design: .monospaced))
+
+                                Spacer()
+
+                                Text(watch.value)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    removeWatch(watch)
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text("Watch")
+                .font(.system(size: 12, weight: .semibold))
+        }
+    }
+
+    private func removeWatch(_ watch: DebugManager.WatchExpression) {
+        debugManager.watchExpressions.removeAll { $0.id == watch.id }
+    }
+
+    private var variablesSection: some View {
+        GroupBox {
+            if debugManager.variables.isEmpty {
+                Text("No variables")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                OutlineGroup(debugManager.variables, children: \.children) { variable in
+                    HStack(spacing: 8) {
+                        Text(variable.name)
+                            .font(.system(size: 12, design: .monospaced))
+
+                        Spacer()
+
+                        Text(variable.value)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        } label: {
+            Text("Variables")
+                .font(.system(size: 12, weight: .semibold))
+        }
+    }
+
+    private var callStackSection: some View {
+        GroupBox {
+            if debugManager.callStack.isEmpty {
+                Text("No call stack")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(debugManager.callStack) { frame in
+                        Button {
+                            debugManager.selectedFrameId = frame.id
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(frame.function)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.primary)
+
+                                Spacer()
+
+                                Text("\(frame.file):\(frame.line + 1)")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(debugManager.selectedFrameId == frame.id ? Color.accentColor.opacity(0.15) : Color.clear)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        } label: {
+            Text("Call Stack")
+                .font(.system(size: 12, weight: .semibold))
+        }
+    }
+}
+
+#Preview {
+    DebugView()
+}

@@ -1,0 +1,755 @@
+import Foundation
+
+/// Errors that can occur during remote execution
+enum RemoteRunnerError: Error {
+    case connectionFailed(String)
+    case fileCreationFailed(String)
+    case executionFailed(String)
+    case languageNotSupported(String)
+    case invalidRemotePath
+    case noOutput
+    case envFileNotFound(String)
+    case envFileUnreadable(String)
+}
+
+/// Result of a remote execution
+struct RemoteExecutionResult {
+    let output: String
+    let error: String?
+    let exitCode: Int
+    let executionTime: TimeInterval
+}
+
+/// Configuration for environment variables and run settings
+struct RunConfiguration {
+    var environmentVariables: [String: String] = [:]
+    var inheritSystemEnvironment: Bool = true
+    var envFilePath: String?
+    var pathHandling: PathHandling = .prepend
+    var workingDirectory: String?
+    
+    enum PathHandling: String, Codable {
+        case prepend  // Prepend to existing PATH
+        case replace  // Replace PATH entirely
+        case inherit  // Use system PATH only
+    }
+}
+
+/// Service for running code on remote servers
+class RemoteRunner {
+    
+    // MARK: - Environment Variables Configuration
+    
+    /// Current run configuration with environment variables
+    var runConfiguration: RunConfiguration = RunConfiguration()
+    
+    // MARK: - Language Configuration
+    
+    /// Configuration for supported languages
+    private struct LanguageConfig {
+        let interpreter: String
+        let fileExtension: String
+        let shebang: String?
+    }
+    
+    /// Supported language configurations
+    private let languageConfigs: [String: LanguageConfig] = [
+        "python": LanguageConfig(
+            interpreter: "python3",
+            fileExtension: "py",
+            shebang: "#!/usr/bin/env python3"
+        ),
+        "javascript": LanguageConfig(
+            interpreter: "node",
+            fileExtension: "js",
+            shebang: "#!/usr/bin/env node"
+        ),
+        "typescript": LanguageConfig(
+            interpreter: "ts-node",
+            fileExtension: "ts",
+            shebang: nil
+        ),
+        "swift": LanguageConfig(
+            interpreter: "swift",
+            fileExtension: "swift",
+            shebang: "#!/usr/bin/env swift"
+        ),
+        "ruby": LanguageConfig(
+            interpreter: "ruby",
+            fileExtension: "rb",
+            shebang: "#!/usr/bin/env ruby"
+        ),
+        "bash": LanguageConfig(
+            interpreter: "bash",
+            fileExtension: "sh",
+            shebang: "#!/bin/bash"
+        )
+    ]
+    
+    // MARK: - SSH Connection
+    
+    private var sshSession: SSHSession?
+    private let tempDirectory: String
+    
+    init(tempDirectory: String = "/tmp/vscode-selection") {
+        self.tempDirectory = tempDirectory
+    }
+    
+    /// Establishes SSH connection to remote server
+    func connect(host: String, port: Int = 22, username: String, password: String?) async throws {
+        // SSH connection implementation would go here
+        // This is a placeholder for the actual SSH implementation
+        throw RemoteRunnerError.connectionFailed("SSH connection not yet implemented")
+    }
+    
+    /// Establishes SSH connection using key-based authentication
+    func connect(host: String, port: Int = 22, username: String, privateKey: String) async throws {
+        // SSH key-based connection implementation would go here
+        throw RemoteRunnerError.connectionFailed("SSH key-based connection not yet implemented")
+    }
+    
+    // MARK: - Run Selection
+    
+    /// Runs a selected code snippet on the remote server
+    /// - Parameters:
+    ///   - code: The selected code to execute
+    ///   - language: The programming language of the code (python, javascript, typescript, swift, ruby, bash)
+    ///   - remotePath: Optional working directory on the remote server
+    /// - Returns: The execution result containing output, errors, and exit code
+    /// - Throws: RemoteRunnerError if the language is not supported or execution fails
+    func runSelection(_ code: String, language: String, remotePath: String?) async throws -> RemoteExecutionResult {
+        // Validate language is supported
+        guard let config = languageConfigs[language.lowercased()] else {
+            throw RemoteRunnerError.languageNotSupported("Language '\(language)' is not supported. Supported languages: \(languageConfigs.keys.joined(separator: ", "))")
+        }
+        
+        // Generate unique temporary filename
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let randomSuffix = String(format: "%04x", arc4random_uniform(65536))
+        let tempFilename = "vscode_selection_\(timestamp)_\(randomSuffix).\(config.fileExtension)"
+        
+        // Determine the working directory
+        let workingDir = remotePath ?? tempDirectory
+        let remoteTempPath = "\(workingDir)/\(tempFilename)"
+        
+        // Ensure temp directory exists on remote
+        try await ensureRemoteDirectory(workingDir)
+        
+        // Prepare code with appropriate shebang if needed
+        let preparedCode = prepareCodeForExecution(code, config: config)
+        
+        // Create temporary file on remote server
+        try await createRemoteFile(at: remoteTempPath, content: preparedCode)
+        
+        // Execute the code
+        let startTime = Date()
+        let result = try await executeRemoteCommand("\(config.interpreter) \(remoteTempPath)", workingDirectory: workingDir)
+        let executionTime = Date().timeIntervalSince(startTime)
+        
+        // Clean up temporary file
+        try? await deleteRemoteFile(at: remoteTempPath)
+        
+        return RemoteExecutionResult(
+            output: result.output,
+            error: result.error,
+            exitCode: result.exitCode,
+            executionTime: executionTime
+        )
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Prepares code by adding shebang if appropriate
+    private func prepareCodeForExecution(_ code: String, config: LanguageConfig) -> String {
+        var preparedCode = code
+        
+        // Add shebang for script-based languages if not already present
+        if let shebang = config.shebang, !code.hasPrefix("#!/") {
+            preparedCode = "\(shebang)\n\(code)"
+        }
+        
+        return preparedCode
+    }
+    
+    /// Ensures a directory exists on the remote server
+    private func ensureRemoteDirectory(_ path: String) async throws {
+        let command = "mkdir -p \(path)"
+        let result = try await executeRemoteCommand(command, workingDirectory: nil)
+        
+        if result.exitCode != 0 {
+            throw RemoteRunnerError.fileCreationFailed("Failed to create remote directory '\(path)': \(result.error ?? "Unknown error")")
+        }
+    }
+    
+    /// Creates a file on the remote server with the given content
+    private func createRemoteFile(at path: String, content: String) async throws {
+        // Escape special characters for shell
+        let escapedContent = content
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "`", with: "\\`")
+            .replacingOccurrences(of: "$", with: "\\$")
+        
+        // Use here-document to create file
+        let command = """
+        cat > "\(path)" << 'EOF'
+        \(content)
+        EOF
+        """
+        
+        let result = try await executeRemoteCommand(command, workingDirectory: nil)
+        
+        if result.exitCode != 0 {
+            throw RemoteRunnerError.fileCreationFailed("Failed to create remote file '\(path)': \(result.error ?? "Unknown error")")
+        }
+        
+        // Make executable for script files
+        if path.hasSuffix(".sh") || path.hasSuffix(".swift") {
+            _ = try? await executeRemoteCommand("chmod +x \"\(path)\"", workingDirectory: nil)
+        }
+    }
+    
+    /// Deletes a file on the remote server
+    private func deleteRemoteFile(at path: String) async throws {
+        let command = "rm -f \"\(path)\""
+        _ = try await executeRemoteCommand(command, workingDirectory: nil)
+    }
+    
+    // MARK: - Environment Variable Management
+    
+    /// Loads environment variables from a .env file
+    func loadEnvFile(from path: String) throws -> [String: String] {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: path) else {
+            throw RemoteRunnerError.envFileNotFound(path)
+        }
+        
+        guard let content = fileManager.contents(atPath: path),
+              let contentString = String(data: content, encoding: .utf8) else {
+            throw RemoteRunnerError.envFileUnreadable(path)
+        }
+        
+        var envVars: [String: String] = [:]
+        let lines = contentString.components(separatedBy: .newlines)
+        
+        for line in lines {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            
+            // Skip empty lines and comments
+            guard !trimmedLine.isEmpty, !trimmedLine.hasPrefix("#") else {
+                continue
+            }
+            
+            // Parse KEY=VALUE format
+            if let equalsIndex = trimmedLine.firstIndex(of: "=") {
+                let key = String(trimmedLine[..<equalsIndex]).trimmingCharacters(in: .whitespaces)
+                let value = String(trimmedLine[trimmedLine.index(after: equalsIndex)...]).trimmingCharacters(in: .whitespaces)
+                
+                // Remove surrounding quotes if present
+                var cleanValue = value
+                if (value.hasPrefix("'") && value.hasSuffix("'")) ||
+                   (value.hasPrefix("\"") && value.hasSuffix("\"")) {
+                    cleanValue = String(value.dropFirst().dropLast())
+                }
+                
+                envVars[key] = cleanValue
+            }
+        }
+        
+        return envVars
+    }
+    
+    /// Expands variable references in environment variables (e.g., $VAR or ${VAR})
+    func expandEnvironmentVariables(
+        variables: [String: String],
+        using baseEnvironment: [String: String]? = nil
+    ) -> [String: String] {
+        let baseEnv = baseEnvironment ?? variables
+        var expanded: [String: String] = [:]
+        
+        for (key, value) in variables {
+            expanded[key] = expandVariables(in: value, using: baseEnv)
+        }
+        
+        return expanded
+    }
+    
+    private func expandVariables(in value: String, using environment: [String: String]) -> String {
+        var result = value
+        
+        // Handle ${VAR} syntax
+        let bracePattern = #"\\$\\{([^}]+)\\}"#
+        if let braceRegex = try? NSRegularExpression(pattern: bracePattern, options: []) {
+            let matches = braceRegex.matches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count))
+            
+            // Process matches in reverse to maintain indices
+            for match in matches.reversed() {
+                if let varRange = Range(match.range(at: 1), in: result) {
+                    let varName = String(result[varRange])
+                    let replacement = environment[varName] ?? ""
+                    if let fullRange = Range(match.range, in: result) {
+                        result.replaceSubrange(fullRange, with: replacement)
+                    }
+                }
+            }
+        }
+        
+        // Handle $VAR syntax
+        let simplePattern = #"\\$([A-Za-z_][A-Za-z0-9_]*)"#
+        if let simpleRegex = try? NSRegularExpression(pattern: simplePattern, options: []) {
+            let matches = simpleRegex.matches(in: result, options: [], range: NSRange(location: 0, length: result.utf16.count))
+            
+            for match in matches.reversed() {
+                if let varRange = Range(match.range(at: 1), in: result) {
+                    let varName = String(result[varRange])
+                    let replacement = environment[varName] ?? ""
+                    if let fullRange = Range(match.range, in: result) {
+                        result.replaceSubrange(fullRange, with: replacement)
+                    }
+                }
+            }
+        }
+        
+        return result
+    }
+    
+    /// Builds the complete environment for remote execution
+    func buildEnvironment() -> [String: String] {
+        let config = runConfiguration
+        var finalEnvironment: [String: String] = [:]
+        
+        // Start with system environment if inheriting
+        if config.inheritSystemEnvironment {
+            let systemEnv = ProcessInfo.processInfo.environment
+            finalEnvironment.merge(systemEnv) { _, new in new }
+        }
+        
+        // Load from .env file if specified
+        if let envFilePath = config.envFilePath {
+            do {
+                let fileVars = try loadEnvFile(from: envFilePath)
+                finalEnvironment.merge(fileVars) { _, new in new }
+            } catch {
+                print("Warning: Could not load .env file: \\(error)")
+            }
+        }
+        
+        // Apply custom environment variables with expansion
+        var customVars = config.environmentVariables
+        
+        // First pass: expand variables against base environment
+        customVars = expandEnvironmentVariables(variables: customVars, using: finalEnvironment)
+        
+        // Handle PATH specially
+        if let customPath = customVars["PATH"] {
+            switch config.pathHandling {
+            case .prepend:
+                let systemPath = finalEnvironment["PATH"] ?? ""
+                finalEnvironment["PATH"] = customPath + ":" + systemPath
+                customVars.removeValue(forKey: "PATH")
+            case .replace:
+                finalEnvironment["PATH"] = customPath
+                customVars.removeValue(forKey: "PATH")
+            case .inherit:
+                customVars.removeValue(forKey: "PATH") // Keep system PATH
+            }
+        }
+        
+        // Merge remaining custom variables
+        finalEnvironment.merge(customVars) { _, new in new }
+        
+        return finalEnvironment
+    }
+    
+    /// Generates a remote command that exports environment variables before execution
+    func generateRemoteCommand(baseCommand: String, workingDirectory: String? = nil) -> String {
+        let environment = buildEnvironment()
+        var commands: [String] = []
+        
+        // Change to working directory if specified
+        if let workingDir = workingDirectory ?? runConfiguration.workingDirectory {
+            commands.append("cd \\\"\\(escapeShell(workingDir))\\\"\")
+        }
+        
+        // Export environment variables
+        for (key, value) in environment {
+            let escapedValue = escapeShell(value)
+            commands.append("export \\(key)=\\\"\\(escapedValue)\\\"\")
+        }
+        
+        // Add the main command
+        commands.append(baseCommand)
+        
+        return commands.joined(separator: " && ")
+    }
+    
+    /// Escapes special shell characters in a string
+    private func escapeShell(_ string: String) -> String {
+        return string
+            .replacingOccurrences(of: "\\\\", with: "\\\\\\\\")
+            .replacingOccurrences(of: "\\\"", with: "\\\\\\\"")
+            .replacingOccurrences(of: "'", with: "\\\\'")
+            .replacingOccurrences(of: "`", with: "\\\\`")
+            .replacingOccurrences(of: "$", with: "\\\\$")
+    }
+    
+    /// Executes a command on the remote server via SSH
+    private func executeRemoteCommand(_ command: String, workingDirectory: String?) async throws -> (output: String, error: String?, exitCode: Int) {
+        // This is a placeholder implementation
+        // In a real implementation, this would use an SSH library to execute commands
+        
+        // Generate the full command with environment variables and working directory
+        let fullCommand = generateRemoteCommand(baseCommand: command, workingDirectory: workingDirectory)
+        
+        // Placeholder for actual SSH execution
+        // Real implementation would use libssh2 or similar
+        throw RemoteRunnerError.executionFailed("SSH command execution not yet implemented. Command: \(fullCommand)")
+    }
+    
+    // MARK: - Public Utility Methods
+    
+    /// Check if a language is supported
+    func isLanguageSupported(_ language: String) -> Bool {
+        return languageConfigs[language.lowercased()] != nil
+    }
+    
+    /// Get list of supported languages
+    var supportedLanguages: [String] {
+        return Array(languageConfigs.keys).sorted()
+    }
+    
+    /// Closes the SSH connection
+    func disconnect() {
+        sshSession?.close()
+        sshSession = nil
+    }
+    
+    // MARK: - File Extension Language Detection
+    
+    /// Mapping of file extensions to language identifiers
+    static let fileExtensionToLanguage: [String: String] = [
+        // Python
+        "py": "python",
+        "pyw": "python",
+        "pyc": "python",
+        "pyo": "python",
+        
+        // JavaScript
+        "js": "javascript",
+        "mjs": "javascript",
+        "cjs": "javascript",
+        
+        // TypeScript
+        "ts": "typescript",
+        "tsx": "typescript",
+        "mts": "typescript",
+        "cts": "typescript",
+        
+        // Swift
+        "swift": "swift",
+        
+        // Go
+        "go": "go",
+        
+        // Ruby
+        "rb": "ruby",
+        "rbw": "ruby",
+        "gemspec": "ruby",
+        
+        // Shell scripts
+        "sh": "bash",
+        "bash": "bash",
+        "zsh": "bash",
+        "ksh": "bash",
+        "fish": "bash",
+        
+        // PHP
+        "php": "php",
+        "phtml": "php",
+        "php3": "php",
+        "php4": "php",
+        "php5": "php",
+        
+        // Java
+        "java": "java",
+        "class": "java",
+        "jar": "java",
+        
+        // Kotlin
+        "kt": "kotlin",
+        "kts": "kotlin",
+        
+        // Rust
+        "rs": "rust",
+        
+        // C/C++
+        "c": "c",
+        "cpp": "cpp",
+        "cc": "cpp",
+        "cxx": "cpp",
+        "h": "c",
+        "hpp": "cpp",
+        
+        // C#
+        "cs": "csharp",
+        "csx": "csharp",
+        
+        // Perl
+        "pl": "perl",
+        "pm": "perl",
+        "pod": "perl",
+        
+        // Lua
+        "lua": "lua",
+        
+        // R
+        "r": "r",
+        "R": "r",
+        "rmd": "r",
+        
+        // Dart
+        "dart": "dart",
+        
+        // Haskell
+        "hs": "haskell",
+        "lhs": "haskell",
+        
+        // Scala
+        "scala": "scala",
+        "sc": "scala",
+        
+        // Elixir
+        "ex": "elixir",
+        "exs": "elixir",
+        
+        // Clojure
+        "clj": "clojure",
+        "cljs": "clojure",
+        "cljc": "clojure",
+        "edn": "clojure",
+        
+        // PowerShell
+        "ps1": "powershell",
+        "psm1": "powershell",
+        "psd1": "powershell",
+        
+        // Groovy
+        "groovy": "groovy",
+        "gvy": "groovy",
+        
+        // Julia
+        "jl": "julia",
+        
+        // Crystal
+        "cr": "crystal",
+        
+        // Nim
+        "nim": "nim",
+        "nims": "nim",
+        
+        // D
+        "d": "d",
+        "di": "d",
+        
+        // OCaml
+        "ml": "ocaml",
+        "mli": "ocaml",
+        
+        // F#
+        "fs": "fsharp",
+        "fsx": "fsharp",
+        "fsi": "fsharp",
+        
+        // Zig
+        "zig": "zig",
+        
+        // V
+        "v": "v",
+        "vv": "v",
+        
+        // WebAssembly
+        "wasm": "wasm",
+        "wat": "wasm"
+    ]
+    
+    /// Detect language from file extension
+    /// - Parameter filePath: The path to the file
+    /// - Returns: The detected language identifier, or nil if not supported
+    static func detectLanguageFromExtension(filePath: String) -> String? {
+        let url = URL(fileURLWithPath: filePath)
+        let fileExtension = url.pathExtension.lowercased()
+        
+        guard !fileExtension.isEmpty else {
+            return nil
+        }
+        
+        return fileExtensionToLanguage[fileExtension]
+    }
+    
+    /// Get all supported file extensions for testing
+    static func getSupportedFileExtensions() -> [String] {
+        return Array(fileExtensionToLanguage.keys).sorted()
+    }
+    
+    /// Check if a file extension is supported
+    static func isExtensionSupported(_ extension: String) -> Bool {
+        return fileExtensionToLanguage.keys.contains(extension.lowercased())
+    }
+    
+    /// Test helper: verify language detection for all supported extensions
+    /// - Returns: Array of test results with file extension, expected language, and detection result
+    static func testLanguageDetection() -> [(extension: String, detectedLanguage: String?, expectedLanguage: String, success: Bool)] {
+        let testCases: [(ext: String, expected: String)] = [
+            // Core languages from requirements
+            ("py", "python"),
+            ("js", "javascript"),
+            ("ts", "typescript"),
+            ("swift", "swift"),
+            ("go", "go"),
+            ("rb", "ruby"),
+            ("sh", "bash"),
+            ("bash", "bash"),
+            ("zsh", "bash"),
+            ("php", "php"),
+            ("java", "java"),
+            ("kt", "kotlin"),
+            ("rs", "rust"),
+            
+            // Additional variants
+            ("pyw", "python"),
+            ("mjs", "javascript"),
+            ("cjs", "javascript"),
+            ("tsx", "typescript"),
+            ("mts", "typescript"),
+            ("kts", "kotlin"),
+            ("c", "c"),
+            ("cpp", "cpp"),
+            ("cs", "csharp"),
+            ("pl", "perl"),
+            ("lua", "lua"),
+            ("r", "r"),
+            ("dart", "dart"),
+            ("hs", "haskell"),
+            ("scala", "scala"),
+            ("ex", "elixir"),
+            ("clj", "clojure"),
+            ("ps1", "powershell"),
+            ("jl", "julia"),
+            ("cr", "crystal"),
+            ("nim", "nim"),
+            ("zig", "zig"),
+            ("v", "v"),
+        ]
+        
+        return testCases.map { testCase in
+            let dummyPath = "/test/file.\(testCase.ext)"
+            let detected = detectLanguageFromExtension(filePath: dummyPath)
+            let success = detected == testCase.expected
+            return (extension: testCase.ext, detectedLanguage: detected, expectedLanguage: testCase.expected, success: success)
+        }
+    }
+}
+
+// MARK: - Test Helpers
+
+extension RemoteRunner {
+    /// Comprehensive test of all file extension detection
+    /// Returns detailed results for verification
+    static func runFileDetectionTests() -> String {
+        var results: [String] = []
+        let testResults = testLanguageDetection()
+        
+        let passed = testResults.filter { $0.success }.count
+        let failed = testResults.filter { !$0.success }.count
+        
+        results.append("=== File Extension Language Detection Tests ===")
+        results.append("Total: \(testResults.count), Passed: \(passed), Failed: \(failed)")
+        results.append("")
+        
+        // Group by success/failure
+        let failures = testResults.filter { !$0.success }
+        if !failures.isEmpty {
+            results.append("--- FAILURES ---")
+            for failure in failures {
+                results.append("❌ .\(failure.extension): Expected '\(failure.expectedLanguage)', got '\(failure.detectedLanguage ?? "nil")'")
+            }
+            results.append("")
+        }
+        
+        let successes = testResults.filter { $0.success }
+        if !successes.isEmpty {
+            results.append("--- SUCCESSES ---")
+            for success in successes {
+                results.append("✅ .\(success.extension) -> \(success.detectedLanguage!)")
+            }
+        }
+        
+        results.append("")
+        results.append("=== End of Tests ===")
+        
+        return results.joined(separator: "\n")
+    }
+    
+    /// Test specific file path patterns
+    static func testFilePathPatterns() -> [(input: String, detected: String?, description: String)] {
+        let testCases = [
+            ("/path/to/script.py", "python", "Standard Python file"),
+            ("./relative/path.ts", "typescript", "Relative TypeScript file"),
+            ("main.rs", "rust", "Simple Rust file"),
+            ("MyApp.java", "java", "Java file with camel case"),
+            ("/home/user/code/test.go", "go", "Go file in nested path"),
+            ("/path/file", nil, "File without extension"),
+            ("/path/file.unknown", nil, "Unknown extension"),
+            ("", nil, "Empty path"),
+        ]
+        
+        return testCases.map { (path, expected, desc) in
+            let detected = detectLanguageFromExtension(filePath: path)
+            let success = detected == expected
+            return (input: path, detected: detected, description: "\(success ? "✅" : "❌") \(desc): .\(detected ?? "nil")")
+        }
+    }
+}
+
+// MARK: - SSH Session Protocol
+
+/// Protocol for SSH session operations
+protocol SSHSession {
+    func execute(_ command: String) async throws -> (output: String, error: String, exitCode: Int)
+    func close()
+}
+
+// MARK: - Extension for common use cases
+
+extension RemoteRunner {
+    
+    /// Convenience method to run Python code
+    func runPython(_ code: String, remotePath: String? = nil) async throws -> RemoteExecutionResult {
+        return try await runSelection(code, language: "python", remotePath: remotePath)
+    }
+    
+    /// Convenience method to run JavaScript code
+    func runJavaScript(_ code: String, remotePath: String? = nil) async throws -> RemoteExecutionResult {
+        return try await runSelection(code, language: "javascript", remotePath: remotePath)
+    }
+    
+    /// Convenience method to run TypeScript code
+    func runTypeScript(_ code: String, remotePath: String? = nil) async throws -> RemoteExecutionResult {
+        return try await runSelection(code, language: "typescript", remotePath: remotePath)
+    }
+    
+    /// Convenience method to run Swift code
+    func runSwift(_ code: String, remotePath: String? = nil) async throws -> RemoteExecutionResult {
+        return try await runSelection(code, language: "swift", remotePath: remotePath)
+    }
+    
+    /// Convenience method to run Ruby code
+    func runRuby(_ code: String, remotePath: String? = nil) async throws -> RemoteExecutionResult {
+        return try await runSelection(code, language: "ruby", remotePath: remotePath)
+    }
+    
+    /// Convenience method to run Bash code
+    func runBash(_ code: String, remotePath: String? = nil) async throws -> RemoteExecutionResult {
+        return try await runSelection(code, language: "bash", remotePath: remotePath)
+    }
+}

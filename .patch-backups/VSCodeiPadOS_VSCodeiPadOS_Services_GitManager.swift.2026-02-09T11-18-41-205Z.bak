@@ -1,0 +1,429 @@
+import Foundation
+import Combine
+
+// MARK: - Git Models
+
+enum GitManagerError: LocalizedError {
+    case noRepository
+    case gitExecutableNotFound
+    case commandFailed(args: [String], exitCode: Int32, message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .noRepository:
+            return "No git repository configured"
+        case .gitExecutableNotFound:
+            return "Git executable not found"
+        case let .commandFailed(args, exitCode, message):
+            return "git \(args.joined(separator: " ")) failed (\(exitCode)): \(message)"
+        }
+    }
+}
+
+enum GitChangeKind: String, Hashable {
+    case modified
+    case added
+    case deleted
+    case renamed
+    case copied
+    case untracked
+    case unmerged
+    case typeChanged
+    case unknown
+}
+
+struct GitStatusEntry: Identifiable, Hashable {
+    let id = UUID()
+    let path: String
+    let kind: GitChangeKind
+}
+
+struct GitStatusSnapshot: Hashable {
+    var branch: String
+    var ahead: Int
+    var behind: Int
+    var staged: [GitStatusEntry]
+    var unstaged: [GitStatusEntry]
+}
+
+struct GitLogCommit: Identifiable, Hashable {
+    let id = UUID()
+    let hash: String
+    let author: String
+    let date: Date
+    let subject: String
+}
+
+// MARK: - GitManager
+
+/// Thin wrapper around the `git` CLI.
+///
+/// NOTE: On iOS devices, spawning external processes may not be available unless `git` is bundled
+/// and codesigned with the app. This manager is implemented using `Process` as requested and will
+/// surface errors if the executable cannot be launched.
+@MainActor
+final class GitManager: ObservableObject {
+    static let shared = GitManager()
+
+    @Published private(set) var repositoryURL: URL?
+
+    private let runner = GitRunner()
+
+    private init() {}
+
+    func setRepositoryURL(_ url: URL?) {
+        repositoryURL = url
+    }
+
+    // MARK: - Status
+
+    func status() async throws -> GitStatusSnapshot {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+
+        let out = try await runner.runGit(
+            args: ["status", "--porcelain=v1", "-b", "-z"],
+            repoURL: repo
+        )
+
+        return GitPorcelainParser.parseStatusPorcelainV1Z(out)
+    }
+
+    // MARK: - Diff
+
+    func diff(path: String?, staged: Bool) async throws -> String {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        var args = ["diff", "--no-color"]
+        if staged { args.append("--cached") }
+        if let path { args.append(contentsOf: ["--", path]) }
+        return try await runner.runGit(args: args, repoURL: repo)
+    }
+
+    // MARK: - Stage / Unstage
+
+    func stageFile(_ path: String) async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["add", "--", path], repoURL: repo)
+    }
+
+    func stageAll() async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["add", "-A"], repoURL: repo)
+    }
+
+    /// Stage a patch (typically a single hunk) to the index.
+    func stagePatch(_ patch: String) async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["apply", "--cached", "--"], repoURL: repo, stdin: patch)
+    }
+
+    func unstageFile(_ path: String) async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        // `restore --staged` is preferred; fall back errors are surfaced by the runner.
+        _ = try await runner.runGit(args: ["restore", "--staged", "--", path], repoURL: repo)
+    }
+
+    func unstageAll() async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["restore", "--staged", "."], repoURL: repo)
+    }
+
+    /// Unstage a patch (typically a single hunk) from the index.
+    func unstagePatch(_ patch: String) async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["apply", "--cached", "-R", "--"], repoURL: repo, stdin: patch)
+    }
+
+    // MARK: - Commit / History
+
+    func commit(message: String) async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        _ = try await runner.runGit(args: ["commit", "-m", trimmed], repoURL: repo)
+    }
+
+    func history(limit: Int = 25) async throws -> [GitLogCommit] {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+
+        // Record separator: 0x1E, field separator: 0x1F
+        let format = "%H%x1f%an%x1f%ad%x1f%s%x1e"
+        let out = try await runner.runGit(
+            args: ["log", "-n", String(limit), "--date=iso-strict", "--pretty=format:\(format)"],
+            repoURL: repo
+        )
+        return GitPorcelainParser.parseLogRecords(out)
+    }
+
+    // MARK: - Branches
+
+    func currentBranch() async throws -> String {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        let out = try await runner.runGit(args: ["rev-parse", "--abbrev-ref", "HEAD"], repoURL: repo)
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func branches() async throws -> [String] {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        let out = try await runner.runGit(args: ["branch", "--format=%(refname:short)"], repoURL: repo)
+        return out
+            .split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    func checkout(branch: String) async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["checkout", branch], repoURL: repo)
+    }
+
+    // MARK: - Network
+
+    func fetch() async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["fetch"], repoURL: repo)
+    }
+
+    func pull() async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["pull"], repoURL: repo)
+    }
+
+    func push() async throws {
+        guard let repo = repositoryURL else { throw GitManagerError.noRepository }
+        _ = try await runner.runGit(args: ["push"], repoURL: repo)
+    }
+}
+
+// MARK: - GitRunner
+
+private final class GitRunner {
+    private let exec = GitExecutableResolver.resolve()
+
+    func runGit(args: [String], repoURL: URL, stdin: String? = nil) async throws -> String {
+        try await Task.detached(priority: .userInitiated) {
+            try self.runGitSync(args: args, repoURL: repoURL, stdin: stdin)
+        }.value
+    }
+
+    private func runGitSync(args: [String], repoURL: URL, stdin: String?) throws -> String {
+        let process = Process()
+        process.currentDirectoryURL = repoURL
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        var finalArgs = args
+
+        switch exec {
+        case let .direct(url):
+            process.executableURL = url
+        case let .env(url):
+            // run: /usr/bin/env git <args>
+            process.executableURL = url
+            finalArgs = ["git"] + args
+        case .missing:
+            throw GitManagerError.gitExecutableNotFound
+        }
+
+        process.arguments = finalArgs
+
+        if let stdin {
+            let input = Pipe()
+            process.standardInput = input
+            try process.run()
+            if let data = stdin.data(using: .utf8) {
+                input.fileHandleForWriting.write(data)
+            }
+            try? input.fileHandleForWriting.close()
+        } else {
+            try process.run()
+        }
+
+        process.waitUntilExit()
+
+        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+
+        let out = String(data: outData, encoding: .utf8) ?? ""
+        let err = String(data: errData, encoding: .utf8) ?? ""
+
+        if process.terminationStatus != 0 {
+            let msg = err.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw GitManagerError.commandFailed(args: args, exitCode: process.terminationStatus, message: msg.isEmpty ? out : msg)
+        }
+
+        return out
+    }
+}
+
+private enum GitExecutable {
+    case direct(URL)
+    case env(URL)
+    case missing
+}
+
+private enum GitExecutableResolver {
+    static func resolve() -> GitExecutable {
+        let fm = FileManager.default
+
+        // Common locations on macOS / Simulator hosts.
+        let directCandidates = [
+            "/usr/bin/git",
+            "/opt/homebrew/bin/git",
+            "/usr/local/bin/git"
+        ]
+
+        for path in directCandidates where fm.isExecutableFile(atPath: path) {
+            return .direct(URL(fileURLWithPath: path))
+        }
+
+        // Fall back to env(1) + PATH.
+        let envPath = "/usr/bin/env"
+        if fm.isExecutableFile(atPath: envPath) {
+            return .env(URL(fileURLWithPath: envPath))
+        }
+
+        return .missing
+    }
+}
+
+// MARK: - Parsing
+
+private enum GitPorcelainParser {
+    static func parseStatusPorcelainV1Z(_ text: String) -> GitStatusSnapshot {
+        // NUL-separated records.
+        let parts = text.split(separator: "\0", omittingEmptySubsequences: true)
+        var branch = ""
+        var ahead = 0
+        var behind = 0
+
+        var staged: [GitStatusEntry] = []
+        var unstaged: [GitStatusEntry] = []
+
+        var idx = 0
+        while idx < parts.count {
+            let raw = String(parts[idx])
+
+            if raw.hasPrefix("## ") {
+                // Example: "## main...origin/main [ahead 1, behind 2]"
+                let b = raw.dropFirst(3)
+                branch = String(b.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: true).first ?? "")
+                let metaStart = raw.firstIndex(of: "[")
+                if let metaStart {
+                    let meta = raw[metaStart...]
+                    // naive parsing; stable enough for basic UI.
+                    if let a = parseInt(after: "ahead ", in: String(meta)) { ahead = a }
+                    if let b = parseInt(after: "behind ", in: String(meta)) { behind = b }
+                }
+
+                idx += 1
+                continue
+            }
+
+            // Normal entry: XY SP path
+            // Rename/copy in -z uses: "R  old\0new\0" (the first record contains XY + space + old)
+            guard raw.count >= 3 else {
+                idx += 1
+                continue
+            }
+
+            let x = raw[raw.startIndex]
+            let y = raw[raw.index(after: raw.startIndex)]
+
+            // After "XY "
+            let pathStart = raw.index(raw.startIndex, offsetBy: 3)
+            let firstPath = String(raw[pathStart...])
+
+            let isRenameOrCopy = (x == "R" || x == "C" || y == "R" || y == "C")
+            if isRenameOrCopy {
+                // next NUL part should be the new path
+                let newPath = (idx + 1 < parts.count) ? String(parts[idx + 1]) : firstPath
+                appendEntries(x: x, y: y, path: newPath, staged: &staged, unstaged: &unstaged)
+                idx += 2
+            } else {
+                appendEntries(x: x, y: y, path: firstPath, staged: &staged, unstaged: &unstaged)
+                idx += 1
+            }
+        }
+
+        if branch.isEmpty { branch = "(detached)" }
+
+        return GitStatusSnapshot(branch: branch, ahead: ahead, behind: behind, staged: staged, unstaged: unstaged)
+    }
+
+    private static func appendEntries(
+        x: Character,
+        y: Character,
+        path: String,
+        staged: inout [GitStatusEntry],
+        unstaged: inout [GitStatusEntry]
+    ) {
+        // Untracked is reported as "??".
+        if x == "?" && y == "?" {
+            unstaged.append(GitStatusEntry(path: path, kind: .untracked))
+            return
+        }
+
+        if x != " " {
+            staged.append(GitStatusEntry(path: path, kind: mapStatusCharToKind(x)))
+        }
+        if y != " " {
+            unstaged.append(GitStatusEntry(path: path, kind: mapStatusCharToKind(y)))
+        }
+    }
+
+    private static func mapStatusCharToKind(_ c: Character) -> GitChangeKind {
+        switch c {
+        case "M": return .modified
+        case "A": return .added
+        case "D": return .deleted
+        case "R": return .renamed
+        case "C": return .copied
+        case "U": return .unmerged
+        case "T": return .typeChanged
+        default: return .unknown
+        }
+    }
+
+    static func parseLogRecords(_ text: String) -> [GitLogCommit] {
+        let records = text.split(separator: "\u{001E}", omittingEmptySubsequences: true)
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let isoNoFrac = ISO8601DateFormatter()
+        isoNoFrac.formatOptions = [.withInternetDateTime]
+
+        let gitFallback = DateFormatter()
+        gitFallback.locale = Locale(identifier: "en_US_POSIX")
+        gitFallback.dateFormat = "yyyy-MM-dd HH:mm:ss ZZZZZ"
+
+        return records.compactMap { recSub in
+            let rec = String(recSub)
+            let fields = rec.split(separator: "\u{001F}", omittingEmptySubsequences: false)
+            guard fields.count >= 4 else { return nil }
+
+            let hash = String(fields[0])
+            let author = String(fields[1])
+            let dateStr = String(fields[2])
+            let subject = String(fields[3])
+
+            let date =
+                iso.date(from: dateStr)
+                ?? isoNoFrac.date(from: dateStr)
+                ?? gitFallback.date(from: dateStr)
+                ?? Date()
+
+            return GitLogCommit(hash: hash, author: author, date: date, subject: subject)
+        }
+    }
+
+    private static func parseInt(after needle: String, in haystack: String) -> Int? {
+        guard let r = haystack.range(of: needle) else { return nil }
+        let tail = haystack[r.upperBound...]
+        let digits = tail.prefix { $0.isNumber }
+        return Int(digits)
+    }
+}

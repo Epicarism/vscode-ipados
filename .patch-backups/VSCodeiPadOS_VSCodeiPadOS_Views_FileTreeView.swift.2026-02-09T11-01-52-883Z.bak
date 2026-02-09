@@ -1,0 +1,378 @@
+import SwiftUI
+import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
+import CoreTransferable
+
+extension UTType {
+    /// Internal drag/drop payload type for moving items inside the file explorer.
+    static let vscodeFilePathPayload = UTType(exportedAs: "com.vscode-ipados.filepath-payload")
+}
+
+/// VS Code-like file explorer tree with context menus + drag/drop
+struct FileTreeView: View {
+    let root: FileTreeNode
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @ObservedObject var editorCore: EditorCore
+
+    // MARK: - Rename
+    @State private var renameTarget: URL?
+    @State private var renameText: String = ""
+
+    // MARK: - New file/folder
+    @State private var newFileTargetDirectory: URL?
+    @State private var newFileName: String = ""
+
+    @State private var newFolderTargetDirectory: URL?
+    @State private var newFolderName: String = ""
+
+    // MARK: - Delete
+    @State private var deleteTarget: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            FileTreeNodeView(
+                node: root,
+                level: 0,
+                rootURL: root.url,
+                fileNavigator: fileNavigator,
+                editorCore: editorCore,
+                requestRename: beginRename,
+                requestNewFile: beginNewFile,
+                requestNewFolder: beginNewFolder,
+                requestDelete: beginDelete
+            )
+        }
+        .alert("Rename", isPresented: Binding(get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+            Button("Rename") { performRename() }
+        } message: {
+            Text("Enter a new name")
+        }
+        .alert("New File", isPresented: Binding(get: { newFileTargetDirectory != nil }, set: { if !$0 { newFileTargetDirectory = nil } })) {
+            TextField("File name", text: $newFileName)
+            Button("Cancel", role: .cancel) { newFileTargetDirectory = nil }
+            Button("Create") { performCreateFile() }
+        }
+        .alert("New Folder", isPresented: Binding(get: { newFolderTargetDirectory != nil }, set: { if !$0 { newFolderTargetDirectory = nil } })) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Cancel", role: .cancel) { newFolderTargetDirectory = nil }
+            Button("Create") { performCreateFolder() }
+        }
+        .alert("Delete", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })) {
+            Button("Cancel", role: .cancel) { deleteTarget = nil }
+            Button("Delete", role: .destructive) { performDelete() }
+        } message: {
+            if let url = deleteTarget {
+                Text("Are you sure you want to delete \"\(url.lastPathComponent)\"?")
+            }
+        }
+    }
+
+    // MARK: - UI Intents
+
+    private func beginRename(_ url: URL) {
+        renameTarget = url
+        renameText = url.lastPathComponent
+    }
+
+    private func beginNewFile(in directory: URL) {
+        newFileTargetDirectory = directory
+        newFileName = "Untitled.txt"
+        fileNavigator.expandedPaths.insert(directory.path)
+    }
+
+    private func beginNewFolder(in directory: URL) {
+        newFolderTargetDirectory = directory
+        newFolderName = "New Folder"
+        fileNavigator.expandedPaths.insert(directory.path)
+    }
+
+    private func beginDelete(_ url: URL) {
+        deleteTarget = url
+    }
+
+    // MARK: - Actions
+
+    private func performRename() {
+        guard let fromURL = renameTarget else { return }
+        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        do {
+            let toURL = try fileNavigator.renameItem(at: fromURL, to: trimmed)
+            editorCore.handleFileSystemItemMoved(from: fromURL, to: toURL)
+            fileNavigator.refreshFileTree()
+        } catch {
+            print("Rename error: \(error)")
+        }
+
+        renameTarget = nil
+    }
+
+    private func performCreateFile() {
+        guard let directory = newFileTargetDirectory else { return }
+        let trimmed = newFileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        do {
+            let newURL = try fileNavigator.createFile(named: trimmed, in: directory)
+            fileNavigator.refreshFileTree()
+            editorCore.openFile(from: newURL)
+        } catch {
+            print("Create file error: \(error)")
+        }
+
+        newFileTargetDirectory = nil
+    }
+
+    private func performCreateFolder() {
+        guard let directory = newFolderTargetDirectory else { return }
+        let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        do {
+            _ = try fileNavigator.createFolder(named: trimmed, in: directory)
+            fileNavigator.expandedPaths.insert(directory.path)
+            fileNavigator.refreshFileTree()
+        } catch {
+            print("Create folder error: \(error)")
+        }
+
+        newFolderTargetDirectory = nil
+    }
+
+    private func performDelete() {
+        guard let url = deleteTarget else { return }
+        _ = fileNavigator.deleteItem(at: url)
+        editorCore.handleFileSystemItemDeleted(at: url)
+        fileNavigator.refreshFileTree()
+        deleteTarget = nil
+    }
+}
+
+// MARK: - Node View
+
+private struct FileTreeNodeView: View {
+    let node: FileTreeNode
+    let level: Int
+    let rootURL: URL
+
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @ObservedObject var editorCore: EditorCore
+
+    let requestRename: (URL) -> Void
+    let requestNewFile: (URL) -> Void
+    let requestNewFolder: (URL) -> Void
+    let requestDelete: (URL) -> Void
+
+    @State private var isDropTargeted: Bool = false
+    @State private var hoverExpandWorkItem: DispatchWorkItem?
+
+    private var isExpanded: Bool { fileNavigator.expandedPaths.contains(node.url.path) }
+
+    private var dropTargetedBinding: Binding<Bool> {
+        Binding(
+            get: { node.isDirectory ? isDropTargeted : false },
+            set: { newValue in
+                guard node.isDirectory else { return }
+                isDropTargeted = newValue
+            }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            row
+
+            if isExpanded && node.isDirectory {
+                // BUG-008: smooth expand/collapse
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(node.children) { child in
+                        FileTreeNodeView(
+                            node: child,
+                            level: level + 1,
+                            rootURL: rootURL,
+                            fileNavigator: fileNavigator,
+                            editorCore: editorCore,
+                            requestRename: requestRename,
+                            requestNewFile: requestNewFile,
+                            requestNewFolder: requestNewFolder,
+                            requestDelete: requestDelete
+                        )
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isExpanded)
+        .onChange(of: isDropTargeted) { targeted in
+            // BUG-008: auto-expand folders on drag hover (0.5s)
+            hoverExpandWorkItem?.cancel()
+            hoverExpandWorkItem = nil
+
+            guard targeted, node.isDirectory, !isExpanded else { return }
+
+            let work = DispatchWorkItem {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    fileNavigator.expandedPaths.insert(node.url.path)
+                }
+            }
+            hoverExpandWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+        }
+    }
+
+    private var row: some View {
+        HStack(spacing: 4) {
+            if node.isDirectory {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        fileNavigator.toggleExpanded(path: node.url.path)
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .frame(width: 12)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Spacer().frame(width: 12)
+            }
+
+            Image(systemName: node.isDirectory ? "folder.fill" : fileIcon(for: node.name))
+                .font(.caption)
+                .foregroundColor(node.isDirectory ? .yellow : fileColor(for: node.name))
+
+            Text(node.name)
+                .font(.system(.caption))
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.leading, CGFloat(level * 16))
+        .padding(.vertical, 4)
+        .background(isDropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if node.isDirectory {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    fileNavigator.toggleExpanded(path: node.url.path)
+                }
+            } else {
+                editorCore.openFile(from: node.url)
+            }
+        }
+        .contextMenu {
+            // New file/folder should target a directory; for file rows, target its parent.
+            let targetDirectory = node.isDirectory ? node.url : node.url.deletingLastPathComponent()
+
+            Button("New File") { requestNewFile(targetDirectory) }
+            Button("New Folder") { requestNewFolder(targetDirectory) }
+
+            Divider()
+
+            // FEAT-061: Open containing folder (Files app)
+            Button("Open Containing Folder") {
+                let folderURL = node.isDirectory ? node.url : node.url.deletingLastPathComponent()
+                UIApplication.shared.open(folderURL, options: [:], completionHandler: nil)
+            }
+
+            Divider()
+
+            // FEAT-062: Copy path actions
+            Button("Copy Path") {
+                UIPasteboard.general.string = node.url.path
+            }
+
+            Button("Copy Relative Path") {
+                UIPasteboard.general.string = relativePath(from: rootURL, to: node.url)
+            }
+
+            Divider()
+
+            Button("Rename") { requestRename(node.url) }
+            Divider()
+            Button("Delete", role: .destructive) { requestDelete(node.url) }
+        }
+        // BUG-011: .draggable for file/folder rows
+        .draggable(DragFilePayload(path: node.url.path)) {
+            HStack(spacing: 6) {
+                Image(systemName: node.isDirectory ? "folder.fill" : fileIcon(for: node.name))
+                Text(node.name).lineLimit(1)
+            }
+            .padding(6)
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        // BUG-011: .dropDestination for folder rows
+        .dropDestination(for: DragFilePayload.self, action: { items, _ in
+            guard node.isDirectory else { return false }
+            guard let payload = items.first else { return false }
+
+            let sourceURL = URL(fileURLWithPath: payload.path)
+
+            guard isValidDrop(sourceURL: sourceURL, destinationFolder: node.url) else {
+                return false
+            }
+
+            // Perform the actual move off the main thread; return true to indicate we accepted the drop.
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let newURL = try fileNavigator.moveItem(at: sourceURL, to: node.url)
+                    DispatchQueue.main.async {
+                        editorCore.handleFileSystemItemMoved(from: sourceURL, to: newURL)
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            fileNavigator.expandedPaths.insert(node.url.path)
+                        }
+                    }
+                } catch {
+                    print("Move error: \(error)")
+                }
+            }
+
+            return true
+        }, isTargeted: dropTargetedBinding)
+    }
+
+    // MARK: - Drop validation
+
+    /// Prevent dropping a folder into itself (or its descendants), and avoid no-op drops.
+    private func isValidDrop(sourceURL: URL, destinationFolder: URL) -> Bool {
+        let sourcePath = sourceURL.standardizedFileURL.path
+        let destPath = destinationFolder.standardizedFileURL.path
+
+        // Don't allow dropping onto itself.
+        if sourcePath == destPath { return false }
+
+        // Don't allow dropping into its current parent (no-op).
+        if sourceURL.deletingLastPathComponent().standardizedFileURL.path == destPath { return false }
+
+        // Prevent dropping a folder into itself or one of its descendants.
+        // (Works for both files and folders; only meaningful for folders.)
+        if destPath.hasPrefix(sourcePath + "/") { return false }
+
+        return true
+    }
+
+    private func relativePath(from root: URL, to url: URL) -> String {
+        let rootPath = root.standardizedFileURL.path
+        let targetPath = url.standardizedFileURL.path
+
+        if targetPath == rootPath { return "." }
+
+        let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        if targetPath.hasPrefix(prefix) {
+            return String(targetPath.dropFirst(prefix.count))
+        }
+
+        // Fallback: if it's outside root for any reason, return absolute path
+        return targetPath
+    }
+}
+
+private struct DragFilePayload: Codable {
+    let path: String
+}

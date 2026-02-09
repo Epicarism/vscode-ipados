@@ -1,0 +1,376 @@
+import Foundation
+
+// MARK: - Search Models
+
+struct SearchOptions: Equatable, Codable {
+    var isCaseSensitive: Bool = false
+    var isWholeWord: Bool = false
+    var useRegex: Bool = false
+}
+
+struct SearchOccurrence: Identifiable, Equatable {
+    let id = UUID()
+    let range: NSRange            // range in the full text
+    let lineNumber: Int           // 1-based
+    let column: Int               // 1-based
+    let lineText: String
+    let lineRange: NSRange        // range in lineText
+}
+
+struct SearchLineMatch: Identifiable, Equatable {
+    let id = UUID()
+    let lineNumber: Int           // 1-based
+    let lineText: String
+    let matchRanges: [NSRange]    // ranges in lineText
+}
+
+struct SearchFileResult: Identifiable, Equatable {
+    let id = UUID()
+    let fileURL: URL
+    let relativePath: String
+    var matches: [SearchLineMatch]
+
+    var fileName: String { fileURL.lastPathComponent }
+    var matchCount: Int { matches.reduce(0) { $0 + $1.matchRanges.count } }
+}
+
+// MARK: - Search History
+
+private struct SearchHistoryStore {
+    private static let queriesKey = "search.history.queries"
+    private static let maxItems = 25
+
+    static func loadQueries() -> [String] {
+        UserDefaults.standard.stringArray(forKey: queriesKey) ?? []
+    }
+
+    static func addQuery(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        var items = loadQueries()
+        items.removeAll { $0 == trimmed }
+        items.insert(trimmed, at: 0)
+        if items.count > maxItems { items = Array(items.prefix(maxItems)) }
+        UserDefaults.standard.set(items, forKey: queriesKey)
+    }
+}
+
+// MARK: - Search Manager
+
+@MainActor
+final class SearchManager: ObservableObject {
+    static let shared = SearchManager()
+
+    @Published var workspaceResults: [SearchFileResult] = []
+    @Published var isSearchingWorkspace: Bool = false
+    @Published var lastErrorMessage: String?
+
+    @Published var historyQueries: [String] = SearchHistoryStore.loadQueries()
+
+    private var workspaceSearchWorkItem: DispatchWorkItem?
+
+    // MARK: - History
+
+    func recordQuery(_ query: String) {
+        SearchHistoryStore.addQuery(query)
+        historyQueries = SearchHistoryStore.loadQueries()
+    }
+
+    // MARK: - Regex Builder
+
+    func makeRegularExpression(for query: String, options: SearchOptions) throws -> NSRegularExpression {
+        let pattern: String
+        if options.useRegex {
+            pattern = query
+        } else {
+            pattern = NSRegularExpression.escapedPattern(for: query)
+        }
+
+        let wholeWordWrapped: String
+        if options.isWholeWord {
+            // \b works for most code/text use-cases.
+            wholeWordWrapped = "\\b(?:\(pattern))\\b"
+        } else {
+            wholeWordWrapped = pattern
+        }
+
+        var regexOptions: NSRegularExpression.Options = []
+        if !options.isCaseSensitive {
+            regexOptions.insert(.caseInsensitive)
+        }
+
+        return try NSRegularExpression(pattern: wholeWordWrapped, options: regexOptions)
+    }
+
+    // MARK: - In-Text Search
+
+    func findOccurrences(in text: String, query: String, options: SearchOptions) -> [SearchOccurrence] {
+        let q = query
+        guard !q.isEmpty else { return [] }
+
+        do {
+            let regex = try makeRegularExpression(for: q, options: options)
+            return findOccurrences(in: text, regex: regex)
+        } catch {
+            lastErrorMessage = "Invalid pattern"
+            return []
+        }
+    }
+
+    private func findOccurrences(in text: String, regex: NSRegularExpression) -> [SearchOccurrence] {
+        // Clear error on successful compile/use
+        lastErrorMessage = nil
+
+        var occurrences: [SearchOccurrence] = []
+        let nsText = text as NSString
+
+        // Iterate by lines so we can quickly compute line/column and provide preview.
+        var lineNumber = 1
+        var lineStart = 0
+
+        while lineStart <= nsText.length {
+            var lineEnd = 0
+            var contentsEnd = 0
+            nsText.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd, for: NSRange(location: lineStart, length: 0))
+            let lineRangeInText = NSRange(location: lineStart, length: contentsEnd - lineStart)
+            let lineText = nsText.substring(with: lineRangeInText)
+
+            let matches = regex.matches(in: lineText, range: NSRange(location: 0, length: (lineText as NSString).length))
+            for m in matches {
+                let global = NSRange(location: lineRangeInText.location + m.range.location, length: m.range.length)
+                let column = m.range.location + 1
+                occurrences.append(
+                    SearchOccurrence(
+                        range: global,
+                        lineNumber: lineNumber,
+                        column: column,
+                        lineText: lineText,
+                        lineRange: m.range
+                    )
+                )
+            }
+
+            if lineEnd == nsText.length { break }
+            lineStart = lineEnd
+            lineNumber += 1
+        }
+
+        return occurrences
+    }
+
+    func replaceAll(in text: String, query: String, replacement: String, options: SearchOptions) -> String {
+        guard !query.isEmpty else { return text }
+
+        do {
+            let regex = try makeRegularExpression(for: query, options: options)
+            let range = NSRange(location: 0, length: (text as NSString).length)
+            return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacement)
+        } catch {
+            lastErrorMessage = "Invalid pattern"
+            return text
+        }
+    }
+
+    func replaceOne(in text: String, occurrence: SearchOccurrence, replacement: String) -> String {
+        let nsText = NSMutableString(string: text)
+        nsText.replaceCharacters(in: occurrence.range, with: replacement)
+        return nsText as String
+    }
+
+    // MARK: - Workspace Search
+
+    func searchWorkspace(
+        query: String,
+        options: SearchOptions,
+        root: FileTreeNode?,
+        includePatterns: String,
+        excludePatterns: String
+    ) {
+        workspaceSearchWorkItem?.cancel()
+
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            workspaceResults = []
+            isSearchingWorkspace = false
+            lastErrorMessage = nil
+            return
+        }
+
+        guard let root else {
+            workspaceResults = []
+            isSearchingWorkspace = false
+            lastErrorMessage = "No folder opened"
+            return
+        }
+
+        isSearchingWorkspace = true
+        lastErrorMessage = nil
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+
+            let results: [SearchFileResult]
+            do {
+                let regex = try self.makeRegularExpression(for: trimmed, options: options)
+                results = self.performWorkspaceSearch(root: root, queryRegex: regex, includePatterns: includePatterns, excludePatterns: excludePatterns)
+            } catch {
+                Task { @MainActor in
+                    self.lastErrorMessage = "Invalid pattern"
+                    self.workspaceResults = []
+                    self.isSearchingWorkspace = false
+                }
+                return
+            }
+
+            Task { @MainActor in
+                if !workItem.isCancelled {
+                    self.workspaceResults = results
+                    self.isSearchingWorkspace = false
+                    self.recordQuery(trimmed)
+                }
+            }
+        }
+
+        workspaceSearchWorkItem = workItem
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.2, execute: workItem)
+    }
+
+    private func performWorkspaceSearch(
+        root: FileTreeNode,
+        queryRegex: NSRegularExpression,
+        includePatterns: String,
+        excludePatterns: String
+    ) -> [SearchFileResult] {
+        let rootURL = root.url
+        let include = FilePatternList(includePatterns)
+        let exclude = FilePatternList(excludePatterns)
+
+        var fileResults: [SearchFileResult] = []
+        var stack: [FileTreeNode] = [root]
+
+        while let node = stack.popLast() {
+            if node.isDirectory {
+                stack.append(contentsOf: node.children)
+                continue
+            }
+
+            let relative = Self.relativePath(of: node.url, rootURL: rootURL)
+
+            if include.hasPatterns, !include.matches(path: relative) {
+                continue
+            }
+            if exclude.hasPatterns, exclude.matches(path: relative) {
+                continue
+            }
+
+            // Read as UTF-8 text (best effort).
+            guard let content = try? String(contentsOf: node.url, encoding: .utf8) else {
+                continue
+            }
+
+            let matches = findLineMatches(in: content, regex: queryRegex)
+            if !matches.isEmpty {
+                fileResults.append(SearchFileResult(fileURL: node.url, relativePath: relative, matches: matches))
+            }
+        }
+
+        // Sort like VSCode: by file path.
+        return fileResults.sorted { $0.relativePath < $1.relativePath }
+    }
+
+    private func findLineMatches(in text: String, regex: NSRegularExpression) -> [SearchLineMatch] {
+        let nsText = text as NSString
+        var results: [SearchLineMatch] = []
+
+        var lineNumber = 1
+        var lineStart = 0
+
+        while lineStart <= nsText.length {
+            var lineEnd = 0
+            var contentsEnd = 0
+            nsText.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd, for: NSRange(location: lineStart, length: 0))
+            let lineRangeInText = NSRange(location: lineStart, length: contentsEnd - lineStart)
+            let lineText = nsText.substring(with: lineRangeInText)
+
+            let lineNS = lineText as NSString
+            let found = regex.matches(in: lineText, range: NSRange(location: 0, length: lineNS.length))
+            if !found.isEmpty {
+                results.append(
+                    SearchLineMatch(
+                        lineNumber: lineNumber,
+                        lineText: lineText,
+                        matchRanges: found.map { $0.range }
+                    )
+                )
+            }
+
+            if lineEnd == nsText.length { break }
+            lineStart = lineEnd
+            lineNumber += 1
+        }
+
+        return results
+    }
+
+    private static func relativePath(of fileURL: URL, rootURL: URL) -> String {
+        let rootPath = rootURL.path
+        let filePath = fileURL.path
+        if filePath == rootPath { return fileURL.lastPathComponent }
+        if filePath.hasPrefix(rootPath + "/") {
+            return String(filePath.dropFirst(rootPath.count + 1))
+        }
+        return fileURL.lastPathComponent
+    }
+}
+
+// MARK: - Include/Exclude Pattern Matching
+
+private struct FilePatternList {
+    private(set) var patterns: [FilePattern] = []
+
+    var hasPatterns: Bool { !patterns.isEmpty }
+
+    init(_ raw: String) {
+        let parts = raw
+            .split { $0 == "," || $0 == "\n" || $0 == "\t" || $0 == " " }
+            .map(String.init)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        self.patterns = parts.compactMap { FilePattern(glob: $0) }
+    }
+
+    func matches(path: String) -> Bool {
+        patterns.contains { $0.matches(path: path) }
+    }
+}
+
+private struct FilePattern {
+    private let regex: NSRegularExpression
+
+    init?(glob: String) {
+        // Convert basic glob (*, ?, **) into regex.
+        let escaped = NSRegularExpression.escapedPattern(for: glob)
+        var pattern = escaped
+
+        // Re-introduce glob tokens (escaped \* and \?).
+        // Handle ** first.
+        pattern = pattern.replacingOccurrences(of: "\\\\*\\\\*", with: "§§DOUBLESTAR§§")
+        pattern = pattern.replacingOccurrences(of: "\\\\*", with: "[^/]*")
+        pattern = pattern.replacingOccurrences(of: "\\\\?", with: "[^/]")
+        pattern = pattern.replacingOccurrences(of: "§§DOUBLESTAR§§", with: ".*")
+
+        let full = "^\(pattern)$"
+        do {
+            self.regex = try NSRegularExpression(pattern: full, options: [.caseInsensitive])
+        } catch {
+            return nil
+        }
+    }
+
+    func matches(path: String) -> Bool {
+        let range = NSRange(location: 0, length: (path as NSString).length)
+        return regex.firstMatch(in: path, options: [], range: range) != nil
+    }
+}

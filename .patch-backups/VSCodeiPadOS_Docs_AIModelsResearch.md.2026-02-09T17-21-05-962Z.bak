@@ -1,0 +1,259 @@
+# AI Models Research
+
+Research documentation for AI models used in VSCode iPadOS extension.
+
+---
+
+## Anthropic Claude Models
+
+### Overview
+
+Claude is a family of state-of-the-art large language models developed by Anthropic. All current Claude models support text and image input, text output, multilingual capabilities, and vision.
+
+---
+
+## Claude 4 Series (Current Generation)
+
+### Claude Opus 4.6
+
+**Description:** Our most intelligent model for building agents and coding
+
+| Attribute | Value |
+|-----------|-------|
+| **Claude API ID** | `claude-opus-4-6` |
+| **Claude API Alias** | `claude-opus-4-6` |
+| **AWS Bedrock ID** | `anthropic.claude-opus-4-6-v1` |
+| **GCP Vertex AI ID** | `claude-opus-4-6` |
+| **Context Window** | 200K tokens / 1M tokens (beta) |
+| **Max Output** | 128K tokens |
+| **Extended Thinking** | Yes |
+| **Adaptive Thinking** | Yes |
+| **Priority Tier** | Yes |
+| **Training Data Cutoff** | August 2025 |
+| **Reliable Knowledge Cutoff** | May 2025 |
+
+**Pricing:**
+- Input: $5 / MTok
+- Output: $25 / MTok
+- 5m Cache Writes: $6.25 / MTok
+- 1h Cache Writes: $10 / MTok
+- Cache Hits & Refreshes: $0.50 / MTok
+- Batch Input: $2.50 / MTok
+- Batch Output: $12.50 / MTok
+
+**Long Context Pricing (>200K tokens):**
+- Input: $10 / MTok
+- Output: $37.50 / MTok
+
+---
+
+### Claude Opus 4.5
+
+| Attribute | Value |
+|-----------|-------|
+| **Claude API ID** | `claude-opus-4-5-20251101` |
+| **Claude API Alias** | `claude-opus-4-5` |
+| **AWS Bedrock ID** | `anthropic.claude-opus-4-5-20251101-v1:0` |
+| **GCP Vertex AI ID** | `claude-opus-4-5@20251101` |
+| **Context Window** | 200K tokens |
+| **Max Output** | 128K tokens |
+| **Extended Thinking** | Yes |
+| **Adaptive Thinking** | Yes |
+| **Training Data Cutoff** | July 2025 |
+| **Reliable Knowledge Cutoff** | January 2025 |
+
+**Pricing:**
+- Input: $5 / MTok
+- Output: $25 / MTok
+- Batch Input: $2.50 / MTok
+- Batch Output: $12.50 / MTok
+
+---
+
+### Claude Sonnet 4.5
+
+**Description:** Our best combination of speed and intelligence
+
+| Attribute | Value |
+|-----------|-------|
+| **Claude API ID** | `claude-sonnet-4-5-20250929` |
+| **Claude API Alias** | `claude-sonnet-4-5` |
+| **AWS Bedrock ID** | `anthropic.claude-sonnet-4-5-20250929-v1:0` |
+| **GCP Vertex AI ID** | `claude-sonnet-4-5@20250929` |
+| **Context Window** | 200K tokens / 1M tokens (beta) |
+| **Max Output** | 64K tokens |
+| **Extended Thinking** | Yes |
+| **Adaptive Thinking** | No |
+| **Priority Tier** | Yes |
+| **Comparative Latency** | Fast |
+| **Training Data Cutoff** | July 2025 |
+| **Reliable Knowledge Cutoff** | January 2025 |
+
+**Pricing:**
+- Input: $3 / MTok
+- Output: $15 / MTok
+- 5m Cache Writes: $3.75 / MTok
+- 1h Cache Writes: $6 / MTok
+- Cache Hits & Refreshes: $0.30 / MTok
+- Batch Input: $1.50 / MTok
+- Batch Output: $7.50 / MTok
+
+**Long Context Pricing (>200K tokens):**
+- Input: $6 / MTok
+- Output: $22.50 / MTok
+
+---
+
+### Claude Haiku 4.5
+
+**Description:** Our fastest model with near-frontier intelligence
+
+| Attribute | Value |
+|-----------|-------|
+| **Claude API ID** | `claude-haiku-4-5-20251001` |
+| **Claude API Alias** | `claude-haiku-4-5` |
+| **AWS Bedrock ID** | `anthropic.claude-haiku-4-5-20251001-v1:0` |
+| **GCP Vertex AI ID** | `claude-haiku-4-5@20251001` |
+| **Context Window** | 200K tokens |
+| **Max Output** | 64K tokens |
+| **Extended Thinking** | Yes |
+| **Adaptive Thinking** | No |
+| **Priority Tier** | Yes |
+| **Comparative Latency** | Fastest |
+| **Training Data Cutoff** | July 2025 |
+| **Reliable Knowledge Cutoff** | February 2025 |
+
+**Pricing:**
+- Input: $1 / MTok
+- Output: $5 / MTok
+- 5m Cache Writes: $1.25 / MTok
+- 1h Cache Writes: $2 / MTok
+- Cache Hits & Refreshes: $0.10 / MTok
+- Batch Input: $0.50 / MTok
+- Batch Output: $2.50 / MTok
+
+---
+
+## Legacy Claude 3.x Models
+
+### Claude 3.7 Sonnet (Deprecated)
+
+> **Status:** Deprecated as of October 28, 2025  
+> **Retirement Date:** February 19, 2026  
+> **Replacement:** `claude-opus-4-6`
+
+| Attribute | Value |
+|-----------|-------|
+| **Claude API ID** | `claude-3-7-sonnet-20250219` |
+| **Context Window** | 200K tokens |
+| **Extended Thinking** | Yes |
+
+**Pricing (until retirement):**
+- Input: $3 / MTok
+- Output: $15 / MTok
+- Batch Input: $1.50 / MTok
+- Batch Output: $7.50 / MTok
+
+---
+
+### Claude 3.5 Opus
+
+> **Note:** Claude 3.5 Opus was never released. Anthropic's Opus series skipped from Claude 3 Opus directly to the Claude 4 Opus series. There is no `claude-3-5-opus` model in the Anthropic API.
+>
+> For the most powerful model in the Claude 3.x era, use **Claude 3 Opus** (now deprecated, retiring January 5, 2026).
+
+### Claude 3 Opus (Deprecated)
+
+> **Status:** Deprecated as of June 30, 2025  
+> **Retirement Date:** January 5, 2026  
+> **Replacement:** `claude-opus-4-6`
+
+| Attribute | Value |
+|-----------|-------|
+| **Claude API ID** | `claude-3-opus-20240229` |
+| **Context Window** | 200K tokens |
+
+---
+
+## Claude Code
+
+### Overview
+
+Claude Code is Anthropic's agentic coding tool that integrates Claude models into development workflows. It is a **product/application** built on top of Claude models, not a separate model itself.
+
+### Key Characteristics
+
+- **Type:** AI-powered coding assistant/IDE integration
+- **Base Models:** Uses Claude Opus 4.6 and other Claude models via API
+- **Availability:** Available through Claude Console and API
+- **Features:**
+  - Natural language code editing
+  - Terminal/command execution
+  - File system operations
+  - Code analysis and refactoring
+  - Git integration
+
+### Pricing
+
+Claude Code usage is billed at standard Claude API rates based on the underlying model used. There is no additional Claude Code-specific pricing - you pay for the tokens consumed by the model during code generation and analysis.
+
+### API Access
+
+Claude Code functionality can be accessed programmatically through:
+- **Claude Code Analytics API:** For tracking usage and performance metrics
+- **Agent SDK:** For building custom agentic applications
+
+---
+
+## Context Window Details
+
+### 1M Token Context Window (Beta)
+
+Claude Opus 4.6 and Sonnet 4.5 support a 1M token context window when using the `context-1m-2025-08-07` beta header.
+
+**Requirements:**
+- Available for organizations in usage tier 4
+- Organizations with custom rate limits
+- Long context pricing applies to requests exceeding 200K tokens
+
+---
+
+## Rate Limits and Tiers
+
+| Tier | Description |
+|------|-------------|
+| **Tier 1** | Entry-level usage with basic limits |
+| **Tier 2** | Increased limits for growing applications |
+| **Tier 3** | Higher limits for established applications |
+| **Tier 4** | Maximum standard limits + 1M context access |
+| **Enterprise** | Custom limits available |
+
+---
+
+## Additional Features Pricing
+
+### Fast Mode (Research Preview)
+
+Available on Claude Opus 4.6:
+
+| Context | Input | Output |
+|---------|-------|--------|
+| ≤ 200K tokens | $30 / MTok | $150 / MTok |
+| > 200K tokens | $60 / MTok | $225 / MTok |
+
+### Data Residency
+
+US-only inference via `inference_geo` parameter incurs 1.1x multiplier on all pricing.
+
+---
+
+## References
+
+- [Anthropic Models Overview](https://docs.anthropic.com/en/docs/about-claude/models)
+- [Anthropic Pricing](https://docs.anthropic.com/en/docs/about-claude/pricing)
+- [Model Deprecations](https://docs.anthropic.com/en/docs/about-claude/model-deprecations)
+- [Context Windows](https://docs.anthropic.com/en/docs/build-with-claude/context-windows)
+
+---
+
+*Last Updated: Based on Anthropic documentation as of current date*

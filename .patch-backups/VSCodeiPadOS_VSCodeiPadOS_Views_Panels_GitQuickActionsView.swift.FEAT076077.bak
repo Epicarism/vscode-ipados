@@ -1,0 +1,145 @@
+import SwiftUI
+
+/// Simple sheet wired to GitService for quick Pull/Push + Stash operations.
+struct GitQuickActionsView: View {
+    @ObservedObject private var git = GitService.shared
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var stashMessage: String = ""
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 12) {
+                // Pull / Push
+                HStack(spacing: 12) {
+                    Button {
+                        git.pull()
+                    } label: {
+                        Label("Pull", systemImage: "arrow.down.to.line")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(git.isBusy)
+
+                    Button {
+                        git.push()
+                    } label: {
+                        Label("Push", systemImage: "arrow.up.to.line")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(git.isBusy)
+                }
+                .padding(.horizontal)
+
+                // Status
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("STATUS")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        Text(git.statusText)
+                            .font(.system(.footnote, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                    }
+                    .frame(maxHeight: 160)
+                    .background(Color(UIColor.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .padding(.horizontal)
+
+                // Stash Save
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("STASH")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 10) {
+                        TextField("Message (optional)", text: $stashMessage)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button("Save") {
+                            git.stashSave(message: stashMessage)
+                            stashMessage = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(git.isBusy)
+                    }
+
+                    if git.stashes.isEmpty {
+                        Text("No stashes")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(Color(UIColor.secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    } else {
+                        List {
+                            ForEach(Array(git.stashes.enumerated()), id: \ .element.id) { index, stash in
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("stash@{\(index)}")
+                                            .font(.system(.caption, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                        Text(stash.message)
+                                            .font(.footnote)
+                                            .lineLimit(2)
+                                    }
+
+                                    Spacer()
+
+                                    Button("Apply") {
+                                        git.stashApply(index: index)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(git.isBusy)
+
+                                    Button("Pop") {
+                                        git.stashPop(index: index)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(.red)
+                                    .disabled(git.isBusy)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                        .listStyle(.plain)
+                        .frame(maxHeight: 220)
+                    }
+                }
+                .padding(.horizontal)
+
+                Spacer()
+            }
+            .padding(.top, 12)
+            .navigationTitle("Git")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        git.refreshStatus()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(git.isBusy)
+                }
+            }
+        }
+        .onAppear {
+            if git.statusText == "No changes" {
+                git.refreshStatus()
+            }
+        }
+    }
+}
+
+#Preview {
+    GitQuickActionsView()
+}

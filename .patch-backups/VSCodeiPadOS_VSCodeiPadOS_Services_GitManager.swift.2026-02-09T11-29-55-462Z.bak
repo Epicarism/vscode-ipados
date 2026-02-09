@@ -1,0 +1,204 @@
+import SwiftUI
+import Combine
+
+// MARK: - Git Errors
+
+enum GitManagerError: Error, LocalizedError {
+    case noRepository
+    case gitExecutableNotFound
+    case commandFailed(args: [String], exitCode: Int32, message: String)
+    case notAvailableOnIOS
+    
+    var errorDescription: String? {
+        switch self {
+        case .noRepository:
+            return "No git repository configured"
+        case .gitExecutableNotFound:
+            return "Git executable not found"
+        case let .commandFailed(args, exitCode, message):
+            return "git \(args.joined(separator: " ")) failed (\(exitCode)): \(message)"
+        case .notAvailableOnIOS:
+            return "Git operations require a server backend on iOS"
+        }
+    }
+}
+
+enum GitChangeKind: String, Hashable {
+    case modified
+    case added
+    case deleted
+    case renamed
+    case copied
+    case untracked
+    case unmerged
+    case typeChanged
+    case unknown
+}
+
+struct GitStatusEntry: Identifiable, Hashable {
+    let id = UUID()
+    let path: String
+    let kind: GitChangeKind
+}
+
+struct GitBranch: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let isCurrent: Bool
+    let isRemote: Bool
+}
+
+struct GitCommit: Identifiable, Hashable {
+    let id: String // SHA
+    let message: String
+    let author: String
+    let date: Date
+}
+
+// MARK: - Git Manager
+
+/// Git manager for iOS - provides mock/stub implementation
+/// Real git operations would require a server-side backend on iOS
+class GitManager: ObservableObject {
+    static let shared = GitManager()
+    
+    @Published var isRepository: Bool = false
+    @Published var currentBranch: String = "main"
+    @Published var branches: [GitBranch] = []
+    @Published var status: [GitStatusEntry] = []
+    @Published var recentCommits: [GitCommit] = []
+    @Published var hasUncommittedChanges: Bool = false
+    @Published var isLoading: Bool = false
+    @Published var error: String? = nil
+    
+    private var workingDirectory: URL?
+    
+    private init() {
+        // Initialize with mock data for demo
+        setupMockData()
+    }
+    
+    // MARK: - Public API
+    
+    func setWorkingDirectory(_ url: URL?) {
+        workingDirectory = url
+        if url != nil {
+            // Check if .git folder exists
+            checkForRepository()
+        } else {
+            isRepository = false
+        }
+    }
+    
+    func refresh() async {
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // Simulate network delay
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        
+        await MainActor.run {
+            isLoading = false
+        }
+    }
+    
+    func stage(file: String) async throws {
+        // On iOS, this would call a server API
+        print("[GitManager] Staging file: \(file)")
+    }
+    
+    func unstage(file: String) async throws {
+        print("[GitManager] Unstaging file: \(file)")
+    }
+    
+    func commit(message: String) async throws {
+        guard !message.isEmpty else { return }
+        print("[GitManager] Committing with message: \(message)")
+        
+        await MainActor.run {
+            let newCommit = GitCommit(
+                id: UUID().uuidString.prefix(7).lowercased(),
+                message: message,
+                author: "User",
+                date: Date()
+            )
+            recentCommits.insert(newCommit, at: 0)
+            hasUncommittedChanges = false
+        }
+    }
+    
+    func checkout(branch: String) async throws {
+        print("[GitManager] Checking out branch: \(branch)")
+        
+        await MainActor.run {
+            currentBranch = branch
+            for i in branches.indices {
+                branches[i] = GitBranch(
+                    name: branches[i].name,
+                    isCurrent: branches[i].name == branch,
+                    isRemote: branches[i].isRemote
+                )
+            }
+        }
+    }
+    
+    func createBranch(name: String) async throws {
+        print("[GitManager] Creating branch: \(name)")
+        
+        await MainActor.run {
+            let newBranch = GitBranch(name: name, isCurrent: false, isRemote: false)
+            branches.append(newBranch)
+        }
+    }
+    
+    func pull() async throws {
+        print("[GitManager] Pulling...")
+        await MainActor.run { isLoading = true }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await MainActor.run { isLoading = false }
+    }
+    
+    func push() async throws {
+        print("[GitManager] Pushing...")
+        await MainActor.run { isLoading = true }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await MainActor.run { isLoading = false }
+    }
+    
+    func discardChanges(file: String) async throws {
+        print("[GitManager] Discarding changes in: \(file)")
+        
+        await MainActor.run {
+            status.removeAll { $0.path == file }
+            hasUncommittedChanges = !status.isEmpty
+        }
+    }
+    
+    // MARK: - Private Helpers
+    
+    private func checkForRepository() {
+        guard let dir = workingDirectory else {
+            isRepository = false
+            return
+        }
+        
+        let gitDir = dir.appendingPathComponent(".git")
+        isRepository = FileManager.default.fileExists(atPath: gitDir.path)
+    }
+    
+    private func setupMockData() {
+        branches = [
+            GitBranch(name: "main", isCurrent: true, isRemote: false),
+            GitBranch(name: "develop", isCurrent: false, isRemote: false),
+            GitBranch(name: "feature/new-feature", isCurrent: false, isRemote: false),
+            GitBranch(name: "origin/main", isCurrent: false, isRemote: true)
+        ]
+        
+        recentCommits = [
+            GitCommit(id: "abc1234", message: "Initial commit", author: "Developer", date: Date().addingTimeInterval(-86400 * 7)),
+            GitCommit(id: "def5678", message: "Add new feature", author: "Developer", date: Date().addingTimeInterval(-86400 * 3)),
+            GitCommit(id: "ghi9012", message: "Fix bug in editor", author: "Developer", date: Date().addingTimeInterval(-86400))
+        ]
+    }
+}

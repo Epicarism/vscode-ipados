@@ -1,0 +1,283 @@
+import SwiftUI
+
+// MARK: - Sidebar View Structure
+
+struct SidebarView: View {
+    @ObservedObject var editorCore: EditorCore
+    @ObservedObject var fileNavigator: FileSystemNavigator
+    @Binding var selectedTab: Int
+    @Binding var showSettings: Bool
+    @Binding var showTerminal: Bool
+    @Binding var showFolderPicker: Bool
+    var theme: Theme = ThemeManager.shared.currentTheme
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // 1. Activity Bar (Far Left)
+            IDEActivityBar(
+                editorCore: editorCore,
+                selectedTab: $selectedTab,
+                showSettings: $showSettings,
+                showTerminal: $showTerminal
+            )
+            
+            // 2. Sidebar Panel (Resizable)
+            if editorCore.showSidebar {
+                ZStack(alignment: .trailing) {
+                    VStack(spacing: 0) {
+                        // Header Area
+                        HStack {
+                            Text(sidebarTitle)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .textCase(.uppercase)
+                            Spacer()
+                            sidebarHeaderActions
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        
+                        Divider()
+                            .background(Color(UIColor.separator))
+                        
+                        // Content Area
+                        sidebarContent
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(width: editorCore.sidebarWidth)
+                    .background(Color(UIColor.secondarySystemBackground)) // Theme aware
+                    
+                    // 5. Resize Handle
+                    ResizeHandle(width: $editorCore.sidebarWidth)
+                }
+            }
+        }
+    }
+    
+    // Dynamic Title based on selection
+    private var sidebarTitle: String {
+        switch selectedTab {
+        case 0: return "EXPLORER"
+        case 1: return "SEARCH"
+        case 2: return "SOURCE CONTROL"
+        case 3: return "RUN AND DEBUG"
+        case 4: return "EXTENSIONS"
+        case 5: return "TESTING"
+        default: return "EXPLORER"
+        }
+    }
+    
+    // Header Actions
+    @ViewBuilder
+    private var sidebarHeaderActions: some View {
+        if selectedTab == 0 {
+            HStack(spacing: 12) {
+                Button(action: { showFolderPicker = true }) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .help("Open Folder")
+                
+                Button(action: { editorCore.addTab() }) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .help("New File")
+                
+                Button(action: { fileNavigator.refreshFileTree() }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .help("Refresh")
+                
+                Button(action: { 
+                     // Collapse All Action 
+                     fileNavigator.expandedPaths.removeAll()
+                }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right") // Collapse icon
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .help("Collapse All Folders")
+            }
+        }
+    }
+    
+    // Content Switching
+    @ViewBuilder
+    private var sidebarContent: some View {
+        switch selectedTab {
+        case 0:
+            IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showFolderPicker, theme: theme)
+        case 1:
+            SidebarSearchView(theme: theme)
+        case 2:
+            GitView()
+        case 3:
+            DebugView()
+        case 4:
+            ExtensionsView()
+        case 5:
+            TestView()
+        default:
+            IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showFolderPicker, theme: theme)
+        }
+    }
+}
+
+// MARK: - Activity Bar Implementation
+
+struct IDEActivityBar: View {
+    @ObservedObject var editorCore: EditorCore
+    @Binding var selectedTab: Int
+    @Binding var showSettings: Bool
+    @Binding var showTerminal: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Top Group
+            Group {
+                ActivityBarIcon(icon: "doc.on.doc", title: "Explorer", index: 0, selectedTab: $selectedTab, editorCore: editorCore)
+                ActivityBarIcon(icon: "magnifyingglass", title: "Search", index: 1, selectedTab: $selectedTab, editorCore: editorCore)
+                ActivityBarIcon(icon: "arrow.triangle.branch", title: "Source Control", index: 2, selectedTab: $selectedTab, editorCore: editorCore)
+                ActivityBarIcon(icon: "play.fill", title: "Run and Debug", index: 3, selectedTab: $selectedTab, editorCore: editorCore)
+                ActivityBarIcon(icon: "square.grid.2x2", title: "Extensions", index: 4, selectedTab: $selectedTab, editorCore: editorCore)
+                ActivityBarIcon(icon: "testtube.2", title: "Testing", index: 5, selectedTab: $selectedTab, editorCore: editorCore)
+            }
+            
+            Spacer()
+            
+            // Bottom Group
+            Group {
+                ActivityBarButton(icon: "person.circle", title: "Accounts") {}
+                ActivityBarButton(icon: "gear", title: "Manage") {
+                    showSettings = true
+                }
+            }
+            .padding(.bottom, 10)
+        }
+        .frame(width: 50)
+        .background(Color(UIColor.secondarySystemBackground).opacity(0.8)) // Darker shade for activity bar
+        .border(width: 1, edges: [.trailing], color: Color(UIColor.separator))
+    }
+}
+
+struct ActivityBarIcon: View {
+    let icon: String
+    let title: String
+    let index: Int
+    @Binding var selectedTab: Int
+    @ObservedObject var editorCore: EditorCore
+    
+    var isSelected: Bool { selectedTab == index }
+    
+    var body: some View {
+        Button(action: {
+            if isSelected {
+                // Toggle sidebar visibility if clicking already selected tab
+                editorCore.toggleSidebar()
+            } else {
+                selectedTab = index
+                if !editorCore.showSidebar { editorCore.toggleSidebar() }
+            }
+        }) {
+            ZStack {
+                // Active indicator line on left
+                if isSelected && editorCore.showSidebar {
+                    HStack {
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(width: 2)
+                        Spacer()
+                    }
+                }
+                
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundColor(isSelected && editorCore.showSidebar ? .primary : .secondary)
+                    .frame(width: 50, height: 50)
+                    .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(title)
+    }
+}
+
+struct ActivityBarButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .light))
+                .foregroundColor(.secondary)
+                .frame(width: 50, height: 50)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .help(title)
+    }
+}
+
+// MARK: - Resize Handle (iPad Compatible)
+
+struct ResizeHandle: View {
+    @Binding var width: CGFloat
+    @State private var isDragging = false
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer()
+            ZStack {
+                // Invisible larger hit area
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 10)
+                
+                // Visible separator line
+                Rectangle()
+                    .fill(isDragging ? Color.accentColor : Color(UIColor.separator))
+                    .frame(width: 1)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        let newWidth = width + value.translation.width
+                        // Clamp width (Min 170, Max 600)
+                        if newWidth >= 170 && newWidth <= 600 {
+                            width = newWidth
+                        }
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                    }
+            )
+        }
+    }
+}
+
+// MARK: - Placeholders for Missing Views
+
+
+
+struct ExtensionsView: View {
+    var body: some View {
+        VStack {
+            Text("Extensions")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding()
+            Spacer()
+        }
+    }
+}
+
+

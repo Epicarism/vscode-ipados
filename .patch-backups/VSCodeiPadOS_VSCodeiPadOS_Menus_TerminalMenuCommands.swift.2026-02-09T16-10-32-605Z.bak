@@ -1,0 +1,272 @@
+import SwiftUI
+
+/// Terminal Menu Commands for VS Code iPadOS
+/// Provides keyboard shortcuts and menu items for terminal operations
+struct TerminalMenuCommands: Commands {
+    // MARK: - Environment
+    @FocusedObject private var editorCore: EditorCore?
+    
+    // MARK: - Body
+    var body: some Commands {
+        CommandMenu("Terminal") {
+            
+            // MARK: - New Terminal
+            Button("New Terminal") {
+                editorCore?.createNewTerminal()
+            }
+            .keyboardShortcut("`", modifiers: [.control])
+            .help("Create a new terminal instance (⌃`)")
+            
+            Divider()
+            
+            // MARK: - Split Terminal
+            Button("Split Terminal") {
+                editorCore?.splitTerminal()
+            }
+            .keyboardShortcut("\\", modifiers: [.command])
+            .help("Split the terminal into multiple panes (⌘\\)")
+            
+            // MARK: - Kill Terminal
+            Button("Kill Terminal") {
+                editorCore?.killTerminal()
+            }
+            .help("Terminate the active terminal process")
+            
+            // MARK: - Clear Terminal
+            Button("Clear Terminal") {
+                editorCore?.clearTerminal()
+            }
+            .keyboardShortcut("k", modifiers: [.command])
+            .help("Clear the terminal output (⌘K)")
+            
+            Divider()
+            
+            // MARK: - Run Active File
+            Button("Run Active File") {
+                editorCore?.runActiveFile()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+            .help("Execute the currently active file")
+            
+            // MARK: - Run Selected Text
+            Button("Run Selected Text") {
+                editorCore?.runSelectedText()
+            }
+            .keyboardShortcut("r", modifiers: [.control, .shift])
+            .help("Execute the selected text in the terminal")
+            
+            Divider()
+            
+            // MARK: - Maximize Panel Size
+            Button("Maximize Panel Size") {
+                editorCore?.maximizePanelSize()
+            }
+            .help("Increase the terminal panel to maximum size")
+            
+            // MARK: - Toggle Terminal
+            Button("Toggle Terminal") {
+                editorCore?.togglePanel()
+            }
+            .keyboardShortcut("`", modifiers: [.command])
+            .help("Show or hide the terminal panel (⌘`)")
+        }
+    }
+}
+
+// MARK: - Terminal State Extensions
+extension EditorCore {
+    
+    /// Create a new terminal session
+    func createNewTerminal() {
+        let newSession = TerminalSession()
+        terminalSessions.append(newSession)
+        activeTerminalId = newSession.id
+        
+        // Show panel if hidden
+        if !showPanel {
+            withAnimation(.spring(response: 0.3)) {
+                showPanel = true
+            }
+        }
+        
+        print("✅ Created new terminal: \(newSession.id)")
+    }
+    
+    /// Split the active terminal into a new pane
+    func splitTerminal() {
+        guard activeTerminalId != nil else {
+            // If no terminal exists, create one
+            createNewTerminal()
+            return
+        }
+        
+        let newSession = TerminalSession()
+        terminalSessions.append(newSession)
+        activeTerminalId = newSession.id
+        
+        print("✅ Split terminal: \(newSession.id)")
+    }
+    
+    /// Kill the active terminal process
+    func killTerminal() {
+        guard let activeId = activeTerminalId else {
+            print("⚠️ No active terminal to kill")
+            return
+        }
+        
+        if let index = terminalSessions.firstIndex(where: { $0.id == activeId }) {
+            terminalSessions.remove(at: index)
+            
+            // Set new active terminal or clear
+            if !terminalSessions.isEmpty {
+                activeTerminalId = terminalSessions.first?.id
+            } else {
+                activeTerminalId = nil
+                // Hide panel when no terminals remain
+                withAnimation(.spring(response: 0.3)) {
+                    showPanel = false
+                }
+            }
+            
+            print("✅ Killed terminal: \(activeId)")
+        }
+    }
+    
+    /// Clear the terminal output
+    func clearTerminal() {
+        guard let activeId = activeTerminalId else { return }
+        
+        if let index = terminalSessions.firstIndex(where: { $0.id == activeId }) {
+            terminalSessions[index].clearOutput()
+            print("✅ Cleared terminal: \(activeId)")
+        }
+    }
+    
+    /// Run the active file in the terminal
+    func runActiveFile() {
+        guard let activeTab = activeTab else {
+            print("⚠️ No active file to run")
+            return
+        }
+        
+        // Determine run command based on file extension
+        let runCommand = getRunCommandForTerminal(for: activeTab.fileName)
+        let command = "\(runCommand) \(activeTab.fileName)"
+        
+        // Ensure terminal exists
+        if terminalSessions.isEmpty {
+            createNewTerminal()
+        }
+        
+        // Send command to terminal
+        executeCommandInTerminal(command)
+        
+        // Show terminal panel
+        withAnimation(.spring(response: 0.3)) {
+            showPanel = true
+        }
+        
+        print("✅ Running active file: \(activeTab.fileName)")
+    }
+    
+    /// Run the selected text in the terminal
+    func runSelectedText() {
+        guard !currentSelection.isEmpty else {
+            print("⚠️ No selected text to run")
+            return
+        }
+        
+        // Ensure terminal exists
+        if terminalSessions.isEmpty {
+            createNewTerminal()
+        }
+        
+        // Send selected text to terminal
+        executeCommandInTerminal(currentSelection)
+        
+        // Show terminal panel
+        withAnimation(.spring(response: 0.3)) {
+            showPanel = true
+        }
+        
+        print("✅ Running selected text")
+    }
+    
+    /// Maximize the terminal panel size
+    func maximizePanelSize() {
+        withAnimation(.spring(response: 0.3)) {
+            if isTerminalMaximized {
+                // Restore to normal size
+                terminalPanelHeight = 200
+                isTerminalMaximized = false
+            } else {
+                // Maximize panel
+                terminalPanelHeight = 600
+                isTerminalMaximized = true
+            }
+            showPanel = true
+        }
+        
+        print(isTerminalMaximized ? "✅ Maximized terminal panel" : "✅ Restored terminal panel")
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Get the appropriate run command for a file
+    private func getRunCommandForTerminal(for fileName: String) -> String {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        
+        switch ext {
+        case "swift":
+            return "swift"
+        case "js", "mjs":
+            return "node"
+        case "ts":
+            return "ts-node"
+        case "py":
+            return "python3"
+        case "rb":
+            return "ruby"
+        case "sh":
+            return "bash"
+        case "go":
+            return "go run"
+        case "rs":
+            return "cargo run"
+        case "php":
+            return "php"
+        case "pl":
+            return "perl"
+        case "lua":
+            return "lua"
+        default:
+            return "cat"
+        }
+    }
+    
+    /// Execute a command in the active terminal
+    private func executeCommandInTerminal(_ command: String) {
+        guard let activeId = activeTerminalId else { return }
+        
+        if let index = terminalSessions.firstIndex(where: { $0.id == activeId }) {
+            terminalSessions[index].executeCommand(command)
+        }
+    }
+}
+
+// MARK: - Terminal Session Model
+struct TerminalSession: Identifiable {
+    let id = UUID()
+    var output: [String] = []
+    var isRunning: Bool = true
+    
+    mutating func executeCommand(_ command: String) {
+        output.append("$ \(command)")
+        // Simulate command execution (in real app, this would connect to PTY)
+        output.append("Executing: \(command)")
+    }
+    
+    mutating func clearOutput() {
+        output.removeAll()
+    }
+}

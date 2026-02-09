@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>VS Code needs access to your documents to open and edit files</string>
+    <key>UISupportsDocumentBrowser</key>
+    <true/>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Text Document</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.plain-text</string>
+                <string>public.source-code</string>
+                <string>public.swift-source</string>
+                <string>public.python-script</string>
+                <string>com.netscape.javascript-source</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

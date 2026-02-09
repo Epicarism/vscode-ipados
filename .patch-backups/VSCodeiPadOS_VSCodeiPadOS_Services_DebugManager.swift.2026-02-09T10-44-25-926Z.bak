@@ -1,0 +1,167 @@
+import Foundation
+import SwiftUI
+import Foundation
+
+/// UI-only debug state manager.
+///
+/// This does not perform real debugging yet; it only provides observable state
+/// for the Debug sidebar and breakpoint gutter markers.
+@MainActor
+final class DebugManager: ObservableObject {
+    static let shared = DebugManager()
+
+    enum SessionState: String {
+        case stopped
+        case running
+        case paused
+
+        var displayName: String {
+            switch self {
+            case .stopped: return "Stopped"
+            case .running: return "Running"
+            case .paused: return "Paused"
+            }
+        }
+
+        var canStep: Bool { self == .paused }
+        var canPlay: Bool { self != .running }
+        var canStop: Bool { self != .stopped }
+    }
+
+    struct StackFrame: Identifiable, Hashable {
+        let id = UUID()
+        var function: String
+        var file: String
+        var line: Int
+    }
+
+    struct Variable: Identifiable, Hashable {
+        let id = UUID()
+        var name: String
+        var value: String
+        var type: String
+        var children: [Variable] = []
+    }
+
+    struct WatchExpression: Identifiable, Hashable {
+        let id = UUID()
+        var expression: String
+        var value: String
+    }
+
+    // MARK: - Published state
+
+    @Published var state: SessionState = .stopped
+
+    /// Breakpoints by file identifier (typically URL path, otherwise fileName).
+    @Published private(set) var breakpointsByFile: [String: Set<Int>] = [:]
+
+    @Published var watchExpressions: [WatchExpression] = []
+    @Published var variables: [Variable] = []
+    @Published var callStack: [StackFrame] = []
+    @Published var selectedFrameId: StackFrame.ID?
+
+    private init() {
+        // Seed some UI data so the panels aren’t empty.
+        watchExpressions = [
+            WatchExpression(expression: "counter", value: "0"),
+            WatchExpression(expression: "user.name", value: "\"Taylor\""),
+        ]
+    }
+
+    // MARK: - Breakpoints
+
+    func hasBreakpoint(file: String, line: Int) -> Bool {
+        breakpointsByFile[file]?.contains(line) == true
+    }
+
+    func toggleBreakpoint(file: String, line: Int) {
+        var set = breakpointsByFile[file] ?? []
+        if set.contains(line) {
+            set.remove(line)
+        } else {
+            set.insert(line)
+        }
+        breakpointsByFile[file] = set.isEmpty ? nil : set
+    }
+
+    func allBreakpointsSorted() -> [(file: String, line: Int)] {
+        breakpointsByFile
+            .flatMap { (file, lines) in lines.map { (file: file, line: $0) } }
+            .sorted {
+                if $0.file == $1.file { return $0.line < $1.line }
+                return $0.file < $1.file
+            }
+    }
+
+    // MARK: - Debug controls (UI only)
+
+    func play() {
+        // If paused, resume; if stopped, start a simulated session.
+        if state == .stopped {
+            callStack = [
+                StackFrame(function: "main()", file: "App.swift", line: 12),
+                StackFrame(function: "run()", file: "Runner.swift", line: 48),
+                StackFrame(function: "doWork()", file: "Worker.swift", line: 103)
+            ]
+            selectedFrameId = callStack.first?.id
+
+            variables = [
+                Variable(name: "counter", value: "0", type: "Int"),
+                Variable(
+                    name: "user",
+                    value: "User(…)",
+                    type: "User",
+                    children: [
+                        Variable(name: "id", value: "42", type: "Int"),
+                        Variable(name: "name", value: "\"Taylor\"", type: "String")
+                    ]
+                )
+            ]
+        }
+
+        state = .running
+
+        // Auto-pause quickly so step buttons make sense in the UI.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self else { return }
+            if self.state == .running { self.state = .paused }
+        }
+    }
+
+    func stop() {
+        state = .stopped
+        callStack = []
+        variables = []
+        selectedFrameId = nil
+    }
+
+    func stepOver() {
+        guard state.canStep else { return }
+        advanceTopFrameLine(by: 1)
+    }
+
+    func stepInto() {
+        guard state.canStep else { return }
+        advanceTopFrameLine(by: 1)
+        // Pretend we stepped into a function.
+        if let top = callStack.first {
+            callStack.insert(StackFrame(function: "helper()", file: top.file, line: top.line), at: 0)
+            selectedFrameId = callStack.first?.id
+        }
+    }
+
+    private func advanceTopFrameLine(by delta: Int) {
+        guard !callStack.isEmpty else { return }
+        callStack[0].line += delta
+        // Make the demo watch expression change a bit.
+        if let idx = watchExpressions.firstIndex(where: { $0.expression == "counter" }) {
+            let n = Int(watchExpressions[idx].value) ?? 0
+            watchExpressions[idx].value = "\(n + delta)"
+        }
+        if let varIdx = variables.firstIndex(where: { $0.name == "counter" }) {
+            let n = Int(variables[varIdx].value) ?? 0
+            variables[varIdx].value = "\(n + delta)"
+        }
+    }
+}

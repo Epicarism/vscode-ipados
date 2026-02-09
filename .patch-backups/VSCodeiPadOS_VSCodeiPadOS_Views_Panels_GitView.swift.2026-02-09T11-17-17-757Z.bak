@@ -1,0 +1,987 @@
+import SwiftUI
+
+// MARK: - GitView (VS Code-like Source Control panel)
+
+struct GitView: View {
+    @StateObject private var model = GitViewModel()
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    @State private var showStashSheet = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(VSCodeColors.panelBackground)
+        .onAppear { model.refresh() }
+        .sheet(isPresented: $showStashSheet) {
+            GitStashSheet(model: model)
+        }
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            Text("Source Control")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 8)
+
+            branchMenu
+
+            Divider()
+                .frame(height: 22)
+
+            HStack(spacing: 8) {
+                iconButton("Fetch", systemImage: "arrow.triangle.2.circlepath") { model.fetch() }
+                // FEAT-076
+                iconButton("Pull", systemImage: "arrow.down.to.line") { model.pull() }
+                iconButton("Push", systemImage: "arrow.up.to.line") { model.push() }
+                // FEAT-077
+                iconButton("Stash", systemImage: "archivebox") { showStashSheet = true }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(VSCodeColors.panelHeaderBackground)
+    }
+
+    private var branchMenu: some View {
+        Menu {
+            Picker("Branch", selection: $model.currentBranch) {
+                ForEach(model.branches, id: \.self) { branch in
+                    Text(branch).tag(branch)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(model.currentBranch)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(VSCodeColors.controlBackground)
+            )
+        }
+        .menuStyle(.button)
+    }
+
+    private func iconButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(VSCodeColors.controlBackground)
+                )
+                .accessibilityLabel(Text(title))
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isBusy)
+        .opacity(model.isBusy ? 0.6 : 1)
+    }
+
+    // MARK: Content
+
+    private var content: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                HStack(spacing: 0) {
+                    leftColumn
+                        .frame(minWidth: 360, idealWidth: 420, maxWidth: 520)
+
+                    Divider()
+
+                    diffPreview
+                }
+            } else {
+                VStack(spacing: 0) {
+                    leftColumn
+                    Divider()
+                    diffPreview
+                        .frame(maxHeight: 260)
+                }
+            }
+        }
+    }
+
+    private var leftColumn: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                commitBox
+                changesPanel
+                historyPanel
+
+                if model.isBusy {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(model.busyText)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 2)
+                }
+            }
+            .padding(.vertical, 12)
+        }
+        .background(VSCodeColors.panelBackground)
+    }
+
+    // MARK: Commit box
+
+    private var commitBox: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VSCodeSectionHeader(title: "MESSAGE")
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $model.commitMessage)
+                    .font(.system(.body, design: .default))
+                    .frame(minHeight: 90)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(VSCodeColors.editorInputBackground)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(VSCodeColors.controlBorder, lineWidth: 1)
+                    )
+
+                if model.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Message (Ctrl+Enter to commit)")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    model.commit()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Commit")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(model.canCommit ? VSCodeColors.primaryButton : VSCodeColors.primaryButtonDisabled)
+                )
+                .foregroundStyle(.white)
+                .disabled(!model.canCommit)
+
+                Button {
+                    model.refresh()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(VSCodeColors.controlBackground)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isBusy)
+                .opacity(model.isBusy ? 0.6 : 1)
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    // MARK: Changes panel
+
+    private var changesPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VSCodeSectionHeader(title: "CHANGES")
+                Spacer()
+
+                Button {
+                    model.stageAll()
+                } label: {
+                    Text("Stage All")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(model.unstagedChanges.isEmpty ? .secondary : .primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.unstagedChanges.isEmpty)
+
+                Text("•")
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    model.unstageAll()
+                } label: {
+                    Text("Unstage All")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(model.stagedChanges.isEmpty ? .secondary : .primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.stagedChanges.isEmpty)
+            }
+            .padding(.horizontal, 12)
+
+            VStack(spacing: 8) {
+                DisclosureGroup(isExpanded: $model.isStagedExpanded) {
+                    changesList(model.stagedChanges, isStagedList: true)
+                } label: {
+                    changesGroupLabel(title: "Staged Changes", count: model.stagedChanges.count)
+                }
+
+                DisclosureGroup(isExpanded: $model.isUnstagedExpanded) {
+                    changesList(model.unstagedChanges, isStagedList: false)
+                } label: {
+                    changesGroupLabel(title: "Changes", count: model.unstagedChanges.count)
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    private func changesGroupLabel(title: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            Text("\(count)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(VSCodeColors.badgeBackground)
+                )
+
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func changesList(_ changes: [GitFileChange], isStagedList: Bool) -> some View {
+        VStack(spacing: 0) {
+            if changes.isEmpty {
+                Text(isStagedList ? "No staged changes" : "No changes")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(VSCodeColors.controlBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(changes) { change in
+                        Button {
+                            model.select(change)
+                        } label: {
+                            GitChangeRow(
+                                change: change,
+                                isSelected: model.selectedChange?.path == change.path,
+                                trailingAction: {
+                                    if isStagedList {
+                                        model.unstage(change)
+                                    } else {
+                                        model.stage(change)
+                                    }
+                                },
+                                trailingSystemImage: isStagedList ? "minus.circle" : "plus.circle"
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        if change.id != changes.last?.id {
+                            Divider()
+                                .padding(.leading, 10)
+                        }
+                    }
+                }
+                .background(VSCodeColors.controlBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(VSCodeColors.controlBorder, lineWidth: 1)
+                )
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    // MARK: Diff preview
+
+    private var diffPreview: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                VSCodeSectionHeader(title: "DIFF")
+
+                Spacer()
+
+                if let change = model.selectedChange {
+                    Text(change.path)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text("Select a file to view changes")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(VSCodeColors.panelHeaderBackground)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let change = model.selectedChange {
+                        Text(change.diff)
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                    } else {
+                        Text("No file selected")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .background(VSCodeColors.diffBackground)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: History
+
+    private var historyPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VSCodeSectionHeader(title: "COMMITS")
+                .padding(.horizontal, 12)
+
+            VStack(spacing: 0) {
+                if model.history.isEmpty {
+                    Text("No commits yet")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(VSCodeColors.controlBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(model.history) { commit in
+                            GitCommitRow(commit: commit)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+
+                            if commit.id != model.history.last?.id {
+                                Divider().padding(.leading, 10)
+                            }
+                        }
+                    }
+                    .background(VSCodeColors.controlBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(VSCodeColors.controlBorder, lineWidth: 1)
+                    )
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+}
+
+// MARK: - Stash sheet (FEAT-077)
+
+private struct GitStashSheet: View {
+    @ObservedObject var model: GitViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var message: String = ""
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("SAVE")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+
+                    HStack(spacing: 10) {
+                        TextField("Message (optional)", text: $message)
+                            .textFieldStyle(.roundedBorder)
+
+                        Button("Save") {
+                            model.stashSave(message: message)
+                            message = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(model.isBusy)
+                    }
+                }
+                .padding(.horizontal, 12)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("STASHES")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+
+                    if model.stashes.isEmpty {
+                        Text("No stashes")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(VSCodeColors.controlBackground)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .padding(.horizontal, 12)
+                    } else {
+                        List {
+                            ForEach(Array(model.stashes.enumerated()), id: \.element.id) { index, stash in
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("stash@{\(index)}")
+                                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+
+                                        Text(stash.message)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(2)
+
+                                        Text(stash.date, style: .relative)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Button("Apply") {
+                                        model.stashApply(index: index)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(model.isBusy)
+
+                                    Button("Pop") {
+                                        model.stashPop(index: index)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(.red)
+                                    .disabled(model.isBusy)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                        .listStyle(.plain)
+                    }
+                }
+
+                if model.isBusy {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(model.busyText)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 12)
+            .navigationTitle("Stash")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - View Model (mocked data; ready for real git integration)
+
+@MainActor
+private final class GitViewModel: ObservableObject {
+    // Branch
+    @Published var branches: [String] = ["main", "develop", "feature/ui"]
+    @Published var currentBranch: String = "main"
+
+    // Commit
+    @Published var commitMessage: String = ""
+
+    // Changes
+    @Published var stagedChanges: [GitFileChange] = []
+    @Published var unstagedChanges: [GitFileChange] = []
+    @Published var selectedChange: GitFileChange? = nil
+
+    // FEAT-077: stashes
+    @Published var stashes: [GitStashEntry] = []
+
+    // UI state
+    @Published var isBusy: Bool = false
+    @Published var busyText: String = ""
+    @Published var isStagedExpanded: Bool = true
+    @Published var isUnstagedExpanded: Bool = true
+
+    // History
+    @Published var history: [GitCommit] = []
+
+    var canCommit: Bool {
+        !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !stagedChanges.isEmpty && !isBusy
+    }
+
+    func refresh() {
+        isBusy = true
+        busyText = "Refreshing…"
+
+        // Mock: simulate status
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            let changes: [GitFileChange] = [
+                .init(path: "VSCodeiPadOS/Views/ContentView.swift", kind: .modified, isStaged: false, diff: GitDiffSamples.modifiedSwift),
+                .init(path: "README.md", kind: .modified, isStaged: false, diff: GitDiffSamples.modifiedMarkdown),
+                .init(path: "Assets.xcassets/AppIcon.appiconset/Contents.json", kind: .added, isStaged: false, diff: GitDiffSamples.addedJSON),
+                .init(path: "OldView.swift", kind: .deleted, isStaged: false, diff: GitDiffSamples.deletedSwift)
+            ]
+
+            // Preserve staging decisions when refreshing (best-effort by path).
+            let stagedPaths = Set(self.stagedChanges.map { $0.path })
+            self.stagedChanges = changes.filter { stagedPaths.contains($0.path) }.map { $0.with(isStaged: true) }
+            self.unstagedChanges = changes.filter { !stagedPaths.contains($0.path) }.map { $0.with(isStaged: false) }
+
+            if self.selectedChange == nil {
+                self.selectedChange = self.unstagedChanges.first ?? self.stagedChanges.first
+            } else {
+                // keep selection if still exists
+                if let sel = self.selectedChange,
+                   let updated = (self.stagedChanges + self.unstagedChanges).first(where: { $0.path == sel.path }) {
+                    self.selectedChange = updated
+                } else {
+                    self.selectedChange = self.unstagedChanges.first ?? self.stagedChanges.first
+                }
+            }
+
+            if self.history.isEmpty {
+                self.history = GitCommit.sample
+            }
+
+            self.isBusy = false
+            self.busyText = ""
+        }
+    }
+
+    func select(_ change: GitFileChange) {
+        selectedChange = change
+    }
+
+    func stage(_ change: GitFileChange) {
+        guard let idx = unstagedChanges.firstIndex(where: { $0.id == change.id }) else { return }
+        var item = unstagedChanges.remove(at: idx)
+        item.isStaged = true
+        stagedChanges.insert(item, at: 0)
+        selectedChange = item
+    }
+
+    func unstage(_ change: GitFileChange) {
+        guard let idx = stagedChanges.firstIndex(where: { $0.id == change.id }) else { return }
+        var item = stagedChanges.remove(at: idx)
+        item.isStaged = false
+        unstagedChanges.insert(item, at: 0)
+        selectedChange = item
+    }
+
+    func stageAll() {
+        guard !unstagedChanges.isEmpty else { return }
+        let moved = unstagedChanges.map { $0.with(isStaged: true) }
+        unstagedChanges.removeAll()
+        stagedChanges = moved + stagedChanges
+        if selectedChange == nil { selectedChange = stagedChanges.first }
+    }
+
+    func unstageAll() {
+        guard !stagedChanges.isEmpty else { return }
+        let moved = stagedChanges.map { $0.with(isStaged: false) }
+        stagedChanges.removeAll()
+        unstagedChanges = moved + unstagedChanges
+        if selectedChange == nil { selectedChange = unstagedChanges.first }
+    }
+
+    func commit() {
+        guard canCommit else { return }
+        isBusy = true
+        busyText = "Committing…"
+
+        let message = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stagedCount = stagedChanges.count
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            let newCommit = GitCommit(
+                hash: String(UUID().uuidString.prefix(7)).lowercased(),
+                message: message,
+                author: "You",
+                date: Date(),
+                summary: "\(stagedCount) file(s) changed"
+            )
+            self.history.insert(newCommit, at: 0)
+
+            self.commitMessage = ""
+            self.stagedChanges.removeAll()
+            self.selectedChange = self.unstagedChanges.first
+
+            self.isBusy = false
+            self.busyText = ""
+        }
+    }
+
+    func fetch() {
+        simulateNetwork("Fetching…", delay: 0.5)
+    }
+
+    func pull() {
+        simulateNetwork("Pulling…", delay: 0.7)
+    }
+
+    func push() {
+        simulateNetwork("Pushing…", delay: 0.7)
+    }
+
+    // MARK: - FEAT-077 stash operations
+
+    func stashSave(message: String?) {
+        let trimmed = (message ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let msg = trimmed.isEmpty ? "WIP on \(currentBranch)" : trimmed
+        simulateNetwork("Stashing…", delay: 0.4) {
+            self.stashes.insert(GitStashEntry(message: msg, date: Date()), at: 0)
+        }
+    }
+
+    func stashApply(index: Int) {
+        guard stashes.indices.contains(index) else { return }
+        simulateNetwork("Applying stash…", delay: 0.5)
+    }
+
+    func stashPop(index: Int) {
+        guard stashes.indices.contains(index) else { return }
+        simulateNetwork("Popping stash…", delay: 0.5) {
+            self.stashes.remove(at: index)
+        }
+    }
+
+    private func simulateNetwork(_ text: String, delay: TimeInterval, completion: (() -> Void)? = nil) {
+        isBusy = true
+        busyText = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            completion?()
+            self.isBusy = false
+            self.busyText = ""
+        }
+    }
+}
+
+// MARK: - Models
+
+private enum GitChangeKind: String {
+    case modified = "M"
+    case added = "A"
+    case deleted = "D"
+
+    var color: Color {
+        switch self {
+        case .modified: return VSCodeColors.gitModified
+        case .added: return VSCodeColors.gitAdded
+        case .deleted: return VSCodeColors.gitDeleted
+        }
+    }
+}
+
+private struct GitFileChange: Identifiable, Equatable {
+    let id: UUID = UUID()
+    let path: String
+    let kind: GitChangeKind
+    var isStaged: Bool
+    let diff: String
+
+    func with(isStaged: Bool) -> GitFileChange {
+        var copy = self
+        copy.isStaged = isStaged
+        return copy
+    }
+}
+
+private struct GitStashEntry: Identifiable, Equatable {
+    let id: UUID = UUID()
+    let message: String
+    let date: Date
+}
+
+private struct GitCommit: Identifiable {
+    let id: UUID = UUID()
+    let hash: String
+    let message: String
+    let author: String
+    let date: Date
+    let summary: String
+
+    static var sample: [GitCommit] {
+        [
+            GitCommit(hash: "a1b2c3d", message: "Fix layout in Source Control panel", author: "You", date: Date().addingTimeInterval(-3600), summary: "3 files changed"),
+            GitCommit(hash: "9e8d7c6", message: "Add diff preview component", author: "You", date: Date().addingTimeInterval(-7200), summary: "1 file changed"),
+            GitCommit(hash: "1f2e3d4", message: "Initial iPadOS project setup", author: "You", date: Date().addingTimeInterval(-86400), summary: "20 files changed")
+        ]
+    }
+}
+
+// MARK: - Rows / Subviews
+
+private struct GitChangeRow: View {
+    let change: GitFileChange
+    let isSelected: Bool
+    let trailingAction: () -> Void
+    let trailingSystemImage: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            statusBadge
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(filename)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if !directory.isEmpty {
+                    Text(directory)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: trailingAction) {
+                Image(systemName: trailingSystemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(trailingSystemImage == "plus.circle" ? "Stage" : "Unstage"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(isSelected ? VSCodeColors.selectionBackground : Color.clear)
+        .contentShape(Rectangle())
+    }
+
+    private var statusBadge: some View {
+        Text(change.kind.rawValue)
+            .font(.system(size: 12, weight: .heavy, design: .monospaced))
+            .foregroundStyle(change.kind.color)
+            .frame(width: 20, height: 20)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(change.kind.color.opacity(0.12))
+            )
+    }
+
+    private var filename: String {
+        (change.path as NSString).lastPathComponent
+    }
+
+    private var directory: String {
+        (change.path as NSString).deletingLastPathComponent
+    }
+}
+
+private struct GitCommitRow: View {
+    let commit: GitCommit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(commit.message)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Text(commit.hash)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                Text(commit.summary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                Text("•")
+                    .foregroundStyle(.secondary)
+
+                Text(commit.author)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                Text("•")
+                    .foregroundStyle(.secondary)
+
+                Text(commit.date, style: .relative)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+        }
+    }
+}
+
+private struct VSCodeSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11, weight: .heavy))
+            .foregroundStyle(.secondary)
+            .tracking(0.6)
+    }
+}
+
+// MARK: - Styling
+
+private enum VSCodeColors {
+    // Approximations using iOS system colors, tuned to feel closer to VS Code.
+    static let panelBackground = Color(UIColor.systemBackground)
+    static let panelHeaderBackground = Color(UIColor.secondarySystemBackground)
+
+    static let controlBackground = Color(UIColor.secondarySystemBackground)
+    static let editorInputBackground = Color(UIColor.secondarySystemBackground)
+    static let diffBackground = Color(UIColor.tertiarySystemBackground)
+
+    static let selectionBackground = Color.accentColor.opacity(0.14)
+
+    static let controlBorder = Color(UIColor.separator).opacity(0.55)
+    static let badgeBackground = Color(UIColor.tertiarySystemBackground)
+
+    static let primaryButton = Color.accentColor
+    static let primaryButtonDisabled = Color.accentColor.opacity(0.45)
+
+    static let gitModified = Color.orange
+    static let gitAdded = Color.green
+    static let gitDeleted = Color.red
+}
+
+// MARK: - Diff samples
+
+private enum GitDiffSamples {
+    static let modifiedSwift = """
+    diff --git a/VSCodeiPadOS/Views/ContentView.swift b/VSCodeiPadOS/Views/ContentView.swift
+    index 2c4d1aa..f91ad0b 100644
+    --- a/VSCodeiPadOS/Views/ContentView.swift
+    +++ b/VSCodeiPadOS/Views/ContentView.swift
+    @@ -12,7 +12,12 @@ struct ContentView: View {
+     var body: some View {
+    -    Text(\"Hello\")
+    +    VStack(alignment: .leading, spacing: 8) {
+    +        Text(\"Hello\")
+    +        Text(\"Source Control\")
+    +            .foregroundStyle(.secondary)
+    +    }
+     }
+    }
+    """
+
+    static let modifiedMarkdown = """
+    diff --git a/README.md b/README.md
+    index 8a32b11..57b0c2f 100644
+    --- a/README.md
+    +++ b/README.md
+    @@ -1,4 +1,6 @@
+     # VSCode iPadOS
+    +
+    +A lightweight VS Code-inspired editor UI for iPadOS.
+
+     ## Development
+     - SwiftUI
+    """
+
+    static let addedJSON = """
+    diff --git a/Assets.xcassets/AppIcon.appiconset/Contents.json b/Assets.xcassets/AppIcon.appiconset/Contents.json
+    new file mode 100644
+    --- /dev/null
+    +++ b/Assets.xcassets/AppIcon.appiconset/Contents.json
+    @@ -0,0 +1,8 @@
+    +{
+    +  \"images\" : [],
+    +  \"info\" : {
+    +    \"author\" : \"xcode\",
+    +    \"version\" : 1
+    +  }
+    +}
+    """
+
+    static let deletedSwift = """
+    diff --git a/OldView.swift b/OldView.swift
+    deleted file mode 100644
+    --- a/OldView.swift
+    +++ /dev/null
+    @@ -1,12 +0,0 @@
+    -import SwiftUI
+    -
+    -struct OldView: View {
+    -    var body: some View {
+    -        Text(\"Deprecated\")
+    -    }
+    -}
+    -
+    -#Preview {
+    -    OldView()
+    -}
+    """
+}
+
+#Preview {
+    GitView()
+}

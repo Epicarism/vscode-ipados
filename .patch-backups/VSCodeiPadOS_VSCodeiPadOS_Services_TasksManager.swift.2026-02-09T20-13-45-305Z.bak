@@ -1,0 +1,786 @@
+import Foundation
+import SwiftUI
+
+// MARK: - Output Stream Types
+
+/// Represents the source of an output line (stdout vs stderr)
+enum OutputStreamType {
+    case stdout
+    case stderr
+}
+
+/// A single line entry in the output panel with metadata
+struct OutputLine: Identifiable, Equatable {
+    let id: UUID
+    let text: String
+    let streamType: OutputStreamType
+    let timestamp: Date
+    var isAnsiFormatted: Bool = false
+    var ansiAttributes: [NSRange: [NSAttributedString.Key: Any]]?
+    
+    init(
+        id: UUID = UUID(),
+        text: String,
+        streamType: OutputStreamType = .stdout,
+        timestamp: Date = Date(),
+        isAnsiFormatted: Bool = false,
+        ansiAttributes: [NSRange: [NSAttributedString.Key: Any]]? = nil
+    ) {
+        self.id = id
+        self.text = text
+        self.streamType = streamType
+        self.timestamp = timestamp
+        self.isAnsiFormatted = isAnsiFormatted
+        self.ansiAttributes = ansiAttributes
+    }
+}
+
+// MARK: - Output Channel
+
+enum OutputChannel: String, CaseIterable, Identifiable {
+    case tasks = "Tasks"
+    case git = "Git"
+    case extensions = "Extensions"
+    case remote = "Remote"  // New channel for remote execution
+
+    var id: String { rawValue }
+    
+    var icon: String {
+        switch self {
+        case .tasks: return "checklist"
+        case .git: return "arrow.branch"
+        case .extensions: return "puzzlepiece"
+        case .remote: return "network"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .tasks: return .blue
+        case .git: return .orange
+        case .extensions: return .green
+        case .remote: return .purple
+        }
+    }
+}
+
+// MARK: - ANSI Color Parser
+
+/// Parses ANSI escape codes to SwiftUI attributes
+struct ANSIColorParser {
+    // Standard ANSI colors
+    private static let foregroundColors: [Int: Color] = [
+        30: .black, 31: .red, 32: .green, 33: .yellow,
+        34: .blue, 35: .purple, 36: .cyan, 37: .white,
+        90: .gray, 91: .red, 92: .green, 93: .yellow,
+        94: .blue, 95: .purple, 96: .cyan, 97: .white
+    ]
+    
+    private static let backgroundColors: [Int: Color] = [
+        40: .black, 41: .red, 42: .green, 43: .yellow,
+        44: .blue, 45: .purple, 46: .cyan, 47: .white,
+        100: .gray, 101: .red, 102: .green, 103: .yellow,
+        104: .blue, 105: .purple, 106: .cyan, 107: .white
+    ]
+    
+    /// Strips ANSI codes and returns attributed string with color information
+    static func parse(_ text: String) -> (cleanText: String, attributes: [NSRange: [NSAttributedString.Key: Any]]) {
+        var cleanText = ""
+        var attributes: [NSRange: [NSAttributedString.Key: Any]] = [:]
+        var currentIndex = 0
+        
+        var currentForeground: Color?
+        var currentBackground: Color?
+        var isBold = false
+        var isItalic = false
+        var isUnderline = false
+        
+        // Pattern to match ANSI escape sequences
+        let pattern = "\u{001B}\\[([0-9;]*)m"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return (text, [:])
+        }
+        
+        let nsRange = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, options: [], range: nsRange)
+        
+        var lastEnd = text.startIndex
+        
+        for match in matches {
+            let matchRange = Range(match.range, in: text)!
+            let codeRange = Range(match.range(at: 1), in: text)!
+            let codes = text[codeRange].split(separator: ";").compactMap { Int($0) }
+            
+            // Append text before the escape code
+            let textBefore = String(text[lastEnd..<matchRange.lowerBound])
+            if !textBefore.isEmpty {
+                let nsRange = NSRange(location: currentIndex, length: textBefore.utf16.count)
+                
+                var attrs: [NSAttributedString.Key: Any] = [:]
+                if let fg = currentForeground {
+                    attrs[.foregroundColor] = fg
+                }
+                if let bg = currentBackground {
+                    attrs[.backgroundColor] = bg
+                }
+                if isBold {
+                    attrs[.font] = Font.system(.body, design: .monospaced).bold()
+                }
+                if isItalic {
+                    attrs[.font] = Font.system(.body, design: .monospaced).italic()
+                }
+                if isUnderline {
+                    attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                }
+                
+                if !attrs.isEmpty {
+                    attributes[nsRange] = attrs
+                }
+                
+                cleanText.append(textBefore)
+                currentIndex += textBefore.utf16.count
+            }
+            
+            // Process SGR codes
+            if codes.isEmpty || codes.contains(0) {
+                // Reset
+                currentForeground = nil
+                currentBackground = nil
+                isBold = false
+                isItalic = false
+                isUnderline = false
+            } else {
+                for code in codes {
+                    switch code {
+                    case 1: isBold = true
+                    case 3: isItalic = true
+                    case 4: isUnderline = true
+                    case 22: isBold = false
+                    case 23: isItalic = false
+                    case 24: isUnderline = false
+                    case 30...37, 90...97:
+                        currentForeground = foregroundColors[code]
+                    case 40...47, 100...107:
+                        currentBackground = backgroundColors[code]
+                    default:
+                        break
+                    }
+                }
+            }
+            
+            lastEnd = matchRange.upperBound
+        }
+        
+        // Append remaining text
+        let remainingText = String(text[lastEnd...])
+        if !remainingText.isEmpty {
+            let nsRange = NSRange(location: currentIndex, length: remainingText.utf16.count)
+            
+            var attrs: [NSAttributedString.Key: Any] = [:]
+            if let fg = currentForeground {
+                attrs[.foregroundColor] = fg
+            }
+            if let bg = currentBackground {
+                attrs[.backgroundColor] = bg
+            }
+            if isBold {
+                attrs[.font] = Font.system(.body, design: .monospaced).bold()
+            }
+            if isItalic {
+                attrs[.font] = Font.system(.body, design: .monospaced).italic()
+            }
+            if isUnderline {
+                attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            }
+            
+            if !attrs.isEmpty {
+                attributes[nsRange] = attrs
+            }
+            
+            cleanText.append(remainingText)
+        }
+        
+        return (cleanText, attributes)
+    }
+    
+    /// Quick check if text contains ANSI codes
+    static func containsAnsiCodes(_ text: String) -> Bool {
+        return text.contains("\u{001B}[")
+    }
+}
+
+// MARK: - Remote Execution Status
+
+/// Tracks the state of remote execution for progress indication
+struct RemoteExecutionStatus: Equatable {
+    let isRunning: Bool
+    let command: String?
+    let startTime: Date?
+    let progressMessage: String?
+    
+    static let idle = RemoteExecutionStatus(isRunning: false, command: nil, startTime: nil, progressMessage: nil)
+}
+
+// MARK: - Streaming Output Manager
+
+/// AsyncStream-based output handling for remote execution
+actor StreamingOutputManager {
+    private var continuations: [UUID: AsyncStream<OutputLine>.Continuation] = [:]
+    private var outputHandlers: [UUID: (OutputLine) -> Void] = [:]
+    
+    /// Create a new streaming session
+    func createStream(sessionId: UUID) -> AsyncStream<OutputLine> {
+        AsyncStream { continuation in
+            self.continuations[sessionId] = continuation
+            
+            continuation.onTermination = { @Sendable [weak self] _ in
+                Task {
+                    await self?.terminateSession(sessionId: sessionId)
+                }
+            }
+        }
+    }
+    
+    /// Emit output to a specific session
+    func emit(sessionId: UUID, line: OutputLine) {
+        if let continuation = continuations[sessionId] {
+            continuation.yield(line)
+        }
+        if let handler = outputHandlers[sessionId] {
+            handler(line)
+        }
+    }
+    
+    /// Complete a session
+    func finish(sessionId: UUID) {
+        continuations[sessionId]?.finish()
+        continuations.removeValue(forKey: sessionId)
+        outputHandlers.removeValue(forKey: sessionId)
+    }
+    
+    /// Register a sync handler for a session
+    func registerHandler(sessionId: UUID, handler: @escaping (OutputLine) -> Void) {
+        outputHandlers[sessionId] = handler
+    }
+    
+    private func terminateSession(sessionId: UUID) {
+        continuations.removeValue(forKey: sessionId)
+        outputHandlers.removeValue(forKey: sessionId)
+    }
+}
+
+// MARK: - Output Panel Manager
+
+@MainActor
+final class OutputPanelManager: ObservableObject {
+    static let shared = OutputPanelManager()
+
+    @Published var selectedChannel: OutputChannel = .tasks
+    @Published var isAutoScrollEnabled: Bool = true
+    @Published var showTimestamps: Bool = false
+    @Published var wordWrapEnabled: Bool = true
+    @Published var searchQuery: String = ""
+    @Published private(set) var remoteExecutionStatus: RemoteExecutionStatus = .idle
+    
+    // New: Streaming manager for remote execution
+    private let streamingManager = StreamingOutputManager()
+    
+    // Channel -> output lines (now storing OutputLine instead of String)
+    @Published private(set) var outputLines: [OutputChannel: [OutputLine]] = [
+        .tasks: [],
+        .git: [],
+        .extensions: [],
+        .remote: []
+    ]
+    
+    // Legacy support: computed property for string lines
+    var logs: [OutputChannel: [String]] {
+        var result: [OutputChannel: [String]] = [:]
+        for (channel, lines) in outputLines {
+            result[channel] = lines.map { $0.text }
+        }
+        return result
+    }
+
+    private init() {}
+    
+    // MARK: - Legacy String-Based Methods
+    
+    func clear(_ channel: OutputChannel) {
+        outputLines[channel] = []
+    }
+
+    func append(_ text: String, to channel: OutputChannel, streamType: OutputStreamType = .stdout) {
+        let lines = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        
+        for line in lines {
+            appendLine(line, to: channel, streamType: streamType)
+        }
+    }
+
+    func appendLine(_ line: String, to channel: OutputChannel, streamType: OutputStreamType = .stdout) {
+        let hasAnsi = ANSIColorParser.containsAnsiCodes(line)
+        let (cleanText, attributes) = hasAnsi ? ANSIColorParser.parse(line) : (line, [:])
+        
+        let outputLine = OutputLine(
+            text: cleanText,
+            streamType: streamType,
+            timestamp: Date(),
+            isAnsiFormatted: hasAnsi,
+            ansiAttributes: hasAnsi ? attributes : nil
+        )
+        
+        var current = outputLines[channel] ?? []
+        current.append(outputLine)
+        outputLines[channel] = current
+    }
+    
+    // MARK: - Streaming Methods
+    
+    /// Start streaming output for remote execution
+    func startRemoteExecution(command: String, sessionId: UUID = UUID()) -> AsyncStream<OutputLine> {
+        remoteExecutionStatus = RemoteExecutionStatus(
+            isRunning: true,
+            command: command,
+            startTime: Date(),
+            progressMessage: "Running: \(command)"
+        )
+        
+        // Clear previous remote output
+        clear(.remote)
+        selectedChannel = .remote
+        
+        // Return the async stream for this session
+        return streamingManager.createStream(sessionId: sessionId)
+    }
+    
+    /// Stream a line to remote output (can be called from AsyncStream)
+    func streamLine(_ line: OutputLine, to channel: OutputChannel = .remote, sessionId: UUID? = nil) {
+        var current = outputLines[channel] ?? []
+        current.append(line)
+        outputLines[channel] = current
+        
+        if let sessionId = sessionId {
+            Task {
+                await streamingManager.emit(sessionId: sessionId, line: line)
+            }
+        }
+    }
+    
+    /// Complete remote execution
+    func finishRemoteExecution(sessionId: UUID? = nil, exitMessage: String? = nil) {
+        if let message = exitMessage {
+            let exitLine = OutputLine(
+                text: message,
+                streamType: .stdout,
+                timestamp: Date()
+            )
+            streamLine(exitLine)
+        }
+        
+        if let sessionId = sessionId {
+            Task {
+                await streamingManager.finish(sessionId: sessionId)
+            }
+        }
+        
+        remoteExecutionStatus = .idle
+    }
+    
+    /// Update progress message during remote execution
+    func updateProgressMessage(_ message: String) {
+        guard remoteExecutionStatus.isRunning else { return }
+        remoteExecutionStatus = RemoteExecutionStatus(
+            isRunning: true,
+            command: remoteExecutionStatus.command,
+            startTime: remoteExecutionStatus.startTime,
+            progressMessage: message
+        )
+    }
+    
+    // MARK: - Filtering
+    
+    /// Get filtered lines based on search query and channel
+    func filteredLines(for channel: OutputChannel) -> [OutputLine] {
+        let lines = outputLines[channel] ?? []
+        
+        guard !searchQuery.isEmpty else {
+            return lines
+        }
+        
+        let queryLower = searchQuery.lowercased()
+        return lines.filter { line in
+            line.text.lowercased().contains(queryLower)
+        }
+    }
+    
+    /// Get lines for a specific stream type only
+    func lines(for channel: OutputChannel, streamType: OutputStreamType? = nil) -> [OutputLine] {
+        let lines = filteredLines(for: channel)
+        
+        if let streamType = streamType {
+            return lines.filter { $0.streamType == streamType }
+        }
+        
+        return lines
+    }
+    
+    /// Legacy string lines support
+    func stringLines(for channel: OutputChannel) -> [String] {
+        return filteredLines(for: channel).map { line in
+            if showTimestamps {
+                let formatter = DateFormatter()
+                formatter.timeStyle = .medium
+                let timestamp = formatter.string(from: line.timestamp)
+                let prefix = line.streamType == .stderr ? "[ERR]" : "[OUT]"
+                return "[\(timestamp)] \(prefix) \(line.text)"
+            }
+            return line.text
+        }
+    }
+    
+    // MARK: - Settings
+    
+    func toggleAutoScroll() {
+        isAutoScrollEnabled.toggle()
+    }
+    
+    func toggleTimestamps() {
+        showTimestamps.toggle()
+    }
+    
+    func toggleWordWrap() {
+        wordWrapEnabled.toggle()
+    }
+    
+    func setSearchQuery(_ query: String) {
+        searchQuery = query
+    }
+    
+    /// Clear search/filter
+    func clearFilter() {
+        searchQuery = ""
+    }
+    
+    /// Get count of filtered vs total lines for display
+    func filterStats(for channel: OutputChannel) -> (filtered: Int, total: Int) {
+        let total = outputLines[channel]?.count ?? 0
+        let filtered = filteredLines(for: channel).count
+        return (filtered, total)
+    }
+}
+
+// MARK: - Task Model
+
+enum VSCodeTaskType: String, Codable, CaseIterable, Identifiable {
+    case shell
+    case process
+
+    var id: String { rawValue }
+}
+
+enum VSCodeTaskGroup: String, Codable, CaseIterable, Identifiable {
+    case build
+    case test
+
+    var id: String { rawValue }
+}
+
+struct VSCodeTask: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+
+    var label: String
+    var type: VSCodeTaskType
+    var command: String
+    var args: [String]?
+    var group: VSCodeTaskGroup?
+
+    enum CodingKeys: String, CodingKey {
+        case label, type, command, args, group
+    }
+
+    init(
+        id: UUID = UUID(),
+        label: String,
+        type: VSCodeTaskType,
+        command: String,
+        args: [String]? = nil,
+        group: VSCodeTaskGroup? = nil
+    ) {
+        self.id = id
+        self.label = label
+        self.type = type
+        self.command = command
+        self.args = args
+        self.group = group
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = UUID()
+        self.label = try container.decode(String.self, forKey: .label)
+        self.type = (try? container.decode(VSCodeTaskType.self, forKey: .type)) ?? .shell
+        self.command = try container.decode(String.self, forKey: .command)
+        self.args = try container.decodeIfPresent([String].self, forKey: .args)
+
+        // VS Code supports either string or object for group.
+        if let groupString = try? container.decode(String.self, forKey: .group) {
+            self.group = VSCodeTaskGroup(rawValue: groupString)
+        } else if let groupObj = try? container.decode([String: String].self, forKey: .group),
+                  let kind = groupObj["kind"] {
+            self.group = VSCodeTaskGroup(rawValue: kind)
+        } else {
+            self.group = nil
+        }
+    }
+}
+
+// MARK: - Tasks JSON Container
+
+private struct TasksJSON: Codable {
+    var version: String?
+    var tasks: [VSCodeTask]
+}
+
+// MARK: - Tasks Manager
+
+@MainActor
+final class TasksManager: ObservableObject {
+    static let shared = TasksManager()
+
+    @Published private(set) var tasks: [VSCodeTask] = VSCodeTask.builtInTemplates
+    @Published private(set) var workspaceRootURL: URL?
+
+    @Published var lastErrorMessage: String?
+    @Published var isRunning: Bool = false
+    @Published var runningTaskLabel: String?
+
+    private init() {}
+
+    func setWorkspaceRoot(_ url: URL?) {
+        workspaceRootURL = url
+        reload()
+    }
+
+    func reload() {
+        lastErrorMessage = nil
+
+        guard let workspaceRootURL else {
+            tasks = VSCodeTask.builtInTemplates
+            return
+        }
+
+        let tasksURL = workspaceRootURL
+            .appendingPathComponent(".vscode", isDirectory: true)
+            .appendingPathComponent("tasks.json", isDirectory: false)
+
+        do {
+            let data = try Data(contentsOf: tasksURL)
+            let raw = String(decoding: data, as: UTF8.self)
+            let stripped = Self.stripJSONComments(raw)
+            let decoded = try JSONDecoder().decode(TasksJSON.self, from: Data(stripped.utf8))
+            tasks = decoded.tasks
+            if tasks.isEmpty {
+                tasks = VSCodeTask.builtInTemplates
+            }
+        } catch {
+            // Fall back to templates if the file doesn't exist or can't be read.
+            tasks = VSCodeTask.builtInTemplates
+            lastErrorMessage = "Couldn’t load .vscode/tasks.json"
+        }
+    }
+
+    func addTemplate(_ template: VSCodeTask) {
+        tasks.append(template)
+    }
+
+    func task(named label: String) -> VSCodeTask? {
+        tasks.first { $0.label == label }
+    }
+
+    // MARK: - Run Task
+
+    func run(_ task: VSCodeTask) {
+        OutputPanelManager.shared.selectedChannel = .tasks
+        OutputPanelManager.shared.appendLine("[Task] \(task.label)", to: .tasks)
+
+        isRunning = true
+        runningTaskLabel = task.label
+
+        // Perform in the background.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let start = Date()
+
+            do {
+                try Self.runWithProcess(task: task, workspaceRootURL: self.workspaceRootURL) { chunk in
+                    Task { @MainActor in
+                        OutputPanelManager.shared.append(chunk, to: .tasks)
+                    }
+                }
+
+                let elapsed = Date().timeIntervalSince(start)
+                Task { @MainActor in
+                    OutputPanelManager.shared.appendLine(String(format: "[Task] Finished (%.2fs)", elapsed), to: .tasks)
+                    self.isRunning = false
+                    self.runningTaskLabel = nil
+                }
+            } catch {
+                Task { @MainActor in
+                    OutputPanelManager.shared.appendLine("[Task] Error: \(error.localizedDescription)", to: .tasks)
+                    self.lastErrorMessage = error.localizedDescription
+                    self.isRunning = false
+                    self.runningTaskLabel = nil
+                }
+            }
+        }
+    }
+
+    private static func runWithProcess(
+        task: VSCodeTask,
+        workspaceRootURL: URL?,
+        onOutput: @escaping (String) -> Void
+    ) throws {
+#if os(macOS)
+        let process = Process()
+
+        if let cwd = workspaceRootURL {
+            process.currentDirectoryURL = cwd
+        }
+
+        let expandedCommand = expandVariables(task.command, workspaceRootURL: workspaceRootURL)
+        let expandedArgs = (task.args ?? []).map { expandVariables($0, workspaceRootURL: workspaceRootURL) }
+
+        switch task.type {
+        case .shell:
+            // Use a login shell so things like `swift`/`npm` resolve from PATH (where supported).
+            // Note: This is expected to work on macOS / Mac Catalyst. On iPadOS, spawning processes
+            // may be restricted; errors will be reported to the output panel.
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            let commandLine = ([expandedCommand] + expandedArgs)
+                .map(shellEscape)
+                .joined(separator: " ")
+            process.arguments = ["-lc", commandLine]
+
+        case .process:
+            // Use /usr/bin/env so a bare command name can be resolved via PATH.
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = [expandedCommand] + expandedArgs
+        }
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let lock = NSLock()
+        func forward(_ data: Data) {
+            guard !data.isEmpty else { return }
+            if let s = String(data: data, encoding: .utf8), !s.isEmpty {
+                lock.lock()
+                onOutput(s)
+                lock.unlock()
+            }
+        }
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+            forward(handle.availableData)
+        }
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            forward(handle.availableData)
+        }
+
+        try process.run()
+        process.waitUntilExit()
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+        // Flush any remaining data.
+        forward(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+        forward(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+
+        if process.terminationStatus != 0 {
+            throw NSError(
+                domain: "TasksManager",
+                code: Int(process.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: "Task exited with code \(process.terminationStatus)"]
+            )
+        }
+#else
+        // Process execution not available on iOS
+        onOutput("Error: Task execution is not available on iOS\n")
+        throw NSError(
+            domain: "TasksManager",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Task execution is not available on iOS"]
+        )
+#endif
+    }
+
+    // MARK: - JSONC helpers
+
+    /// VS Code `tasks.json` often uses JSON with comments (JSONC). This strips
+    /// both `//` line comments and `/* ... */` block comments.
+    private static func stripJSONComments(_ input: String) -> String {
+        let blockPattern = "/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*/"
+        let linePattern = "(?m)//.*$"
+
+        let withoutBlocks = input.replacingOccurrences(of: blockPattern, with: "", options: .regularExpression)
+        let withoutLines = withoutBlocks.replacingOccurrences(of: linePattern, with: "", options: .regularExpression)
+        return withoutLines
+    }
+
+    // MARK: - Variable expansion
+
+    private static func expandVariables(_ value: String, workspaceRootURL: URL?) -> String {
+        var out = value
+        if let workspaceRootURL {
+            out = out.replacingOccurrences(of: "${workspaceFolder}", with: workspaceRootURL.path)
+        }
+        // `${file}` is not currently resolved (needs active editor tab), but we keep it intact.
+        return out
+    }
+
+    private static func shellEscape(_ s: String) -> String {
+        if s.isEmpty { return "''" }
+        // Basic single-quote escaping for zsh/bash.
+        if s.contains(where: { $0.isWhitespace || $0 == "\"" || $0 == "'" || $0 == "\\" || $0 == "(" || $0 == ")" }) {
+            return "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
+        return s
+    }
+}
+
+// MARK: - Built-in Templates
+
+extension VSCodeTask {
+    static var builtInTemplates: [VSCodeTask] {
+        [
+            VSCodeTask(
+                label: "swift-build",
+                type: .shell,
+                command: "swift",
+                args: ["build"],
+                group: .build
+            ),
+            VSCodeTask(
+                label: "npm-run-build",
+                type: .shell,
+                command: "npm",
+                args: ["run", "build"],
+                group: .build
+            ),
+            VSCodeTask(
+                label: "python-script",
+                type: .shell,
+                command: "python3",
+                args: ["${file}"],
+                group: .test
+            )
+        ]
+    }
+}

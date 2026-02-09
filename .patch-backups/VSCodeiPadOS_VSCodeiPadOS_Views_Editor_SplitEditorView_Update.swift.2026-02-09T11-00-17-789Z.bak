@@ -1,0 +1,689 @@
+//
+//  SplitEditorView.swift
+//  VSCodeiPadOS
+//
+//  Split editor panes implementation
+//  - Split right/down
+//  - Drag tabs to create splits
+//  - Independent panes with own tabs
+//  - Resizable with drag handles
+//  - Close split buttons
+//  - Sync scroll option
+//
+
+import SwiftUI
+
+// MARK: - Split Direction
+
+enum SplitDirection: String, CaseIterable {
+    case horizontal // side by side
+    case vertical   // top and bottom
+}
+
+// MARK: - Editor Pane Model
+
+class EditorPane: ObservableObject, Identifiable {
+    let id: UUID
+    @Published var tabs: [Tab]
+    @Published var activeTabId: UUID?
+    @Published var scrollOffset: CGFloat = 0
+    
+    var activeTab: Tab? {
+        tabs.first { $0.id == activeTabId }
+    }
+    
+    init(id: UUID = UUID(), tabs: [Tab] = [], activeTabId: UUID? = nil) {
+        self.id = id
+        self.tabs = tabs
+        self.activeTabId = activeTabId ?? tabs.first?.id
+    }
+    
+    func addTab(_ tab: Tab) {
+        // Check if already exists
+        if let existing = tabs.first(where: { $0.url == tab.url && tab.url != nil }) {
+            activeTabId = existing.id
+            return
+        }
+        tabs.append(tab)
+        activeTabId = tab.id
+    }
+    
+    func closeTab(id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        tabs.remove(at: index)
+        
+        if activeTabId == id {
+            if tabs.isEmpty {
+                activeTabId = nil
+            } else if index >= tabs.count {
+                activeTabId = tabs[tabs.count - 1].id
+            } else {
+                activeTabId = tabs[index].id
+            }
+        }
+    }
+    
+    func selectTab(id: UUID) {
+        activeTabId = id
+    }
+    
+    func updateTabContent(_ content: String) {
+        guard let index = tabs.firstIndex(where: { $0.id == activeTabId }) else { return }
+        tabs[index].content = content
+        if tabs[index].url != nil {
+            tabs[index].isUnsaved = true
+        }
+    }
+}
+
+// MARK: - Split Editor Manager
+
+class SplitEditorManager: ObservableObject {
+    @Published var panes: [EditorPane] = []
+    @Published var splitDirection: SplitDirection = .horizontal
+    @Published var splitRatios: [CGFloat] = [1.0]
+    @Published var activePaneId: UUID?
+    @Published var syncScroll: Bool = false
+    
+    var activePane: EditorPane? {
+        panes.first { $0.id == activePaneId }
+    }
+    
+    init() {
+        let initialPane = EditorPane()
+        panes = [initialPane]
+        activePaneId = initialPane.id
+        splitRatios = [1.0]
+    }
+    
+    // Initialize with EditorCore's tabs
+    func initializeWithTabs(_ tabs: [Tab], activeTabId: UUID?) {
+        if panes.isEmpty {
+            let pane = EditorPane(tabs: tabs, activeTabId: activeTabId)
+            panes = [pane]
+            activePaneId = pane.id
+            splitRatios = [1.0]
+        } else if let firstPane = panes.first, firstPane.tabs.isEmpty {
+            firstPane.tabs = tabs
+            firstPane.activeTabId = activeTabId
+        }
+    }
+    
+    // MARK: - Split Operations
+    
+    func splitPane(direction: SplitDirection, fromPaneId: UUID? = nil) {
+        let sourcePane = fromPaneId.flatMap { id in panes.first { $0.id == id } } ?? activePane
+        guard let source = sourcePane else { return }
+        
+        // Create new pane with duplicate of active tab (or empty)
+        var newTabs: [Tab] = []
+        if let activeTab = source.activeTab {
+            let duplicateTab = Tab(
+                fileName: activeTab.fileName,
+                content: activeTab.content,
+                language: activeTab.language,
+                url: activeTab.url,
+                isUnsaved: activeTab.isUnsaved
+            )
+            newTabs = [duplicateTab]
+        }
+        
+        let newPane = EditorPane(tabs: newTabs, activeTabId: newTabs.first?.id)
+        
+        self.splitDirection = direction
+        panes.append(newPane)
+        
+        // Recalculate ratios equally
+        let ratio = 1.0 / CGFloat(panes.count)
+        splitRatios = Array(repeating: ratio, count: panes.count)
+        
+        activePaneId = newPane.id
+    }
+    
+    func closePane(id: UUID) {
+        guard panes.count > 1 else { return } // Keep at least one pane
+        guard let index = panes.firstIndex(where: { $0.id == id }) else { return }
+        
+        panes.remove(at: index)
+        splitRatios.remove(at: index)
+        
+        // Normalize ratios
+        let total = splitRatios.reduce(0, +)
+        if total > 0 {
+            splitRatios = splitRatios.map { $0 / total }
+        } else {
+            splitRatios = Array(repeating: 1.0 / CGFloat(panes.count), count: panes.count)
+        }
+        
+        // Update active pane
+        if activePaneId == id {
+            activePaneId = panes.first?.id
+        }
+    }
+    
+    func moveTabToPane(tab: Tab, fromPaneId: UUID, toPaneId: UUID) {
+        guard let fromPane = panes.first(where: { $0.id == fromPaneId }),
+              let toPane = panes.first(where: { $0.id == toPaneId }) else { return }
+        
+        fromPane.closeTab(id: tab.id)
+        
+        // Create new tab (since Tab is a struct)
+        let newTab = Tab(
+            fileName: tab.fileName,
+            content: tab.content,
+            language: tab.language,
+            url: tab.url,
+            isUnsaved: tab.isUnsaved
+        )
+        toPane.addTab(newTab)
+    }
+    
+    func moveTabToNewSplit(tab: Tab, fromPaneId: UUID, direction: SplitDirection) {
+        guard let fromPane = panes.first(where: { $0.id == fromPaneId }) else { return }
+        
+        fromPane.closeTab(id: tab.id)
+        
+        let newTab = Tab(
+            fileName: tab.fileName,
+            content: tab.content,
+            language: tab.language,
+            url: tab.url,
+            isUnsaved: tab.isUnsaved
+        )
+        
+        let newPane = EditorPane(tabs: [newTab], activeTabId: newTab.id)
+        self.splitDirection = direction
+        panes.append(newPane)
+        
+        let ratio = 1.0 / CGFloat(panes.count)
+        splitRatios = Array(repeating: ratio, count: panes.count)
+        activePaneId = newPane.id
+    }
+    
+    func updateRatio(at index: Int, delta: CGFloat, totalSize: CGFloat) {
+        guard index < splitRatios.count - 1 else { return }
+        
+        let deltaRatio = delta / totalSize
+        let minRatio: CGFloat = 0.15
+        
+        let newRatio1 = splitRatios[index] + deltaRatio
+        let newRatio2 = splitRatios[index + 1] - deltaRatio
+        
+        if newRatio1 >= minRatio && newRatio2 >= minRatio {
+            splitRatios[index] = newRatio1
+            splitRatios[index + 1] = newRatio2
+        }
+    }
+    
+    // Sync scroll across panes
+    func syncScrollOffset(_ offset: CGFloat, fromPaneId: UUID) {
+        guard syncScroll else { return }
+        for pane in panes where pane.id != fromPaneId {
+            pane.scrollOffset = offset
+        }
+    }
+}
+
+// MARK: - Split Editor View
+
+struct SplitEditorView: View {
+    @ObservedObject var splitManager: SplitEditorManager
+    @ObservedObject var editorCore: EditorCore
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                if splitManager.panes.count == 1 {
+                    // Single pane - no split
+                    if let pane = splitManager.panes.first {
+                        SinglePaneView(pane: pane, splitManager: splitManager, editorCore: editorCore)
+                    }
+                } else {
+                    // Multiple panes with split
+                    splitContent(geometry: geometry)
+                }
+                
+                // Hover Info Overlay
+                HoverInfoView()
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func splitContent(geometry: GeometryProxy) -> some View {
+        let totalSize = splitManager.splitDirection == .horizontal ? geometry.size.width : geometry.size.height
+        
+        if splitManager.splitDirection == .horizontal {
+            HStack(spacing: 0) {
+                ForEach(Array(splitManager.panes.enumerated()), id: \.element.id) { index, pane in
+                    SinglePaneView(pane: pane, splitManager: splitManager, editorCore: editorCore)
+                        .frame(width: totalSize * splitManager.splitRatios[index])
+                    
+                    if index < splitManager.panes.count - 1 {
+                        SplitDragHandle(direction: .horizontal) { delta in
+                            splitManager.updateRatio(at: index, delta: delta, totalSize: totalSize)
+                        }
+                    }
+                }
+            }
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(splitManager.panes.enumerated()), id: \.element.id) { index, pane in
+                    SinglePaneView(pane: pane, splitManager: splitManager, editorCore: editorCore)
+                        .frame(height: totalSize * splitManager.splitRatios[index])
+                    
+                    if index < splitManager.panes.count - 1 {
+                        SplitDragHandle(direction: .vertical) { delta in
+                            splitManager.updateRatio(at: index, delta: delta, totalSize: totalSize)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Single Pane View
+
+struct SinglePaneView: View {
+    @ObservedObject var pane: EditorPane
+    @ObservedObject var splitManager: SplitEditorManager
+    @ObservedObject var editorCore: EditorCore
+    @State private var dragOverPane = false
+    
+    var isActive: Bool {
+        splitManager.activePaneId == pane.id
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Pane header with tabs and controls
+            paneHeader
+            
+            // Editor content
+            if let tab = pane.activeTab {
+                PaneEditorView(
+                    pane: pane,
+                    tab: tab,
+                    splitManager: splitManager,
+                    editorCore: editorCore
+                )
+            } else {
+                emptyPaneView
+            }
+        }
+        .background(isActive ? Color(UIColor.systemBackground) : Color(UIColor.secondarySystemBackground).opacity(0.3))
+        .overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
+        .overlay(
+            // Drop zone indicator
+            Group {
+                if dragOverPane {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.accentColor.opacity(0.2))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [5]))
+                        )
+                }
+            }
+        )
+        .onTapGesture {
+            splitManager.activePaneId = pane.id
+        }
+        .onDrop(of: [.text], isTargeted: $dragOverPane) { providers in
+            // Handle tab drop
+            return true
+        }
+    }
+    
+    private var paneHeader: some View {
+        HStack(spacing: 0) {
+            // Tab bar
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(pane.tabs) { tab in
+                        PaneTabItem(
+                            tab: tab,
+                            isSelected: pane.activeTabId == tab.id,
+                            pane: pane,
+                            splitManager: splitManager
+                        )
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            // Pane controls
+            HStack(spacing: 4) {
+                // Split buttons
+                Menu {
+                    Button(action: { splitManager.splitPane(direction: .horizontal, fromPaneId: pane.id) }) {
+                        Label("Split Right", systemImage: "rectangle.split.2x1")
+                    }
+                    Button(action: { splitManager.splitPane(direction: .vertical, fromPaneId: pane.id) }) {
+                        Label("Split Down", systemImage: "rectangle.split.1x2")
+                    }
+                    Divider()
+                    Toggle(isOn: $splitManager.syncScroll) {
+                        Label("Sync Scroll", systemImage: "arrow.up.arrow.down")
+                    }
+                } label: {
+                    Image(systemName: "rectangle.split.3x1")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, height: 24)
+                }
+                
+                // Close pane button (only if more than one pane)
+                if splitManager.panes.count > 1 {
+                    Button(action: { splitManager.closePane(id: pane.id) }) {
+                        Image(systemName: "xmark")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(width: 24, height: 24)
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(height: 36)
+        .background(Color(UIColor.secondarySystemBackground))
+    }
+    
+    private var emptyPaneView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 40))
+                .foregroundColor(.secondary.opacity(0.5))
+            Text("No file open")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 8) {
+                Button(action: { editorCore.showFilePicker = true }) {
+                    Text("Open File")
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(4)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Pane Tab Item
+
+struct PaneTabItem: View {
+    let tab: Tab
+    let isSelected: Bool
+    @ObservedObject var pane: EditorPane
+    @ObservedObject var splitManager: SplitEditorManager
+    @State private var isDragging = false
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: tab.language.iconName)
+                .font(.caption)
+                .foregroundColor(tab.language.color)
+            
+            Text(tab.fileName)
+                .font(.system(size: 12))
+                .lineLimit(1)
+            
+            if tab.isUnsaved {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 6, height: 6)
+            }
+            
+            Button(action: { pane.closeTab(id: tab.id) }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isSelected ? Color(UIColor.systemBackground) : Color.clear)
+        )
+        .opacity(isDragging ? 0.5 : 1.0)
+        .onTapGesture {
+            pane.selectTab(id: tab.id)
+            splitManager.activePaneId = pane.id
+        }
+        .onDrag {
+            isDragging = true
+            return NSItemProvider(object: tab.id.uuidString as NSString)
+        }
+        .contextMenu {
+            Button(action: { pane.closeTab(id: tab.id) }) {
+                Label("Close", systemImage: "xmark")
+            }
+            
+            Divider()
+            
+            Button(action: { splitManager.moveTabToNewSplit(tab: tab, fromPaneId: pane.id, direction: .horizontal) }) {
+                Label("Move to Split Right", systemImage: "rectangle.split.2x1")
+            }
+            
+            Button(action: { splitManager.moveTabToNewSplit(tab: tab, fromPaneId: pane.id, direction: .vertical) }) {
+                Label("Move to Split Down", systemImage: "rectangle.split.1x2")
+            }
+        }
+    }
+}
+
+// MARK: - Pane Editor View
+
+struct PaneEditorView: View {
+    @ObservedObject var pane: EditorPane
+    let tab: Tab
+    @ObservedObject var splitManager: SplitEditorManager
+    @ObservedObject var editorCore: EditorCore
+    @ObservedObject private var debugManager = DebugManager.shared
+    @State private var text: String = ""
+    @State private var scrollPosition: Int = 0
+    @State private var totalLines: Int = 1
+    @State private var visibleLines: Int = 20
+    @State private var currentLineNumber: Int = 1
+    @State private var currentColumn: Int = 1
+    @State private var lineHeight: CGFloat = 17
+    
+    private var fileId: String { tab.url?.path ?? tab.fileName }
+    
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                // Line numbers + breakpoints
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        ForEach(0..<totalLines, id: \.self) { lineIndex in
+                            HStack(spacing: 4) {
+                                Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
+                                    Circle()
+                                        .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color.red : Color.clear)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.red.opacity(0.6), lineWidth: 1)
+                                                .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
+                                        )
+                                        .frame(width: 10, height: 10)
+                                }
+                                .buttonStyle(.plain)
+                                .frame(width: 14, height: lineHeight)
+                                
+                                Text("\(lineIndex + 1)")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(lineIndex + 1 == currentLineNumber ? .primary : .secondary.opacity(0.6))
+                                    .frame(height: lineHeight)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    }
+                    .padding(.trailing, 4)
+                }
+                .frame(width: 54)
+                .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+                
+                // Editor
+                SyntaxHighlightingTextView(
+                    text: $text,
+                    filename: tab.fileName,
+                    scrollPosition: $scrollPosition,
+                    totalLines: $totalLines,
+                    visibleLines: $visibleLines,
+                    currentLineNumber: $currentLineNumber,
+                    currentColumn: $currentColumn,
+                    lineHeight: $lineHeight,
+                    isActive: splitManager.activePaneId == pane.id
+                )
+                .environmentObject(editorCore)
+                .onChange(of: text) { newValue in
+                    pane.updateTabContent(newValue)
+                    
+                    // Sync scroll if enabled
+                    if splitManager.syncScroll {
+                        splitManager.syncScrollOffset(CGFloat(scrollPosition) * lineHeight, fromPaneId: pane.id)
+                    }
+                }
+                
+                // Mini minimap
+                MinimapView(
+                    content: text,
+                    scrollOffset: .constant(CGFloat(scrollPosition) * lineHeight),
+                    scrollViewHeight: .constant(geometry.size.height),
+                    totalContentHeight: CGFloat(totalLines) * lineHeight
+                )
+                .frame(width: 60)
+            }
+        }
+        .onAppear {
+            text = tab.content
+        }
+        .onChange(of: tab.id) { _ in
+            text = tab.content
+        }
+        .onChange(of: pane.scrollOffset) { newOffset in
+            if splitManager.syncScroll {
+                scrollPosition = Int(newOffset / lineHeight)
+            }
+        }
+    }
+}
+
+// MARK: - Split Drag Handle
+
+struct SplitDragHandle: View {
+    let direction: SplitDirection
+    let onDrag: (CGFloat) -> Void
+    
+    @State private var isDragging = false
+    @GestureState private var dragOffset: CGFloat = 0
+    
+    var body: some View {
+        ZStack {
+            // Background
+            Rectangle()
+                .fill(Color(UIColor.separator))
+            
+            // Handle indicator
+            if direction == .horizontal {
+                VStack(spacing: 2) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(isDragging ? Color.accentColor : Color.secondary)
+                            .frame(width: 3, height: 3)
+                    }
+                }
+            } else {
+                HStack(spacing: 2) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(isDragging ? Color.accentColor : Color.secondary)
+                            .frame(width: 3, height: 3)
+                    }
+                }
+            }
+        }
+        .frame(
+            width: direction == .horizontal ? 6 : nil,
+            height: direction == .vertical ? 6 : nil
+        )
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .updating($dragOffset) { value, state, _ in
+                    let delta = direction == .horizontal ? value.translation.width : value.translation.height
+                    state = delta
+                }
+                .onChanged { value in
+                    isDragging = true
+                    let delta = direction == .horizontal ? value.translation.width : value.translation.height
+                    onDrag(delta)
+                }
+                .onEnded { _ in
+                    isDragging = false
+                }
+        )
+        .onHover { hovering in
+            if hovering {
+                #if targetEnvironment(macCatalyst)
+                NSCursor.resizeLeftRight.push()
+                #endif
+            } else {
+                #if targetEnvironment(macCatalyst)
+                NSCursor.pop()
+                #endif
+            }
+        }
+    }
+}
+
+// MARK: - Split Action Buttons (for toolbar/menu)
+
+struct SplitEditorButtons: View {
+    @ObservedObject var splitManager: SplitEditorManager
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: { splitManager.splitPane(direction: .horizontal) }) {
+                Image(systemName: "rectangle.split.2x1")
+                    .font(.caption)
+            }
+            .help("Split Editor Right")
+            
+            Button(action: { splitManager.splitPane(direction: .vertical) }) {
+                Image(systemName: "rectangle.split.1x2")
+                    .font(.caption)
+            }
+            .help("Split Editor Down")
+            
+            Toggle(isOn: $splitManager.syncScroll) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.caption)
+            }
+            .toggleStyle(.button)
+            .help("Sync Scroll")
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    let manager = SplitEditorManager()
+    let core = EditorCore()
+    manager.initializeWithTabs(core.tabs, activeTabId: core.activeTabId)
+    
+    return SplitEditorView(splitManager: manager, editorCore: core)
+}

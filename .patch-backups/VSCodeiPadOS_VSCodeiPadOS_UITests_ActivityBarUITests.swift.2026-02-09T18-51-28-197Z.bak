@@ -1,0 +1,88 @@
+import XCTest
+
+/// UI tests for verifying activity bar interactions switch/toggle the sidebar panels.
+///
+/// These tests rely on accessibility identifiers set in `SidebarView.swift` for:
+/// - Activity bar icons: `activityBar.<panel>`
+/// - Sidebar title: `sidebar.header.title`
+/// - Sidebar container: `sidebar.panel`
+final class ActivityBarUITests: XCTestCase {
+
+    private var app: XCUIApplication!
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+
+        app = XCUIApplication()
+        app.launchArguments += ["-ui-testing"]
+        app.launch()
+
+        // Ensure activity bar is present.
+        XCTAssertTrue(app.buttons["activityBar.explorer"].waitForExistence(timeout: 10))
+    }
+
+    // MARK: - Helpers
+
+    @discardableResult
+    private func tapActivity(_ id: String, expectedTitle: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let button = app.buttons[id]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing activity bar button: \(id)", file: file, line: line)
+        button.tap()
+
+        let sidebar = app.otherElements["sidebar.panel"]
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "Sidebar should be visible after tapping \(id)", file: file, line: line)
+
+        let title = app.staticTexts["sidebar.header.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "Sidebar title should exist", file: file, line: line)
+        XCTAssertEqual(title.label, expectedTitle, file: file, line: line)
+        return button
+    }
+
+    private func ensureSidebarVisible(file: StaticString = #filePath, line: UInt = #line) {
+        let sidebar = app.otherElements["sidebar.panel"]
+        if !sidebar.exists {
+            app.buttons["activityBar.explorer"].tap()
+        }
+        XCTAssertTrue(app.otherElements["sidebar.panel"].waitForExistence(timeout: 5), file: file, line: line)
+    }
+
+    // MARK: - Tests
+
+    func testSwitchToExplorer() {
+        tapActivity("activityBar.explorer", expectedTitle: "EXPLORER")
+    }
+
+    func testSwitchToSearch() {
+        tapActivity("activityBar.search", expectedTitle: "SEARCH")
+    }
+
+    func testSwitchToGit() {
+        tapActivity("activityBar.sourceControl", expectedTitle: "SOURCE CONTROL")
+    }
+
+    func testSwitchToDebug() {
+        tapActivity("activityBar.runAndDebug", expectedTitle: "RUN AND DEBUG")
+    }
+
+    func testToggleSidebarByReclick() {
+        // Ensure sidebar is visible and Explorer selected.
+        tapActivity("activityBar.explorer", expectedTitle: "EXPLORER")
+        ensureSidebarVisible()
+
+        let sidebar = app.otherElements["sidebar.panel"]
+        XCTAssertTrue(sidebar.exists)
+
+        // Re-clicking the selected icon should toggle the sidebar hidden.
+        app.buttons["activityBar.explorer"].tap()
+        XCTAssertFalse(sidebar.waitForExistence(timeout: 1))
+
+        // Clicking again should reveal it.
+        app.buttons["activityBar.explorer"].tap()
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5))
+
+        let title = app.staticTexts["sidebar.header.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "EXPLORER")
+    }
+}

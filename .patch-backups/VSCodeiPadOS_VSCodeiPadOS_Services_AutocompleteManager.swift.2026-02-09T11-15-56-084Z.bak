@@ -1,0 +1,447 @@
+import Foundation
+import SwiftUI
+
+// MARK: - Autocomplete Models
+
+enum AutocompleteSuggestionKind: String {
+    case keyword
+    case symbol
+}
+
+struct AutocompleteSuggestion: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let kind: AutocompleteSuggestionKind
+    let detail: String?
+}
+
+struct AutocompleteSymbol: Hashable {
+    let name: String
+    let signature: String?
+}
+
+// MARK: - AutocompleteManager
+
+final class AutocompleteManager: ObservableObject {
+    // Suggestions
+    @Published var suggestions: [AutocompleteSuggestion] = []
+    @Published var showSuggestions = false
+    @Published var selectedIndex = 0
+
+    // Inline UI
+    @Published var ghostText: String = ""
+    @Published var signatureHint: String? = nil
+
+    // Internal caches
+    private var cachedSymbols: Set<AutocompleteSymbol> = []
+
+    // MARK: - Keywords
+
+    private let swiftKeywords = [
+        "import", "func", "var", "let", "class", "struct", "enum",
+        "if", "else", "for", "while", "switch", "case", "return",
+        "true", "false", "nil", "self", "super", "init", "deinit",
+        "extension", "protocol", "typealias", "static", "private",
+        "public", "internal", "fileprivate", "open", "final",
+        "guard", "defer", "throw", "throws", "try", "catch", "do",
+        "as", "is", "in", "where", "break", "continue"
+    ]
+
+    private let jsTsKeywords = [
+        "import", "export", "default", "from", "as",
+        "function", "const", "let", "var",
+        "class", "extends", "constructor", "super", "this",
+        "if", "else", "for", "while", "switch", "case", "break", "continue",
+        "return", "try", "catch", "finally", "throw",
+        "async", "await", "new", "typeof", "instanceof",
+        "true", "false", "null", "undefined"
+    ]
+
+    private let pythonKeywords = [
+        "def", "class", "import", "from", "as",
+        "if", "elif", "else", "for", "while", "break", "continue", "return",
+        "try", "except", "finally", "raise",
+        "True", "False", "None", "self",
+        "with", "yield", "lambda", "pass", "global", "nonlocal"
+    ]
+
+    private func keywords(for language: CodeLanguage) -> [String] {
+        switch language {
+        case .swift:
+            return swiftKeywords
+        case .javascript, .typescript:
+            return jsTsKeywords
+        case .python:
+            return pythonKeywords
+        default:
+            return []
+        }
+    }
+
+    // MARK: - Public API
+
+    /// Update symbol cache from the current file content.
+    /// Call this when the document changes.
+    func updateCurrentFileSymbols(from text: String, language: CodeLanguage) {
+        cachedSymbols = parseSymbols(in: text, language: language)
+    }
+
+    /// Update suggestions based on current cursor location.
+    func updateSuggestions(for text: String, cursorIndex: Int, language: CodeLanguage) {
+        let cursorIndex = max(0, min(cursorIndex, text.count))
+
+        // Signature hint is independent of completion list.
+        signatureHint = computeSignatureHint(in: text, cursorIndex: cursorIndex)
+
+        // Determine current prefix.
+        guard let token = currentToken(in: text, cursorIndex: cursorIndex), !token.text.isEmpty else {
+            clearSuggestions()
+            return
+        }
+
+        let prefix = token.text
+        let lowerPrefix = prefix.lowercased()
+
+        // Build candidate list.
+        var result: [AutocompleteSuggestion] = []
+
+        // Symbols
+        let symbolMatches = cachedSymbols
+            .filter { $0.name.lowercased().hasPrefix(lowerPrefix) && $0.name.lowercased() != lowerPrefix }
+            .sorted { a, b in
+                if a.name.count != b.name.count { return a.name.count < b.name.count }
+                return a.name < b.name
+            }
+
+        result.append(contentsOf: symbolMatches.map { sym in
+            AutocompleteSuggestion(text: sym.name, kind: .symbol, detail: sym.signature)
+        })
+
+        // Keywords
+        let keywordMatches = keywords(for: language)
+            .filter { $0.lowercased().hasPrefix(lowerPrefix) && $0.lowercased() != lowerPrefix }
+            .sorted { a, b in
+                if a.count != b.count { return a.count < b.count }
+                return a < b
+            }
+
+        result.append(contentsOf: keywordMatches.map { kw in
+            AutocompleteSuggestion(text: kw, kind: .keyword, detail: nil)
+        })
+
+        suggestions = Array(result.prefix(25))
+        showSuggestions = !suggestions.isEmpty
+        selectedIndex = 0
+
+        updateGhostText(prefix: prefix)
+    }
+
+    func dismiss() {
+        clearSuggestions()
+    }
+
+    func selectNext() {
+        guard showSuggestions, !suggestions.isEmpty else { return }
+        selectedIndex = min(selectedIndex + 1, suggestions.count - 1)
+    }
+
+    func selectPrevious() {
+        guard showSuggestions, !suggestions.isEmpty else { return }
+        selectedIndex = max(selectedIndex - 1, 0)
+    }
+
+    func currentSuggestion() -> AutocompleteSuggestion? {
+        guard showSuggestions, selectedIndex >= 0, selectedIndex < suggestions.count else { return nil }
+        return suggestions[selectedIndex]
+    }
+
+    /// Apply currently selected suggestion. Returns updated (text, cursorIndex).
+    func acceptSuggestion(in text: String, cursorIndex: Int) -> (String, Int)? {
+        guard let suggestion = currentSuggestion() else { return nil }
+        guard let token = currentToken(in: text, cursorIndex: cursorIndex) else { return nil }
+
+        let replacement = suggestion.text
+        let ns = text as NSString
+        let replaced = ns.replacingCharacters(in: token.nsRange, with: replacement)
+        let newCursor = token.nsRange.location + (replacement as NSString).length
+
+        clearSuggestions()
+        return (replaced, newCursor)
+    }
+
+    // MARK: - Internals
+
+    private func clearSuggestions() {
+        suggestions = []
+        showSuggestions = false
+        selectedIndex = 0
+        ghostText = ""
+    }
+
+    private func updateGhostText(prefix: String) {
+        guard showSuggestions, let s = currentSuggestion() else {
+            ghostText = ""
+            return
+        }
+        let completion = s.text
+        if completion.lowercased().hasPrefix(prefix.lowercased()), completion.count > prefix.count {
+            ghostText = String(completion.dropFirst(prefix.count))
+        } else {
+            ghostText = ""
+        }
+    }
+
+    // MARK: - Tokenization
+
+    private struct TokenInfo {
+        let text: String
+        let nsRange: NSRange
+    }
+
+    private func currentToken(in text: String, cursorIndex: Int) -> TokenInfo? {
+        let ns = text as NSString
+        let length = ns.length
+        let cursor = max(0, min(cursorIndex, length))
+
+        let identifierChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+
+        var start = cursor
+        while start > 0 {
+            let c = ns.character(at: start - 1)
+            if let scalar = UnicodeScalar(c), identifierChars.contains(scalar) {
+                start -= 1
+            } else {
+                break
+            }
+        }
+
+        var end = cursor
+        while end < length {
+            let c = ns.character(at: end)
+            if let scalar = UnicodeScalar(c), identifierChars.contains(scalar) {
+                end += 1
+            } else {
+                break
+            }
+        }
+
+        guard end > start else { return nil }
+        let range = NSRange(location: start, length: end - start)
+        let token = ns.substring(with: range)
+        return TokenInfo(text: token, nsRange: range)
+    }
+
+    // MARK: - Signature Hint
+
+    private func computeSignatureHint(in text: String, cursorIndex: Int) -> String? {
+        let ns = text as NSString
+        let length = ns.length
+        let cursor = max(0, min(cursorIndex, length))
+        if cursor == 0 { return nil }
+
+        // Scan backwards tracking paren depth.
+        var depth = 0
+        var i = cursor - 1
+        while i >= 0 {
+            let ch = ns.substring(with: NSRange(location: i, length: 1))
+            if ch == ")" {
+                depth += 1
+            } else if ch == "(" {
+                if depth == 0 {
+                    // Candidate call paren at i. Find identifier before it.
+                    var j = i - 1
+                    while j >= 0 {
+                        let c = ns.substring(with: NSRange(location: j, length: 1))
+                        if c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            j -= 1
+                        } else {
+                            break
+                        }
+                    }
+                    guard j >= 0 else { return nil }
+
+                    let identifierChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+                    let end = j + 1
+                    var start = end
+                    while start > 0 {
+                        let c = ns.character(at: start - 1)
+                        if let scalar = UnicodeScalar(c), identifierChars.contains(scalar) {
+                            start -= 1
+                        } else {
+                            break
+                        }
+                    }
+                    guard end > start else { return nil }
+                    let name = ns.substring(with: NSRange(location: start, length: end - start))
+
+                    if let match = cachedSymbols.first(where: { $0.name == name }),
+                       let sig = match.signature {
+                        return sig
+                    }
+                    return nil
+                } else {
+                    depth -= 1
+                }
+            }
+            i -= 1
+        }
+
+        return nil
+    }
+
+    // MARK: - Symbol Parsing
+
+    private func parseSymbols(in text: String, language: CodeLanguage) -> Set<AutocompleteSymbol> {
+        switch language {
+        case .swift:
+            return parseSwiftSymbols(in: text)
+        case .javascript, .typescript:
+            return parseJSSymbols(in: text)
+        case .python:
+            return parsePythonSymbols(in: text)
+        default:
+            return []
+        }
+    }
+
+    private func parseSwiftSymbols(in text: String) -> Set<AutocompleteSymbol> {
+        var out: Set<AutocompleteSymbol> = []
+        let lines = text.components(separatedBy: .newlines)
+
+        // Functions: func name(params)
+        let funcRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:public|private|internal|fileprivate|open)?\s*(?:static\s+)?func\s+(\w+)\s*(\([^\)]*\))?"#,
+            options: []
+        )
+        let typeRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:public|private|internal|fileprivate|open)?\s*(?:final\s+)?(class|struct|enum|protocol)\s+(\w+)"#,
+            options: []
+        )
+        let varRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:public|private|internal|fileprivate|open)?\s*(?:static\s+)?(?:var|let)\s+(\w+)"#,
+            options: []
+        )
+
+        for line in lines {
+            if let funcRegex,
+               let m = funcRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                let name = String(line[nameRange])
+                let sig: String? = {
+                    if m.numberOfRanges > 2, m.range(at: 2).location != NSNotFound, let r = Range(m.range(at: 2), in: line) {
+                        return "\(name)\(String(line[r]))"
+                    }
+                    return "\(name)(…)"
+                }()
+                out.insert(AutocompleteSymbol(name: name, signature: sig))
+                continue
+            }
+
+            if let typeRegex,
+               let m = typeRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 2), in: line) {
+                out.insert(AutocompleteSymbol(name: String(line[nameRange]), signature: nil))
+                continue
+            }
+
+            if let varRegex,
+               let m = varRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                out.insert(AutocompleteSymbol(name: String(line[nameRange]), signature: nil))
+                continue
+            }
+        }
+
+        return out
+    }
+
+    private func parseJSSymbols(in text: String) -> Set<AutocompleteSymbol> {
+        var out: Set<AutocompleteSymbol> = []
+        let lines = text.components(separatedBy: .newlines)
+
+        let funcRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*(\([^\)]*\))?"#,
+            options: []
+        )
+        let arrowRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\(?[^=]*\)?\s*=>"#,
+            options: []
+        )
+        let classRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:export\s+)?(?:default\s+)?class\s+(\w+)"#,
+            options: []
+        )
+
+        for line in lines {
+            if let funcRegex,
+               let m = funcRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                let name = String(line[nameRange])
+                let sig: String? = {
+                    if m.numberOfRanges > 2, m.range(at: 2).location != NSNotFound, let r = Range(m.range(at: 2), in: line) {
+                        return "\(name)\(String(line[r]))"
+                    }
+                    return "\(name)(…)"
+                }()
+                out.insert(AutocompleteSymbol(name: name, signature: sig))
+                continue
+            }
+
+            if let arrowRegex,
+               let m = arrowRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                let name = String(line[nameRange])
+                out.insert(AutocompleteSymbol(name: name, signature: "\(name)(…)"))
+                continue
+            }
+
+            if let classRegex,
+               let m = classRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                out.insert(AutocompleteSymbol(name: String(line[nameRange]), signature: nil))
+                continue
+            }
+        }
+
+        return out
+    }
+
+    private func parsePythonSymbols(in text: String) -> Set<AutocompleteSymbol> {
+        var out: Set<AutocompleteSymbol> = []
+        let lines = text.components(separatedBy: .newlines)
+
+        let defRegex = try? NSRegularExpression(
+            pattern: #"^\s*def\s+(\w+)\s*(\([^\)]*\))?"#,
+            options: []
+        )
+        let classRegex = try? NSRegularExpression(
+            pattern: #"^\s*class\s+(\w+)"#,
+            options: []
+        )
+
+        for line in lines {
+            if let defRegex,
+               let m = defRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                let name = String(line[nameRange])
+                let sig: String? = {
+                    if m.numberOfRanges > 2, m.range(at: 2).location != NSNotFound, let r = Range(m.range(at: 2), in: line) {
+                        return "\(name)\(String(line[r]))"
+                    }
+                    return "\(name)(…)"
+                }()
+                out.insert(AutocompleteSymbol(name: name, signature: sig))
+                continue
+            }
+
+            if let classRegex,
+               let m = classRegex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+               let nameRange = Range(m.range(at: 1), in: line) {
+                out.insert(AutocompleteSymbol(name: String(line[nameRange]), signature: nil))
+                continue
+            }
+        }
+
+        return out
+    }
+}
