@@ -38,43 +38,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        
-        // Check if this is a file-specific window request
-        if let userActivity = options.userActivities.first,
-           userActivity.activityType == WindowActivity.activityType {
-            
-            // Check if it's a file URL request
-            if let fileURLString = userActivity.userInfo?[WindowActivity.fileURLKey] as? String,
-               let _ = URL(string: fileURLString) {
-                // Create configuration for file window
-                let fileConfig = UISceneConfiguration(
-                    name: "File Window Configuration",
-                    sessionRole: connectingSceneSession.role
-                )
-                fileConfig.delegateClass = SceneDelegate.self
-                return fileConfig
-            }
-            
-            // Check if it's a workspace request
-            if let workspacePath = userActivity.userInfo?[WindowActivity.workspacePathKey] as? String,
-               !workspacePath.isEmpty {
-                // Create configuration for workspace window
-                let workspaceConfig = UISceneConfiguration(
-                    name: "Workspace Window Configuration",
-                    sessionRole: connectingSceneSession.role
-                )
-                workspaceConfig.delegateClass = SceneDelegate.self
-                return workspaceConfig
-            }
-        }
-        
-        // Default configuration
-        let defaultConfig = UISceneConfiguration(
+        // Let SwiftUI handle all scene management via WindowGroup
+        // This prevents duplicate menu registration
+        return UISceneConfiguration(
             name: "Default Configuration",
             sessionRole: connectingSceneSession.role
         )
-        defaultConfig.delegateClass = SceneDelegate.self
-        return defaultConfig
     }
     
     func application(
