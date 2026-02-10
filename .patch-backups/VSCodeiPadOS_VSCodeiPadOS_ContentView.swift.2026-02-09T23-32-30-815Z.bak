@@ -117,46 +117,6 @@ struct ContentView: View {
         .onAppear {
             updateWindowTitle()
         }
-        // MARK: - Notification Handlers for Menu Keyboard Shortcuts
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowCommandPalette"))) { _ in
-            editorCore.showCommandPalette = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTerminal"))) { _ in
-            showTerminal.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSidebar"))) { _ in
-            editorCore.toggleSidebar()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowQuickOpen"))) { _ in
-            editorCore.showQuickOpen = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToSymbol"))) { _ in
-            editorCore.showGoToSymbol = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToLine"))) { _ in
-            editorCore.showGoToLine = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowAIAssistant"))) { _ in
-            editorCore.showAIAssistant = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewFile"))) { _ in
-            editorCore.addTab()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveFile"))) { _ in
-            editorCore.saveActiveTab()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseTab"))) { _ in
-            if let id = editorCore.activeTabId { editorCore.closeTab(id: id) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFind"))) { _ in
-            editorCore.showSearch = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomIn"))) { _ in
-            editorCore.zoomIn()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomOut"))) { _ in
-            editorCore.zoomOut()
-        }
         .environmentObject(themeManager)
         .environmentObject(editorCore)
     }

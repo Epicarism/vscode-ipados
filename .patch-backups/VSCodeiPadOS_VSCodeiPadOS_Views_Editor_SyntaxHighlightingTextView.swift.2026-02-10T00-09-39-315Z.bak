@@ -875,25 +875,13 @@ class EditorTextView: UITextView {
             discoverabilityTitle: "Command Palette"
         ))
         
-        // Toggle Terminal: Cmd+` (also Cmd+J as backup since backtick is buggy on iOS 15+)
-        let toggleTerminalCmd = UIKeyCommand(
+        // Toggle Terminal: Cmd+`
+        commands.append(UIKeyCommand(
             input: "`",
             modifierFlags: .command,
             action: #selector(handleToggleTerminal),
             discoverabilityTitle: "Toggle Terminal"
-        )
-        toggleTerminalCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(toggleTerminalCmd)
-        
-        // Toggle Terminal alternative: Cmd+J (VS Code's actual shortcut)
-        let toggleTerminalAltCmd = UIKeyCommand(
-            input: "j",
-            modifierFlags: .command,
-            action: #selector(handleToggleTerminal),
-            discoverabilityTitle: "Toggle Panel"
-        )
-        toggleTerminalAltCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(toggleTerminalAltCmd)
+        ))
         
         // AI Assistant: Cmd+Shift+A
         commands.append(UIKeyCommand(
@@ -919,15 +907,13 @@ class EditorTextView: UITextView {
             discoverabilityTitle: "Quick Open"
         ))
         
-        // New File: Cmd+N (needs priority over system "New Window")
-        let newFileCmd = UIKeyCommand(
+        // New File: Cmd+N
+        commands.append(UIKeyCommand(
             input: "n",
             modifierFlags: .command,
             action: #selector(handleNewFile),
             discoverabilityTitle: "New File"
-        )
-        newFileCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(newFileCmd)
+        ))
         
         // Save: Cmd+S
         commands.append(UIKeyCommand(
@@ -948,15 +934,13 @@ class EditorTextView: UITextView {
         closeTabCommand.wantsPriorityOverSystemBehavior = true
         commands.append(closeTabCommand)
         
-        // Find: Cmd+F (needs priority over system find)
-        let findCmd = UIKeyCommand(
+        // Find: Cmd+F
+        commands.append(UIKeyCommand(
             input: "f",
             modifierFlags: .command,
             action: #selector(handleFind),
             discoverabilityTitle: "Find"
-        )
-        findCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(findCmd)
+        ))
         
         // Zoom In: Cmd+=
         commands.append(UIKeyCommand(

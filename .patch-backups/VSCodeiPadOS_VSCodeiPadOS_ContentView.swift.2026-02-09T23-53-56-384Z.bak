@@ -145,17 +145,8 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveFile"))) { _ in
             editorCore.saveActiveTab()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseTab"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseFile"))) { _ in
             if let id = editorCore.activeTabId { editorCore.closeTab(id: id) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFind"))) { _ in
-            editorCore.showSearch = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomIn"))) { _ in
-            editorCore.zoomIn()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomOut"))) { _ in
-            editorCore.zoomOut()
         }
         .environmentObject(themeManager)
         .environmentObject(editorCore)

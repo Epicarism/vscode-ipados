@@ -177,7 +177,7 @@ struct ViewMenuCommands: Commands {
             Button("Toggle Terminal") {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleTerminal"), object: nil)
             }
-            .keyboardShortcut("`", modifiers: .command)
+            .keyboardShortcut("`", modifiers: .control)
             
             Divider()
             
