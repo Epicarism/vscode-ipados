@@ -38,7 +38,8 @@ struct FileMenuCommands: Commands {
             Button("Open File...") {
                 openFile()
             }
-            .keyboardShortcut("o", modifiers: [.command])
+            // Note: Removed Cmd+O shortcut - conflicts with system shortcuts
+            // and is handled by UITextView's built-in behavior
             
             Button("Open Folder...") {
                 openFolder()

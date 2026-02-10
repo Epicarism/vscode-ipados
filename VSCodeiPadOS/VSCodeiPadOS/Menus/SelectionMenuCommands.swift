@@ -17,7 +17,7 @@ struct SelectionMenuCommands: Commands {
             Button("Select All") {
                 editorCore.selectAll()
             }
-            .keyboardShortcut("a", modifiers: [.command])
+            // Note: UITextView has built-in Cmd+A support, removed duplicate
             
             Divider()
             

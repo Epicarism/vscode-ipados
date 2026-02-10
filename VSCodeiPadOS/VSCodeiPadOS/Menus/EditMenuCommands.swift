@@ -18,13 +18,13 @@ struct EditMenuCommands: Commands {
                 Button("Undo") {
                     undoManager?.undo()
                 }
-                .keyboardShortcut("z", modifiers: .command)
+                // Note: UITextView has built-in Cmd+Z support, removed duplicate
                 .disabled(undoManager?.canUndo ?? false)
                 
                 Button("Redo") {
                     undoManager?.redo()
                 }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
+                // Note: UITextView has built-in Cmd+Shift+Z support, removed duplicate
                 .disabled(undoManager?.canRedo ?? false)
             }
             
@@ -37,19 +37,19 @@ struct EditMenuCommands: Commands {
                     // System responder chain handles cut operation
                     NotificationCenter.default.post(name: .cutAction, object: nil)
                 }
-                .keyboardShortcut("x", modifiers: .command)
+                // Note: UITextView has built-in Cmd+X support, removed duplicate
                 
                 Button("Copy") {
                     // System responder chain handles copy operation
                     NotificationCenter.default.post(name: .copyAction, object: nil)
                 }
-                .keyboardShortcut("c", modifiers: .command)
+                // Note: UITextView has built-in Cmd+C support, removed duplicate
                 
                 Button("Paste") {
                     // System responder chain handles paste operation
                     NotificationCenter.default.post(name: .pasteAction, object: nil)
                 }
-                .keyboardShortcut("v", modifiers: .command)
+                // Note: UITextView has built-in Cmd+V support, removed duplicate
             }
             
             Divider()

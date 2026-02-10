@@ -9,6 +9,14 @@
 import SwiftUI
 import UIKit
 import Runestone
+import TreeSitterSwiftRunestone
+import TreeSitterJavaScriptRunestone
+import TreeSitterPythonRunestone
+import TreeSitterJSONRunestone
+import TreeSitterHTMLRunestone
+import TreeSitterCSSRunestone
+import TreeSitterGoRunestone
+import TreeSitterRustRunestone
 
 // Feature flag now uses centralized FeatureFlags.useRunestoneEditor
 
@@ -94,9 +102,14 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Content insets for padding
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         
-        // Set text directly - Runestone provides O(log n) text storage even without TreeSitter
-        // TODO: Add TreeSitter language support for syntax highlighting
-        textView.text = text
+        // Set text with TreeSitter language support
+        if let language = getTreeSitterLanguage(for: filename) {
+            let state = TextViewState(text: text, language: language)
+            textView.setState(state)
+        } else {
+            // No language support - fallback to plain text
+            textView.text = text
+        }
         
         // Store reference for coordinator
         context.coordinator.textView = textView
@@ -128,11 +141,18 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         
         // Update text if changed externally (not by user typing)
-        if textView.text != text && !context.coordinator.isUpdatingFromTextView {
+        let currentText = textView.text
+        if currentText != text && !context.coordinator.isUpdatingFromTextView {
             let selectedRange = textView.selectedRange
             
-            // Set text directly - Runestone provides O(log n) text storage
-            textView.text = text
+            // Update text with language support
+            if let language = getTreeSitterLanguage(for: filename) {
+                let state = TextViewState(text: text, language: language)
+                textView.setState(state)
+            } else {
+                // No language support - fallback to plain text
+                textView.text = text
+            }
             
             // Restore selection if valid
             let textLength = (text as NSString).length
@@ -178,159 +198,76 @@ struct RunestoneEditorView: UIViewRepresentable {
     
     // MARK: - Language Mode Mapping
     
-    /// Maps file extensions to Runestone TreeSitterLanguage
+    /// Gets the actual TreeSitter Language object for a given filename
     /// Returns nil for plain text files (no syntax highlighting)
-    static func treeSitterLanguage(for filename: String) -> TreeSitterLanguage? {
+    private func getTreeSitterLanguage(for filename: String) -> Runestone.TreeSitterLanguage? {
         let ext = (filename as NSString).pathExtension.lowercased()
         let lastComponent = (filename as NSString).lastPathComponent.lowercased()
         
         // Special-case filenames without extensions
         if lastComponent == "dockerfile" || lastComponent.hasPrefix("dockerfile.") {
-            return .bash
+            return nil // Bash support not in package list yet
         }
         if lastComponent == ".env" || lastComponent.hasPrefix(".env.") {
             return nil // Plain text
         }
         if lastComponent == "makefile" || lastComponent == "gnumakefile" {
-            return .bash
+            return nil // Bash support not in package list yet
         }
         if lastComponent == "podfile" || lastComponent == "gemfile" {
-            return .ruby
+            return nil // Ruby support not in package list yet
         }
         if lastComponent == "package.json" || lastComponent == "tsconfig.json" {
-            return .json
+            return TreeSitterLanguage.json
         }
         
         switch ext {
         // Swift
         case "swift":
-            return .swift
+            return TreeSitterLanguage.swift
         
         // JavaScript
-        case "js", "mjs", "cjs":
-            return .javaScript
-        case "jsx":
-            return .javaScriptJSX
+        case "js", "mjs", "cjs", "jsx":
+            return TreeSitterLanguage.javaScript
         
-        // TypeScript
-        case "ts", "mts", "cts":
-            return .typeScript
-        case "tsx":
-            return .typeScriptJSX
+        // TypeScript - use JavaScript as fallback
+        case "ts", "mts", "cts", "tsx":
+            return TreeSitterLanguage.javaScript
         
         // Python
         case "py", "pyw", "pyi":
-            return .python
+            return TreeSitterLanguage.python
         
         // Go
         case "go":
-            return .go
+            return TreeSitterLanguage.go
         
         // Rust
         case "rs":
-            return .rust
-        
-        // Ruby
-        case "rb", "ruby", "rake", "gemspec":
-            return .ruby
-        
-        // Java
-        case "java":
-            return .java
-        
-        // C
-        case "c", "h":
-            return .c
-        
-        // C++
-        case "cpp", "cc", "cxx", "hpp", "hh", "hxx", "mm":
-            return .cpp
-        
-        // C#
-        case "cs":
-            return .cSharp
+            return TreeSitterLanguage.rust
         
         // JSON
         case "json", "jsonc":
-            return .json
+            return TreeSitterLanguage.json
         
         // HTML
         case "html", "htm", "xhtml":
-            return .html
+            return TreeSitterLanguage.html
         
         // CSS
-        case "css":
-            return .css
+        case "css", "scss":
+            return TreeSitterLanguage.css
         
-        // SCSS
-        case "scss":
-            return .scss
-        
-        // YAML
-        case "yml", "yaml":
-            return .yaml
-        
-        // TOML
-        case "toml":
-            return .toml
-        
-        // Markdown
-        case "md", "markdown":
-            return .markdown
-        
-        // Shell/Bash
-        case "sh", "bash", "zsh", "fish":
-            return .bash
-        
-        // SQL
-        case "sql":
-            return .sql
-        
-        // PHP
-        case "php":
-            return .php
-        
-        // Lua
-        case "lua":
-            return .lua
-        
-        // Perl
-        case "pl", "pm":
-            return .perl
-        
-        // Elixir
-        case "ex", "exs":
-            return .elixir
-        
-        // Haskell
-        case "hs":
-            return .haskell
-        
-        // Zig
-        case "zig":
-            return .zig
-        
-        // Julia
-        case "jl":
-            return .julia
-        
-        // R
-        case "r", "R":
-            return .r
-        
-        // OCaml
-        case "ml", "mli":
-            return .ocaml
-        
-        // XML/Plist
+        // XML - use HTML as fallback
         case "xml", "plist", "svg":
-            return .html // HTML parser works reasonably for XML
+            return TreeSitterLanguage.html
         
         // Default - no syntax highlighting
         default:
             return nil
         }
     }
+
     
     // MARK: - Helpers
     
@@ -355,6 +292,11 @@ struct RunestoneEditorView: UIViewRepresentable {
         var isUpdatingFromTextView = false
         var lastFontSize: CGFloat = 14.0
         var lastThemeId: String = ""
+        var currentLanguage: Language?
+        
+        // Debounced text sync to avoid SwiftUI re-renders on every keystroke
+        private var textSyncWorkItem: DispatchWorkItem?
+        private let debounceInterval: TimeInterval = 0.5 // 500ms
         
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
@@ -362,19 +304,50 @@ struct RunestoneEditorView: UIViewRepresentable {
             self.lastThemeId = ThemeManager.shared.currentTheme.id
         }
         
+        deinit {
+            // Cancel any pending debounced updates
+            textSyncWorkItem?.cancel()
+        }
+        
         // MARK: - TextViewDelegate
         
         func textViewDidChange(_ textView: TextView) {
+            // Cancel any pending debounced update
+            textSyncWorkItem?.cancel()
+            
+            // Create new debounced work item
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.isUpdatingFromTextView = true
+                defer { self.isUpdatingFromTextView = false }
+                
+                // Update text binding (debounced - only after typing stops)
+                self.parent.text = textView.text
+                
+                // Update line count
+                DispatchQueue.main.async {
+                    self.parent.totalLines = self.parent.countLines(in: textView.text)
+                }
+            }
+            
+            // Schedule the update after debounce interval
+            textSyncWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+        }
+        
+        /// Immediately sync text to SwiftUI binding (call on save/tab-switch)
+        func syncTextImmediately() {
+            // Cancel any pending debounced update
+            textSyncWorkItem?.cancel()
+            
+            guard let textView = textView else { return }
+            
             isUpdatingFromTextView = true
             defer { isUpdatingFromTextView = false }
             
-            // Update text binding
+            // Immediate sync
             parent.text = textView.text
-            
-            // Update line count
-            DispatchQueue.main.async {
-                self.parent.totalLines = self.parent.countLines(in: textView.text)
-            }
+            parent.totalLines = parent.countLines(in: textView.text)
         }
         
         func textViewDidChangeSelection(_ textView: TextView) {
@@ -660,43 +633,7 @@ class RunestoneEditorTheme: Runestone.Theme {
     }
 }
 
-// MARK: - TreeSitterLanguage Enum
 
-/// Supported TreeSitter languages for Runestone
-/// This enum maps to Runestone's built-in language support
-enum TreeSitterLanguage {
-    case bash
-    case c
-    case cpp
-    case cSharp
-    case css
-    case elixir
-    case go
-    case haskell
-    case html
-    case java
-    case javaScript
-    case javaScriptJSX
-    case json
-    case julia
-    case lua
-    case markdown
-    case ocaml
-    case perl
-    case php
-    case python
-    case r
-    case ruby
-    case rust
-    case scss
-    case sql
-    case swift
-    case toml
-    case typeScript
-    case typeScriptJSX
-    case yaml
-    case zig
-}
 
 // MARK: - Preview
 #if DEBUG

@@ -440,7 +440,8 @@ struct IDEEditorView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
-                    if lineNumbersStyle != "off" {
+                    // Only show custom line numbers for legacy editor (Runestone has built-in line numbers)
+                    if lineNumbersStyle != "off" && !useRunestoneEditor {
                         LineNumbersWithFolding(
                             fileId: tab.url?.path ?? tab.fileName,
                             totalLines: totalLines,
@@ -577,7 +578,7 @@ struct IDEEditorView: View {
                         requestedLineSelection = line
                     }
                 )
-                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
+                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
 
                 if showAutocomplete && !autocomplete.suggestionItems.isEmpty {

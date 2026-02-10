@@ -430,6 +430,14 @@
 			name = VSCodeiPadOS;
 			packageProductDependencies = (
 				896595EE2F3B8D73005B984D /* Runestone */,
+				896596682F3B9FB0005B984D /* TreeSitterSwiftRunestone */,
+				896596692F3B9FB1005B984D /* TreeSitterJavaScriptRunestone */,
+				8965966A2F3B9FB2005B984D /* TreeSitterPythonRunestone */,
+				8965966B2F3B9FB3005B984D /* TreeSitterJSONRunestone */,
+				8965966C2F3B9FB4005B984D /* TreeSitterHTMLRunestone */,
+				8965966D2F3B9FB5005B984D /* TreeSitterCSSRunestone */,
+				8965966E2F3B9FB6005B984D /* TreeSitterGoRunestone */,
+				8965966F2F3B9FB7005B984D /* TreeSitterRustRunestone */,
 			);
 			productName = VSCodeiPadOS;
 			productReference = 3000 /* VSCodeiPadOS.app */;
@@ -818,6 +826,46 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */;
 			productName = Runestone;
+		};
+		896596682F3B9FB0005B984D /* TreeSitterSwiftRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterSwiftRunestone;
+		};
+		896596692F3B9FB1005B984D /* TreeSitterJavaScriptRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterJavaScriptRunestone;
+		};
+		8965966A2F3B9FB2005B984D /* TreeSitterPythonRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterPythonRunestone;
+		};
+		8965966B2F3B9FB3005B984D /* TreeSitterJSONRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterJSONRunestone;
+		};
+		8965966C2F3B9FB4005B984D /* TreeSitterHTMLRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterHTMLRunestone;
+		};
+		8965966D2F3B9FB5005B984D /* TreeSitterCSSRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterCSSRunestone;
+		};
+		8965966E2F3B9FB6005B984D /* TreeSitterGoRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterGoRunestone;
+		};
+		8965966F2F3B9FB7005B984D /* TreeSitterRustRunestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
+			productName = TreeSitterRustRunestone;
 		};
 
 /* End XCSwiftPackageProductDependency section */
