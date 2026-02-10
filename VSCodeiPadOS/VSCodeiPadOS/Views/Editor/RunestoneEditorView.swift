@@ -140,6 +140,13 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.theme = makeRunestoneTheme()
         }
         
+        // CRITICAL: Never update text while user is actively editing!
+        // Calling setState() during editing corrupts Runestone's line manager
+        // and causes a crash in TextEditHelper.swift:27 (force unwrap on linePosition)
+        guard !textView.isFirstResponder else {
+            return
+        }
+        
         // Update text if changed externally (not by user typing)
         let currentText = textView.text
         if currentText != text && !context.coordinator.isUpdatingFromTextView {
@@ -610,6 +617,16 @@ class RunestoneEditorTheme: Runestone.Theme {
         // Attributes - use variable color
         if highlightName.contains("attribute") {
             return _variableColor
+        }
+        
+        // Spell checking highlights - ignore (return nil to use default)
+        if highlightName.contains("spell") {
+            return nil
+        }
+        
+        // Include/import statements - use keyword color
+        if highlightName.contains("include") {
+            return _keywordColor
         }
         
         // Default: use standard text color

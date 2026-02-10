@@ -54,14 +54,14 @@ struct FileMenuCommands: Commands {
             Button("New Window") {
                 // Request new window via UIKit
             }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .keyboardShortcut("n", modifiers: [.command, .option])
             
             Divider()
             
             Button("Open...") {
                 NotificationCenter.default.post(name: NSNotification.Name("OpenFile"), object: nil)
             }
-            .keyboardShortcut("o", modifiers: .command)
+            // Note: Cmd+O removed - conflicts with UITextView
             
             Divider()
             
@@ -90,34 +90,8 @@ struct FileMenuCommands: Commands {
 struct EditMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Edit") {
-            Button("Undo") {
-                NotificationCenter.default.post(name: NSNotification.Name("Undo"), object: nil)
-            }
-            .keyboardShortcut("z", modifiers: .command)
-            
-            Button("Redo") {
-                NotificationCenter.default.post(name: NSNotification.Name("Redo"), object: nil)
-            }
-            .keyboardShortcut("z", modifiers: [.command, .shift])
-            
-            Divider()
-            
-            Button("Cut") {
-                NotificationCenter.default.post(name: NSNotification.Name("Cut"), object: nil)
-            }
-            .keyboardShortcut("x", modifiers: .command)
-            
-            Button("Copy") {
-                NotificationCenter.default.post(name: NSNotification.Name("Copy"), object: nil)
-            }
-            .keyboardShortcut("c", modifiers: .command)
-            
-            Button("Paste") {
-                NotificationCenter.default.post(name: NSNotification.Name("Paste"), object: nil)
-            }
-            .keyboardShortcut("v", modifiers: .command)
-            
-            Divider()
+            // Note: Undo/Redo/Cut/Copy/Paste/SelectAll removed
+            // They conflict with UITextView's built-in handlers
             
             Button("Find") {
                 NotificationCenter.default.post(name: NSNotification.Name("ShowFind"), object: nil)
@@ -137,12 +111,7 @@ struct EditMenuCommands: Commands {
 struct SelectionMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Selection") {
-            Button("Select All") {
-                NotificationCenter.default.post(name: NSNotification.Name("SelectAll"), object: nil)
-            }
-            .keyboardShortcut("a", modifiers: .command)
-            
-            Divider()
+            // Note: Select All removed - conflicts with UITextView Cmd+A
             
             Button("Add Cursor Above") {
                 NotificationCenter.default.post(name: NSNotification.Name("AddCursorAbove"), object: nil)
@@ -184,7 +153,7 @@ struct ViewMenuCommands: Commands {
             Button("Zoom In") {
                 NotificationCenter.default.post(name: NSNotification.Name("ZoomIn"), object: nil)
             }
-            .keyboardShortcut("+", modifiers: .command)
+            .keyboardShortcut("=", modifiers: .command)  // Use = instead of + (standard)
             
             Button("Zoom Out") {
                 NotificationCenter.default.post(name: NSNotification.Name("ZoomOut"), object: nil)
