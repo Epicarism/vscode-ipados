@@ -21,7 +21,11 @@ struct VSCodeiPadOSApp: App {
                 }
         }
         .commands {
-            // VS Code-style menu bar
+            // Hide conflicting system menus by replacing with empty content
+            CommandGroup(replacing: .textEditing) { }
+            CommandGroup(replacing: .help) { }
+            
+            // VS Code-style menu bar (our custom menus)
             FileMenuCommands()
             EditMenuCommands()
             SelectionMenuCommands()
