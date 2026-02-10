@@ -460,6 +460,7 @@ struct IDEEditorView: View {
                             cursorIndex: $cursorIndex,
                             lineHeight: $lineHeight,
                             isActive: true,
+                            fontSize: editorCore.editorFontSize,
                             requestedLineSelection: $requestedLineSelection,
                             requestedCursorIndex: $requestedCursorIndex,
                             onAcceptAutocomplete: {

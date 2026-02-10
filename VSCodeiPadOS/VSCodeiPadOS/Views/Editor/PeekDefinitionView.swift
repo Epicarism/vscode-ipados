@@ -63,8 +63,21 @@ struct PeekDefinitionView: View {
     private func loadContent() {
         // Extract context: 5 lines before, definition, 5 lines after
         let lines = content.components(separatedBy: .newlines)
-        let startLine = max(0, targetLine - 5)
-        let endLine = min(lines.count - 1, targetLine + 5)
+        guard !lines.isEmpty else {
+            attributedContent = NSAttributedString(string: "// Empty file")
+            return
+        }
+        
+        // Clamp targetLine to valid range first to prevent inverted bounds
+        let safeTargetLine = min(max(0, targetLine), lines.count - 1)
+        let startLine = max(0, safeTargetLine - 5)
+        let endLine = min(lines.count - 1, safeTargetLine + 5)
+        
+        // Safety check: ensure valid range (startLine <= endLine)
+        guard startLine <= endLine else {
+            attributedContent = NSAttributedString(string: "// Line out of range")
+            return
+        }
         
         let contextLines = lines[startLine...endLine]
         let contextString = contextLines.joined(separator: "\n")

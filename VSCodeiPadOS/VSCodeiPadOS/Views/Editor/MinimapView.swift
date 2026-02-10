@@ -119,18 +119,21 @@ struct MinimapView: View {
         // VS Code minimap diff markers are thin and pinned to the left.
         let barWidth: CGFloat = 2
 
-        ForEach(diffIndicators) { indicator in
-            let startLine = max(0, min(indicator.lineRange.lowerBound, lineCount - 1))
-            let endLineExclusive = max(startLine + 1, min(indicator.lineRange.upperBound, lineCount))
+        // Guard against division by zero
+        if lineCount > 0 {
+            ForEach(diffIndicators) { indicator in
+                let startLine = max(0, min(indicator.lineRange.lowerBound, lineCount - 1))
+                let endLineExclusive = max(startLine + 1, min(indicator.lineRange.upperBound, lineCount))
 
-            let startY = (CGFloat(startLine) / CGFloat(lineCount)) * minimapHeight
-            let endY = (CGFloat(endLineExclusive) / CGFloat(lineCount)) * minimapHeight
-            let height = max(2, endY - startY)
+                let startY = (CGFloat(startLine) / CGFloat(max(lineCount, 1))) * minimapHeight
+                let endY = (CGFloat(endLineExclusive) / CGFloat(max(lineCount, 1))) * minimapHeight
+                let height = max(2, endY - startY)
 
-            Rectangle()
-                .fill(diffColor(for: indicator.kind).opacity(0.95))
-                .frame(width: barWidth, height: height)
-                .offset(x: 0, y: startY)
+                Rectangle()
+                    .fill(diffColor(for: indicator.kind).opacity(0.95))
+                    .frame(width: barWidth, height: height)
+                    .offset(x: 0, y: startY)
+            }
         }
     }
 
@@ -183,65 +186,58 @@ struct MinimapView: View {
         guard contentWidth > 0, contentHeight > 0 else { return }
 
         let lineCount = max(lines.count, 1)
-        let pixelsPerLine = contentHeight / CGFloat(lineCount)
+        
+        // FIXED: Use fixed pixels per line (VS Code style) instead of stretching to fill
+        // This ensures the minimap always shows a tiny preview regardless of file size
+        let targetPixelsPerLine: CGFloat = 2.5
+        let pixelsPerLine = targetPixelsPerLine
+        
+        // Calculate how many lines we can show in the minimap
+        let visibleLines = Int(contentHeight / pixelsPerLine)
+        
+        // Calculate scroll offset to show the right portion of the document
+        // Use scrollOffset and totalContentHeight to calculate current position
+        let scrollRatio = totalContentHeight > 0 ? Double(scrollOffset) / Double(max(totalContentHeight - scrollViewHeight, 1)) : 0
+        let startLine = max(0, Int(scrollRatio * Double(max(0, lineCount - visibleLines))))
 
-        // If we're dense (lots of lines), switch to token-block rendering.
-        // Otherwise, render actual tiny syntax-colored text.
-        let useTextMode = pixelsPerLine >= 3.0
+        // Token-block mode (colored rectangles) - VS Code style minimap
+        let minBarHeight: CGFloat = 1
+        let barHeight = max(minBarHeight, pixelsPerLine)
 
-        if useTextMode {
-            // Font is tiny; keep it stable rather than tied too tightly to pixelsPerLine.
-            let fontSize: CGFloat = min(6, max(3.5, pixelsPerLine * 0.9))
+        // Approximate "characters" across minimap width.
+        let maxChars: CGFloat = 120
+        let charWidth = contentWidth / maxChars
 
-            for i in 0..<lineCount {
-                let y = paddingY + (CGFloat(i) * pixelsPerLine)
-                if y > size.height { break }
+        // Render lines starting from startLine (scrolls with document)
+        let endLine = min(startLine + visibleLines + 1, lineCount)
+        
+        // Guard against invalid range (endLine must be >= startLine)
+        guard endLine >= startLine else { return }
+        
+        for i in startLine..<endLine {
+            let displayIndex = i - startLine
+            let y = paddingY + (CGFloat(displayIndex) * pixelsPerLine)
+            if y > size.height { break }
 
-                let line = lines.indices.contains(i) ? lines[i] : Substring("")
-                let attributed = makeAttributedLine(from: line, fontSize: fontSize)
+            let line = lines.indices.contains(i) ? lines[i] : Substring("")
+            let tokens = tokenize(line)
 
-                // Slightly dim to match minimap look.
-                let text = Text(attributed)
+            var x = paddingX
+            let yAligned = y.rounded(FloatingPointRoundingRule.down)
 
-                context.draw(
-                    text,
-                    at: CGPoint(x: paddingX, y: y),
-                    anchor: .topLeading
-                )
+            if tokens.isEmpty {
+                // Render faint whitespace line.
+                let rect = CGRect(x: x, y: yAligned, width: max(4, contentWidth * 0.15), height: barHeight)
+                context.fill(Path(rect), with: .color(Color(white: 0.45).opacity(0.10)))
+                continue
             }
-        } else {
-            // Token-block mode (colored rectangles), closer to VS Code minimap blocks for long files.
-            let minBarHeight: CGFloat = 1
-            let barHeight = max(minBarHeight, pixelsPerLine)
 
-            // Approximate "characters" across minimap width.
-            let maxChars: CGFloat = 120
-            let charWidth = contentWidth / maxChars
-
-            for i in 0..<lineCount {
-                let y = paddingY + (CGFloat(i) * pixelsPerLine)
-                if y > size.height { break }
-
-                let line = lines.indices.contains(i) ? lines[i] : Substring("")
-                let tokens = tokenize(line)
-
-                var x = paddingX
-                let yAligned = y.rounded(.down)
-
-                if tokens.isEmpty {
-                    // Render faint whitespace line.
-                    let rect = CGRect(x: x, y: yAligned, width: max(4, contentWidth * 0.15), height: barHeight)
-                    context.fill(Path(rect), with: .color(Color(white: 0.45).opacity(0.10)))
-                    continue
-                }
-
-                for token in tokens {
-                    guard x < (paddingX + contentWidth) else { break }
-                    let w = max(1, CGFloat(token.text.count) * charWidth)
-                    let rect = CGRect(x: x, y: yAligned, width: min(w, paddingX + contentWidth - x), height: barHeight)
-                    context.fill(Path(rect), with: .color(token.color.opacity(0.80)))
-                    x += w
-                }
+            for token in tokens {
+                guard x < (paddingX + contentWidth) else { break }
+                let w = max(1, CGFloat(token.text.count) * charWidth)
+                let rect = CGRect(x: x, y: yAligned, width: min(w, paddingX + contentWidth - x), height: barHeight)
+                context.fill(Path(rect), with: .color(token.color.opacity(0.80)))
+                x += w
             }
         }
     }

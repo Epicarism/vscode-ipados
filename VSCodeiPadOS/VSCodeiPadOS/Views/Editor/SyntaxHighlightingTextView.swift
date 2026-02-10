@@ -27,6 +27,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
     let onDismissAutocomplete: (() -> Bool)?
 
     let isActive: Bool
+    let fontSize: CGFloat  // Explicit parameter to trigger SwiftUI updates
     @EnvironmentObject var editorCore: EditorCore
 
     init(
@@ -40,6 +41,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         cursorIndex: Binding<Int> = .constant(0),
         lineHeight: Binding<CGFloat>,
         isActive: Bool,
+        fontSize: CGFloat = 14.0,
         requestedLineSelection: Binding<Int?> = .constant(nil),
         requestedCursorIndex: Binding<Int?> = .constant(nil),
         onAcceptAutocomplete: (() -> Bool)? = nil,
@@ -55,6 +57,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         self._cursorIndex = cursorIndex
         self._lineHeight = lineHeight
         self.isActive = isActive
+        self.fontSize = fontSize
         self._requestedLineSelection = requestedLineSelection
         self._requestedCursorIndex = requestedCursorIndex
         self.onAcceptAutocomplete = onAcceptAutocomplete
@@ -90,6 +93,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             cursorIndex: cursorIndex,
             lineHeight: lineHeight,
             isActive: isActive,
+            fontSize: editorCore.editorFontSize,
             requestedLineSelection: requestedLineSelection,
             requestedCursorIndex: requestedCursorIndex,
             onAcceptAutocomplete: onAcceptAutocomplete,
@@ -197,10 +201,10 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             editorView.updateThemeColors(theme: ThemeManager.shared.currentTheme)
         }
         
-        // Update font size if changed
-        if let currentFont = textView.font, currentFont.pointSize != editorCore.editorFontSize {
+        // Update font size if changed (using explicit fontSize parameter for proper SwiftUI updates)
+        if let currentFont = textView.font, currentFont.pointSize != fontSize {
             let selectedRange = textView.selectedRange
-            textView.font = UIFont.monospacedSystemFont(ofSize: editorCore.editorFontSize, weight: .regular)
+            textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
             context.coordinator.applySyntaxHighlighting(to: textView)
             textView.selectedRange = selectedRange
             
@@ -865,114 +869,9 @@ class EditorTextView: UITextView {
             action: #selector(handleUnfold)
         ))
         
-        // MARK: - App-Level Shortcuts (must be here because UITextView captures keyboard)
-        
-        // Command Palette: Cmd+Shift+P
-        commands.append(UIKeyCommand(
-            input: "p",
-            modifierFlags: [.command, .shift],
-            action: #selector(handleShowCommandPalette),
-            discoverabilityTitle: "Command Palette"
-        ))
-        
-        // Toggle Terminal: Cmd+` (also Cmd+J as backup since backtick is buggy on iOS 15+)
-        let toggleTerminalCmd = UIKeyCommand(
-            input: "`",
-            modifierFlags: .command,
-            action: #selector(handleToggleTerminal),
-            discoverabilityTitle: "Toggle Terminal"
-        )
-        toggleTerminalCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(toggleTerminalCmd)
-        
-        // Toggle Terminal alternative: Cmd+J (VS Code's actual shortcut)
-        let toggleTerminalAltCmd = UIKeyCommand(
-            input: "j",
-            modifierFlags: .command,
-            action: #selector(handleToggleTerminal),
-            discoverabilityTitle: "Toggle Panel"
-        )
-        toggleTerminalAltCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(toggleTerminalAltCmd)
-        
-        // AI Assistant: Cmd+Shift+A
-        commands.append(UIKeyCommand(
-            input: "a",
-            modifierFlags: [.command, .shift],
-            action: #selector(handleShowAIAssistant),
-            discoverabilityTitle: "AI Assistant"
-        ))
-        
-        // Toggle Sidebar: Cmd+B
-        commands.append(UIKeyCommand(
-            input: "b",
-            modifierFlags: .command,
-            action: #selector(handleToggleSidebar),
-            discoverabilityTitle: "Toggle Sidebar"
-        ))
-        
-        // Quick Open: Cmd+P
-        commands.append(UIKeyCommand(
-            input: "p",
-            modifierFlags: .command,
-            action: #selector(handleShowQuickOpen),
-            discoverabilityTitle: "Quick Open"
-        ))
-        
-        // New File: Cmd+N (needs priority over system "New Window")
-        let newFileCmd = UIKeyCommand(
-            input: "n",
-            modifierFlags: .command,
-            action: #selector(handleNewFile),
-            discoverabilityTitle: "New File"
-        )
-        newFileCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(newFileCmd)
-        
-        // Save: Cmd+S
-        commands.append(UIKeyCommand(
-            input: "s",
-            modifierFlags: .command,
-            action: #selector(handleSaveFile),
-            discoverabilityTitle: "Save"
-        ))
-        
-        // Close Tab: Cmd+W
-        // Use wantsPriorityOverSystemBehavior to prevent system from intercepting Cmd+W
-        let closeTabCommand = UIKeyCommand(
-            input: "w",
-            modifierFlags: .command,
-            action: #selector(handleCloseTab),
-            discoverabilityTitle: "Close Tab"
-        )
-        closeTabCommand.wantsPriorityOverSystemBehavior = true
-        commands.append(closeTabCommand)
-        
-        // Find: Cmd+F (needs priority over system find)
-        let findCmd = UIKeyCommand(
-            input: "f",
-            modifierFlags: .command,
-            action: #selector(handleFind),
-            discoverabilityTitle: "Find"
-        )
-        findCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(findCmd)
-        
-        // Zoom In: Cmd+=
-        commands.append(UIKeyCommand(
-            input: "=",
-            modifierFlags: .command,
-            action: #selector(handleZoomIn),
-            discoverabilityTitle: "Zoom In"
-        ))
-        
-        // Zoom Out: Cmd+-
-        commands.append(UIKeyCommand(
-            input: "-",
-            modifierFlags: .command,
-            action: #selector(handleZoomOut),
-            discoverabilityTitle: "Zoom Out"
-        ))
+        // NOTE: App-level shortcuts (Cmd+B, Cmd+P, Cmd+Shift+P, Cmd+`, etc.) 
+        // are now handled by AppCommands.swift to avoid duplicate registration.
+        // Only text-editing specific shortcuts should be registered here.
         
         return commands
     }

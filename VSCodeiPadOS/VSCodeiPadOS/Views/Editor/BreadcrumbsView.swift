@@ -57,7 +57,7 @@ struct BreadcrumbsView: View {
                     .padding(.horizontal, 2)
                     
                 HStack(spacing: 2) {
-                    Image(systemName: "f.curlybraces")
+                    Image(systemName: "curlybraces")
                         .font(.caption2)
                         .foregroundColor(.purple)
                     Text("ContentView")
