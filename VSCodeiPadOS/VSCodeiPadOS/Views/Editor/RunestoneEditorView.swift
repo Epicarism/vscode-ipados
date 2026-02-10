@@ -140,11 +140,14 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.theme = makeRunestoneTheme()
         }
         
-        // CRITICAL FIX: Only call setState() when switching to a DIFFERENT file
+        // CRITICAL: Only call setState() when safe (not during active editing)
         // Calling setState() during editing corrupts Runestone's lineManager
         // and causes crash at TextEditHelper.swift:27 (force unwrap on linePosition)
         
         let isFileSwitching = context.coordinator.lastFilename != filename
+        let currentText = textView.text
+        let textChanged = currentText != text
+        let isActivelyEditing = textView.isFirstResponder
         
         if isFileSwitching {
             // User switched to a different file - safe to call setState()
@@ -165,10 +168,23 @@ struct RunestoneEditorView: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.totalLines = self.countLines(in: text)
             }
+        } else if textChanged && !context.coordinator.hasBeenEdited && !isActivelyEditing && !context.coordinator.isUpdatingFromTextView {
+            // Text changed externally (e.g., initial load, external modification)
+            // Safe to update since user hasn't started editing yet
+            if let language = getTreeSitterLanguage(for: filename) {
+                let state = TextViewState(text: text, language: language)
+                textView.setState(state)
+            } else {
+                textView.text = text
+            }
+            
+            // Update line count
+            DispatchQueue.main.async {
+                self.totalLines = self.countLines(in: text)
+            }
         }
-        // If NOT switching files AND user has edited, DO NOTHING
+        // If user HAS edited OR is actively editing, DO NOTHING
         // Let the user's edits remain - don't corrupt the lineManager
-        // The debounced sync will update parent.text eventually
     }
     
     // MARK: - Runestone Theme Factory

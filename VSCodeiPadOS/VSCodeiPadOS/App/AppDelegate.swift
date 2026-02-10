@@ -33,18 +33,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     
     // MARK: - Scene Configuration
     
-    func application(
-        _ application: UIApplication,
-        configurationForConnecting connectingSceneSession: UISceneSession,
-        options: UIScene.ConnectionOptions
-    ) -> UISceneConfiguration {
-        // Let SwiftUI handle all scene management via WindowGroup
-        // This prevents duplicate menu registration
-        return UISceneConfiguration(
-            name: "Default Configuration",
-            sessionRole: connectingSceneSession.role
-        )
-    }
+    // NOTE: Removed configurationForConnecting - let SwiftUI handle scenes entirely
+    // Returning a custom UISceneConfiguration was causing "Info.plist contained no 
+    // UIScene configuration dictionary" errors and duplicate menu registration
     
     func application(
         _ application: UIApplication,
