@@ -34,10 +34,6 @@ struct RunestoneEditorView: UIViewRepresentable {
     let fontSize: CGFloat
     @EnvironmentObject var editorCore: EditorCore
     
-    // Settings from AppStorage
-    @AppStorage("wordWrap") private var wordWrapEnabled: Bool = true
-    @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
-    
     /// Autocomplete key handling hooks (return true if handled)
     let onAcceptAutocomplete: (() -> Bool)?
     let onDismissAutocomplete: (() -> Bool)?
@@ -76,12 +72,12 @@ struct RunestoneEditorView: UIViewRepresentable {
         let textView = TextView()
         textView.editorDelegate = context.coordinator
         
-        // Configure line numbers (from settings)
-        textView.showLineNumbers = showLineNumbers
+        // Configure line numbers
+        textView.showLineNumbers = true
         textView.lineSelectionDisplayType = .line
         
-        // Configure line wrapping (from settings)
-        textView.isLineWrappingEnabled = wordWrapEnabled
+        // Configure line wrapping
+        textView.isLineWrappingEnabled = true
         
         // Configure editing
         textView.isEditable = true
@@ -142,14 +138,6 @@ struct RunestoneEditorView: UIViewRepresentable {
         if context.coordinator.lastFontSize != fontSize {
             context.coordinator.lastFontSize = fontSize
             textView.theme = makeRunestoneTheme()
-        }
-        
-        // Update settings if changed (live toggle support)
-        if textView.showLineNumbers != showLineNumbers {
-            textView.showLineNumbers = showLineNumbers
-        }
-        if textView.isLineWrappingEnabled != wordWrapEnabled {
-            textView.isLineWrappingEnabled = wordWrapEnabled
         }
         
         // CRITICAL: Only call setState() when safe (not during active editing)

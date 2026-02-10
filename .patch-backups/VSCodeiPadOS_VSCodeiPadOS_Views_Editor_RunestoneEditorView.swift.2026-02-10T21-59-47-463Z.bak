@@ -144,14 +144,6 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.theme = makeRunestoneTheme()
         }
         
-        // Update settings if changed (live toggle support)
-        if textView.showLineNumbers != showLineNumbers {
-            textView.showLineNumbers = showLineNumbers
-        }
-        if textView.isLineWrappingEnabled != wordWrapEnabled {
-            textView.isLineWrappingEnabled = wordWrapEnabled
-        }
-        
         // CRITICAL: Only call setState() when safe (not during active editing)
         // Calling setState() during editing corrupts Runestone's lineManager
         // and causes crash at TextEditHelper.swift:27 (force unwrap on linePosition)
