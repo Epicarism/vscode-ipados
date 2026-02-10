@@ -461,45 +461,80 @@ struct IDEEditorView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(theme.editorBackground)
                     } else {
-                        // TODO: Re-enable Runestone when package is properly linked
-                        // See FeatureFlags.useRunestoneEditor
-                        // Legacy SyntaxHighlightingTextView
-                        SyntaxHighlightingTextView(
-                            text: $text,
-                            filename: tab.fileName,
-                            scrollPosition: $scrollPosition,
-                            scrollOffset: $scrollOffset,
-                            totalLines: $totalLines,
-                            visibleLines: $visibleLines,
-                            currentLineNumber: $currentLineNumber,
-                            currentColumn: $currentColumn,
-                            cursorIndex: $cursorIndex,
-                            lineHeight: $lineHeight,
-                            isActive: true,
-                            fontSize: editorCore.editorFontSize,
-                            requestedLineSelection: $requestedLineSelection,
-                            requestedCursorIndex: $requestedCursorIndex,
-                            onAcceptAutocomplete: {
-                                guard showAutocomplete else { return false }
-                                var tempText = text
-                                var tempCursor = cursorIndex
-                                autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
-                                if tempText != text {
-                                    text = tempText
-                                    cursorIndex = tempCursor
-                                    requestedCursorIndex = tempCursor
-                                    showAutocomplete = false
-                                    return true
-                                }
-                                return false
-                            },
-                            onDismissAutocomplete: {
-                                guard showAutocomplete else { return false }
-                                autocomplete.hideSuggestions()
-                                showAutocomplete = false
-                                return true
+                        // Use Runestone for O(log n) performance, or legacy view as fallback
+                        Group {
+                            if useRunestoneEditor {
+                                RunestoneEditorView(
+                                    text: $text,
+                                    filename: tab.fileName,
+                                    scrollOffset: $scrollOffset,
+                                    totalLines: $totalLines,
+                                    currentLineNumber: $currentLineNumber,
+                                    currentColumn: $currentColumn,
+                                    cursorIndex: $cursorIndex,
+                                    isActive: true,
+                                    fontSize: editorCore.editorFontSize,
+                                    onAcceptAutocomplete: {
+                                        guard showAutocomplete else { return false }
+                                        var tempText = text
+                                        var tempCursor = cursorIndex
+                                        autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
+                                        if tempText != text {
+                                            text = tempText
+                                            cursorIndex = tempCursor
+                                            requestedCursorIndex = tempCursor
+                                            showAutocomplete = false
+                                            return true
+                                        }
+                                        return false
+                                    },
+                                    onDismissAutocomplete: {
+                                        guard showAutocomplete else { return false }
+                                        autocomplete.hideSuggestions()
+                                        showAutocomplete = false
+                                        return true
+                                    }
+                                )
+                            } else {
+                                // Legacy SyntaxHighlightingTextView (fallback)
+                                SyntaxHighlightingTextView(
+                                    text: $text,
+                                    filename: tab.fileName,
+                                    scrollPosition: $scrollPosition,
+                                    scrollOffset: $scrollOffset,
+                                    totalLines: $totalLines,
+                                    visibleLines: $visibleLines,
+                                    currentLineNumber: $currentLineNumber,
+                                    currentColumn: $currentColumn,
+                                    cursorIndex: $cursorIndex,
+                                    lineHeight: $lineHeight,
+                                    isActive: true,
+                                    fontSize: editorCore.editorFontSize,
+                                    requestedLineSelection: $requestedLineSelection,
+                                    requestedCursorIndex: $requestedCursorIndex,
+                                    onAcceptAutocomplete: {
+                                        guard showAutocomplete else { return false }
+                                        var tempText = text
+                                        var tempCursor = cursorIndex
+                                        autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
+                                        if tempText != text {
+                                            text = tempText
+                                            cursorIndex = tempCursor
+                                            requestedCursorIndex = tempCursor
+                                            showAutocomplete = false
+                                            return true
+                                        }
+                                        return false
+                                    },
+                                    onDismissAutocomplete: {
+                                        guard showAutocomplete else { return false }
+                                        autocomplete.hideSuggestions()
+                                        showAutocomplete = false
+                                        return true
+                                    }
+                                )
                             }
-                        )
+                        }
                         .onChange(of: text) { newValue in
                             editorCore.updateActiveTabContent(newValue)
                             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)

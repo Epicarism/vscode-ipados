@@ -1,0 +1,827 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001 /* ContentView.swift */; };
+		1002 /* VSCodeiPadOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002 /* VSCodeiPadOSApp.swift */; };
+		1003 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2003 /* AppCommands.swift */; };
+		1004 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2004 /* Color+Hex.swift */; };
+		1005 /* FileManager+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2005 /* FileManager+Extension.swift */; };
+		1006 /* FileManager+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2006 /* FileManager+Extensions.swift */; };
+		1007 /* NSAttributedStringSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2007 /* NSAttributedStringSyntaxHighlighter.swift */; };
+		1009 /* EditorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2009 /* EditorState.swift */; };
+		1012 /* FileItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2012 /* FileItem.swift */; };
+		1013 /* FileItemUTType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2013 /* FileItemUTType.swift */; };
+		1015 /* FindViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2015 /* FindViewModel.swift */; };
+		1016 /* MultiCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2016 /* MultiCursor.swift */; };
+		1017 /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2017 /* Tab.swift */; };
+		1018 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2018 /* Theme.swift */; };
+		1019 /* AutocompleteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2019 /* AutocompleteManager.swift */; };
+		1020 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020 /* ThemeManager.swift */; };
+		1022 /* CodeFoldingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2022 /* CodeFoldingManager.swift */; };
+		1023 /* EditorCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2023 /* EditorCore.swift */; };
+		1025 /* FileSystemNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2025 /* FileSystemNavigator.swift */; };
+		1035 /* MinimapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2035 /* MinimapView.swift */; };
+		1036 /* SyntaxHighlightingTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2036 /* SyntaxHighlightingTextView.swift */; };
+		1043 /* GitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2043 /* GitView.swift */; };
+		1044 /* GoToLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2044 /* GoToLineView.swift */; };
+		1050 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2050 /* SettingsView.swift */; };
+		1051 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2051 /* TerminalView.swift */; };
+		1052 /* DebugManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052 /* DebugManager.swift */; };
+		1053 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2053 /* DebugView.swift */; };
+		1054 /* WorkspaceTrustManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2054 /* WorkspaceTrustManager.swift */; };
+		1055 /* AIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2055 /* AIManager.swift */; };
+		1056 /* ColorPickerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2056 /* ColorPickerManager.swift */; };
+		1057 /* GitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2057 /* GitManager.swift */; };
+		1058 /* GitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2058 /* GitService.swift */; };
+		1059 /* HoverInfoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2059 /* HoverInfoManager.swift */; };
+		1060 /* LaunchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2060 /* LaunchManager.swift */; };
+		1061 /* NavigationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2061 /* NavigationManager.swift */; };
+		1062 /* RecentFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* RecentFileManager.swift */; };
+		1063 /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* SearchManager.swift */; };
+		1064 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* SettingsManager.swift */; };
+		1065 /* SnippetsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* SnippetsManager.swift */; };
+		1066 /* TasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* TasksManager.swift */; };
+		1067 /* WorkspaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2067 /* WorkspaceManager.swift */; };
+		1068 /* FileIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2068 /* FileIcons.swift */; };
+		1069 /* FileTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2069 /* FileTreeView.swift */; };
+		1070 /* SpotlightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* SpotlightManager.swift */; };
+		1099 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2099 /* Assets.xcassets */; };
+		1101 /* BranchMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2101 /* BranchMenu.swift */; };
+		1102 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2102 /* CommandPalette.swift */; };
+		1103 /* DiffComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2103 /* DiffComponents.swift */; };
+		1104 /* FileIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2104 /* FileIconView.swift */; };
+		1105 /* GoToSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2105 /* GoToSymbol.swift */; };
+		1106 /* LaunchConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2106 /* LaunchConfigView.swift */; };
+		1107 /* QuickOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2107 /* QuickOpen.swift */; };
+		1108 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2108 /* SidebarView.swift */; };
+		1109 /* SnippetPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2109 /* SnippetPickerView.swift */; };
+		1110 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2110 /* StatusBarView.swift */; };
+		1111 /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2111 /* TabBarView.swift */; };
+		1112 /* TasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2112 /* TasksView.swift */; };
+		1113 /* WorkspaceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2113 /* WorkspaceSettingsView.swift */; };
+		1114 /* WorkspaceTrustDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2114 /* WorkspaceTrustDialog.swift */; };
+		1115 /* OutputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2115 /* OutputView.swift */; };
+		1116 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2116 /* SearchView.swift */; };
+		1117 /* MarkdownPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2117 /* MarkdownPreviewView.swift */; };
+		1118 /* AIAssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2118 /* AIAssistantView.swift */; };
+		1119 /* GitQuickActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2119 /* GitQuickActionsView.swift */; };
+		1120 /* MarkdownPreviewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2120 /* MarkdownPreviewWrapper.swift */; };
+		1121 /* TestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2121 /* TestView.swift */; };
+		1122 /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2122 /* PanelView.swift */; };
+		1123 /* ProblemsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2123 /* ProblemsView.swift */; };
+		1124 /* OutlineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2124 /* OutlineView.swift */; };
+		1125 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2125 /* TimelineView.swift */; };
+		1126 /* DebugConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2126 /* DebugConsoleView.swift */; };
+		1127 /* SplitEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2127 /* SplitEditorView.swift */; };
+		1128 /* StickyHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2128 /* StickyHeaderView.swift */; };
+		1129 /* ColorPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2129 /* ColorPickerView.swift */; };
+		1130 /* MultiCursorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2130 /* MultiCursorTextView.swift */; };
+		1131 /* JSONTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2131 /* JSONTreeView.swift */; };
+		1132 /* EditorSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2132 /* EditorSplitView.swift */; };
+		1133 /* InlayHintsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2133 /* InlayHintsOverlay.swift */; };
+		1135 /* HoverInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2135 /* HoverInfoView.swift */; };
+		1136 /* BreadcrumbsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2136 /* BreadcrumbsView.swift */; };
+		1138 /* PeekDefinitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2138 /* PeekDefinitionView.swift */; };
+		1139 /* InlayHintsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2139 /* InlayHintsManager.swift */; };
+		1140 /* FileHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2140 /* FileHelpers.swift */; };
+		1141 /* Notification+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2141 /* Notification+Search.swift */; };
+		1142 /* SSHManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2142 /* SSHManager.swift */; };
+		1143 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143 /* AppDelegate.swift */; };
+		1144 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2144 /* SceneDelegate.swift */; };
+		1145 /* NativeGitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2145 /* NativeGitReader.swift */; };
+		1146 /* NativeGitWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2146 /* NativeGitWriter.swift */; };
+		1147 /* RunestoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2147 /* RunestoneEditorView.swift */; };
+		1148 /* RunestoneThemeAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2148 /* RunestoneThemeAdapter.swift */; };
+		1149 /* TreeSitterLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */; };
+		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		2001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		2002 /* VSCodeiPadOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VSCodeiPadOSApp.swift; sourceTree = "<group>"; };
+		2003 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
+		2004 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		2005 /* FileManager+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FileManager+Extension.swift"; sourceTree = "<group>"; };
+		2006 /* FileManager+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FileManager+Extensions.swift"; sourceTree = "<group>"; };
+		2007 /* NSAttributedStringSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSAttributedStringSyntaxHighlighter.swift; sourceTree = "<group>"; };
+		2009 /* EditorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorState.swift; sourceTree = "<group>"; };
+		2012 /* FileItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileItem.swift; sourceTree = "<group>"; };
+		2013 /* FileItemUTType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileItemUTType.swift; sourceTree = "<group>"; };
+		2015 /* FindViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindViewModel.swift; sourceTree = "<group>"; };
+		2016 /* MultiCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCursor.swift; sourceTree = "<group>"; };
+		2017 /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
+		2018 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		2019 /* AutocompleteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutocompleteManager.swift; sourceTree = "<group>"; };
+		2020 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
+		2022 /* CodeFoldingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeFoldingManager.swift; sourceTree = "<group>"; };
+		2023 /* EditorCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorCore.swift; sourceTree = "<group>"; };
+		2025 /* FileSystemNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemNavigator.swift; sourceTree = "<group>"; };
+		2035 /* MinimapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinimapView.swift; sourceTree = "<group>"; };
+		2036 /* SyntaxHighlightingTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxHighlightingTextView.swift; sourceTree = "<group>"; };
+		2043 /* GitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitView.swift; sourceTree = "<group>"; };
+		2044 /* GoToLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToLineView.swift; sourceTree = "<group>"; };
+		2050 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2051 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
+		2052 /* DebugManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugManager.swift; sourceTree = "<group>"; };
+		2053 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
+		2054 /* WorkspaceTrustManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTrustManager.swift; sourceTree = "<group>"; };
+		2055 /* AIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIManager.swift; sourceTree = "<group>"; };
+		2056 /* ColorPickerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerManager.swift; sourceTree = "<group>"; };
+		2057 /* GitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitManager.swift; sourceTree = "<group>"; };
+		2058 /* GitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitService.swift; sourceTree = "<group>"; };
+		2059 /* HoverInfoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInfoManager.swift; sourceTree = "<group>"; };
+		2060 /* LaunchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchManager.swift; sourceTree = "<group>"; };
+		2061 /* NavigationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationManager.swift; sourceTree = "<group>"; };
+		2062 /* RecentFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFileManager.swift; sourceTree = "<group>"; };
+		2063 /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
+		2064 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		2065 /* SnippetsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsManager.swift; sourceTree = "<group>"; };
+		2066 /* TasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksManager.swift; sourceTree = "<group>"; };
+		2067 /* WorkspaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceManager.swift; sourceTree = "<group>"; };
+		2068 /* FileIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIcons.swift; sourceTree = "<group>"; };
+		2069 /* FileTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeView.swift; sourceTree = "<group>"; };
+		2070 /* SpotlightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightManager.swift; sourceTree = "<group>"; };
+		2099 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2101 /* BranchMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMenu.swift; sourceTree = "<group>"; };
+		2102 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
+		2103 /* DiffComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffComponents.swift; sourceTree = "<group>"; };
+		2104 /* FileIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIconView.swift; sourceTree = "<group>"; };
+		2105 /* GoToSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToSymbol.swift; sourceTree = "<group>"; };
+		2106 /* LaunchConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchConfigView.swift; sourceTree = "<group>"; };
+		2107 /* QuickOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpen.swift; sourceTree = "<group>"; };
+		2108 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		2109 /* SnippetPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetPickerView.swift; sourceTree = "<group>"; };
+		2110 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
+		2111 /* TabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarView.swift; sourceTree = "<group>"; };
+		2112 /* TasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksView.swift; sourceTree = "<group>"; };
+		2113 /* WorkspaceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsView.swift; sourceTree = "<group>"; };
+		2114 /* WorkspaceTrustDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTrustDialog.swift; sourceTree = "<group>"; };
+		2115 /* OutputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputView.swift; sourceTree = "<group>"; };
+		2116 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		2117 /* MarkdownPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreviewView.swift; sourceTree = "<group>"; };
+		2118 /* AIAssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistantView.swift; sourceTree = "<group>"; };
+		2119 /* GitQuickActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitQuickActionsView.swift; sourceTree = "<group>"; };
+		2120 /* MarkdownPreviewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreviewWrapper.swift; sourceTree = "<group>"; };
+		2121 /* TestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestView.swift; sourceTree = "<group>"; };
+		2122 /* PanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelView.swift; sourceTree = "<group>"; };
+		2123 /* ProblemsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProblemsView.swift; sourceTree = "<group>"; };
+		2124 /* OutlineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlineView.swift; sourceTree = "<group>"; };
+		2125 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
+		2126 /* DebugConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugConsoleView.swift; sourceTree = "<group>"; };
+		2127 /* SplitEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitEditorView.swift; sourceTree = "<group>"; };
+		2128 /* StickyHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyHeaderView.swift; sourceTree = "<group>"; };
+		2129 /* ColorPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerView.swift; sourceTree = "<group>"; };
+		2130 /* MultiCursorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiCursorTextView.swift; sourceTree = "<group>"; };
+		2131 /* JSONTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONTreeView.swift; sourceTree = "<group>"; };
+		2132 /* EditorSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSplitView.swift; sourceTree = "<group>"; };
+		2133 /* InlayHintsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlayHintsOverlay.swift; sourceTree = "<group>"; };
+		2135 /* HoverInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInfoView.swift; sourceTree = "<group>"; };
+		2136 /* BreadcrumbsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreadcrumbsView.swift; sourceTree = "<group>"; };
+		2138 /* PeekDefinitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekDefinitionView.swift; sourceTree = "<group>"; };
+		2139 /* InlayHintsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlayHintsManager.swift; sourceTree = "<group>"; };
+		2140 /* FileHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileHelpers.swift; sourceTree = "<group>"; };
+		2141 /* Notification+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notification+Search.swift"; sourceTree = "<group>"; };
+		2142 /* SSHManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHManager.swift; sourceTree = "<group>"; };
+		2143 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		2144 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		2145 /* NativeGitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitReader.swift; sourceTree = "<group>"; };
+		2146 /* NativeGitWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitWriter.swift; sourceTree = "<group>"; };
+		2147 /* RunestoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneEditorView.swift; sourceTree = "<group>"; };
+		2148 /* RunestoneThemeAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneThemeAdapter.swift; sourceTree = "<group>"; };
+		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
+		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		4000 = {
+			isa = PBXGroup;
+			children = (
+				4001 /* VSCodeiPadOS */,
+				4099 /* Products */,
+				896596632F3B9FAB005B984D /* FeatureFlags.swift */,
+				896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */,
+			);
+			sourceTree = "<group>";
+		};
+		4001 /* VSCodeiPadOS */ = {
+			isa = PBXGroup;
+			children = (
+				2001 /* ContentView.swift */,
+				2099 /* Assets.xcassets */,
+				4002 /* App */,
+				4003 /* Commands */,
+				4004 /* Extensions */,
+				4005 /* Models */,
+				4006 /* Services */,
+				4007 /* Views */,
+			);
+			path = VSCodeiPadOS;
+			sourceTree = "<group>";
+		};
+		4002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				2002 /* VSCodeiPadOSApp.swift */,
+				2143 /* AppDelegate.swift */,
+				2144 /* SceneDelegate.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4003 /* Commands */ = {
+			isa = PBXGroup;
+			children = (
+				2003 /* AppCommands.swift */,
+			);
+			path = Commands;
+			sourceTree = "<group>";
+		};
+		4004 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				2004 /* Color+Hex.swift */,
+				2005 /* FileManager+Extension.swift */,
+				2006 /* FileManager+Extensions.swift */,
+				2007 /* NSAttributedStringSyntaxHighlighter.swift */,
+				2068 /* FileIcons.swift */,
+				2140 /* FileHelpers.swift */,
+				2141 /* Notification+Search.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		4005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2009 /* EditorState.swift */,
+				2012 /* FileItem.swift */,
+				2013 /* FileItemUTType.swift */,
+				2015 /* FindViewModel.swift */,
+				2016 /* MultiCursor.swift */,
+				2017 /* Tab.swift */,
+				2018 /* Theme.swift */,
+				2020 /* ThemeManager.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		4006 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				2019 /* AutocompleteManager.swift */,
+				2022 /* CodeFoldingManager.swift */,
+				2023 /* EditorCore.swift */,
+				2025 /* FileSystemNavigator.swift */,
+				2052 /* DebugManager.swift */,
+				2054 /* WorkspaceTrustManager.swift */,
+				2055 /* AIManager.swift */,
+				2056 /* ColorPickerManager.swift */,
+				2057 /* GitManager.swift */,
+				2058 /* GitService.swift */,
+				2059 /* HoverInfoManager.swift */,
+				2060 /* LaunchManager.swift */,
+				2061 /* NavigationManager.swift */,
+				2062 /* RecentFileManager.swift */,
+				2063 /* SearchManager.swift */,
+				2064 /* SettingsManager.swift */,
+				2065 /* SnippetsManager.swift */,
+				2066 /* TasksManager.swift */,
+				2067 /* WorkspaceManager.swift */,
+				2139 /* InlayHintsManager.swift */,
+				2070 /* SpotlightManager.swift */,
+				2142 /* SSHManager.swift */,
+				2148 /* RunestoneThemeAdapter.swift */,
+				4013 /* NativeGit */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		4007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2069 /* FileTreeView.swift */,
+				2104 /* FileIconView.swift */,
+				2109 /* SnippetPickerView.swift */,
+				2108 /* SidebarView.swift */,
+				2106 /* LaunchConfigView.swift */,
+				2111 /* TabBarView.swift */,
+				2103 /* DiffComponents.swift */,
+				2105 /* GoToSymbol.swift */,
+				2113 /* WorkspaceSettingsView.swift */,
+				2102 /* CommandPalette.swift */,
+				2110 /* StatusBarView.swift */,
+				2112 /* TasksView.swift */,
+				2107 /* QuickOpen.swift */,
+				2101 /* BranchMenu.swift */,
+				2114 /* WorkspaceTrustDialog.swift */,
+				4008 /* Editor */,
+				4009 /* Main */,
+				4010 /* Panels */,
+				4011 /* Sidebar */,
+				4012 /* StatusBar */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		4008 /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				2136 /* BreadcrumbsView.swift */,
+				2129 /* ColorPickerView.swift */,
+				2132 /* EditorSplitView.swift */,
+				2135 /* HoverInfoView.swift */,
+				2133 /* InlayHintsOverlay.swift */,
+				2131 /* JSONTreeView.swift */,
+				2130 /* MultiCursorTextView.swift */,
+				2138 /* PeekDefinitionView.swift */,
+				2127 /* SplitEditorView.swift */,
+				2128 /* StickyHeaderView.swift */,
+				2035 /* MinimapView.swift */,
+				2036 /* SyntaxHighlightingTextView.swift */,
+				2147 /* RunestoneEditorView.swift */,
+			);
+			path = Editor;
+			sourceTree = "<group>";
+		};
+		4009 /* Main */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Main;
+			sourceTree = "<group>";
+		};
+		4010 /* Panels */ = {
+			isa = PBXGroup;
+			children = (
+				2043 /* GitView.swift */,
+				2119 /* GitQuickActionsView.swift */,
+				2044 /* GoToLineView.swift */,
+				2124 /* OutlineView.swift */,
+				2115 /* OutputView.swift */,
+				2122 /* PanelView.swift */,
+				2123 /* ProblemsView.swift */,
+				2116 /* SearchView.swift */,
+				2117 /* MarkdownPreviewView.swift */,
+				2120 /* MarkdownPreviewWrapper.swift */,
+				2125 /* TimelineView.swift */,
+				2126 /* DebugConsoleView.swift */,
+				2118 /* AIAssistantView.swift */,
+				2121 /* TestView.swift */,
+				2050 /* SettingsView.swift */,
+				2051 /* TerminalView.swift */,
+				2053 /* DebugView.swift */,
+			);
+			path = Panels;
+			sourceTree = "<group>";
+		};
+		4011 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		4012 /* StatusBar */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = StatusBar;
+			sourceTree = "<group>";
+		};
+		4013 /* NativeGit */ = {
+			isa = PBXGroup;
+			children = (
+				2145 /* NativeGitReader.swift */,
+				2146 /* NativeGitWriter.swift */,
+			);
+			path = NativeGit;
+			sourceTree = "<group>";
+		};
+		4099 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3000 /* VSCodeiPadOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5000 /* VSCodeiPadOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6000 /* Build configuration list for PBXNativeTarget "VSCodeiPadOS" */;
+			buildPhases = (
+				5001 /* Sources */,
+				5003 /* Frameworks */,
+				5002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VSCodeiPadOS;
+			packageProductDependencies = (
+				896595EE2F3B8D73005B984D /* Runestone */,
+			);
+			productName = VSCodeiPadOS;
+			productReference = 3000 /* VSCodeiPadOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					5000 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 8000 /* Build configuration list for PBXProject "VSCodeiPadOS" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 4000;
+			packageReferences = (
+				896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */,
+				896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */,
+			);
+			productRefGroup = 4099 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5000 /* VSCodeiPadOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1099 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1001 /* ContentView.swift in Sources */,
+				1002 /* VSCodeiPadOSApp.swift in Sources */,
+				1003 /* AppCommands.swift in Sources */,
+				1004 /* Color+Hex.swift in Sources */,
+				1005 /* FileManager+Extension.swift in Sources */,
+				1006 /* FileManager+Extensions.swift in Sources */,
+				1007 /* NSAttributedStringSyntaxHighlighter.swift in Sources */,
+				1068 /* FileIcons.swift in Sources */,
+				1140 /* FileHelpers.swift in Sources */,
+				1141 /* Notification+Search.swift in Sources */,
+				1142 /* SSHManager.swift in Sources */,
+				1143 /* AppDelegate.swift in Sources */,
+				1144 /* SceneDelegate.swift in Sources */,
+				1009 /* EditorState.swift in Sources */,
+				1012 /* FileItem.swift in Sources */,
+				1013 /* FileItemUTType.swift in Sources */,
+				1015 /* FindViewModel.swift in Sources */,
+				1016 /* MultiCursor.swift in Sources */,
+				1017 /* Tab.swift in Sources */,
+				1018 /* Theme.swift in Sources */,
+				1019 /* AutocompleteManager.swift in Sources */,
+				1020 /* ThemeManager.swift in Sources */,
+				1022 /* CodeFoldingManager.swift in Sources */,
+				1023 /* EditorCore.swift in Sources */,
+				1025 /* FileSystemNavigator.swift in Sources */,
+				1139 /* InlayHintsManager.swift in Sources */,
+				1069 /* FileTreeView.swift in Sources */,
+				1104 /* FileIconView.swift in Sources */,
+				1109 /* SnippetPickerView.swift in Sources */,
+				1108 /* SidebarView.swift in Sources */,
+				1106 /* LaunchConfigView.swift in Sources */,
+				1111 /* TabBarView.swift in Sources */,
+				1103 /* DiffComponents.swift in Sources */,
+				1105 /* GoToSymbol.swift in Sources */,
+				1113 /* WorkspaceSettingsView.swift in Sources */,
+				1102 /* CommandPalette.swift in Sources */,
+				1110 /* StatusBarView.swift in Sources */,
+				1112 /* TasksView.swift in Sources */,
+				1107 /* QuickOpen.swift in Sources */,
+				896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */,
+				1101 /* BranchMenu.swift in Sources */,
+				1114 /* WorkspaceTrustDialog.swift in Sources */,
+				1127 /* SplitEditorView.swift in Sources */,
+				1128 /* StickyHeaderView.swift in Sources */,
+				1129 /* ColorPickerView.swift in Sources */,
+				1130 /* MultiCursorTextView.swift in Sources */,
+				1131 /* JSONTreeView.swift in Sources */,
+				1132 /* EditorSplitView.swift in Sources */,
+				1133 /* InlayHintsOverlay.swift in Sources */,
+				1135 /* HoverInfoView.swift in Sources */,
+				1136 /* BreadcrumbsView.swift in Sources */,
+				1138 /* PeekDefinitionView.swift in Sources */,
+				1035 /* MinimapView.swift in Sources */,
+				1036 /* SyntaxHighlightingTextView.swift in Sources */,
+				1043 /* GitView.swift in Sources */,
+				1119 /* GitQuickActionsView.swift in Sources */,
+				1044 /* GoToLineView.swift in Sources */,
+				1124 /* OutlineView.swift in Sources */,
+				1115 /* OutputView.swift in Sources */,
+				1122 /* PanelView.swift in Sources */,
+				1123 /* ProblemsView.swift in Sources */,
+				1116 /* SearchView.swift in Sources */,
+				1117 /* MarkdownPreviewView.swift in Sources */,
+				1120 /* MarkdownPreviewWrapper.swift in Sources */,
+				1125 /* TimelineView.swift in Sources */,
+				1126 /* DebugConsoleView.swift in Sources */,
+				1118 /* AIAssistantView.swift in Sources */,
+				1121 /* TestView.swift in Sources */,
+				1050 /* SettingsView.swift in Sources */,
+				1051 /* TerminalView.swift in Sources */,
+				1052 /* DebugManager.swift in Sources */,
+				1053 /* DebugView.swift in Sources */,
+				1054 /* WorkspaceTrustManager.swift in Sources */,
+				1055 /* AIManager.swift in Sources */,
+				1056 /* ColorPickerManager.swift in Sources */,
+				1057 /* GitManager.swift in Sources */,
+				1058 /* GitService.swift in Sources */,
+				1059 /* HoverInfoManager.swift in Sources */,
+				1060 /* LaunchManager.swift in Sources */,
+				1061 /* NavigationManager.swift in Sources */,
+				1062 /* RecentFileManager.swift in Sources */,
+				1063 /* SearchManager.swift in Sources */,
+				1064 /* SettingsManager.swift in Sources */,
+				1065 /* SnippetsManager.swift in Sources */,
+				1066 /* TasksManager.swift in Sources */,
+				1067 /* WorkspaceManager.swift in Sources */,
+				1070 /* SpotlightManager.swift in Sources */,
+				1145 /* NativeGitReader.swift in Sources */,
+				1146 /* NativeGitWriter.swift in Sources */,
+				1147 /* RunestoneEditorView.swift in Sources */,
+				1148 /* RunestoneThemeAdapter.swift in Sources */,
+				1149 /* TreeSitterLanguages.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		6001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LAB993Y8WK;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = VSCodeiPadOS/Info.plist;
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "VS Code needs access to your documents to open and edit files";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vscodeipad.VSCodeiPadOS;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Debug;
+		};
+		6002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LAB993Y8WK;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = VSCodeiPadOS/Info.plist;
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "VS Code needs access to your documents to open and edit files";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vscodeipad.VSCodeiPadOS;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 2;
+			};
+			name = Release;
+		};
+		8001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASYNCK_AWAIT_ENABLED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		8002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASYNCK_AWAIT_ENABLED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6000 /* Build configuration list for PBXNativeTarget "VSCodeiPadOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6001 /* Debug */,
+				6002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8000 /* Build configuration list for PBXProject "VSCodeiPadOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8001 /* Debug */,
+				8002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simonbs/Runestone.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.1;
+			};
+		};
+		896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simonbs/TreeSitterLanguages.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.10;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		896595EE2F3B8D73005B984D /* Runestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */;
+			productName = Runestone;
+		};
+
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 7000 /* Project object */;
+}

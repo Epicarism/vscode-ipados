@@ -96,6 +96,9 @@
 		1144 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2144 /* SceneDelegate.swift */; };
 		1145 /* NativeGitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2145 /* NativeGitReader.swift */; };
 		1146 /* NativeGitWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2146 /* NativeGitWriter.swift */; };
+		1147 /* RunestoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2147 /* RunestoneEditorView.swift */; };
+		1148 /* RunestoneThemeAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2148 /* RunestoneThemeAdapter.swift */; };
+		1149 /* TreeSitterLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */; };
 		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
 /* End PBXBuildFile section */
 
@@ -189,6 +192,8 @@
 		2144 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		2145 /* NativeGitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitReader.swift; sourceTree = "<group>"; };
 		2146 /* NativeGitWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitWriter.swift; sourceTree = "<group>"; };
+		2147 /* RunestoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneEditorView.swift; sourceTree = "<group>"; };
+		2148 /* RunestoneThemeAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneThemeAdapter.swift; sourceTree = "<group>"; };
 		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
@@ -292,6 +297,7 @@
 				2139 /* InlayHintsManager.swift */,
 				2070 /* SpotlightManager.swift */,
 				2142 /* SSHManager.swift */,
+				2148 /* RunestoneThemeAdapter.swift */,
 				4013 /* NativeGit */,
 			);
 			path = Services;
@@ -339,6 +345,7 @@
 				2128 /* StickyHeaderView.swift */,
 				2035 /* MinimapView.swift */,
 				2036 /* SyntaxHighlightingTextView.swift */,
+				2147 /* RunestoneEditorView.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -413,6 +420,7 @@
 			buildConfigurationList = 6000 /* Build configuration list for PBXNativeTarget "VSCodeiPadOS" */;
 			buildPhases = (
 				5001 /* Sources */,
+				5003 /* Frameworks */,
 				5002 /* Resources */,
 			);
 			buildRules = (
@@ -420,6 +428,9 @@
 			dependencies = (
 			);
 			name = VSCodeiPadOS;
+			packageProductDependencies = (
+				896595EE2F3B8D73005B984D /* Runestone */,
+			);
 			productName = VSCodeiPadOS;
 			productReference = 3000 /* VSCodeiPadOS.app */;
 			productType = "com.apple.product-type.application";
@@ -460,6 +471,16 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5002 /* Resources */ = {
@@ -566,6 +587,8 @@
 				1070 /* SpotlightManager.swift in Sources */,
 				1145 /* NativeGitReader.swift in Sources */,
 				1146 /* NativeGitWriter.swift in Sources */,
+				1147 /* RunestoneEditorView.swift in Sources */,
+				1148 /* RunestoneThemeAdapter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -789,6 +812,15 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		896595EE2F3B8D73005B984D /* Runestone */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */;
+			productName = Runestone;
+		};
+
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7000 /* Project object */;
 }
