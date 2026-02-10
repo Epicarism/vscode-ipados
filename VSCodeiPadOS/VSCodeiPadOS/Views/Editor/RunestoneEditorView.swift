@@ -590,7 +590,6 @@ class RunestoneEditorTheme: Runestone.Theme {
         
         // Debug: Log highlight names to understand TreeSitter output
         #if DEBUG
-        // Uncomment next line to debug highlighting:
         print("🎨 Highlight: \(rawHighlightName)")
         #endif
         
@@ -599,16 +598,18 @@ class RunestoneEditorTheme: Runestone.Theme {
             return _keywordColor
         }
         
-        // JSON/Object keys (property names) - use variable color (light blue in Dark+)
-        if highlightName.contains("property") || 
-           highlightName.contains("key") ||
-           highlightName == "string.special" {
-            return _variableColor
+        // JSON/Object keys - check BEFORE general string check
+        // TreeSitter JSON uses "string.special" for keys in some grammars
+        if highlightName.hasPrefix("string.special") ||
+           highlightName.contains("label") ||
+           highlightName.contains("property.definition") ||
+           (highlightName.contains("property") && !highlightName.contains("variable")) {
+            return _variableColor  // Light blue #9CDCFE for keys
         }
         
-        // Strings (but not keys)
+        // Strings (values, not keys)
         if highlightName.contains("string") {
-            return _stringColor
+            return _stringColor  // Orange #CE9178 for string values
         }
         
         // Numbers and constants
