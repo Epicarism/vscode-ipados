@@ -456,8 +456,9 @@ struct IDEEditorView: View {
                         .background(theme.sidebarBackground.opacity(0.5))
                     }
                     
-                    if tab.fileName.hasSuffix(".json") {
-                        // JSON Tree View for .json files
+                    // Use Runestone for all files including JSON (has TreeSitter JSON support)
+                    if false && tab.fileName.hasSuffix(".json") {
+                        // JSON Tree View disabled - using Runestone editor instead
                         JSONTreeView(data: text.data(using: .utf8) ?? Data())
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(theme.editorBackground)
