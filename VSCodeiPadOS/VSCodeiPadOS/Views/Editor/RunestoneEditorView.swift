@@ -140,39 +140,35 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.theme = makeRunestoneTheme()
         }
         
-        // CRITICAL: Never update text while user is actively editing!
-        // Calling setState() during editing corrupts Runestone's line manager
-        // and causes a crash in TextEditHelper.swift:27 (force unwrap on linePosition)
-        guard !textView.isFirstResponder else {
-            return
-        }
+        // CRITICAL FIX: Only call setState() when switching to a DIFFERENT file
+        // Calling setState() during editing corrupts Runestone's lineManager
+        // and causes crash at TextEditHelper.swift:27 (force unwrap on linePosition)
         
-        // Update text if changed externally (not by user typing)
-        let currentText = textView.text
-        if currentText != text && !context.coordinator.isUpdatingFromTextView {
-            let selectedRange = textView.selectedRange
+        let isFileSwitching = context.coordinator.lastFilename != filename
+        
+        if isFileSwitching {
+            // User switched to a different file - safe to call setState()
+            context.coordinator.lastFilename = filename
+            context.coordinator.hasBeenEdited = false
             
-            // Update text with language support
             if let language = getTreeSitterLanguage(for: filename) {
                 let state = TextViewState(text: text, language: language)
                 textView.setState(state)
             } else {
-                // No language support - fallback to plain text
                 textView.text = text
             }
             
-            // Restore selection if valid
-            let textLength = (text as NSString).length
-            if selectedRange.location <= textLength {
-                let safeLength = min(selectedRange.length, textLength - selectedRange.location)
-                textView.selectedRange = NSRange(location: selectedRange.location, length: safeLength)
-            }
+            // Reset cursor to start for new file
+            textView.selectedRange = NSRange(location: 0, length: 0)
             
             // Update line count
             DispatchQueue.main.async {
                 self.totalLines = self.countLines(in: text)
             }
         }
+        // If NOT switching files AND user has edited, DO NOTHING
+        // Let the user's edits remain - don't corrupt the lineManager
+        // The debounced sync will update parent.text eventually
     }
     
     // MARK: - Runestone Theme Factory
@@ -301,6 +297,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         var lastThemeId: String = ""
         var currentLanguage: Language?
         
+        // Track file identity to know when to call setState()
+        var lastFilename: String = ""
+        var hasBeenEdited: Bool = false
+        
         // Debounced text sync to avoid SwiftUI re-renders on every keystroke
         private var textSyncWorkItem: DispatchWorkItem?
         private let debounceInterval: TimeInterval = 0.5 // 500ms
@@ -309,6 +309,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             self.parent = parent
             self.lastFontSize = parent.fontSize
             self.lastThemeId = ThemeManager.shared.currentTheme.id
+            self.lastFilename = parent.filename
         }
         
         deinit {
@@ -319,6 +320,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         // MARK: - TextViewDelegate
         
         func textViewDidChange(_ textView: TextView) {
+            // Mark that user has edited - blocks setState() calls until file switch
+            hasBeenEdited = true
+            
             // Cancel any pending debounced update
             textSyncWorkItem?.cancel()
             
