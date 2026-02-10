@@ -13,6 +13,8 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
     @Binding var text: String
     let filename: String
     @Binding var scrollPosition: Int
+    /// Pixel scroll offset (contentOffset.y) for smooth gutter alignment.
+    @Binding var scrollOffset: CGFloat
     @Binding var totalLines: Int
     @Binding var visibleLines: Int
     @Binding var currentLineNumber: Int
@@ -34,6 +36,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         text: Binding<String>,
         filename: String,
         scrollPosition: Binding<Int>,
+        scrollOffset: Binding<CGFloat> = .constant(0),
         totalLines: Binding<Int>,
         visibleLines: Binding<Int>,
         currentLineNumber: Binding<Int>,
@@ -50,6 +53,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         self._text = text
         self.filename = filename
         self._scrollPosition = scrollPosition
+        self._scrollOffset = scrollOffset
         self._totalLines = totalLines
         self._visibleLines = visibleLines
         self._currentLineNumber = currentLineNumber
@@ -69,6 +73,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         text: Binding<String>,
         filename: String,
         scrollPosition: Binding<Int>,
+        scrollOffset: Binding<CGFloat> = .constant(0),
         totalLines: Binding<Int>,
         visibleLines: Binding<Int>,
         currentLineNumber: Binding<Int>,
@@ -86,6 +91,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             text: text,
             filename: filename,
             scrollPosition: scrollPosition,
+            scrollOffset: scrollOffset,
             totalLines: totalLines,
             visibleLines: visibleLines,
             currentLineNumber: currentLineNumber,
@@ -106,8 +112,26 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
     }
     
     func makeUIView(context: Context) -> UITextView {
-        let textView = EditorTextView()
+        // Create custom TextKit stack with FoldingLayoutManager for code folding support
+        let textStorage = NSTextStorage()
+        let foldingLayoutManager = FoldingLayoutManager()
+        textStorage.addLayoutManager(foldingLayoutManager)
+        
+        let textContainer = NSTextContainer(size: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        textContainer.widthTracksTextView = true
+        foldingLayoutManager.addTextContainer(textContainer)
+        
+        let textView = EditorTextView(frame: .zero, textContainer: textContainer)
+        
+        // Connect FoldingLayoutManager to EditorTextView
+        foldingLayoutManager.ownerTextView = textView
+        
         textView.delegate = context.coordinator
+        textView.editorCore = editorCore
+        
+        // Code folding support
+        textView.foldingManager = CodeFoldingManager.shared
+        textView.fileId = filename
 
         // Autocomplete hooks
         textView.onAcceptAutocomplete = onAcceptAutocomplete
@@ -150,8 +174,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             context.coordinator.handleUnfold(in: textView)
         }
         
-        // Add pinch gesture for zoom
+        // Add pinch gesture for zoom (with delegate to allow simultaneous text selection)
         let pinchGesture = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
+        pinchGesture.delegate = context.coordinator
         textView.addGestureRecognizer(pinchGesture)
         context.coordinator.pinchGesture = pinchGesture
         
@@ -169,6 +194,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         textView.font = UIFont.monospacedSystemFont(ofSize: editorCore.editorFontSize, weight: .regular)
         textView.textColor = UIColor(ThemeManager.shared.currentTheme.editorForeground)
         textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
+        textView.tintColor = UIColor(ThemeManager.shared.currentTheme.cursor)
         textView.keyboardType = .default
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         
@@ -192,9 +218,25 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
     }
     
     func updateUIView(_ textView: UITextView, context: Context) {
+        // CRITICAL: Update coordinator's parent reference to current struct
+        // SwiftUI creates new struct instances on each update, so this keeps
+        // coordinator in sync with current bindings and properties
+        context.coordinator.parent = self
+        
+        // CRITICAL FIX: Apply initial highlighting FIRST on the very first updateUIView call
+        // This fixes the bug where syntax highlighting only appears after typing.
+        // makeUIView applies it, but the view may not be fully in hierarchy yet,
+        // causing the attributed text to be lost. This ensures it's applied reliably.
+        if !context.coordinator.hasAppliedInitialHighlighting && !textView.text.isEmpty {
+            context.coordinator.applySyntaxHighlighting(to: textView)
+            context.coordinator.hasAppliedInitialHighlighting = true
+        }
+        
         // Update colors when theme changes
+        // NOTE: Only set backgroundColor and tintColor here. Do NOT set textColor
+        // as it interferes with attributedText syntax highlighting colors.
+        // The foreground color is handled entirely by the attributedText.
         textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
-        textView.textColor = UIColor(ThemeManager.shared.currentTheme.editorForeground)
         textView.tintColor = UIColor(ThemeManager.shared.currentTheme.cursor)
         
         if let editorView = textView as? EditorTextView {
@@ -221,14 +263,16 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let selectedRange = textView.selectedRange
             textView.text = text
             context.coordinator.applySyntaxHighlighting(to: textView)
+            context.coordinator.hasAppliedInitialHighlighting = true
             textView.selectedRange = selectedRange
         } else if context.coordinator.lastThemeId != ThemeManager.shared.currentTheme.id {
             // Re-apply highlighting if theme changed
             context.coordinator.applySyntaxHighlighting(to: textView)
         }
         
-        // Handle minimap scrolling
-        if scrollPosition != context.coordinator.lastKnownScrollPosition && scrollPosition >= 0 {
+        // Handle minimap scrolling - but ONLY if user is NOT actively scrolling
+        // This prevents the editor from fighting against user scroll due to async binding lag
+        if scrollPosition != context.coordinator.lastKnownScrollPosition && scrollPosition >= 0 && !context.coordinator.isUserScrolling {
             // Update lastKnownScrollPosition FIRST to prevent race condition
             // where user scroll gets overridden by stale binding value
             context.coordinator.lastKnownScrollPosition = scrollPosition
@@ -250,7 +294,14 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         if let requested = requestedCursorIndex,
            requested != context.coordinator.lastRequestedCursorIndex {
             context.coordinator.lastRequestedCursorIndex = requested
-            textView.selectedRange = NSRange(location: max(0, requested), length: 0)
+            // Use UTF-16 count for NSRange compatibility
+            let textLength = (textView.text as NSString?)?.length ?? 0
+            let safeIndex = max(0, min(requested, textLength))
+            textView.selectedRange = NSRange(location: safeIndex, length: 0)
+            
+            // Ensure cursor is visible by scrolling to it
+            textView.scrollRangeToVisible(textView.selectedRange)
+            
             // Defer @Binding update to avoid "Publishing changes from within view updates"
             DispatchQueue.main.async {
                 self.requestedCursorIndex = nil
@@ -267,7 +318,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
     
     // MARK: - Coordinator
     
-    class Coordinator: NSObject, UITextViewDelegate {
+    class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var parent: SyntaxHighlightingTextView
         var lastKnownScrollPosition: Int = 0
         var lastThemeId: String = ""
@@ -277,12 +328,46 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         private var highlightDebouncer: Timer?
         weak var pinchGesture: UIPinchGestureRecognizer?
         private var initialFontSize: CGFloat = 0
+        
+        // Track user scroll to prevent programmatic scroll fighting back
+        private var userScrollDebouncer: Timer?
+        var isUserScrolling = false
 
         // FEAT-044: Matching bracket highlight state
         private var bracketHighlightRanges: [NSRange] = []
         
+        // Track if initial highlighting has been applied (fixes highlighting not appearing on file open)
+        var hasAppliedInitialHighlighting = false
+        
+        // PERF: Track last line to avoid unnecessary redraws
+        private var lastKnownLineNumber: Int = -1
+        
+        // PERF: Debounce bracket matching to avoid O(n) scans on every cursor move
+        private var bracketMatchDebouncer: Timer?
+        
+        // PERFORMANCE: Large file highlighting optimization
+        // Files larger than this threshold get deferred full highlighting
+        private let largeFileThreshold = 10000  // 10k characters
+        private var largeFileHighlightDebouncer: Timer?
+        // Track if we have pending full highlight (for large files)
+        private var hasPendingFullHighlight = false
+        
         init(_ parent: SyntaxHighlightingTextView) {
             self.parent = parent
+        }
+        
+        // MARK: - UIGestureRecognizerDelegate
+        
+        // Allow pinch gesture to work simultaneously with text selection gestures
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            // Allow pinch to work alongside native text selection gestures
+            return true
+        }
+        
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            // Ensure syntax highlighting is current when user begins editing
+            // This handles cases where text was set but highlighting hasn't run yet
+            applySyntaxHighlighting(to: textView)
         }
         
         func textViewDidChange(_ textView: UITextView) {
@@ -298,11 +383,39 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 .foregroundColor: UIColor(theme.editorForeground)
             ]
             
-            // Debounced syntax highlighting for performance (reduced from 0.15s to 0.08s)
+            // PERFORMANCE FIX: Aggressive debounce strategy based on document size
+            // For large files, syntax highlighting is EXTREMELY expensive and causes lag
+            let textLength = textView.text.count
+            
+            // Large file threshold - above this, skip highlighting during active typing entirely
+            let largeFileThreshold = 10000
+            // Very large file threshold - above this, use extended delay
+            let veryLargeFileThreshold = 50000
+            
             highlightDebouncer?.invalidate()
-            highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.applySyntaxHighlighting(to: textView)
+            
+            if textLength > veryLargeFileThreshold {
+                // VERY LARGE FILES (50k+): Wait 1.5 seconds of idle before highlighting
+                // This prevents UI blocking entirely during active typing
+                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                    self?.applyVisibleRangeHighlighting(to: textView)
+                }
+            } else if textLength > largeFileThreshold {
+                // LARGE FILES (10k-50k): Wait 1 second of idle, then highlight visible range only
+                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
+                    self?.applyVisibleRangeHighlighting(to: textView)
+                }
+            } else if textLength > 5000 {
+                // MEDIUM FILES (5k-10k): 300ms debounce, full highlighting on background thread
+                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                    self?.applyHighlightingAsync(to: textView)
+                }
+            } else {
+                // SMALL FILES (<5k): 80ms debounce, direct highlighting (fast enough)
+                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
+                    DispatchQueue.main.async {
+                        self?.applySyntaxHighlighting(to: textView)
+                    }
                 }
             }
             
@@ -310,67 +423,282 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             updateCursorPosition(textView)
         }
         
+        /// Async highlighting for large files - processes on background thread
+        func applyHighlightingAsync(to textView: UITextView) {
+            guard !isApplyingHighlighting else { return }
+            isApplyingHighlighting = true
+            
+            let text = textView.text ?? ""
+            let filename = parent.filename
+            let theme = ThemeManager.shared.currentTheme
+            let fontSize = parent.editorCore.editorFontSize
+            let selectedRange = textView.selectedRange
+            
+            // Process highlighting on background thread
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                let highlighter = VSCodeSyntaxHighlighter(theme: theme, fontSize: fontSize)
+                let attributedText = highlighter.highlight(text, filename: filename)
+                
+                // Apply on main thread
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.isApplyingHighlighting = false
+                    
+                    // Only apply if text hasn't changed while we were processing
+                    guard textView.text == text else { return }
+                    
+                    textView.attributedText = attributedText
+                    textView.selectedRange = selectedRange
+                    
+                    textView.typingAttributes = [
+                        .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
+                        .foregroundColor: UIColor(theme.editorForeground)
+                    ]
+                    
+                    self.lastThemeId = theme.id
+                }
+            }
+        }
+        
+        /// PERFORMANCE: Visible-range-only highlighting for very large files
+        /// Only highlights the text that's currently visible on screen, dramatically reducing lag
+        func applyVisibleRangeHighlighting(to textView: UITextView) {
+            guard !isApplyingHighlighting else { return }
+            isApplyingHighlighting = true
+            
+            let text = textView.text ?? ""
+            let filename = parent.filename
+            let theme = ThemeManager.shared.currentTheme
+            let fontSize = parent.editorCore.editorFontSize
+            let selectedRange = textView.selectedRange
+            
+            // Calculate visible range with buffer
+            let visibleRect = textView.bounds
+            let textContainer = textView.textContainer
+            let layoutManager = textView.layoutManager
+            
+            // Get the glyph range for the visible rect
+            var visibleGlyphRange = NSRange()
+            layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { (rect, usedRect, container, glyphRange, stop) in
+                if rect.intersects(visibleRect) {
+                    if visibleGlyphRange.length == 0 {
+                        visibleGlyphRange = glyphRange
+                    } else {
+                        visibleGlyphRange.length = glyphRange.location + glyphRange.length - visibleGlyphRange.location
+                    }
+                } else if visibleGlyphRange.length > 0 && rect.minY > visibleRect.maxY {
+                    stop.pointee = true
+                }
+            }
+            
+            // Convert glyph range to character range
+            var visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
+            
+            // Add buffer of ~50 lines before and after for smooth scrolling
+            let bufferChars = 5000
+            let rangeStart = max(0, visibleCharRange.location - bufferChars)
+            let rangeEnd = min(text.utf16.count, visibleCharRange.location + visibleCharRange.length + bufferChars)
+            visibleCharRange = NSRange(location: rangeStart, length: rangeEnd - rangeStart)
+            
+            // Process highlighting on background thread
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                // Extract the visible portion of text
+                let nsText = text as NSString
+                let safeRange = NSRange(
+                    location: visibleCharRange.location,
+                    length: min(visibleCharRange.length, nsText.length - visibleCharRange.location)
+                )
+                guard safeRange.length > 0 else {
+                    DispatchQueue.main.async {
+                        self?.isApplyingHighlighting = false
+                    }
+                    return
+                }
+                
+                let visibleText = nsText.substring(with: safeRange)
+                
+                // Highlight only the visible portion
+                let highlighter = VSCodeSyntaxHighlighter(theme: theme, fontSize: fontSize)
+                let highlightedVisible = highlighter.highlight(visibleText, filename: filename)
+                
+                // Apply on main thread
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.isApplyingHighlighting = false
+                    
+                    // Only apply if text hasn't changed while we were processing
+                    guard textView.text == text else { return }
+                    
+                    // Create full attributed string with base styling
+                    let fullAttributed = NSMutableAttributedString(string: text)
+                    let baseFont = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+                    let baseColor = UIColor(theme.editorForeground)
+                    let fullRange = NSRange(location: 0, length: text.utf16.count)
+                    fullAttributed.addAttribute(.font, value: baseFont, range: fullRange)
+                    fullAttributed.addAttribute(.foregroundColor, value: baseColor, range: fullRange)
+                    
+                    // Apply highlighted attributes only to visible range
+                    highlightedVisible.enumerateAttributes(in: NSRange(location: 0, length: highlightedVisible.length), options: []) { attrs, range, _ in
+                        let targetRange = NSRange(location: safeRange.location + range.location, length: range.length)
+                        if targetRange.location + targetRange.length <= fullAttributed.length {
+                            for (key, value) in attrs {
+                                fullAttributed.addAttribute(key, value: value, range: targetRange)
+                            }
+                        }
+                    }
+                    
+                    textView.attributedText = fullAttributed
+                    textView.selectedRange = selectedRange
+                    
+                    textView.typingAttributes = [
+                        .font: baseFont,
+                        .foregroundColor: baseColor
+                    ]
+                    
+                    self.lastThemeId = theme.id
+                }
+            }
+        }
+        
         func textViewDidChangeSelection(_ textView: UITextView) {
             if !isUpdatingFromMinimap {
                 updateCursorPosition(textView)
                 updateScrollPosition(textView)
 
-                // FEAT-044: Matching bracket highlight
-                updateMatchingBracketHighlight(textView)
+                // FEAT-044: Matching bracket highlight - PERF: debounced to avoid O(n) scan spam
+                bracketMatchDebouncer?.invalidate()
+                bracketMatchDebouncer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
+                    self?.updateMatchingBracketHighlight(textView)
+                }
 
-                // Trigger redraw so current-line highlight/indent guides track the caret
-                (textView as? EditorTextView)?.setNeedsDisplay()
+                // PERF: Only trigger redraw when line actually changes (not on every cursor move)
+                let currentLine = parent.currentLineNumber
+                if currentLine != lastKnownLineNumber {
+                    lastKnownLineNumber = currentLine
+                    (textView as? EditorTextView)?.setNeedsDisplay()
+                }
 
                 // Update selection in EditorCore for multi-cursor support
+                // Defer @Published property updates to avoid "Publishing changes from within view updates"
                 let range = textView.selectedRange
-                parent.editorCore.updateSelection(range: range, text: textView.text ?? "")
+                let currentText = textView.text ?? ""
+                let isMultiCursor = parent.editorCore.multiCursorState.isMultiCursor
+                
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.parent.editorCore.updateSelection(range: range, text: currentText)
 
-                // If user clicks elsewhere (not multi-cursor operation), reset to single cursor
-                if !parent.editorCore.multiCursorState.isMultiCursor {
-                    parent.editorCore.multiCursorState.reset(to: range.location + range.length)
+                    // Keep EditorCore.multiCursorState in sync with UIKit selection.
+                    // Important: Don't clear the anchor when there's an active selection, otherwise Cmd+D
+                    // loses the "first occurrence" selection and multi-cursor typing won't replace all occurrences.
+                    if !isMultiCursor {
+                        if range.length > 0 {
+                            self.parent.editorCore.multiCursorState.cursors = [
+                                Cursor(position: range.location + range.length, anchor: range.location, isPrimary: true)
+                            ]
+                        } else {
+                            self.parent.editorCore.multiCursorState.reset(to: range.location)
+                        }
+                    }
                 }
+            }
+        }
+        
+        // MARK: - UIScrollViewDelegate methods for reliable user scroll detection
+        
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            // User started dragging - set flag immediately to prevent programmatic scroll fighting
+            isUserScrolling = true
+            userScrollDebouncer?.invalidate()
+        }
+        
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            // If not decelerating, user stopped scrolling
+            if !decelerate {
+                // Small delay to let any final scroll events settle
+                userScrollDebouncer?.invalidate()
+                userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
+                    self?.isUserScrolling = false
+                }
+            }
+        }
+        
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            // Deceleration finished - user scroll is complete
+            userScrollDebouncer?.invalidate()
+            userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
+                self?.isUserScrolling = false
             }
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let textView = scrollView as? UITextView, !isUpdatingFromMinimap else { return }
+            
+            // Note: isUserScrolling is now set by scrollViewWillBeginDragging for reliable detection
+            // We still use debouncer as a fallback for edge cases
+            if isUserScrolling {
+                userScrollDebouncer?.invalidate()
+                userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                    self?.isUserScrolling = false
+                }
+            }
+            
             updateScrollPosition(textView)
         }
         
         func updateLineCount(_ textView: UITextView) {
-            let lines = textView.text.components(separatedBy: .newlines)
+            // PERF: Count newlines directly instead of creating array copy
+            let text = textView.text ?? ""
+            var lineCount = 1
+            for char in text {
+                if char == "\n" {
+                    lineCount += 1
+                }
+            }
             DispatchQueue.main.async {
-                self.parent.totalLines = max(1, lines.count)
+                self.parent.totalLines = lineCount
             }
         }
         
         func updateCursorPosition(_ textView: UITextView) {
             guard let selectedRange = textView.selectedTextRange else { return }
-             let cursorPosition = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
-             
-             let text = textView.text ?? ""
-             let prefix = String(text.prefix(cursorPosition))
-             let lines = prefix.components(separatedBy: .newlines)
-             
-             let lineNumber = lines.count
-             let column = (lines.last?.count ?? 0) + 1
-             
-             DispatchQueue.main.async {
-                 self.parent.currentLineNumber = lineNumber
-                 self.parent.currentColumn = column
-                 self.parent.cursorIndex = cursorPosition
-             }
+            let cursorPosition = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
+            
+            // PERF: Count newlines directly instead of creating substring + array
+            let text = textView.text ?? ""
+            var lineNumber = 1
+            var columnStart = 0
+            
+            let endIndex = text.index(text.startIndex, offsetBy: min(cursorPosition, text.count), limitedBy: text.endIndex) ?? text.endIndex
+            for (i, char) in text[..<endIndex].enumerated() {
+                if char == "\n" {
+                    lineNumber += 1
+                    columnStart = i + 1
+                }
+            }
+            
+            let column = cursorPosition - columnStart + 1
+            
+            DispatchQueue.main.async {
+                self.parent.currentLineNumber = lineNumber
+                self.parent.currentColumn = column
+                self.parent.cursorIndex = cursorPosition
+            }
         }
         
         func updateScrollPosition(_ textView: UITextView) {
             guard let font = textView.font else { return }
             let lineHeight = font.lineHeight
-            let scrollOffset = textView.contentOffset.y
-            let line = Int(scrollOffset / lineHeight)
-            
+            let yOffset = textView.contentOffset.y
+            let line = Int(yOffset / lineHeight)
+
+            // Update lastKnownScrollPosition synchronously to prevent feedback loops
             lastKnownScrollPosition = line
+            
+            // Defer @Binding updates to avoid "Publishing changes from within view updates"
             DispatchQueue.main.async {
                 self.parent.scrollPosition = line
+                self.parent.scrollOffset = yOffset
             }
         }
         
@@ -422,7 +750,15 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             updateScrollPosition(textView)
         }
 
+        private var isApplyingHighlighting = false
+        
         func applySyntaxHighlighting(to textView: UITextView) {
+            // Guard against reentrancy - this can happen if attributedText assignment
+            // triggers delegate callbacks that call this method again
+            guard !isApplyingHighlighting else { return }
+            isApplyingHighlighting = true
+            defer { isApplyingHighlighting = false }
+            
             let theme = ThemeManager.shared.currentTheme
             lastThemeId = theme.id
 
@@ -430,6 +766,15 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let attributedText = highlighter.highlight(textView.text, filename: parent.filename)
 
             let selectedRange = textView.selectedRange
+
+            // NOTE: We intentionally do NOT manipulate undoManager.disableUndoRegistration/enableUndoRegistration
+            // here. UITextView's internal undo manager state machine is fragile and can crash with
+            // "enableUndoRegistration may only be invoked with matching call to disableUndoRegistration"
+            // when attributedText assignment triggers internal undo callbacks.
+            // 
+            // Instead, we let the system handle undo naturally. The trade-off is that syntax highlighting
+            // changes might add noise to the undo stack, but this is preferable to crashing.
+            
             textView.attributedText = attributedText
             textView.selectedRange = selectedRange
 
@@ -686,8 +1031,77 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
     }
 }
 
+// MARK: - FoldingLayoutManager
+/// TextKit layout manager that collapses line fragments for lines marked folded in CodeFoldingManager.
+/// This is a view-level folding implementation (it does NOT modify the underlying text).
+final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
+    weak var ownerTextView: EditorTextView?
+
+    override init() {
+        super.init()
+        self.delegate = self
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.delegate = self
+    }
+
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<CGRect>,
+        lineFragmentUsedRect: UnsafeMutablePointer<CGRect>,
+        baselineOffset: UnsafeMutablePointer<CGFloat>,
+        in textContainer: NSTextContainer,
+        forGlyphRange glyphRange: NSRange
+    ) -> Bool {
+        guard let owner = ownerTextView,
+              let foldingManager = owner.foldingManager,
+              let fileId = owner.fileId
+        else {
+            return false
+        }
+
+        // Convert glyphRange -> characterRange so we can compute the line index.
+        let charRange = self.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        let loc = max(0, charRange.location)
+
+        let full = (self.textStorage?.string ?? "") as NSString
+        let lineIndex = FoldingLayoutManager.lineIndex(atUTF16Location: loc, in: full)
+
+        if foldingManager.isLineFolded(fileId: fileId, line: lineIndex) {
+            // Collapse this visual line fragment.
+            lineFragmentRect.pointee.size.height = 0
+            lineFragmentUsedRect.pointee.size.height = 0
+            baselineOffset.pointee = 0
+            return true
+        }
+
+        return false
+    }
+
+    private static func lineIndex(atUTF16Location loc: Int, in text: NSString) -> Int {
+        if loc <= 0 { return 0 }
+
+        let capped = min(loc, text.length)
+        var line = 0
+        var searchStart = 0
+
+        while searchStart < capped {
+            let r = text.range(of: "\n", options: [], range: NSRange(location: searchStart, length: capped - searchStart))
+            if r.location == NSNotFound { break }
+            line += 1
+            let next = r.location + 1
+            if next >= capped { break }
+            searchStart = next
+        }
+
+        return line
+    }
+}
+
 // Custom text view to handle key commands, indent guides, and line highlighting
-class EditorTextView: UITextView {
+class EditorTextView: MultiCursorTextView {
     var onPeekDefinition: (() -> Void)?
     var onEscape: (() -> Void)?
     var onGoToLine: (() -> Void)?
@@ -700,14 +1114,22 @@ class EditorTextView: UITextView {
     var onFold: (() -> Void)?
     var onUnfold: (() -> Void)?
 
-    // Autocomplete key handling hooks (return true if handled)
-    var onAcceptAutocomplete: (() -> Bool)?
-    var onDismissAutocomplete: (() -> Bool)?
+    // Autocomplete key handling hooks are inherited from MultiCursorTextView
+    
+    // Code folding support - required by FoldingLayoutManager
+    weak var foldingManager: CodeFoldingManager?
+    var fileId: String?
     
     // FEAT-039 & FEAT-043
     private var indentGuideColor: UIColor = .separator
     private var activeIndentGuideColor: UIColor = .label
     private var currentLineHighlightColor: UIColor = .clear
+    
+    // PERF: Cached values to avoid recalculating on every draw()
+    private var cachedTabSize: Int = 4
+    private var cachedSpaceWidth: CGFloat = 0
+    private var cachedIndentWidth: CGFloat = 0
+    private var lastCachedFont: UIFont?
     
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
@@ -722,6 +1144,19 @@ class EditorTextView: UITextView {
     private func setup() {
         // Ensure we redraw when bounds/selection change
         contentMode = .redraw
+        updateCachedMeasurements()
+    }
+    
+    /// PERF: Update cached measurements - call when font changes
+    func updateCachedMeasurements() {
+        let storedTabSize = UserDefaults.standard.integer(forKey: "tabSize")
+        cachedTabSize = storedTabSize > 0 ? storedTabSize : 4
+        
+        if let font = self.font, font != lastCachedFont {
+            cachedSpaceWidth = " ".size(withAttributes: [.font: font]).width
+            cachedIndentWidth = cachedSpaceWidth * CGFloat(cachedTabSize)
+            lastCachedFont = font
+        }
     }
     
     func updateThemeColors(theme: Theme) {
@@ -756,12 +1191,13 @@ class EditorTextView: UITextView {
 
         context.setLineWidth(1.0)
 
-        // Respect editor tab size setting (default 4)
-        let storedTabSize = UserDefaults.standard.integer(forKey: "tabSize")
-        let tabSize = storedTabSize > 0 ? storedTabSize : 4
-
-        let spaceWidth = " ".size(withAttributes: [.font: font]).width
-        let indentWidth = spaceWidth * CGFloat(tabSize)
+        // PERF: Use cached values instead of recalculating on every draw
+        // Update cache if font changed
+        if font != lastCachedFont {
+            updateCachedMeasurements()
+        }
+        let tabSize = cachedTabSize
+        let indentWidth = cachedIndentWidth
 
         // Determine active indent level for caret line (for indentGuideActive)
         var activeIndentLevel: Int = 0
@@ -823,23 +1259,22 @@ class EditorTextView: UITextView {
     }
     
     override var keyCommands: [UIKeyCommand]? {
+        // NOTE: Only define text-editing specific shortcuts here.
+        // App-level shortcuts (Cmd+B, Cmd+P, Cmd+N, Cmd+S, Cmd+W, Cmd+F, etc.)
+        // are defined in the Menus/ folder via SwiftUI's .keyboardShortcut().
+        // See: KEYBOARD_SHORTCUTS_SOURCE_OF_TRUTH.md
+        // Defining them here AND in Menus/ causes duplicate conflicts.
+        
         var commands = super.keyCommands ?? []
         
-        // Peek Definition: Alt+F12 (using special key input)
-        // Note: F12 is not directly available on iPadOS keyboards
-        // Using Option+D as alternative
+        // Peek Definition: Option+D (editor-specific, not in menus)
         commands.append(UIKeyCommand(
             input: "d",
             modifierFlags: .alternate,
             action: #selector(handlePeekDefinition)
         ))
 
-        // Go to Line: Cmd+G
-        commands.append(UIKeyCommand(
-            input: "g",
-            modifierFlags: .command,
-            action: #selector(handleGoToLine)
-        ))
+        // NOTE: Cmd+G (Go to Line) is defined in GoMenuCommands.swift - DO NOT ADD HERE
 
         // Tab: accept autocomplete if visible, else insert tab
         commands.append(UIKeyCommand(
@@ -848,7 +1283,7 @@ class EditorTextView: UITextView {
             action: #selector(handleTab)
         ))
         
-        // Escape: dismiss autocomplete if visible, else normal escape behavior
+        // Escape: dismiss autocomplete/peek if visible
         commands.append(UIKeyCommand(
             input: UIKeyCommand.inputEscape,
             modifierFlags: [],
@@ -869,9 +1304,23 @@ class EditorTextView: UITextView {
             action: #selector(handleUnfold)
         ))
         
-        // NOTE: App-level shortcuts (Cmd+B, Cmd+P, Cmd+Shift+P, Cmd+`, etc.) 
-        // are now handled by AppCommands.swift to avoid duplicate registration.
-        // Only text-editing specific shortcuts should be registered here.
+        // Toggle Terminal: Cmd+J (not in standard system menus, safe to define here)
+        let toggleTerminalCmd = UIKeyCommand(
+            input: "j",
+            modifierFlags: .command,
+            action: #selector(handleToggleTerminal),
+            discoverabilityTitle: "Toggle Panel"
+        )
+        toggleTerminalCmd.wantsPriorityOverSystemBehavior = true
+        commands.append(toggleTerminalCmd)
+        
+        // AI Assistant: Cmd+Shift+A (not conflicting with system Select All which is Cmd+A)
+        commands.append(UIKeyCommand(
+            input: "a",
+            modifierFlags: [.command, .shift],
+            action: #selector(handleShowAIAssistant),
+            discoverabilityTitle: "AI Assistant"
+        ))
         
         return commands
     }
@@ -904,6 +1353,16 @@ class EditorTextView: UITextView {
     
     @objc func handleUnfold() {
         onUnfold?()
+    }
+
+    // MARK: - Undo / Redo
+
+    @objc func handleUndo() {
+        undoManager?.undo()
+    }
+
+    @objc func handleRedo() {
+        undoManager?.redo()
     }
     
     // MARK: - App-Level Shortcut Handlers

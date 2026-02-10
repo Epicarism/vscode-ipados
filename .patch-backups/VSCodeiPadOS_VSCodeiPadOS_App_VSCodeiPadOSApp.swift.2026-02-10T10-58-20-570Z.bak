@@ -1,0 +1,45 @@
+import SwiftUI
+
+@main
+struct VSCodeiPadOSApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var editorCore = EditorCore()
+    @State private var showSettings = false
+    @State private var showTerminal = false
+    @State private var windowTitle: String = "VS Code"
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(editorCore)
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WindowTitleDidChange"))) { notification in
+                    if let userInfo = notification.userInfo,
+                       let title = userInfo["title"] as? String {
+                        windowTitle = title
+                        updateWindowTitle(title)
+                    }
+                }
+        }
+        .commands {
+            // VS Code-style menu bar
+            FileMenuCommands()
+            EditMenuCommands()
+            SelectionMenuCommands()
+            ViewMenuCommands()
+            GoMenuCommands()
+            RunMenuCommands()
+            TerminalMenuCommands()
+            HelpMenuCommands()
+        }
+    }
+    
+    private func updateWindowTitle(_ title: String) {
+        // Update the window title for the scene
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            windowScene.title = title
+        }
+    }
+}
+
+// NOTE: Menu command structs (FileMenuCommands, EditMenuCommands, etc.) are defined in
+// the /Menus/ folder. Do NOT define them here to avoid duplicate menu conflicts.

@@ -88,6 +88,52 @@ class NativeGitReader {
             return trimmed
         }
     }
+
+    // MARK: - File contents (from commit)
+
+    /// Read a file's blob contents at a given commit (default: HEAD).
+    func fileContents(atPath path: String, commitSHA: String? = nil) -> Data? {
+        let commitSha = commitSHA ?? headSHA()
+        guard let commitSha,
+              let commit = parseCommit(sha: commitSha),
+              let treeSha = commit.treeSHA,
+              let blobSha = blobSHA(forPath: path, inTree: treeSha),
+              let blob = readObject(sha: blobSha),
+              blob.type == .blob else {
+            return nil
+        }
+
+        return blob.data
+    }
+
+    func fileContentsString(atPath path: String, commitSHA: String? = nil, encoding: String.Encoding = .utf8) -> String? {
+        guard let data = fileContents(atPath: path, commitSHA: commitSHA) else { return nil }
+        return String(data: data, encoding: encoding)
+    }
+
+    private func blobSHA(forPath path: String, inTree treeSHA: String) -> String? {
+        let components = path.split(separator: "/").map(String.init)
+        return blobSHA(pathComponents: components, inTree: treeSHA)
+    }
+
+    private func blobSHA(pathComponents: [String], inTree treeSHA: String) -> String? {
+        guard !pathComponents.isEmpty else { return nil }
+        guard let object = readObject(sha: treeSHA), object.type == .tree else { return nil }
+
+        let entries = parseTreeEntries(data: object.data)
+        let head = pathComponents[0]
+
+        if pathComponents.count == 1 {
+            guard let entry = entries.first(where: { $0.name == head }) else { return nil }
+            // Not a directory
+            guard !entry.mode.hasPrefix("40") else { return nil }
+            return entry.sha
+        }
+
+        // Directory
+        guard let dir = entries.first(where: { $0.name == head && $0.mode.hasPrefix("40") }) else { return nil }
+        return blobSHA(pathComponents: Array(pathComponents.dropFirst()), inTree: dir.sha)
+    }
     
     // MARK: - Branches
     

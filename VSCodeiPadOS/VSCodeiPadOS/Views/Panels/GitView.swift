@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftUI
 
 // MARK: - Git View (Source Control Panel)
 
@@ -7,6 +8,7 @@ struct GitView: View {
     @EnvironmentObject var editorCore: EditorCore
     @State private var commitMessage = ""
     @State private var selectedEntry: GitStatusEntry?
+    @State private var showingDiffEntry: GitStatusEntry?
     @State private var showBranchPicker = false
     
     var body: some View {
@@ -139,8 +141,18 @@ struct GitView: View {
                         }
                     }
                     
+                    // Untracked files
+                    if !gitManager.untrackedFiles.isEmpty {
+                        sectionHeader("Untracked", count: gitManager.untrackedFiles.count, color: .secondary)
+                        ForEach(gitManager.untrackedFiles) { entry in
+                            changeRow(entry, isStaged: false)
+                        }
+                    }
+                    
                     // No changes
-                    if gitManager.stagedChanges.isEmpty && gitManager.unstagedChanges.isEmpty {
+                    if gitManager.stagedChanges.isEmpty &&
+                        gitManager.unstagedChanges.isEmpty &&
+                        gitManager.untrackedFiles.isEmpty {
                         VStack(spacing: 8) {
                             Image(systemName: "checkmark.circle")
                                 .font(.system(size: 24))
@@ -230,6 +242,9 @@ struct GitView: View {
         .sheet(isPresented: $showBranchPicker) {
             BranchPickerSheet(gitManager: gitManager)
         }
+        .fullScreenCover(item: $showingDiffEntry) { entry in
+            GitDiffSheet(entry: entry)
+        }
     }
     
     private var canCommit: Bool {
@@ -291,6 +306,7 @@ struct GitView: View {
         .cornerRadius(4)
         .onTapGesture {
             selectedEntry = entry
+            showingDiffEntry = entry
         }
         .contextMenu {
             if isStaged {
@@ -414,7 +430,7 @@ struct BranchPickerSheet: View {
     }
     
     var remoteBranches: [GitBranch] {
-        gitManager.branches.filter { $0.isRemote }
+        gitManager.remoteBranches
     }
     
     var body: some View {

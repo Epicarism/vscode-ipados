@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftUI
+import Foundation
 
 // MARK: - Models
 
@@ -30,9 +32,197 @@ struct DiffFile: Identifiable {
     let hunks: [DiffHunk]
 }
 
-enum DiffViewMode {
+enum DiffViewMode: Hashable {
     case inline
     case sideBySide
+}
+
+// MARK: - Diff Builder (working copy vs HEAD)
+
+private enum _DiffEdit {
+    case equal(String)
+    case insert(String)
+    case delete(String)
+}
+
+struct DiffBuilder {
+    static func build(fileName: String, status: String, old: String, new: String) -> DiffFile {
+        let oldLines = splitLines(old)
+        let newLines = splitLines(new)
+        let edits = diffEdits(oldLines, newLines)
+
+        var lines: [DiffLine] = []
+        lines.reserveCapacity(edits.count)
+
+        var oldLineNumber = 1
+        var newLineNumber = 1
+
+        for edit in edits {
+            switch edit {
+            case let .equal(text):
+                lines.append(.init(type: .context, content: text, oldLineNumber: oldLineNumber, newLineNumber: newLineNumber))
+                oldLineNumber += 1
+                newLineNumber += 1
+
+            case let .delete(text):
+                lines.append(.init(type: .deletion, content: text, oldLineNumber: oldLineNumber, newLineNumber: nil))
+                oldLineNumber += 1
+
+            case let .insert(text):
+                lines.append(.init(type: .addition, content: text, oldLineNumber: nil, newLineNumber: newLineNumber))
+                newLineNumber += 1
+            }
+        }
+
+        let header = "@@ -1,\(oldLines.count) +1,\(newLines.count) @@"
+        let hunk = DiffHunk(header: header, lines: lines)
+        return DiffFile(fileName: fileName, status: status, hunks: [hunk])
+    }
+
+    private static func splitLines(_ text: String) -> [String] {
+        var lines = text.components(separatedBy: "\n")
+        // Drop trailing empty line if file ends with newline.
+        if lines.last == "" {
+            lines.removeLast()
+        }
+        return lines
+    }
+
+    private static func diffEdits(_ old: [String], _ new: [String]) -> [_DiffEdit] {
+        let n = old.count
+        let m = new.count
+
+        if n == 0 { return new.map { .insert($0) } }
+        if m == 0 { return old.map { .delete($0) } }
+
+        // LCS DP (simple + deterministic). Replace with Myers later if needed.
+        var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+        for i in 1...n {
+            for j in 1...m {
+                if old[i - 1] == new[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1] + 1
+                } else {
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                }
+            }
+        }
+
+        var edits: [_DiffEdit] = []
+        edits.reserveCapacity(n + m)
+
+        var i = n
+        var j = m
+        while i > 0 || j > 0 {
+            if i > 0, j > 0, old[i - 1] == new[j - 1] {
+                edits.append(.equal(old[i - 1]))
+                i -= 1
+                j -= 1
+            } else if j > 0, i == 0 || dp[i][j - 1] >= dp[i - 1][j] {
+                edits.append(.insert(new[j - 1]))
+                j -= 1
+            } else if i > 0 {
+                edits.append(.delete(old[i - 1]))
+                i -= 1
+            }
+        }
+
+        return edits.reversed()
+    }
+}
+
+// MARK: - Diff Viewer (Inline / Side-by-side)
+
+struct DiffViewer: View {
+    let file: DiffFile
+    @State private var mode: DiffViewMode = .inline
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+
+            Picker("Mode", selection: $mode) {
+                Text("Inline").tag(DiffViewMode.inline)
+                Text("Side by Side").tag(DiffViewMode.sideBySide)
+            }
+            .pickerStyle(.segmented)
+            .padding(12)
+
+            Divider()
+
+            ScrollView([.vertical, .horizontal]) {
+                Group {
+                    switch mode {
+                    case .inline:
+                        InlineDiffView(file: file)
+                    case .sideBySide:
+                        SideBySideDiffView(file: file)
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(file.fileName)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+
+            Spacer()
+
+            Text(file.status)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(UIColor.secondarySystemBackground))
+                .cornerRadius(6)
+        }
+        .padding(12)
+        .background(Color(UIColor.secondarySystemBackground))
+    }
+}
+
+// MARK: - Sheet wrapper for GitView
+
+struct GitDiffSheet: View {
+    let entry: GitStatusEntry
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var gitManager = GitManager.shared
+
+    @State private var isLoading = true
+    @State private var diffFile: DiffFile?
+
+    var body: some View {
+        NavigationView {
+            Group {
+                if isLoading {
+                    ProgressView("Loading diff…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let diffFile {
+                    DiffViewer(file: diffFile)
+                } else {
+                    Text("No diff available")
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .task {
+            isLoading = true
+            diffFile = await gitManager.diffWorkingCopyToHEAD(path: entry.path, kind: entry.kind)
+            isLoading = false
+        }
+    }
 }
 
 // MARK: - Inline Diff View

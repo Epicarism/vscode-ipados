@@ -1,0 +1,1 @@
+Tracking fixes for line numbers alignment & scroll sync.

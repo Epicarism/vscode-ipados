@@ -151,63 +151,74 @@ class MultiCursorState: ObservableObject {
     
     /// Insert text at all cursor positions
     func insertText(_ text: String, in fullText: inout String) {
-        // Process cursors from end to start to maintain positions
-        let sortedCursors = cursors.sorted { $0.position > $1.position }
-        var offsetAdjustment = 0
-        
-        for (index, cursor) in sortedCursors.enumerated() {
-            let adjustedPosition = cursor.position
-            
-            if let selectionRange = cursor.selectionRange,
-               let swiftRange = Range(selectionRange, in: fullText) {
-                // Replace selection
+        // Process from start -> end while tracking how prior edits shift later cursor positions.
+        let sortedCursors = cursors.sorted { $0.position < $1.position }
+        var delta = 0
+
+        for cursor in sortedCursors {
+            guard let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id }) else { continue }
+
+            if let selectionRange = cursor.selectionRange {
+                let effectiveLocation = selectionRange.location + delta
+                let effectiveRange = NSRange(location: effectiveLocation, length: selectionRange.length)
+
+                guard let swiftRange = Range(effectiveRange, in: fullText) else { continue }
+
                 fullText.replaceSubrange(swiftRange, with: text)
-                let delta = text.count - selectionRange.length
-                offsetAdjustment += delta
-                
-                // Update cursor position
-                let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id })!
-                cursors[cursorIndex].position = selectionRange.location + text.count
+
+                // Cursor ends after inserted text; selection cleared.
+                cursors[cursorIndex].position = effectiveLocation + text.count
                 cursors[cursorIndex].anchor = nil
+
+                delta += (text.count - selectionRange.length)
             } else {
-                // Insert at cursor
-                let stringIndex = fullText.index(fullText.startIndex, offsetBy: min(adjustedPosition, fullText.count))
+                let effectivePosition = cursor.position + delta
+                let clamped = min(max(0, effectivePosition), fullText.count)
+                let stringIndex = fullText.index(fullText.startIndex, offsetBy: clamped)
+
                 fullText.insert(contentsOf: text, at: stringIndex)
-                
-                // Update cursor position
-                let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id })!
-                cursors[cursorIndex].position = adjustedPosition + text.count
+
+                cursors[cursorIndex].position = clamped + text.count
+                delta += text.count
             }
         }
-        
-        // Adjust positions of cursors that come before
-        adjustCursorPositions(afterInsertion: text.count)
+
+        // Keep state sane if multiple edits collapse cursors onto the same location.
+        removeDuplicateCursors()
     }
     
     /// Delete text at all cursor positions (backspace)
     func deleteBackward(in fullText: inout String) {
-        let sortedCursors = cursors.sorted { $0.position > $1.position }
-        
+        let sortedCursors = cursors.sorted { $0.position < $1.position }
+        var delta = 0
+
         for cursor in sortedCursors {
-            if let selectionRange = cursor.selectionRange,
-               let swiftRange = Range(selectionRange, in: fullText) {
-                // Delete selection
+            guard let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id }) else { continue }
+
+            if let selectionRange = cursor.selectionRange {
+                let effectiveLocation = selectionRange.location + delta
+                let effectiveRange = NSRange(location: effectiveLocation, length: selectionRange.length)
+                guard let swiftRange = Range(effectiveRange, in: fullText) else { continue }
+
                 fullText.removeSubrange(swiftRange)
-                
-                let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id })!
-                cursors[cursorIndex].position = selectionRange.location
+
+                cursors[cursorIndex].position = effectiveLocation
                 cursors[cursorIndex].anchor = nil
-            } else if cursor.position > 0 {
-                // Delete character before cursor
-                let deleteIndex = fullText.index(fullText.startIndex, offsetBy: cursor.position - 1)
+
+                delta -= selectionRange.length
+            } else {
+                let effectivePosition = cursor.position + delta
+                guard effectivePosition > 0 else { continue }
+
+                let deleteOffset = effectivePosition - 1
+                let deleteIndex = fullText.index(fullText.startIndex, offsetBy: deleteOffset)
                 fullText.remove(at: deleteIndex)
-                
-                let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id })!
-                cursors[cursorIndex].position = cursor.position - 1
+
+                cursors[cursorIndex].position = deleteOffset
+                delta -= 1
             }
         }
-        
-        // Remove duplicate cursors at same position
+
         removeDuplicateCursors()
     }
     

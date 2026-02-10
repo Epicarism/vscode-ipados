@@ -97,7 +97,7 @@ struct Theme: Identifiable, Equatable, Hashable {
         tabInactiveForeground: hex("#969696"),
         statusBarBackground: hex("#007ACC"),
         statusBarForeground: hex("#FFFFFF"),
-        keyword: hex("#C586C0"),
+        keyword: hex("#569CD6"),
         string: hex("#CE9178"),
         number: hex("#B5CEA8"),
         comment: hex("#6A9955"),

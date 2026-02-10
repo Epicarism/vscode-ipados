@@ -489,12 +489,17 @@ struct PaneEditorView: View {
     @ObservedObject private var foldingManager = CodeFoldingManager.shared
     @State private var text: String = ""
     @State private var scrollPosition: Int = 0
+    @State private var scrollOffset: CGFloat = 0
     @State private var totalLines: Int = 1
     @State private var visibleLines: Int = 20
     @State private var currentLineNumber: Int = 1
     @State private var currentColumn: Int = 1
+    @State private var cursorIndex: Int = 0
     @State private var lineHeight: CGFloat = 17
     @State private var requestedLineSelection: Int? = nil
+    @State private var requestedCursorIndex: Int? = nil
+    
+    private var useRunestoneEditor: Bool { FeatureFlags.useRunestoneEditor }
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
     
@@ -510,6 +515,7 @@ struct PaneEditorView: View {
                 if lineNumbersStyle != "off" {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .trailing, spacing: 0) {
+                            // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
                             ForEach(0..<totalLines, id: \ .self) { lineIndex in
                                 HStack(spacing: 2) {
                                     // Fold chevron icon
@@ -556,8 +562,10 @@ struct PaneEditorView: View {
                             }
                         }
                         .padding(.trailing, 4)
-                        .offset(y: -CGFloat(scrollPosition) * lineHeight)
+                        .padding(.top, 8)
+                        .offset(y: -scrollOffset)
                     }
+                    .scrollDisabled(true)
                     .frame(width: 70)
                     .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
                 }
@@ -567,6 +575,7 @@ struct PaneEditorView: View {
                     text: $text,
                     filename: tab.fileName,
                     scrollPosition: $scrollPosition,
+                    scrollOffset: $scrollOffset,
                     totalLines: $totalLines,
                     visibleLines: $visibleLines,
                     currentLineNumber: $currentLineNumber,
@@ -578,19 +587,27 @@ struct PaneEditorView: View {
                 )
                 .onChange(of: text) { newValue in
                     pane.updateTabContent(newValue)
-                    
-                    // Sync scroll if enabled
+                }
+                .onChange(of: scrollOffset) { newOffset in
+                    // Track latest scroll offset for this pane, and sync if enabled.
+                    if abs(pane.scrollOffset - newOffset) > 0.5 {
+                        pane.scrollOffset = newOffset
+                    }
                     if splitManager.syncScroll {
-                        splitManager.syncScrollOffset(CGFloat(scrollPosition) * lineHeight, fromPaneId: pane.id)
+                        splitManager.syncScrollOffset(newOffset, fromPaneId: pane.id)
                     }
                 }
                 
                 // Mini minimap
                 MinimapView(
                     content: text,
-                    scrollOffset: .constant(CGFloat(scrollPosition) * lineHeight),
-                    scrollViewHeight: .constant(geometry.size.height),
-                    totalContentHeight: CGFloat(totalLines) * lineHeight
+                    scrollOffset: scrollOffset,
+                    scrollViewHeight: geometry.size.height,
+                    totalContentHeight: CGFloat(totalLines) * lineHeight,
+                    onScrollRequested: { newOffset in
+                        scrollOffset = newOffset
+                        scrollPosition = Int(newOffset / max(lineHeight, 1))
+                    }
                 )
                 .frame(width: 60)
             }
@@ -644,8 +661,13 @@ struct PaneEditorView: View {
             text = tab.content
         }
         .onChange(of: pane.scrollOffset) { newOffset in
-            if splitManager.syncScroll {
-                scrollPosition = Int(newOffset / lineHeight)
+            guard splitManager.syncScroll else { return }
+            // Avoid feedback loop when we're the source pane.
+            if abs(scrollOffset - newOffset) > 0.5 {
+                scrollOffset = newOffset
+                if !useRunestoneEditor {
+                    scrollPosition = Int(newOffset / max(lineHeight, 1))
+                }
             }
         }
     }

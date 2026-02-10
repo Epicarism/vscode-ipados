@@ -1,0 +1,1 @@
+Backups created for MultiCursorTextView.swift and SyntaxHighlightingTextView.swift before multi-cursor fixes.

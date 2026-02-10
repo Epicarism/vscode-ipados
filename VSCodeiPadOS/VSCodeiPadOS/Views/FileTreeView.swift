@@ -71,9 +71,8 @@ struct FileTreeRowView: View {
                 }
                 
                 // File/folder icon
-                Image(systemName: node.isDirectory ? (isExpanded ? "folder.fill" : "folder") : "doc")
-                    .foregroundColor(node.isDirectory ? .blue : .gray)
-                    .frame(width: 16)
+                FileIconView(filename: node.name, isDirectory: node.isDirectory, isOpen: isExpanded)
+                    .frame(width: 16, height: 16)
                 
                 // Name
                 Text(node.name)

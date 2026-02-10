@@ -1,0 +1,109 @@
+# Known Bugs - VSCodeiPadOS
+
+## 🔴 Critical
+
+### 0. Typing Lag in Large Documents (1000+ lines)
+**Status:** Active - HIGH PRIORITY  
+**Symptoms:**
+- Typing is ultra laggy/slow in documents with ~1000+ lines of code
+- App becomes unusable for real-world code editing
+- This is a BLOCKER - if we can't handle 1000 lines, the app is dead
+
+**Likely Cause:**
+- Syntax highlighting running on every keystroke
+- `applySyntaxHighlighting()` processing entire document each time
+- Debounce timer (0.08s) may be too short
+- Need virtualized/incremental highlighting for large files
+
+**Files to investigate:**
+- `SyntaxHighlightingTextView.swift` - applySyntaxHighlighting, textViewDidChange
+- Consider: Only highlight visible lines, batch updates, background processing
+
+---
+
+### 1. Scrolling is Broken / Jaggy
+**Status:** Active  
+**Symptoms:**
+- Scrolling fights with the current line view
+- If cursor is on a different line, editor wants to keep that line in focus
+- Results in jaggy/jumpy scrolling behavior
+
+**Likely Cause:**
+- `scrollToLine()` or cursor position tracking in SyntaxHighlightingTextView
+- `updateUIView` may be resetting scroll position on every update
+- Conflict between user scroll and programmatic scroll to cursor
+
+**Files to investigate:**
+- `SyntaxHighlightingTextView.swift` - scrollToLine, updateScrollPosition
+- `ContentView.swift` - scrollPosition binding
+- MinimapView scroll sync
+
+---
+
+### 2. Syntax Highlighting Only Appears When Typing
+**Status:** Active  
+**Symptoms:**
+- Syntax highlighting doesn't appear on file open
+- Only shows up after user starts typing
+- Even then, highlighting is inconsistent/partial
+
+**Likely Cause:**
+- `applySyntaxHighlighting()` not called on initial load
+- Highlighting may be getting cleared/overwritten
+- Theme not applied until text changes trigger delegate
+
+**Files to investigate:**
+- `SyntaxHighlightingTextView.swift` - makeUIView, applySyntaxHighlighting
+- When/how highlighting is triggered on file load vs on edit
+
+---
+
+### 3. File Type Icons Missing from Sidebar
+**Status:** Active  
+**Symptoms:**
+- No file type icons showing in file explorer sidebar
+- VS Code style icons for html, js, json, md, swift, etc. not visible
+
+**Expected:**
+- Downloaded VS Code icons should display next to filenames
+- Different icons for different file extensions
+
+**Files to investigate:**
+- FileNavigator / FileExplorerView
+- Assets.xcassets - check if icons were added
+- Icon mapping logic
+
+---
+
+### 4. Keyboard Shortcuts Were Broken (Cmd+J, Cmd+Shift+A, etc.)
+**Status:** ✅ FIXED  
+**What happened:**
+- Accidentally removed UIKeyCommands thinking they were duplicates
+- UITextView captures keyboard, so UIKeyCommands ARE needed there
+- Restored all shortcuts: Cmd+J, Cmd+Shift+A, Cmd+B, Cmd+P, Cmd+S, Cmd+W, Cmd+F, Cmd+N, Cmd+=, Cmd+-
+
+---
+
+## 🟡 Medium Priority
+
+### 5. Multi-cursor / Selection State Sync
+**Status:** Active  
+**Notes:** EditorCore.multiCursorState needs to stay in sync with UITextView selection
+
+---
+
+## 🟢 Fixed (This Session)
+
+- ✅ Fatal crash: Range requires lowerBound <= upperBound
+- ✅ Duplicate keyboard shortcuts (UIMenu conflicts)
+- ✅ Invalid SF Symbol 'f.curlybraces'
+- ✅ "Publishing changes from within view updates" warnings - wrapped @Binding updates in DispatchQueue.main.async
+- ✅ Undo manager crash (NSInternalInconsistencyException: enableUndoRegistration invalid state) - added reentrancy guard and defer pattern
+- ✅ NativeGit files not in Xcode project - added NativeGitReader.swift and NativeGitWriter.swift to build
+- ✅ iOS deployment target too low (15.0) - updated to iOS 16.0 for scrollDisabled() API
+
+---
+
+## Notes
+
+Last updated: 2026-02-10

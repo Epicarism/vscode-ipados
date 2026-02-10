@@ -91,6 +91,14 @@ class CodeFoldingManager: ObservableObject {
         var blockStack: [(type: FoldRegion.FoldType, startLine: Int, label: String?)] = []
         var commentStack: [(startLine: Int, isMultiline: Bool)] = []
         var regionStack: [(startLine: Int, label: String)] = []
+
+        // If we detect a declaration/function/control-flow whose opening brace is on a later line,
+        // we mark that brace line so it won't be treated as a standalone generic block.
+        var braceLinesClaimed: Set<Int> = []
+
+        // Used to prevent duplicate regions for grouped constructs (imports, // comments)
+        var previousNonEmptyWasImport = false
+        var previousNonEmptyWasSingleLineComment = false
         
         for (index, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -98,12 +106,28 @@ class CodeFoldingManager: ObservableObject {
             
             // Skip empty lines for most detections
             guard !trimmed.isEmpty else { continue }
+
+            // MARK: - Close blocks BEFORE opening new ones (handles "} else {" correctly)
+            if trimmed.hasPrefix("}") {
+                // Count consecutive leading '}' so we can pop multiple blocks for lines like "}}"
+                let closeCount = max(1, trimmed.prefix { $0 == "}" }.count)
+                for _ in 0..<closeCount {
+                    if let lastBlock = blockStack.popLast() {
+                        if index - lastBlock.startLine > 1 {
+                            regions.append(FoldRegion(
+                                startLine: lastBlock.startLine,
+                                endLine: index,
+                                type: lastBlock.type,
+                                label: lastBlock.label
+                            ))
+                        }
+                    }
+                }
+            }
             
             // MARK: - Region Detection (#region, #pragma mark, MARK:)
-            if detectRegionStart(trimmed) != nil {
-                if let label = detectRegionStart(trimmed) {
-                    regionStack.append((index, label))
-                }
+            if let label = detectRegionStart(trimmed) {
+                regionStack.append((index, label))
             } else if detectRegionEnd(trimmed) {
                 if let region = regionStack.popLast() {
                     if index - region.startLine > 1 {
@@ -117,35 +141,44 @@ class CodeFoldingManager: ObservableObject {
                 }
             }
             
-            // MARK: - Import Statement Detection
+            // MARK: - Import Statement Detection (group consecutive imports once)
             if trimmed.hasPrefix("import ") {
-                // Group consecutive imports
-                let importEnd = findConsecutiveImports(from: index, in: lines)
-                if importEnd > index {
-                    regions.append(FoldRegion(
-                        startLine: index,
-                        endLine: importEnd,
-                        type: .importStatement,
-                        label: "Imports"
-                    ))
+                if !previousNonEmptyWasImport {
+                    let importEnd = findConsecutiveImports(from: index, in: lines)
+                    if importEnd > index {
+                        regions.append(FoldRegion(
+                            startLine: index,
+                            endLine: importEnd,
+                            type: .importStatement,
+                            label: "Imports"
+                        ))
+                    }
                 }
+                previousNonEmptyWasImport = true
+            } else {
+                previousNonEmptyWasImport = false
             }
             
             // MARK: - Comment Detection
             if detectCommentStart(trimmed) {
                 commentStack.append((index, true))
+                previousNonEmptyWasSingleLineComment = false
             } else if trimmed.starts(with: "//") {
-                // Single-line comment - check for consecutive comment blocks
-                let commentEnd = findConsecutiveComments(from: index, in: lines)
-                if commentEnd > index {
-                    regions.append(FoldRegion(
-                        startLine: index,
-                        endLine: commentEnd,
-                        type: .comment,
-                        label: "Comment"
-                    ))
+                // Only create a fold region at the start of a consecutive // block
+                if !previousNonEmptyWasSingleLineComment {
+                    let commentEnd = findConsecutiveComments(from: index, in: lines)
+                    if commentEnd > index {
+                        regions.append(FoldRegion(
+                            startLine: index,
+                            endLine: commentEnd,
+                            type: .comment,
+                            label: "Comment"
+                        ))
+                    }
                 }
+                previousNonEmptyWasSingleLineComment = true
             } else if detectCommentEnd(trimmed) {
+                previousNonEmptyWasSingleLineComment = false
                 if let comment = commentStack.popLast() {
                     if index - comment.startLine > 1 {
                         regions.append(FoldRegion(
@@ -156,6 +189,8 @@ class CodeFoldingManager: ObservableObject {
                         ))
                     }
                 }
+            } else {
+                previousNonEmptyWasSingleLineComment = false
             }
             
             // MARK: - Class/Struct/Enum/Protocol/Extension Detection
@@ -165,6 +200,7 @@ class CodeFoldingManager: ObservableObject {
                 } else {
                     // Declaration without opening brace - look ahead for it
                     if let braceLine = findOpeningBrace(from: index + 1, in: lines) {
+                        braceLinesClaimed.insert(braceLine)
                         blockStack.append((declaration.type, index, declaration.label))
                     }
                 }
@@ -177,6 +213,7 @@ class CodeFoldingManager: ObservableObject {
                 } else {
                     // Function without opening brace - look ahead
                     if let braceLine = findOpeningBrace(from: index + 1, in: lines) {
+                        braceLinesClaimed.insert(braceLine)
                         blockStack.append((.function, index, functionInfo))
                     }
                 }
@@ -188,29 +225,23 @@ class CodeFoldingManager: ObservableObject {
                     blockStack.append((.controlFlow, index, controlFlowLabel))
                 } else {
                     if let braceLine = findOpeningBrace(from: index + 1, in: lines) {
+                        braceLinesClaimed.insert(braceLine)
                         blockStack.append((.controlFlow, index, controlFlowLabel))
                     }
                 }
             }
             
             // MARK: - Generic Block Detection
-            if trimmed.hasSuffix("{") && !isDeclarationLine(trimmed) && !isFunctionLine(trimmed) {
+            // Avoid adding a generic block for a standalone "{" that belongs to a previously detected declaration.
+            if trimmed.hasSuffix("{"),
+               trimmed != "{",
+               !braceLinesClaimed.contains(index),
+               !isDeclarationLine(trimmed),
+               !isFunctionLine(trimmed) {
                 blockStack.append((.genericBlock, index, nil))
             }
-            
-            // MARK: - Block End Detection
-            if detectBlockEnd(trimmed, leadingWhitespace: leadingWhitespace) {
-                if let lastBlock = blockStack.popLast() {
-                    if index - lastBlock.startLine > 1 {
-                        regions.append(FoldRegion(
-                            startLine: lastBlock.startLine,
-                            endLine: index,
-                            type: lastBlock.type,
-                            label: lastBlock.label
-                        ))
-                    }
-                }
-            }
+
+            _ = leadingWhitespace // keep param for potential future heuristics
         }
         
         // Handle any remaining unclosed blocks
@@ -314,26 +345,46 @@ class CodeFoldingManager: ObservableObject {
     }
     
     private func detectDeclaration(_ line: String) -> (type: FoldRegion.FoldType, label: String)? {
-        // Class detection
-        if let className = extractName(from: line, prefix: "class", visibility: ["public", "private", "internal", "fileprivate", "open", "final"]) {
-            return (.classOrStruct, className)
+        func matchName(pattern: String) -> String? {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+            guard let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+                  match.numberOfRanges >= 2,
+                  let r = Range(match.range(at: 1), in: line)
+            else { return nil }
+            return String(line[r])
         }
-        // Struct detection
-        if let structName = extractName(from: line, prefix: "struct", visibility: ["public", "private", "internal", "fileprivate"]) {
-            return (.classOrStruct, structName)
+
+        // Allow leading attributes like "@MainActor", "@available(...)"
+        // Allow common modifiers in any order (best-effort).
+        let prefix = #"^(?:\s*@\w+(?:\([^\)]*\))?\s+)*(?:\s*(?:public|private|internal|fileprivate|open|final|indirect|lazy|static|override|mutating|nonmutating)\s+)*"#
+
+        // IMPORTANT: avoid treating "class func"/"class var" as a type declaration.
+        if let name = matchName(pattern: prefix + #"class\s+(?!func\b|var\b|let\b)([A-Za-z_]\w*)"#) {
+            return (.classOrStruct, name)
         }
-        // Enum detection
-        if let enumName = extractName(from: line, prefix: "enum", visibility: ["public", "private", "internal", "fileprivate", "indirect"]) {
-            return (.enumDeclaration, enumName)
+
+        // Actor (Swift concurrency) – fold like a class/struct
+        if let name = matchName(pattern: prefix + #"actor\s+([A-Za-z_]\w*)"#) {
+            return (.classOrStruct, name)
         }
-        // Protocol detection
-        if let protocolName = extractName(from: line, prefix: "protocol", visibility: ["public", "private", "internal", "fileprivate"]) {
-            return (.protocolDeclaration, protocolName)
+
+        if let name = matchName(pattern: prefix + #"struct\s+([A-Za-z_]\w*)"#) {
+            return (.classOrStruct, name)
         }
-        // Extension detection
-        if let extensionName = extractName(from: line, prefix: "extension", visibility: []) {
-            return (.extension, extensionName)
+
+        if let name = matchName(pattern: prefix + #"enum\s+([A-Za-z_]\w*)"#) {
+            return (.enumDeclaration, name)
         }
+
+        if let name = matchName(pattern: prefix + #"protocol\s+([A-Za-z_]\w*)"#) {
+            return (.protocolDeclaration, name)
+        }
+
+        // Extensions can include dotted names (Foo.Bar)
+        if let name = matchName(pattern: prefix + #"extension\s+([A-Za-z_][A-Za-z0-9_\.]*)"#) {
+            return (.extension, name)
+        }
+
         return nil
     }
     
@@ -668,9 +719,20 @@ class CodeFoldingManager: ObservableObject {
         return foldRegions.contains { $0.startLine == line }
     }
     
-    /// Checks if a line is currently folded
+    /// Checks if a line is currently folded (for the currently active file in `foldRegions`)
     func isLineFolded(line: Int) -> Bool {
         return collapsedLines.contains(line)
+    }
+
+    /// Checks if a line should be hidden for a specific file (does not rely on `collapsedLines`)
+    func isLineFolded(fileId: String, line: Int) -> Bool {
+        guard let regions = foldRegionsByFile[fileId] else { return false }
+        for region in regions where region.isFolded {
+            if line > region.startLine && line <= region.endLine {
+                return true
+            }
+        }
+        return false
     }
     
     /// Checks if a region at a given line is folded
@@ -714,6 +776,9 @@ class CodeFoldingManager: ObservableObject {
             if fileId == currentFileId {
                 self.foldRegions = regions
                 updateCollapsedLines()
+            } else {
+                // Ensure SwiftUI updates for gutters rendering using file-aware queries.
+                objectWillChange.send()
             }
             
             // Save state after toggling

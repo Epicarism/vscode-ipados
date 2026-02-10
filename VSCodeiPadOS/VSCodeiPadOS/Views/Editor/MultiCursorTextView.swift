@@ -26,6 +26,10 @@ class MultiCursorTextView: UITextView {
     /// Timer for cursor blink animation
     private var blinkTimer: Timer?
     private var cursorVisible = true
+    
+    /// PERF: Throttle cursor display updates during scroll
+    private var lastCursorUpdateTime: CFTimeInterval = 0
+    private let cursorUpdateThrottleInterval: CFTimeInterval = 0.016  // ~60fps max
 
     /// Cursor appearance
     private let cursorWidth: CGFloat = 2
@@ -193,13 +197,20 @@ class MultiCursorTextView: UITextView {
 
     override var contentOffset: CGPoint {
         didSet {
-            // Update cursor positions when scrolling
-            updateCursorDisplay()
+            // PERF: Throttle cursor updates during scrolling to avoid recreating layers every pixel
+            let now = CACurrentMediaTime()
+            if now - lastCursorUpdateTime >= cursorUpdateThrottleInterval {
+                lastCursorUpdateTime = now
+                updateCursorDisplay()
+            }
         }
     }
 }
 
 // MARK: - Key Commands for Multi-Cursor + Autocomplete
+// NOTE: App-level shortcuts are defined in Menus/ folder only.
+// See: KEYBOARD_SHORTCUTS_SOURCE_OF_TRUTH.md
+// DO NOT define Cmd+D, Cmd+Shift+L, Cmd+G here - they are in SelectionMenuCommands/GoMenuCommands
 
 extension MultiCursorTextView {
 
@@ -207,6 +218,7 @@ extension MultiCursorTextView {
         var commands = super.keyCommands ?? []
 
         // Tab: accept autocomplete (if showing), else insert tab
+        // This is editor-specific and NOT a menu command
         commands.append(UIKeyCommand(
             title: "Accept Suggestion",
             action: #selector(tabAcceptAutocomplete),
@@ -214,31 +226,12 @@ extension MultiCursorTextView {
             modifierFlags: []
         ))
 
-        // Cmd+D: Add next occurrence
-        commands.append(UIKeyCommand(
-            title: "Add Next Occurrence",
-            action: #selector(addNextOccurrence),
-            input: "d",
-            modifierFlags: .command
-        ))
-
-        // Cmd+Shift+L: Select all occurrences
-        commands.append(UIKeyCommand(
-            title: "Select All Occurrences",
-            action: #selector(selectAllOccurrences),
-            input: "l",
-            modifierFlags: [.command, .shift]
-        ))
-
-        // Cmd+G: Go to Line
-        commands.append(UIKeyCommand(
-            title: "Go to Line",
-            action: #selector(goToLine),
-            input: "g",
-            modifierFlags: .command
-        ))
+        // NOTE: Cmd+D (Add Next Occurrence) is in SelectionMenuCommands.swift
+        // NOTE: Cmd+Shift+L (Select All Occurrences) is in SelectionMenuCommands.swift
+        // NOTE: Cmd+G (Go to Line) is in GoMenuCommands.swift
 
         // Escape: Dismiss autocomplete if visible, else exit multi-cursor mode
+        // This is editor-specific and NOT a menu command
         commands.append(UIKeyCommand(
             title: "Escape",
             action: #selector(escapeKeyPressed),

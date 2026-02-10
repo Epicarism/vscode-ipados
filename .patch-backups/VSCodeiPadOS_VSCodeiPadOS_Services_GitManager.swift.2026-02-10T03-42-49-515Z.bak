@@ -1,0 +1,317 @@
+//
+//  GitManager.swift
+//  VSCodeiPadOS
+//
+//  Minimal Git Manager - stub implementation
+//  TODO: Implement real git operations via SSH
+//
+
+import SwiftUI
+import Combine
+
+// MARK: - Git Errors
+
+enum GitManagerError: Error, LocalizedError {
+    case noRepository
+    case gitExecutableNotFound
+    case commandFailed(args: [String], exitCode: Int32, message: String)
+    case notAvailableOnIOS
+    case sshNotConnected
+    case invalidRepository
+    
+    var errorDescription: String? {
+        switch self {
+        case .noRepository:
+            return "No git repository configured"
+        case .gitExecutableNotFound:
+            return "Git executable not found"
+        case let .commandFailed(args, exitCode, message):
+            return "git \(args.joined(separator: " ")) failed (\(exitCode)): \(message)"
+        case .notAvailableOnIOS:
+            return "Git is not available on iOS"
+        case .sshNotConnected:
+            return "SSH connection required for git operations"
+        case .invalidRepository:
+            return "Invalid git repository"
+        }
+    }
+}
+
+// MARK: - Git Types
+
+enum GitChangeKind: String, Codable, Hashable {
+    case modified = "M"
+    case added = "A"
+    case deleted = "D"
+    case renamed = "R"
+    case copied = "C"
+    case untracked = "?"
+    case ignored = "!"
+    case unmerged = "U"
+    case typeChanged = "T"
+    case unknown = "X"
+    
+    var icon: String {
+        switch self {
+        case .modified: return "pencil"
+        case .added: return "plus"
+        case .deleted: return "minus"
+        case .renamed: return "arrow.right"
+        case .copied: return "doc.on.doc"
+        case .untracked: return "questionmark"
+        case .ignored: return "eye.slash"
+        case .unmerged: return "exclamationmark.triangle"
+        case .typeChanged: return "arrow.triangle.2.circlepath"
+        case .unknown: return "questionmark.circle"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .modified: return .orange
+        case .added: return .green
+        case .deleted: return .red
+        case .renamed: return .blue
+        case .copied: return .blue
+        case .untracked: return .gray
+        case .ignored: return .gray
+        case .unmerged: return .yellow
+        case .typeChanged: return .purple
+        case .unknown: return .gray
+        }
+    }
+}
+
+struct GitBranch: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    let isRemote: Bool
+    let isCurrent: Bool
+    
+    init(name: String, isRemote: Bool = false, isCurrent: Bool = false) {
+        self.name = name
+        self.isRemote = isRemote
+        self.isCurrent = isCurrent
+    }
+}
+
+struct GitCommit: Identifiable, Hashable {
+    let id: String // SHA
+    let message: String
+    let author: String
+    let date: Date
+    
+    var shortSHA: String {
+        String(id.prefix(7))
+    }
+}
+
+struct GitFileChange: Identifiable, Hashable {
+    let id = UUID()
+    let path: String
+    let kind: GitChangeKind
+    let staged: Bool
+    
+    init(path: String, kind: GitChangeKind, staged: Bool = false) {
+        self.path = path
+        self.kind = kind
+        self.staged = staged
+    }
+}
+
+struct GitStashEntry: Identifiable, Hashable {
+    let id = UUID()
+    let index: Int
+    let message: String
+    let branch: String
+}
+
+// Type alias for compatibility with GitView
+typealias GitStatusEntry = GitFileChange
+
+// MARK: - Git Manager
+
+@MainActor
+class GitManager: ObservableObject {
+    static let shared = GitManager()
+    
+    // MARK: - Published State
+    
+    @Published var isRepository: Bool = false
+    @Published var currentBranch: String = "main"
+    @Published var branches: [GitBranch] = []
+    @Published var remoteBranches: [GitBranch] = []
+    @Published var stagedChanges: [GitFileChange] = []
+    @Published var unstagedChanges: [GitFileChange] = []
+    @Published var untrackedFiles: [GitFileChange] = []
+    @Published var recentCommits: [GitCommit] = []
+    @Published var stashes: [GitStashEntry] = []
+    @Published var isLoading: Bool = false
+    @Published var lastError: String?
+    @Published var aheadCount: Int = 0
+    @Published var behindCount: Int = 0
+    
+    private var workingDirectory: URL?
+    private var nativeReader: NativeGitReader?
+    
+    private init() {}
+    
+    // MARK: - Repository Setup
+    
+    func setWorkingDirectory(_ url: URL?) {
+        self.workingDirectory = url
+        
+        if let url {
+            self.nativeReader = NativeGitReader(repositoryURL: url)
+            self.isRepository = (self.nativeReader != nil)
+        } else {
+            self.nativeReader = nil
+            self.isRepository = false
+        }
+        
+        if isRepository {
+            Task { await refresh() }
+        } else {
+            clearRepository()
+        }
+    }
+    
+    func clearRepository() {
+        isRepository = false
+        currentBranch = "main"
+        branches = []
+        remoteBranches = []
+        stagedChanges = []
+        unstagedChanges = []
+        untrackedFiles = []
+        recentCommits = []
+        stashes = []
+        lastError = nil
+    }
+    
+    // MARK: - Git Operations
+    
+    func refresh() async {
+        isLoading = true
+        defer { isLoading = false }
+        lastError = nil
+        
+        guard let reader = nativeReader else {
+            lastError = "No git repository found"
+            return
+        }
+        
+        // Current branch
+        currentBranch = reader.currentBranch() ?? "HEAD"
+        
+        // Branches
+        let localBranchNames = reader.localBranches()
+        branches = localBranchNames.map { name in
+            GitBranch(name: name, isRemote: false, isCurrent: name == currentBranch)
+        }
+        
+        let remoteBranchPairs = reader.remoteBranches()
+        remoteBranches = remoteBranchPairs.map { (remote, branch) in
+            GitBranch(name: "\(remote)/\(branch)", isRemote: true, isCurrent: false)
+        }
+        
+        // Status
+        let fileStatuses = reader.status()
+        
+        stagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
+            guard let staged = status.staged else { return nil }
+            return GitFileChange(path: status.path, kind: mapStatusType(staged), staged: true)
+        }
+        
+        unstagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
+            guard let working = status.working else { return nil }
+            return GitFileChange(path: status.path, kind: mapStatusType(working), staged: false)
+        }
+        
+        untrackedFiles = fileStatuses.compactMap { status -> GitFileChange? in
+            guard status.working == .untracked else { return nil }
+            return GitFileChange(path: status.path, kind: .untracked, staged: false)
+        }
+        
+        // Recent commits
+        let commits = reader.recentCommits(count: 20)
+        recentCommits = commits.map { commit in
+            GitCommit(id: commit.sha, message: commit.message, author: commit.author, date: commit.authorDate)
+        }
+    }
+    
+    func stage(file: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func stageAll() async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func unstage(file: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func commit(message: String) async throws {
+        guard workingDirectory != nil else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Native commit requires NativeGitWriter which isn't in Xcode project yet
+        // TODO: Add NativeGit folder to Xcode project to enable offline commits
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func checkout(branch: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func createBranch(name: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func deleteBranch(name: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func pull() async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func push() async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func stashPush(message: String?) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func stashPop(index: Int) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func stashDrop(index: Int) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func discard(file: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func discardAll() async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func discardChanges(file: String) async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    func fetch() async throws {
+        throw GitManagerError.sshNotConnected
+    }
+    
+    /// Alias for lastError for compatibility
+    var error: String? {
+        return lastError
+    }
+}

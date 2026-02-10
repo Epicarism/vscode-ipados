@@ -6,7 +6,16 @@ final class FileSystemNavigator: ObservableObject {
     @Published var fileTree: FileTreeNode?
     @Published var expandedPaths: Set<String> = []
 
+    /// The currently opened workspace root URL (if any).
+    @Published private(set) var rootURL: URL?
+
+    /// Convenience for callers that store paths.
+    var rootPath: String? { rootURL?.path }
+
     func loadFileTree(at url: URL) {
+        // Treat this as the workspace root.
+        rootURL = url
+
         DispatchQueue.global(qos: .userInitiated).async {
             let tree = self.buildFileTree(at: url)
             DispatchQueue.main.async {
@@ -16,6 +25,40 @@ final class FileSystemNavigator: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - File Read/Write
+
+    /// Write UTF-8 text to a URL, handling security-scoped access when applicable.
+    func writeFile(at url: URL, content: String) throws {
+        // Try to access the file; if that fails, try its parent folder (common on iPadOS).
+        let didStartItem = url.startAccessingSecurityScopedResource()
+        let parentURL = url.deletingLastPathComponent()
+        let didStartParent = (!didStartItem) ? parentURL.startAccessingSecurityScopedResource() : false
+
+        defer {
+            if didStartItem { url.stopAccessingSecurityScopedResource() }
+            if didStartParent { parentURL.stopAccessingSecurityScopedResource() }
+        }
+
+        try content.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Create a new empty file, choosing a unique name if needed, and return its URL.
+    func createFileUnique(named name: String, in folder: URL) throws -> URL {
+        let didStart = folder.startAccessingSecurityScopedResource()
+        defer { if didStart { folder.stopAccessingSecurityScopedResource() } }
+
+        let initialURL = folder.appendingPathComponent(name, isDirectory: false)
+        let finalURL = uniqueDestinationURL(for: initialURL, fileManager: FileManager.default)
+
+        let created = FileManager.default.createFile(atPath: finalURL.path, contents: Data(), attributes: nil)
+        if !created {
+            throw NSError(domain: "FileSystemNavigator", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create file"])
+        }
+
+        DispatchQueue.main.async { self.refreshFileTree() }
+        return finalURL
     }
 
     // MARK: - Refresh

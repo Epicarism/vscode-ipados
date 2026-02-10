@@ -230,8 +230,10 @@ final class AutocompleteManager: ObservableObject {
 
     private func completionContext(in text: String, cursorPosition: Int) -> CompletionContext? {
         guard !text.isEmpty else { return nil }
-
-        let cursorIndex = text.index(text.startIndex, offsetBy: cursorPosition)
+        
+        // Safety check: ensure cursorPosition is within bounds
+        let safeCursor = max(0, min(cursorPosition, text.count))
+        let cursorIndex = text.index(text.startIndex, offsetBy: safeCursor)
 
         // Find start of current identifier (letters/digits/_).
         var start = cursorIndex

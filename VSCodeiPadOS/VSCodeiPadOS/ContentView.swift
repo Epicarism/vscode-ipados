@@ -114,7 +114,15 @@ struct ContentView: View {
         .onChange(of: editorCore.tabs.count) { _ in
             updateWindowTitle()
         }
+        .onChange(of: editorCore.activeTabId) { _ in
+            updateWindowTitle()
+        }
+        .onChange(of: editorCore.activeTab?.isUnsaved) { _ in
+            updateWindowTitle()
+        }
         .onAppear {
+            // Wire up EditorCore -> FileSystemNavigator so save operations can route through it.
+            editorCore.fileNavigator = fileNavigator
             updateWindowTitle()
         }
         // MARK: - Notification Handlers for Menu Keyboard Shortcuts
@@ -397,10 +405,14 @@ struct IDEEditorView: View {
     @ObservedObject var editorCore: EditorCore
     let tab: Tab
     let theme: Theme
+    
+    /// Feature flag for Runestone editor - uses centralized FeatureFlags
+    private var useRunestoneEditor: Bool { FeatureFlags.useRunestoneEditor }
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
     @State private var text: String = ""
     @State private var scrollPosition: Int = 0
+    @State private var scrollOffset: CGFloat = 0
     @State private var totalLines: Int = 1
     @State private var visibleLines: Int = 20
     @State private var currentLineNumber: Int = 1
@@ -412,7 +424,7 @@ struct IDEEditorView: View {
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
-    @StateObject private var foldingManager = CodeFoldingManager()
+    @ObservedObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
     
     var body: some View {
@@ -433,7 +445,7 @@ struct IDEEditorView: View {
                             fileId: tab.url?.path ?? tab.fileName,
                             totalLines: totalLines,
                             currentLine: currentLineNumber,
-                            scrollOffset: CGFloat(scrollPosition) * lineHeight,
+                            scrollOffset: scrollOffset,
                             lineHeight: lineHeight,
                             requestedLineSelection: $requestedLineSelection,
                             foldingManager: foldingManager,
@@ -449,10 +461,14 @@ struct IDEEditorView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(theme.editorBackground)
                     } else {
+                        // TODO: Re-enable Runestone when package is properly linked
+                        // See FeatureFlags.useRunestoneEditor
+                        // Legacy SyntaxHighlightingTextView
                         SyntaxHighlightingTextView(
                             text: $text,
                             filename: tab.fileName,
                             scrollPosition: $scrollPosition,
+                            scrollOffset: $scrollOffset,
                             totalLines: $totalLines,
                             visibleLines: $visibleLines,
                             currentLineNumber: $currentLineNumber,
@@ -489,7 +505,7 @@ struct IDEEditorView: View {
                             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
-                            foldingManager.detectFoldableRegions(in: newValue)
+                            foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path ?? tab.fileName)
                         }
                         .onChange(of: cursorIndex) { newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
@@ -500,9 +516,16 @@ struct IDEEditorView: View {
                     if !tab.fileName.hasSuffix(".json") {
                         MinimapView(
                             content: text,
-                            scrollOffset: .constant(CGFloat(scrollPosition) * lineHeight),
-                            scrollViewHeight: .constant(geometry.size.height),
-                            totalContentHeight: CGFloat(totalLines) * lineHeight
+                            scrollOffset: scrollOffset,
+                            scrollViewHeight: geometry.size.height,
+                            totalContentHeight: CGFloat(totalLines) * lineHeight,
+                            onScrollRequested: { newOffset in
+                                // Minimap requested scroll - update editor position
+                                scrollOffset = newOffset
+                                // Convert back from pixels to line number
+                                let newLine = Int(newOffset / max(lineHeight, 1))
+                                scrollPosition = max(0, min(newLine, totalLines - 1))
+                            }
                         )
                         .frame(width: 80)
                     }
@@ -546,11 +569,11 @@ struct IDEEditorView: View {
         }
         .onAppear {
             text = tab.content
-            foldingManager.detectFoldableRegions(in: text)
+            foldingManager.detectFoldableRegions(in: text, filePath: tab.url?.path ?? tab.fileName)
         }
         .onChange(of: tab.id) { _ in
             text = tab.content
-            foldingManager.detectFoldableRegions(in: text)
+            foldingManager.detectFoldableRegions(in: text, filePath: tab.url?.path ?? tab.fileName)
         }
         .onChange(of: currentLineNumber) { line in
             editorCore.cursorPosition = CursorPosition(line: line, column: currentColumn)
@@ -584,6 +607,8 @@ struct LineNumbersWithFolding: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .trailing, spacing: 0) {
+                // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
+                // so line numbers stay vertically aligned with the first line of text.
                 ForEach(0..<totalLines, id: \.self) { lineIndex in
                     if !foldingManager.isLineFolded(line: lineIndex) {
                         HStack(spacing: 2) {
@@ -628,8 +653,10 @@ struct LineNumbersWithFolding: View {
                     }
                 }
             }
+            .padding(.top, 8)
             .offset(y: -scrollOffset)
         }
+        .scrollDisabled(true)
     }
 
     private func displayText(for lineIndex: Int) -> String {

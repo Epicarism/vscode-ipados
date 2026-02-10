@@ -1,0 +1,77 @@
+# Known Bugs - VSCodeiPadOS
+
+## 🔴 Critical
+
+### 1. Scrolling is Broken / Jaggy
+**Status:** Active  
+**Symptoms:**
+- Scrolling fights with the current line view
+- If cursor is on a different line, editor wants to keep that line in focus
+- Results in jaggy/jumpy scrolling behavior
+
+**Likely Cause:**
+- `scrollToLine()` or cursor position tracking in SyntaxHighlightingTextView
+- `updateUIView` may be resetting scroll position on every update
+- Conflict between user scroll and programmatic scroll to cursor
+
+**Files to investigate:**
+- `SyntaxHighlightingTextView.swift` - scrollToLine, updateScrollPosition
+- `ContentView.swift` - scrollPosition binding
+- MinimapView scroll sync
+
+---
+
+### 2. Syntax Highlighting Only Appears When Typing
+**Status:** Active  
+**Symptoms:**
+- Syntax highlighting doesn't appear on file open
+- Only shows up after user starts typing
+- Even then, highlighting is inconsistent/partial
+
+**Likely Cause:**
+- `applySyntaxHighlighting()` not called on initial load
+- Highlighting may be getting cleared/overwritten
+- Theme not applied until text changes trigger delegate
+
+**Files to investigate:**
+- `SyntaxHighlightingTextView.swift` - makeUIView, applySyntaxHighlighting
+- When/how highlighting is triggered on file load vs on edit
+
+---
+
+### 3. File Type Icons Missing from Sidebar
+**Status:** Active  
+**Symptoms:**
+- No file type icons showing in file explorer sidebar
+- VS Code style icons for html, js, json, md, swift, etc. not visible
+
+**Expected:**
+- Downloaded VS Code icons should display next to filenames
+- Different icons for different file extensions
+
+**Files to investigate:**
+- FileNavigator / FileExplorerView
+- Assets.xcassets - check if icons were added
+- Icon mapping logic
+
+---
+
+## 🟡 Medium Priority
+
+### 3. "Publishing changes from within view updates" Warnings
+**Status:** Partially addressed  
+**Notes:** Some DispatchQueue.main.async wrapping added, may need more
+
+---
+
+## 🟢 Fixed (This Session)
+
+- ✅ Fatal crash: Range requires lowerBound <= upperBound
+- ✅ Duplicate keyboard shortcuts (UIMenu conflicts)
+- ✅ Invalid SF Symbol 'f.curlybraces'
+
+---
+
+## Notes
+
+Last updated: 2026-02-10

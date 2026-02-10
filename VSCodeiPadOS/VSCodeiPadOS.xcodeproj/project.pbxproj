@@ -21,8 +21,8 @@
 		1016 /* MultiCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2016 /* MultiCursor.swift */; };
 		1017 /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2017 /* Tab.swift */; };
 		1018 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2018 /* Theme.swift */; };
-		1020 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020 /* ThemeManager.swift */; };
 		1019 /* AutocompleteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2019 /* AutocompleteManager.swift */; };
+		1020 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2020 /* ThemeManager.swift */; };
 		1022 /* CodeFoldingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2022 /* CodeFoldingManager.swift */; };
 		1023 /* EditorCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2023 /* EditorCore.swift */; };
 		1025 /* FileSystemNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2025 /* FileSystemNavigator.swift */; };
@@ -51,6 +51,7 @@
 		1068 /* FileIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2068 /* FileIcons.swift */; };
 		1069 /* FileTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2069 /* FileTreeView.swift */; };
 		1070 /* SpotlightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* SpotlightManager.swift */; };
+		1099 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2099 /* Assets.xcassets */; };
 		1101 /* BranchMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2101 /* BranchMenu.swift */; };
 		1102 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2102 /* CommandPalette.swift */; };
 		1103 /* DiffComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2103 /* DiffComponents.swift */; };
@@ -84,10 +85,8 @@
 		1131 /* JSONTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2131 /* JSONTreeView.swift */; };
 		1132 /* EditorSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2132 /* EditorSplitView.swift */; };
 		1133 /* InlayHintsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2133 /* InlayHintsOverlay.swift */; };
-
 		1135 /* HoverInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2135 /* HoverInfoView.swift */; };
 		1136 /* BreadcrumbsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2136 /* BreadcrumbsView.swift */; };
-
 		1138 /* PeekDefinitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2138 /* PeekDefinitionView.swift */; };
 		1139 /* InlayHintsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2139 /* InlayHintsManager.swift */; };
 		1140 /* FileHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2140 /* FileHelpers.swift */; };
@@ -95,7 +94,9 @@
 		1142 /* SSHManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2142 /* SSHManager.swift */; };
 		1143 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143 /* AppDelegate.swift */; };
 		1144 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2144 /* SceneDelegate.swift */; };
-		1099 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2099 /* Assets.xcassets */; };
+		1145 /* NativeGitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2145 /* NativeGitReader.swift */; };
+		1146 /* NativeGitWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2146 /* NativeGitWriter.swift */; };
+		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -143,6 +144,7 @@
 		2068 /* FileIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIcons.swift; sourceTree = "<group>"; };
 		2069 /* FileTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeView.swift; sourceTree = "<group>"; };
 		2070 /* SpotlightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightManager.swift; sourceTree = "<group>"; };
+		2099 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2101 /* BranchMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMenu.swift; sourceTree = "<group>"; };
 		2102 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
 		2103 /* DiffComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffComponents.swift; sourceTree = "<group>"; };
@@ -176,10 +178,8 @@
 		2131 /* JSONTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONTreeView.swift; sourceTree = "<group>"; };
 		2132 /* EditorSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSplitView.swift; sourceTree = "<group>"; };
 		2133 /* InlayHintsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlayHintsOverlay.swift; sourceTree = "<group>"; };
-
 		2135 /* HoverInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverInfoView.swift; sourceTree = "<group>"; };
 		2136 /* BreadcrumbsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreadcrumbsView.swift; sourceTree = "<group>"; };
-
 		2138 /* PeekDefinitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeekDefinitionView.swift; sourceTree = "<group>"; };
 		2139 /* InlayHintsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlayHintsManager.swift; sourceTree = "<group>"; };
 		2140 /* FileHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileHelpers.swift; sourceTree = "<group>"; };
@@ -187,8 +187,11 @@
 		2142 /* SSHManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHManager.swift; sourceTree = "<group>"; };
 		2143 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2144 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		2099 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2145 /* NativeGitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitReader.swift; sourceTree = "<group>"; };
+		2146 /* NativeGitWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitWriter.swift; sourceTree = "<group>"; };
 		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
+		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -197,6 +200,8 @@
 			children = (
 				4001 /* VSCodeiPadOS */,
 				4099 /* Products */,
+				896596632F3B9FAB005B984D /* FeatureFlags.swift */,
+				896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -287,6 +292,7 @@
 				2139 /* InlayHintsManager.swift */,
 				2070 /* SpotlightManager.swift */,
 				2142 /* SSHManager.swift */,
+				4013 /* NativeGit */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -330,9 +336,7 @@
 				2130 /* MultiCursorTextView.swift */,
 				2138 /* PeekDefinitionView.swift */,
 				2127 /* SplitEditorView.swift */,
-
 				2128 /* StickyHeaderView.swift */,
-
 				2035 /* MinimapView.swift */,
 				2036 /* SyntaxHighlightingTextView.swift */,
 			);
@@ -382,6 +386,15 @@
 			children = (
 			);
 			path = StatusBar;
+			sourceTree = "<group>";
+		};
+		4013 /* NativeGit */ = {
+			isa = PBXGroup;
+			children = (
+				2145 /* NativeGitReader.swift */,
+				2146 /* NativeGitWriter.swift */,
+			);
+			path = NativeGit;
 			sourceTree = "<group>";
 		};
 		4099 /* Products */ = {
@@ -435,6 +448,10 @@
 				Base,
 			);
 			mainGroup = 4000;
+			packageReferences = (
+				896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */,
+				896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */,
+			);
 			productRefGroup = 4099 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -499,6 +516,7 @@
 				1110 /* StatusBarView.swift in Sources */,
 				1112 /* TasksView.swift in Sources */,
 				1107 /* QuickOpen.swift in Sources */,
+				896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */,
 				1101 /* BranchMenu.swift in Sources */,
 				1114 /* WorkspaceTrustDialog.swift in Sources */,
 				1127 /* SplitEditorView.swift in Sources */,
@@ -508,10 +526,8 @@
 				1131 /* JSONTreeView.swift in Sources */,
 				1132 /* EditorSplitView.swift in Sources */,
 				1133 /* InlayHintsOverlay.swift in Sources */,
-
 				1135 /* HoverInfoView.swift in Sources */,
 				1136 /* BreadcrumbsView.swift in Sources */,
-
 				1138 /* PeekDefinitionView.swift in Sources */,
 				1035 /* MinimapView.swift in Sources */,
 				1036 /* SyntaxHighlightingTextView.swift in Sources */,
@@ -548,6 +564,8 @@
 				1066 /* TasksManager.swift in Sources */,
 				1067 /* WorkspaceManager.swift in Sources */,
 				1070 /* SpotlightManager.swift in Sources */,
+				1145 /* NativeGitReader.swift in Sources */,
+				1146 /* NativeGitWriter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -564,10 +582,11 @@
 				DEVELOPMENT_TEAM = LAB993Y8WK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VSCodeiPadOS/Info.plist;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "VS Code needs access to your documents to open and edit files";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -593,10 +612,11 @@
 				DEVELOPMENT_TEAM = LAB993Y8WK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VSCodeiPadOS/Info.plist;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "VS Code needs access to your documents to open and edit files";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -663,7 +683,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -718,7 +738,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -750,6 +770,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simonbs/Runestone.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.1;
+			};
+		};
+		896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/simonbs/TreeSitterLanguages.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.10;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = 7000 /* Project object */;
 }

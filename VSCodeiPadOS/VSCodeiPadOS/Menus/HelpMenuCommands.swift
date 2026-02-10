@@ -17,10 +17,11 @@ struct HelpMenuCommands: Commands {
             Divider()
             
             // Show All Commands (Command Palette)
+            // NOTE: Shortcut Cmd+Shift+P is defined in ViewMenuCommands.swift
             Button("Show All Commands") {
                 showCommandPalette?.toggle()
             }
-            .keyboardShortcut("p", modifiers: [.shift, .command])
+            // No shortcut here - it's in ViewMenuCommands as "Command Palette"
             
             Divider()
             

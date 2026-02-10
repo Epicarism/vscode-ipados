@@ -1,0 +1,1 @@
+Temp backup marker before patching SyntaxHighlightingTextView.swift for undo/redo + undo registration around syntax highlighting.

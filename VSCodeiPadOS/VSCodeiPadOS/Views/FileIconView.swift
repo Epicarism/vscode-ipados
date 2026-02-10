@@ -24,7 +24,7 @@ struct FileIconView: View {
     }
     
     private var folderIcon: some View {
-        Image(systemName: isOpen ? "folder.fill" : "folder.fill")
+        Image(systemName: isOpen ? "folder.fill" : "folder")
             .resizable()
             .aspectRatio(contentMode: .fit)
             .foregroundColor(.blue)

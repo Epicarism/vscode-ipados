@@ -1,0 +1,1 @@
+Work log for Cmd+S save tracing and dirty indicator fixes.

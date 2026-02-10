@@ -2,6 +2,10 @@ import SwiftUI
 
 /// View menu commands for VSCode iPadOS
 /// Provides access to UI visibility toggles, navigation, and zoom controls
+///
+/// NOTE: Some shortcuts are defined elsewhere to avoid duplicates:
+///   - Cmd+P (Go to File) → GoMenuCommands.swift
+///   - Cmd+` (Toggle Terminal) → TerminalMenuCommands.swift
 struct ViewMenuCommands: Commands {
     // MARK: - Environment
     @FocusedValue(\.menuEditorCore) private var editorCore: EditorCore?
@@ -15,11 +19,7 @@ struct ViewMenuCommands: Commands {
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
             
-            // MARK: - Quick Open
-            Button("Go to File...") {
-                editorCore?.toggleQuickOpen()
-            }
-            .keyboardShortcut("p", modifiers: .command)
+            // NOTE: "Go to File..." (Cmd+P) is in GoMenuCommands.swift
             
             Divider()
             
@@ -34,10 +34,7 @@ struct ViewMenuCommands: Commands {
             }
             .keyboardShortcut("j", modifiers: .command)
             
-            Button("Toggle Terminal") {
-                editorCore?.togglePanel()
-            }
-            .keyboardShortcut("`", modifiers: .command)
+            // NOTE: "Toggle Terminal" (Cmd+`) is in TerminalMenuCommands.swift
             
             Divider()
             

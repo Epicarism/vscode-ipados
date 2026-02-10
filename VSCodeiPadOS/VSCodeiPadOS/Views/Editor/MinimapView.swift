@@ -9,9 +9,15 @@ struct MinimapView: View {
     // MARK: - External inputs
 
     let content: String
-    @Binding var scrollOffset: CGFloat
-    @Binding var scrollViewHeight: CGFloat
+    /// Current scroll offset (read-only for display). Minimap FOLLOWS the editor, never fights it.
+    let scrollOffset: CGFloat
+    /// Visible viewport height (read-only for display)
+    let scrollViewHeight: CGFloat
     let totalContentHeight: CGFloat
+    
+    /// Callback when user taps/drags on minimap to request scroll. 
+    /// Parent handles actual scrolling - prevents bidirectional binding jitter.
+    var onScrollRequested: ((CGFloat) -> Void)? = nil
 
     /// Optional indicators to render as thin bars on the left side of the minimap.
     /// Note: call sites can ignore this (default empty) without breaking compilation.
@@ -155,9 +161,11 @@ struct MinimapView: View {
 
     // MARK: - Interaction
 
-    /// Sets `scrollOffset` so that the main editor's visible region is centered around the minimap Y position.
+    /// Requests scroll so that the main editor's visible region is centered around the minimap Y position.
+    /// Uses callback to parent - minimap never directly controls editor scroll (prevents jitter).
     private func updateScroll(forMinimapY yPosition: CGFloat, minimapHeight: CGFloat) {
         guard totalContentHeight > 0 else { return }
+        guard let onScrollRequested = onScrollRequested else { return }
 
         let clampedY = max(0, min(yPosition, minimapHeight))
         let ratio = (minimapHeight > 0) ? (clampedY / minimapHeight) : 0
@@ -167,7 +175,10 @@ struct MinimapView: View {
         let desiredOffset = targetCenter - (scrollViewHeight / 2)
 
         let maxOffset = max(0, totalContentHeight - scrollViewHeight)
-        scrollOffset = min(max(desiredOffset, 0), maxOffset)
+        let newOffset = min(max(desiredOffset, 0), maxOffset)
+        
+        // Request scroll via callback - parent controls the actual scroll
+        onScrollRequested(newOffset)
     }
 
     // MARK: - Rendering (Canvas)

@@ -1,0 +1,221 @@
+import SwiftUI
+import SwiftUI
+import Foundation
+
+// MARK: - Models
+
+enum DiffLineType {
+    case context
+    case addition
+    case deletion
+    case header
+}
+
+struct DiffLine: Identifiable {
+    let id = UUID()
+    let type: DiffLineType
+    let content: String
+    let oldLineNumber: Int?
+    let newLineNumber: Int?
+}
+
+struct DiffHunk: Identifiable {
+    let id = UUID()
+    let header: String
+    let lines: [DiffLine]
+}
+
+struct DiffFile: Identifiable {
+    let id = UUID()
+    let fileName: String
+    let status: String
+    let hunks: [DiffHunk]
+}
+
+enum DiffViewMode {
+    case inline
+    case sideBySide
+}
+
+// MARK: - Inline Diff View
+
+struct InlineDiffView: View {
+    let file: DiffFile
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(file.hunks) { hunk in
+                HunkHeaderView(text: hunk.header)
+                
+                ForEach(hunk.lines) { line in
+                    InlineDiffLineView(line: line)
+                }
+            }
+        }
+        .background(Color(UIColor.systemBackground))
+        .border(Color.gray.opacity(0.2))
+    }
+}
+
+struct InlineDiffLineView: View {
+    let line: DiffLine
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Line Numbers
+            HStack(spacing: 0) {
+                Text(line.oldLineNumber.map(String.init) ?? "")
+                    .frame(width: 30, alignment: .trailing)
+                    .padding(.trailing, 4)
+                Text(line.newLineNumber.map(String.init) ?? "")
+                    .frame(width: 30, alignment: .trailing)
+                    .padding(.trailing, 4)
+            }
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            .background(Color(UIColor.secondarySystemBackground))
+            
+            // Content
+            Text(line.content)
+                .font(.system(.caption, design: .monospaced))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 8)
+                .padding(.vertical, 1)
+        }
+        .background(backgroundColor)
+    }
+    
+    var backgroundColor: Color {
+        switch line.type {
+        case .addition: return Color.green.opacity(0.15)
+        case .deletion: return Color.red.opacity(0.15)
+        case .header: return Color.blue.opacity(0.1)
+        case .context: return Color.clear
+        }
+    }
+}
+
+// MARK: - Side By Side Diff View
+
+struct SideBySideDiffView: View {
+    let file: DiffFile
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(file.hunks) { hunk in
+                HunkHeaderView(text: hunk.header)
+                
+                ForEach(hunk.lines) { line in
+                    SideBySideDiffLineView(line: line)
+                }
+            }
+        }
+        .background(Color(UIColor.systemBackground))
+        .border(Color.gray.opacity(0.2))
+    }
+}
+
+struct SideBySideDiffLineView: View {
+    let line: DiffLine
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left Column (Old)
+            HStack(spacing: 0) {
+                if line.type != .addition {
+                    Text(line.oldLineNumber.map(String.init) ?? "")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 30, alignment: .trailing)
+                        .padding(.trailing, 4)
+                        .background(Color(UIColor.secondarySystemBackground))
+                    
+                    Text(line.content)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 4)
+                } else {
+                    Spacer()
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(leftBackgroundColor)
+            
+            Divider()
+            
+            // Right Column (New)
+            HStack(spacing: 0) {
+                if line.type != .deletion {
+                    Text(line.newLineNumber.map(String.init) ?? "")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(width: 30, alignment: .trailing)
+                        .padding(.trailing, 4)
+                        .background(Color(UIColor.secondarySystemBackground))
+                    
+                    Text(line.content)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 4)
+                } else {
+                    Spacer()
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(rightBackgroundColor)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    
+    var leftBackgroundColor: Color {
+        if line.type == .deletion { return Color.red.opacity(0.15) }
+        if line.type == .addition { return Color(UIColor.systemGray6) }
+        return Color.clear
+    }
+    
+    var rightBackgroundColor: Color {
+        if line.type == .addition { return Color.green.opacity(0.15) }
+        if line.type == .deletion { return Color(UIColor.systemGray6) }
+        return Color.clear
+    }
+}
+
+// MARK: - Shared Components
+
+struct HunkHeaderView: View {
+    let text: String
+    
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .padding(.vertical, 4)
+            .padding(.horizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.blue.opacity(0.1))
+            .foregroundColor(.blue)
+    }
+}
+
+// MARK: - Previews
+
+struct DiffComponents_Previews: PreviewProvider {
+    static var previews: some View {
+        let sampleLines = [
+            DiffLine(type: .context, content: "import SwiftUI", oldLineNumber: 1, newLineNumber: 1),
+            DiffLine(type: .deletion, content: "struct OldView: View {", oldLineNumber: 2, newLineNumber: nil),
+            DiffLine(type: .addition, content: "struct NewView: View {", oldLineNumber: nil, newLineNumber: 2),
+            DiffLine(type: .context, content: "    var body: some View {", oldLineNumber: 3, newLineNumber: 3)
+        ]
+        let hunk = DiffHunk(header: "@@ -1,3 +1,3 @@", lines: sampleLines)
+        let file = DiffFile(fileName: "ContentView.swift", status: "modified", hunks: [hunk])
+        
+        VStack(spacing: 20) {
+            Text("Inline")
+            InlineDiffView(file: file)
+            
+            Text("Side by Side")
+            SideBySideDiffView(file: file)
+        }
+        .padding()
+    }
+}

@@ -2,7 +2,8 @@
   "patterns": [
     "cd *",
     "xcodebuild *",
-    "pkill *"
+    "pkill *",
+    "xcrun *"
   ],
   "blocklist": [
     "rm -rf /*",
@@ -31,7 +32,16 @@
     "dd if=*of=/dev/*",
     "> /dev/sda",
     "chmod -R 777 /",
+    "chown -R *:* /",
+    "rm -rf /*",
+    "rm -rf /",
+    "sudo rm -rf *",
+    ":(){:|:&};:",
+    "mkfs.*",
+    "dd if=*of=/dev/*",
+    "> /dev/sda",
+    "chmod -R 777 /",
     "chown -R *:* /"
   ],
-  "updatedAt": 1770581570701
+  "updatedAt": 1770720026899
 }

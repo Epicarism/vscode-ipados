@@ -1,0 +1,280 @@
+//  MultiCursorTextView.swift
+//  VSCodeiPadOS
+//
+//  Custom UITextView subclass that supports multiple cursor display
+//
+
+import UIKit
+import SwiftUI
+
+/// Custom UITextView that displays multiple cursors
+class MultiCursorTextView: UITextView {
+
+    /// Reference to the editor core for multi-cursor state
+    weak var editorCore: EditorCore?
+
+    /// Autocomplete key handling hooks (return true if handled)
+    var onAcceptAutocomplete: (() -> Bool)?
+    var onDismissAutocomplete: (() -> Bool)?
+
+    /// Layer for drawing additional cursors
+    private var cursorLayers: [CALayer] = []
+
+    /// Layer for drawing selection highlights for additional cursors
+    private var selectionLayers: [CALayer] = []
+
+    /// Timer for cursor blink animation
+    private var blinkTimer: Timer?
+    private var cursorVisible = true
+
+    /// Cursor appearance
+    private let cursorWidth: CGFloat = 2
+    private let cursorColor = UIColor.systemBlue
+    private let secondaryCursorColor = UIColor.systemCyan
+    private let selectionColor = UIColor.systemBlue.withAlphaComponent(0.3)
+    private let secondarySelectionColor = UIColor.systemCyan.withAlphaComponent(0.25)
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        setupCursorBlinking()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupCursorBlinking()
+    }
+
+    deinit {
+        blinkTimer?.invalidate()
+    }
+
+    private func setupCursorBlinking() {
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.cursorVisible.toggle()
+            self?.updateCursorVisibility()
+        }
+    }
+
+    private func updateCursorVisibility() {
+        let alpha: Float = cursorVisible ? 1.0 : 0.0
+        cursorLayers.forEach { $0.opacity = alpha }
+    }
+
+    /// Updates the display of all cursors and selections
+    func updateCursorDisplay() {
+        // Remove existing cursor and selection layers
+        cursorLayers.forEach { $0.removeFromSuperlayer() }
+        cursorLayers.removeAll()
+        selectionLayers.forEach { $0.removeFromSuperlayer() }
+        selectionLayers.removeAll()
+
+        guard let editorCore = editorCore else { return }
+        let cursors = editorCore.multiCursorState.cursors
+
+        // Only show additional cursors if we have multiple
+        guard cursors.count > 1 else { return }
+
+        // Draw each cursor (skip the primary one as UITextView handles it)
+        for (index, cursor) in cursors.enumerated() {
+            // Draw selection if present
+            if let selectionRange = cursor.selectionRange {
+                drawSelection(for: selectionRange, isPrimary: cursor.isPrimary, index: index)
+            }
+
+            // Draw cursor line (skip primary cursor as system handles it)
+            if !cursor.isPrimary {
+                drawCursor(at: cursor.position, isPrimary: false, index: index)
+            }
+        }
+    }
+
+    private func drawCursor(at position: Int, isPrimary: Bool, index: Int) {
+        guard let textPosition = self.position(from: beginningOfDocument, offset: position) else { return }
+
+        let caretRect = self.caretRect(for: textPosition)
+
+        let cursorLayer = CALayer()
+        cursorLayer.backgroundColor = (isPrimary ? cursorColor : secondaryCursorColor).cgColor
+        cursorLayer.frame = CGRect(
+            x: caretRect.origin.x,
+            y: caretRect.origin.y,
+            width: cursorWidth,
+            height: caretRect.height
+        )
+        cursorLayer.cornerRadius = 1
+
+        layer.addSublayer(cursorLayer)
+        cursorLayers.append(cursorLayer)
+    }
+
+    private func drawSelection(for range: NSRange, isPrimary: Bool, index: Int) {
+        guard let start = position(from: beginningOfDocument, offset: range.location),
+              let end = position(from: beginningOfDocument, offset: range.location + range.length),
+              let textRange = self.textRange(from: start, to: end) else { return }
+
+        let selectionRects = selectionRects(for: textRange)
+
+        for rect in selectionRects {
+            let selectionLayer = CALayer()
+            selectionLayer.backgroundColor = (isPrimary ? selectionColor : secondarySelectionColor).cgColor
+            selectionLayer.frame = rect.rect
+
+            // Insert behind text
+            if let textLayer = layer.sublayers?.first {
+                layer.insertSublayer(selectionLayer, below: textLayer)
+            } else {
+                layer.addSublayer(selectionLayer)
+            }
+            selectionLayers.append(selectionLayer)
+        }
+    }
+
+    // MARK: - Text Input Handling for Multi-Cursor
+
+    override func insertText(_ text: String) {
+        guard let editorCore = editorCore,
+              editorCore.multiCursorState.isMultiCursor else {
+            super.insertText(text)
+            return
+        }
+
+        // Handle multi-cursor insert
+        var content = self.text ?? ""
+        editorCore.multiCursorState.insertText(text, in: &content)
+
+        // Update text view
+        let cursorPosition = editorCore.multiCursorState.primaryCursor?.position ?? 0
+        self.text = content
+
+        // Position the main cursor
+        if let newPosition = position(from: beginningOfDocument, offset: cursorPosition) {
+            selectedTextRange = textRange(from: newPosition, to: newPosition)
+        }
+
+        // Trigger text change notification
+        delegate?.textViewDidChange?(self)
+
+        updateCursorDisplay()
+    }
+
+    override func deleteBackward() {
+        guard let editorCore = editorCore,
+              editorCore.multiCursorState.isMultiCursor else {
+            super.deleteBackward()
+            return
+        }
+
+        // Handle multi-cursor delete
+        var content = self.text ?? ""
+        editorCore.multiCursorState.deleteBackward(in: &content)
+
+        // Update text view
+        let cursorPosition = editorCore.multiCursorState.primaryCursor?.position ?? 0
+        self.text = content
+
+        // Position the main cursor
+        if let newPosition = position(from: beginningOfDocument, offset: cursorPosition) {
+            selectedTextRange = textRange(from: newPosition, to: newPosition)
+        }
+
+        // Trigger text change notification
+        delegate?.textViewDidChange?(self)
+
+        updateCursorDisplay()
+    }
+
+    // MARK: - Layout Updates
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Refresh cursor positions when layout changes
+        updateCursorDisplay()
+    }
+
+    override var contentOffset: CGPoint {
+        didSet {
+            // Update cursor positions when scrolling
+            updateCursorDisplay()
+        }
+    }
+}
+
+// MARK: - Key Commands for Multi-Cursor + Autocomplete
+
+extension MultiCursorTextView {
+
+    override var keyCommands: [UIKeyCommand]? {
+        var commands = super.keyCommands ?? []
+
+        // Tab: accept autocomplete (if showing), else insert tab
+        commands.append(UIKeyCommand(
+            title: "Accept Suggestion",
+            action: #selector(tabAcceptAutocomplete),
+            input: "\t",
+            modifierFlags: []
+        ))
+
+        // Cmd+D: Add next occurrence
+        commands.append(UIKeyCommand(
+            title: "Add Next Occurrence",
+            action: #selector(addNextOccurrence),
+            input: "d",
+            modifierFlags: .command
+        ))
+
+        // Cmd+Shift+L: Select all occurrences
+        commands.append(UIKeyCommand(
+            title: "Select All Occurrences",
+            action: #selector(selectAllOccurrences),
+            input: "l",
+            modifierFlags: [.command, .shift]
+        ))
+
+        // Cmd+G: Go to Line
+        commands.append(UIKeyCommand(
+            title: "Go to Line",
+            action: #selector(goToLine),
+            input: "g",
+            modifierFlags: .command
+        ))
+
+        // Escape: Dismiss autocomplete if visible, else exit multi-cursor mode
+        commands.append(UIKeyCommand(
+            title: "Escape",
+            action: #selector(escapeKeyPressed),
+            input: UIKeyCommand.inputEscape,
+            modifierFlags: []
+        ))
+
+        return commands
+    }
+
+    @objc private func tabAcceptAutocomplete() {
+        if onAcceptAutocomplete?() == true {
+            return
+        }
+        insertText("\t")
+    }
+
+    @objc private func addNextOccurrence() {
+        editorCore?.addNextOccurrence()
+        updateCursorDisplay()
+    }
+
+    @objc private func selectAllOccurrences() {
+        editorCore?.selectAllOccurrences()
+        updateCursorDisplay()
+    }
+
+    @objc private func goToLine() {
+        editorCore?.showGoToLine = true
+    }
+
+    @objc private func escapeKeyPressed() {
+        if onDismissAutocomplete?() == true {
+            return
+        }
+        editorCore?.escapeMultiCursor()
+        updateCursorDisplay()
+    }
+}

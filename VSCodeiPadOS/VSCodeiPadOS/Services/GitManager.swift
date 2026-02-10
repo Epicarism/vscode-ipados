@@ -152,6 +152,7 @@ class GitManager: ObservableObject {
     @Published var behindCount: Int = 0
     
     private var workingDirectory: URL?
+    private var nativeReader: NativeGitReader?
     
     private init() {}
     
@@ -159,12 +160,17 @@ class GitManager: ObservableObject {
     
     func setWorkingDirectory(_ url: URL?) {
         self.workingDirectory = url
-        self.isRepository = url != nil
         
-        if url != nil {
-            Task {
-                await refresh()
-            }
+        if let url {
+            self.nativeReader = NativeGitReader(repositoryURL: url)
+            self.isRepository = (self.nativeReader != nil)
+        } else {
+            self.nativeReader = nil
+            self.isRepository = false
+        }
+        
+        if isRepository {
+            Task { await refresh() }
         } else {
             clearRepository()
         }
@@ -183,15 +189,89 @@ class GitManager: ObservableObject {
         lastError = nil
     }
     
-    // MARK: - Git Operations (Stubs - require SSH)
+    // MARK: - Git Operations
     
     func refresh() async {
         isLoading = true
         defer { isLoading = false }
+        lastError = nil
         
-        // TODO: Implement via SSH connection
-        // For now, just show placeholder data
-        lastError = "Git operations require SSH connection to a server with git installed"
+        guard let reader = nativeReader else {
+            lastError = "No git repository found"
+            return
+        }
+        
+        // Current branch
+        currentBranch = reader.currentBranch() ?? "HEAD"
+        
+        // Branches
+        let localBranchNames = reader.localBranches()
+        branches = localBranchNames.map { name in
+            GitBranch(name: name, isRemote: false, isCurrent: name == currentBranch)
+        }
+        
+        let remoteBranchPairs = reader.remoteBranches()
+        remoteBranches = remoteBranchPairs.map { (remote, branch) in
+            GitBranch(name: "\(remote)/\(branch)", isRemote: true, isCurrent: false)
+        }
+        
+        // Status
+        let fileStatuses = reader.status()
+        
+        stagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
+            guard let staged = status.staged else { return nil }
+            return GitFileChange(path: status.path, kind: mapStatusType(staged), staged: true)
+        }
+        
+        unstagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
+            guard let working = status.working else { return nil }
+            return GitFileChange(path: status.path, kind: mapStatusType(working), staged: false)
+        }
+        
+        untrackedFiles = fileStatuses.compactMap { status -> GitFileChange? in
+            guard status.working == .untracked else { return nil }
+            return GitFileChange(path: status.path, kind: .untracked, staged: false)
+        }
+        
+        // Recent commits
+        let commits = reader.recentCommits(count: 20)
+        recentCommits = commits.map { commit in
+            GitCommit(id: commit.sha, message: commit.message, author: commit.author, date: commit.authorDate)
+        }
+    }
+    
+    private func mapStatusType(_ status: GitStatusType) -> GitChangeKind {
+        switch status {
+        case .modified: return .modified
+        case .added: return .added
+        case .deleted: return .deleted
+        case .renamed: return .renamed
+        case .copied: return .copied
+        case .untracked: return .untracked
+        case .ignored: return .ignored
+        }
+    }
+    
+    /// Build a real diff for a working-copy file against HEAD (offline, using NativeGitReader).
+    func diffWorkingCopyToHEAD(path: String, kind: GitChangeKind) async -> DiffFile? {
+        guard let repoURL = workingDirectory else { return nil }
+        
+        return await Task.detached {
+            guard let reader = NativeGitReader(repositoryURL: repoURL) else { return nil }
+            
+            let headSha = reader.headSHA()
+            let oldText = reader.fileContentsString(atPath: path, commitSHA: headSha) ?? ""
+            
+            let workingURL = repoURL.appendingPathComponent(path)
+            let newText = (try? String(contentsOf: workingURL, encoding: .utf8)) ?? ""
+            
+            return DiffBuilder.build(
+                fileName: path,
+                status: kind.rawValue,
+                old: oldText,
+                new: newText
+            )
+        }.value
     }
     
     func stage(file: String) async throws {
@@ -207,6 +287,12 @@ class GitManager: ObservableObject {
     }
     
     func commit(message: String) async throws {
+        guard workingDirectory != nil else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Native commit requires NativeGitWriter which isn't in Xcode project yet
+        // TODO: Add NativeGit folder to Xcode project to enable offline commits
         throw GitManagerError.sshNotConnected
     }
     

@@ -258,22 +258,30 @@ struct ContentView: View {
 
     func updateActiveTabContent(_ content: String) {
         guard let index = activeTabIndex else { return }
+
+        // Avoid marking a tab dirty when we're just syncing state (e.g., initial onAppear assignment).
+        guard tabs[index].content != content else { return }
+
         tabs[index].content = content
-        if tabs[index].url != nil {
-            tabs[index].isUnsaved = true
-        }
+
+        // Mark dirty for both saved and unsaved-new files.
+        tabs[index].isUnsaved = true
     }
 
     func saveActiveTab() {
         guard let index = activeTabIndex,
               let url = tabs[index].url else { return }
 
-        // Ensure we have access when writing, even if this URL wasn't opened via openFile().
-        let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
-        defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-
         do {
-            try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+            if let fileNavigator {
+                try fileNavigator.writeFile(at: url, content: tabs[index].content)
+            } else {
+                // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
+                let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
+                defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+                try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+            }
+
             tabs[index].isUnsaved = false
         } catch {
             print("Error saving file: \(error)")
@@ -284,12 +292,16 @@ struct ContentView: View {
         for index in tabs.indices {
             guard let url = tabs[index].url, tabs[index].isUnsaved else { continue }
 
-            // Ensure we have access when writing, even if this URL wasn't opened via openFile().
-            let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-
             do {
-                try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+                if let fileNavigator {
+                    try fileNavigator.writeFile(at: url, content: tabs[index].content)
+                } else {
+                    // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
+                    let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
+                    defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+                    try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+                }
+
                 tabs[index].isUnsaved = false
             } catch {
                 print("Error saving file: \(error)")
