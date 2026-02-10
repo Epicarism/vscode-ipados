@@ -588,12 +588,25 @@ class RunestoneEditorTheme: Runestone.Theme {
         // See: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#highlights
         let highlightName = rawHighlightName.lowercased()
         
+        // Debug: Log highlight names to understand TreeSitter output
+        #if DEBUG
+        // Uncomment next line to debug highlighting:
+        print("🎨 Highlight: \(rawHighlightName)")
+        #endif
+        
         // Keywords
         if highlightName.contains("keyword") {
             return _keywordColor
         }
         
-        // Strings
+        // JSON/Object keys (property names) - use variable color (light blue in Dark+)
+        if highlightName.contains("property") || 
+           highlightName.contains("key") ||
+           highlightName == "string.special" {
+            return _variableColor
+        }
+        
+        // Strings (but not keys)
         if highlightName.contains("string") {
             return _stringColor
         }
