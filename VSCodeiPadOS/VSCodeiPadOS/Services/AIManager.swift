@@ -45,9 +45,12 @@ enum AIProvider: String, CaseIterable, Identifiable {
             ]
         case .kimi:
             return [
-                AIModel(id: "moonshot-v1-8k", name: "Moonshot V1 8K", provider: .kimi),
+                AIModel(id: "kimi-k2.5", name: "Kimi K2.5 (Most Intelligent)", provider: .kimi),
+                AIModel(id: "kimi-k2", name: "Kimi K2 (Code & Agents)", provider: .kimi),
+                AIModel(id: "kimi-k2-thinking", name: "Kimi K2 Thinking (Deep Reasoning)", provider: .kimi),
+                AIModel(id: "moonshot-v1-128k", name: "Moonshot V1 128K", provider: .kimi),
                 AIModel(id: "moonshot-v1-32k", name: "Moonshot V1 32K", provider: .kimi),
-                AIModel(id: "moonshot-v1-128k", name: "Moonshot V1 128K", provider: .kimi)
+                AIModel(id: "moonshot-v1-8k", name: "Moonshot V1 8K", provider: .kimi)
             ]
         case .glm:
             return [
