@@ -138,8 +138,18 @@ class EditorCore: ObservableObject {
     }
 
     init() {
-        // Create a default welcome tab
-        let defaultTab = Tab(
+        // Create example tabs for all supported languages
+        let exampleTabs = Self.createExampleTabs()
+        tabs.append(contentsOf: exampleTabs)
+        activeTabId = exampleTabs.first?.id ?? UUID()
+    }
+    
+    /// Creates example tabs demonstrating syntax highlighting for all supported languages
+    private static func createExampleTabs() -> [Tab] {
+        var examples: [Tab] = []
+        
+        // Swift example
+        examples.append(Tab(
             fileName: "Welcome.swift",
             content: """
 // Welcome to VS Code for iPadOS! 🎉
@@ -161,17 +171,562 @@ class EditorCore: ObservableObject {
 import SwiftUI
 
 struct ContentView: View {
+    @State private var counter = 0
+    
     var body: some View {
-        Text("Hello, World!")
-            .font(.largeTitle)
-            .foregroundColor(.blue)
+        VStack(spacing: 20) {
+            Text("Hello, World!")
+                .font(.largeTitle)
+                .foregroundColor(.blue)
+            
+            Button("Count: \\(counter)") {
+                counter += 1
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
     }
+}
+
+// MARK: - Preview
+#Preview {
+    ContentView()
 }
 """,
             language: "swift"
-        )
-        tabs.append(defaultTab)
-        activeTabId = defaultTab.id
+        ))
+        
+        // JavaScript example
+        examples.append(Tab(
+            fileName: "example.js",
+            content: """
+// JavaScript Example - ES6+ Features
+
+import React, { useState, useEffect } from 'react';
+
+const API_URL = 'https://api.example.com';
+
+// Async function with error handling
+async function fetchData(endpoint) {
+    try {
+        const response = await fetch(`${API_URL}/${endpoint}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Fetch failed:', error);
+        return null;
+    }
+}
+
+// React Component
+function UserProfile({ userId }) {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    
+    useEffect(() => {
+        fetchData(`users/${userId}`)
+            .then(data => {
+                setUser(data);
+                setLoading(false);
+            });
+    }, [userId]);
+    
+    if (loading) return <div>Loading...</div>;
+    
+    return (
+        <div className="profile">
+            <h1>{user?.name ?? 'Unknown'}</h1>
+            <p>Email: {user?.email}</p>
+        </div>
+    );
+}
+
+// Array methods & destructuring
+const numbers = [1, 2, 3, 4, 5];
+const doubled = numbers.map(n => n * 2);
+const [first, second, ...rest] = doubled;
+
+export { fetchData, UserProfile };
+""",
+            language: "javascript"
+        ))
+        
+        // Python example
+        examples.append(Tab(
+            fileName: "example.py",
+            content: """
+#!/usr/bin/env python3
+\"\"\"
+Python Example - Modern Python Features
+Demonstrates type hints, dataclasses, async, and more.
+\"\"\"
+
+import asyncio
+from dataclasses import dataclass, field
+from typing import Optional, List
+from enum import Enum
+
+class Status(Enum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+
+@dataclass
+class Task:
+    \"\"\"Represents a task with metadata.\"\"\"
+    id: int
+    title: str
+    status: Status = Status.PENDING
+    tags: List[str] = field(default_factory=list)
+    description: Optional[str] = None
+    
+    def mark_complete(self) -> None:
+        self.status = Status.COMPLETED
+        print(f"Task '{self.title}' completed!")
+
+class TaskManager:
+    def __init__(self):
+        self._tasks: dict[int, Task] = {}
+        self._next_id = 1
+    
+    def add_task(self, title: str, **kwargs) -> Task:
+        task = Task(id=self._next_id, title=title, **kwargs)
+        self._tasks[task.id] = task
+        self._next_id += 1
+        return task
+    
+    async def process_tasks(self) -> None:
+        for task in self._tasks.values():
+            await asyncio.sleep(0.1)  # Simulate work
+            task.mark_complete()
+
+# Main execution
+async def main():
+    manager = TaskManager()
+    manager.add_task("Learn Python", tags=["programming", "learning"])
+    manager.add_task("Build app", description="Create VSCode for iPad")
+    
+    await manager.process_tasks()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+""",
+            language: "python"
+        ))
+        
+        // JSON example
+        examples.append(Tab(
+            fileName: "package.json",
+            content: """
+{
+  "name": "vscode-ipados-example",
+  "version": "1.0.0",
+  "description": "Example package.json for VS Code iPadOS",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "build": "webpack --mode production",
+    "test": "jest --coverage",
+    "lint": "eslint src/**/*.js"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "webpack": "^5.88.0",
+    "jest": "^29.5.0",
+    "eslint": "^8.44.0",
+    "typescript": "^5.1.6"
+  },
+  "keywords": ["vscode", "ipad", "editor"],
+  "author": "VS Code iPadOS Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/example/vscode-ipados"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+""",
+            language: "json"
+        ))
+        
+        // HTML example
+        examples.append(Tab(
+            fileName: "index.html",
+            content: """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VS Code for iPadOS</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <header class="navbar">
+        <nav>
+            <a href="#" class="logo">VS Code iPadOS</a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#download">Download</a></li>
+                <li><a href="#docs">Documentation</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <section id="hero" class="hero-section">
+            <h1>Code Anywhere</h1>
+            <p>Professional code editor for your iPad</p>
+            <button id="cta-button" class="btn primary">
+                Get Started
+            </button>
+        </section>
+        
+        <section id="features">
+            <h2>Features</h2>
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <h3>Syntax Highlighting</h3>
+                    <p>Support for 8+ languages with TreeSitter</p>
+                </article>
+                <!-- More features -->
+            </div>
+        </section>
+    </main>
+    
+    <footer>
+        <p>&copy; 2024 VS Code iPadOS. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+""",
+            language: "html"
+        ))
+        
+        // CSS example
+        examples.append(Tab(
+            fileName: "styles.css",
+            content: """
+/* VS Code iPadOS - Stylesheet */
+/* Modern CSS with variables, grid, and animations */
+
+:root {
+    --primary-color: #007acc;
+    --secondary-color: #3c3c3c;
+    --background-dark: #1e1e1e;
+    --text-light: #d4d4d4;
+    --accent-green: #4ec9b0;
+    --font-mono: 'SF Mono', Menlo, monospace;
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: var(--background-dark);
+    color: var(--text-light);
+    line-height: 1.6;
+}
+
+.navbar {
+    position: sticky;
+    top: 0;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 1rem 2rem;
+    z-index: 1000;
+}
+
+.hero-section {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    background: linear-gradient(135deg, var(--background-dark), #2d2d30);
+}
+
+.btn.primary {
+    background: var(--primary-color);
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    padding: 2rem;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.feature-card {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .hero-section { padding: 2rem; }
+}
+""",
+            language: "css"
+        ))
+        
+        // Go example
+        examples.append(Tab(
+            fileName: "main.go",
+            content: """
+// Go Example - HTTP Server with Goroutines
+package main
+
+import (
+\t"context"
+\t"encoding/json"
+\t"fmt"
+\t"log"
+\t"net/http"
+\t"sync"
+\t"time"
+)
+
+// User represents a user in the system
+type User struct {
+\tID        int       `json:"id"`
+\tName      string    `json:"name"`
+\tEmail     string    `json:"email"`
+\tCreatedAt time.Time `json:"created_at"`
+}
+
+// UserStore handles user data with thread-safe access
+type UserStore struct {
+\tmu    sync.RWMutex
+\tusers map[int]*User
+\tnextID int
+}
+
+func NewUserStore() *UserStore {
+\treturn &UserStore{
+\t\tusers:  make(map[int]*User),
+\t\tnextID: 1,
+\t}
+}
+
+func (s *UserStore) Create(name, email string) *User {
+\ts.mu.Lock()
+\tdefer s.mu.Unlock()
+\t
+\tuser := &User{
+\t\tID:        s.nextID,
+\t\tName:      name,
+\t\tEmail:     email,
+\t\tCreatedAt: time.Now(),
+\t}
+\ts.users[user.ID] = user
+\ts.nextID++
+\treturn user
+}
+
+func (s *UserStore) Get(id int) (*User, bool) {
+\ts.mu.RLock()
+\tdefer s.mu.RUnlock()
+\tuser, ok := s.users[id]
+\treturn user, ok
+}
+
+func handleUsers(store *UserStore) http.HandlerFunc {
+\treturn func(w http.ResponseWriter, r *http.Request) {
+\t\tswitch r.Method {
+\t\tcase http.MethodGet:
+\t\t\t// Return all users
+\t\t\tw.Header().Set("Content-Type", "application/json")
+\t\t\tjson.NewEncoder(w).Encode(store.users)
+\t\tcase http.MethodPost:
+\t\t\t// Create new user
+\t\t\tvar req struct {
+\t\t\t\tName  string `json:"name"`
+\t\t\t\tEmail string `json:"email"`
+\t\t\t}
+\t\t\tif err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+\t\t\t\thttp.Error(w, err.Error(), http.StatusBadRequest)
+\t\t\t\treturn
+\t\t\t}
+\t\t\tuser := store.Create(req.Name, req.Email)
+\t\t\tw.WriteHeader(http.StatusCreated)
+\t\t\tjson.NewEncoder(w).Encode(user)
+\t\tdefault:
+\t\t\thttp.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+\t\t}
+\t}
+}
+
+func main() {
+\tstore := NewUserStore()
+\t
+\t// Seed some data
+\tstore.Create("Alice", "alice@example.com")
+\tstore.Create("Bob", "bob@example.com")
+\t
+\tmux := http.NewServeMux()
+\tmux.HandleFunc("/api/users", handleUsers(store))
+\t
+\tserver := &http.Server{
+\t\tAddr:         ":8080",
+\t\tHandler:      mux,
+\t\tReadTimeout:  10 * time.Second,
+\t\tWriteTimeout: 10 * time.Second,
+\t}
+\t
+\tfmt.Println("Server starting on :8080")
+\tlog.Fatal(server.ListenAndServe())
+}
+""",
+            language: "go"
+        ))
+        
+        // Rust example
+        examples.append(Tab(
+            fileName: "main.rs",
+            content: """
+//! Rust Example - Async Web Server
+//! Demonstrates ownership, traits, async/await, and error handling
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Represents a task in our system
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Task {
+    pub id: u64,
+    pub title: String,
+    pub completed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// Task store with thread-safe access
+pub struct TaskStore {
+    tasks: RwLock<HashMap<u64, Task>>,
+    next_id: RwLock<u64>,
+}
+
+impl TaskStore {
+    pub fn new() -> Self {
+        Self {
+            tasks: RwLock::new(HashMap::new()),
+            next_id: RwLock::new(1),
+        }
+    }
+    
+    pub async fn create(&self, title: String, description: Option<String>) -> Task {
+        let mut next_id = self.next_id.write().await;
+        let id = *next_id;
+        *next_id += 1;
+        
+        let task = Task {
+            id,
+            title,
+            completed: false,
+            description,
+        };
+        
+        self.tasks.write().await.insert(id, task.clone());
+        task
+    }
+    
+    pub async fn get(&self, id: u64) -> Option<Task> {
+        self.tasks.read().await.get(&id).cloned()
+    }
+    
+    pub async fn list(&self) -> Vec<Task> {
+        self.tasks.read().await.values().cloned().collect()
+    }
+    
+    pub async fn complete(&self, id: u64) -> Result<Task, &'static str> {
+        let mut tasks = self.tasks.write().await;
+        match tasks.get_mut(&id) {
+            Some(task) => {
+                task.completed = true;
+                Ok(task.clone())
+            }
+            None => Err("Task not found"),
+        }
+    }
+}
+
+/// Error type for our application
+#[derive(Debug, thiserror::Error)]
+pub enum AppError {
+    #[error("Task not found: {0}")]
+    NotFound(u64),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let store = Arc::new(TaskStore::new());
+    
+    // Create some tasks
+    let task1 = store.create("Learn Rust".into(), Some("Study ownership".into())).await;
+    let task2 = store.create("Build app".into(), None).await;
+    
+    println!("Created tasks:");
+    for task in store.list().await {
+        println!("  - {} ({})", task.title, if task.completed { "✓" } else { "○" });
+    }
+    
+    // Complete a task
+    store.complete(task1.id).await?;
+    println!("\\nCompleted task: {}", task1.title);
+    
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_create_task() {
+        let store = TaskStore::new();
+        let task = store.create("Test".into(), None).await;
+        assert_eq!(task.title, "Test");
+        assert!(!task.completed);
+    }
+}
+""",
+            language: "rust"
+        ))
+        
+        return examples
     }
 
     // MARK: - Tab Management
