@@ -1,0 +1,3596 @@
+# Agent: opus-trace-token-color
+**Status:** done
+**Tokens:** 9,958
+**Cost:** $0.0000
+**Time:** 2026-02-11T01:03:35.852Z
+
+## Task
+CRITICAL DEBUG: Trace the EXACT path from TreeSitterSyntaxHighlighter to attributed string. Read TreeSitterSyntaxHighlighter.swift fully. Find the tokens() method and setAttributes() method. Trace: 1) How token.textColor is populated 2) How addAttributes applies foregroundColor 3) Whether there's any default color that could override. Look for ANY place where orange/CE9178 could be hardcoded.
+
+## Response
+I'll trace the exact path from TreeSitterSyntaxHighlighter to attributed string. Let me start by reading the full file.
+
+>>>TOOL read_file
+{"path": "AuroraEditor/Features/Editor/TreeSitter/TreeSitterSyntaxHighlighter.swift"}
+>>>END
+
+>>>TOOL search
+{"query": "TreeSitterSyntaxHighlighter", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "TreeSitterSyntaxHighlighter"
+
+
+>>>TOOL search
+{"query": "SyntaxHighlighter", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "SyntaxHighlighter"
+
+
+>>>TOOL search
+{"query": "TreeSitter", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "TreeSitter"
+
+
+
+
+>>>TOOL list_dir
+{"path": "."}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ./
+📁 .claude/
+📁 .claudefluff/
+📁 .garbage/
+📁 .patch-backups/
+📁 .vscode/
+📁 Docs/
+📁 Extensions/
+📁 logs/
+📁 Models/
+📁 Services/
+📁 test-results/
+📁 Tests/
+📁 Views/
+📁 VSCodeiPadOS/
+📁 VSCodeiPadOSUITests/
+   .gitignore
+   build.log
+   FULL_FEATURE_TEST_PLAN.md
+   idb_testing_report.md
+   LICENSE
+   README.md
+   StressTest.swift
+   test_editor_typing.sh
+   update.md
+   VSCodeiPadOS_idb_test_plan.sh
+   VSCodeiPadOS_Ui_Element_Coordinates.md
+(cached)
+
+
+>>>TOOL list_dir
+{"path": "Services"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 Services/
+📁 OnDevice/
+
+
+>>>TOOL list_dir
+{"path": "Services"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 Services/
+📁 OnDevice/
+(cached)
+
+
+>>>TOOL list_dir
+{"path": "Services/"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 Services/
+📁 OnDevice/
+(cached)
+
+
+>>>TOOL list_dir
+{"path": "OnDevice"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+Error: Directory "OnDevice" not found
+
+
+>>>TOOL search
+{"query": "textColor", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "textColor"
+
+
+>>>TOOL search
+{"query": "foregroundColor", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 2 matches:
+StressTest.swift:332: .foregroundColor(.blue)
+StressTest.swift:406: .foregroundColor(.white)
+
+
+>>>TOOL search
+{"query": "TreeSitter", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "TreeSitter"
+
+
+>>>TOOL search
+{"query": "attributed", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "attributed"
+
+
+>>>TOOL search
+{"query": "syntax", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "syntax"
+
+
+>>>TOOL search
+{"query": "highlight", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "highlight"
+
+
+>>>TOOL search
+{"query": "class", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 1 matches:
+StressTest.swift:483: class StressTestManager {
+
+
+>>>TOOL read_file
+{"path": "StressTest.swift", "start_line": 1, "end_line": 100}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: StressTest.swift (lines 2-100 of 523)
+────────────────────────────────────────
+2: // Generated with 60+ functions to stress test scrolling and typing
+3: 
+4: import Foundation
+5: import SwiftUI
+6: 
+7: // MARK: - Utility Functions (1-10)
+8: 
+9: func processData1(input: String) -> String {
+10:     let trimmed = input.trimmingCharacters(in: .whitespaces)
+11:     let uppercased = trimmed.uppercased()
+12:     let result = "Processed: \(uppercased)"
+13:     print("Function 1 completed")
+14:     return result
+15: }
+16: 
+17: func processData2(input: String) -> String {
+18:     let trimmed = input.trimmingCharacters(in: .whitespaces)
+19:     let lowercased = trimmed.lowercased()
+20:     let result = "Processed: \(lowercased)"
+21:     print("Function 2 completed")
+22:     return result
+23: }
+24: 
+25: func processData3(input: [Int]) -> Int {
+26:     let sum = input.reduce(0, +)
+27:     let average = input.isEmpty ? 0 : sum / input.count
+28:     print("Function 3: Sum=\(sum), Avg=\(average)")
+29:     return sum
+30: }
+31: 
+32: func processData4(input: [Int]) -> [Int] {
+33:     let sorted = input.sorted()
+34:     let filtered = sorted.filter { $0 > 0 }
+35:     print("Function 4: Filtered \(filtered.count) items")
+36:     return filtered
+37: }
+38: 
+39: func processData5(input: Double) -> Double {
+40:     let squared = input * input
+41:     let cubed = squared * input
+42:     let result = sqrt(squared + cubed)
+43:     print("Function 5: Result=\(result)")
+44:     return result
+45: }
+46: 
+47: func processData6(input: String) -> [String] {
+48:     let words = input.components(separatedBy: " ")
+49:     let filtered = words.filter { !$0.isEmpty }
+50:     print("Function 6: Found \(filtered.count) words")
+51:     return filtered
+52: }
+53: 
+54: func processData7(input: [String]) -> String {
+55:     let joined = input.joined(separator: ", ")
+56:     let result = "[\(joined)]"
+57:     print("Function 7: Joined string")
+58:     return result
+59: }
+60: 
+61: func processData8(input: Int) -> Bool {
+62:     let isEven = input % 2 == 0
+63:     let isPositive = input > 0
+64:     let result = isEven && isPositive
+65:     print("Function 8: isEven=\(isEven), isPositive=\(isPositive)")
+66:     return result
+67: }
+68: 
+69: func processData9(input: [Double]) -> Double {
+70:     guard !input.isEmpty else { return 0 }
+71:     let sum = input.reduce(0, +)
+72:     let mean = sum / Double(input.count)
+73:     print("Function 9: Mean=\(mean)")
+74:     return mean
+75: }
+76: 
+77: func processData10(input: String) -> Int {
+78:     let count = input.count
+79:     let vowels = input.filter { "aeiouAEIOU".contains($0) }.count
+80:     print("Function 10: Length=\(count), Vowels=\(vowels)")
+81:     return count
+82: }
+83: 
+84: // MARK: - Data Transformation Functions (11-20)
+85: 
+86: func transformData11(input: [Int]) -> [Int] {
+87:     return input.map { $0 * 2 }
+88: }
+89: 
+90: func transformData12(input: [Int]) -> [Int] {
+91:     return input.map { $0 + 10 }
+92: }
+93: 
+94: func transformData13(input: [String]) -> [String] {
+95:     return input.map { $0.uppercased() }
+96: }
+97: 
+98: func transformData14(input: [String]) -> [Int] {
+99:     return input.map { $0.count }
+100: }
+
+
+>>>TOOL search
+{"query": "TreeSitter", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "TreeSitter"
+
+
+>>>TOOL search
+{"query": "color", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 2 matches:
+StressTest.swift:467: func helper79(color: Color) -> some View {
+StressTest.swift:469: .fill(color)
+
+
+>>>TOOL search
+{"query": "orange", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "orange"
+
+
+>>>TOOL search
+{"query": "CE9178", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "CE9178"
+
+
+>>>TOOL search
+{"query": "NSAttributedString", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "NSAttributedString"
+
+
+>>>TOOL list_dir
+{"path": "./Services"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ./Services/
+📁 OnDevice/
+
+
+>>>TOOL list_dir
+{"path": "Services/"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 Services/
+📁 OnDevice/
+
+
+>>>TOOL search
+{"query": "import", "glob": "*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 2 matches:
+StressTest.swift:4: import Foundation
+StressTest.swift:5: import SwiftUI
+
+
+>>>TOOL search
+{"query": "token", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "token"
+
+
+>>>TOOL search
+{"query": "Editor", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 12 matches:
+update.md:46: ## PHASE 1: Editor Perfect ✅ COMPLETE
+update.md:198: | **Editor** | 25 | 22 | 2 | 0 | 1 |
+update.md:258: - Editor background: `#1e1e1e`
+update.md:294: | Phase 1: Editor | 2 | 25 | opus, gpt52, gemini3 |
+FULL_FEATURE_TEST_PLAN.md:65: ### Editor Features:
+FULL_FEATURE_TEST_PLAN.md:109: ## 6. SPLIT EDITOR (SplitEditorView.swift - 755 lines)
+FULL_FEATURE_TEST_PLAN.md:543: 6. **Split Editor** - Need to drag and resize
+README.md:29: │  ├── EditorView (syntax highlighting, cursor, selection)    │
+test_editor_typing.sh:3: # VSCodeiPadOS Editor Typing Test
+test_editor_typing.sh:9: echo "VSCodeiPadOS Editor Typing Test"
+test_editor_typing.sh:39: # Editor area is roughly center-right (sidebar takes ~280px on left)
+VSCodeiPadOS_Ui_Element_Coordinates.md:44: ### 4. Editor Area
+
+
+>>>TOOL search
+{"query": "swift", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 30 matches:
+StressTest.swift:1: // StressTest.swift - Large file for editor performance testing
+StressTest.swift:520: // End of StressTest.swift
+update.md:69: - `NativeGitReader.swift` (759 lines) - Parses .git directory, commits, status, branches
+update.md:70: - `NativeGitWriter.swift` - For commits (needs to be added to project)
+update.md:71: - `SSHGitClient.swift` (452 lines) - Full SSH-based git operations
+update.md:72: - `GitView.swift` (505 lines) - Complete UI for staging, commits, branches
+update.md:94: - Implement `SSHManager.swift` (currently complete stub)
+update.md:100: - `Services/SSHManager.swift` (233 lines - all stubs)
+update.md:101: - `Views/Panels/TerminalView.swift` (981 lines - needs SSH wiring)
+update.md:102: - `Services/GitManager.swift` (switch from stubs to real)
+update.md:132: - `DebugView.swift` (233 lines) - MOCK DATA ONLY
+update.md:133: - `DebugManager.swift` - UI-only demo, no real breakpoints
+update.md:184: - `TabBarView.swift` (249 lines) - Tab management, drag-reorder, pinning
+update.md:185: - `StatusBarView.swift` (136 lines) - Branch, cursor position, encoding, language
+update.md:186: - `FileTreeView.swift` (251 lines) - File explorer with icons
+update.md:187: - `OutlineView.swift` (867 lines) - Symbol tree with filtering
+update.md:188: - `OutputView.swift` (393 lines) - Multi-channel output with ANSI
+update.md:189: - `SettingsView.swift` (415 lines) - Theme picker, font settings, editor options
+update.md:190: - `MinimapView.swift` (472 lines) - VS Code-style minimap with diff indicators
+FULL_FEATURE_TEST_PLAN.md:16: ## 1. AI ASSISTANT (AIManager.swift - 756 lines)
+FULL_FEATURE_TEST_PLAN.md:47: ## 2. SYNTAX HIGHLIGHTING (SyntaxHighlightingTextView.swift - 1503 lines)
+FULL_FEATURE_TEST_PLAN.md:78: ## 3. MULTI-CURSOR EDITING (MultiCursorTextView.swift - 281 lines)
+FULL_FEATURE_TEST_PLAN.md:89: ## 4. CODE FOLDING (CodeFoldingManager.swift - 131 lines)
+FULL_FEATURE_TEST_PLAN.md:98: ## 5. MINIMAP (MinimapView.swift - 465 lines)
+FULL_FEATURE_TEST_PLAN.md:109: ## 6. SPLIT EDITOR (SplitEditorView.swift - 755 lines)
+FULL_FEATURE_TEST_PLAN.md:121: ## 7. GIT INTEGRATION (GitManager.swift - 235 lines, GitService.swift - 152 lines)
+FULL_FEATURE_TEST_PLAN.md:140: ### Git Gutter (GitGutterView.swift - 622 lines):
+FULL_FEATURE_TEST_PLAN.md:146: ### Diff View (DiffComponents.swift - 220 lines):
+FULL_FEATURE_TEST_PLAN.md:153: ### Merge Conflicts (MergeConflictView.swift - 110 lines):
+FULL_FEATURE_TEST_PLAN.md:161: ## 8. FILE EXPLORER (FileTreeView.swift - 122 lines, FileSystemNavigator.swift - 293 lines)
+
+
+>>>TOOL search
+{"query": "SyntaxHighlightingTextView", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 1 matches:
+FULL_FEATURE_TEST_PLAN.md:47: ## 2. SYNTAX HIGHLIGHTING (SyntaxHighlightingTextView.swift - 1503 lines)
+
+
+>>>TOOL read_file
+{"path": "FULL_FEATURE_TEST_PLAN.md", "start_line": 45, "end_line": 80}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: FULL_FEATURE_TEST_PLAN.md (lines 46-80 of 548)
+────────────────────────────────────────
+46: 
+47: ## 2. SYNTAX HIGHLIGHTING (SyntaxHighlightingTextView.swift - 1503 lines)
+48: ### Languages to Test:
+49: - [ ] Swift - keywords (func, let, var, class, struct, enum, protocol)
+50: - [ ] Swift - strings (colored correctly)
+51: - [ ] Swift - comments (// and /* */)
+52: - [ ] Swift - numbers
+53: - [ ] Swift - types
+54: - [ ] JavaScript - keywords (function, const, let, var)
+55: - [ ] JavaScript - strings
+56: - [ ] JavaScript - comments
+57: - [ ] TypeScript - types and interfaces
+58: - [ ] Python - keywords (def, class, import)
+59: - [ ] Python - strings (single, double, triple quotes)
+60: - [ ] HTML - tags, attributes
+61: - [ ] CSS - selectors, properties
+62: - [ ] JSON - keys, values, strings, numbers
+63: - [ ] Markdown - headers, bold, italic, code
+64: 
+65: ### Editor Features:
+66: - [ ] Line numbers display
+67: - [ ] Current line highlight
+68: - [ ] Cursor blinking
+69: - [ ] Text selection
+70: - [ ] Copy/paste
+71: - [ ] Undo/redo
+72: - [ ] Scroll position tracking
+73: - [ ] Font family setting
+74: - [ ] Font size setting
+75: 
+76: ---
+77: 
+78: ## 3. MULTI-CURSOR EDITING (MultiCursorTextView.swift - 281 lines)
+79: - [ ] Add cursor with Option+Click
+80: - [ ] Add next occurrence (Cmd+D)
+
+
+>>>TOOL search
+{"query": "foreground", "glob": "*"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+Found 2 matches:
+StressTest.swift:332: .foregroundColor(.blue)
+StressTest.swift:406: .foregroundColor(.white)
+
+
+>>>TOOL list_dir
+{"path": ".."}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../
+📁 .claudefluff/
+📁 aristotle-syllogisms/
+📁 c/
+📁 forks/
+📁 LSAT/
+📁 OUTLIER-AGENT/
+📁 outlier-vscode/
+📁 OutlierVoice-clean/
+📁 studybot/
+📁 voice-app/
+📁 vscode-ipados/
+   hello.c
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/
+📁 .claude/
+📁 .claudefluff/
+📁 .garbage/
+📁 .patch-backups/
+📁 .vscode/
+📁 Docs/
+📁 Extensions/
+📁 logs/
+📁 Models/
+📁 Services/
+📁 test-results/
+📁 Tests/
+📁 Views/
+📁 VSCodeiPadOS/
+📁 VSCodeiPadOSUITests/
+   .gitignore
+   build.log
+   FULL_FEATURE_TEST_PLAN.md
+   idb_testing_report.md
+   LICENSE
+   README.md
+   StressTest.swift
+   test_editor_typing.sh
+   update.md
+   VSCodeiPadOS_idb_test_plan.sh
+   VSCodeiPadOS_Ui_Element_Coordinates.md
+
+
+>>>TOOL search
+{"query": "TreeSitter", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "TreeSitter"
+
+
+>>>TOOL search
+{"query": "SyntaxHighlight", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "SyntaxHighlight"
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/Views"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/Views/
+📁 Editor/
+📁 Panels/
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/Views/Editor"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/Views/Editor/
+   (empty directory)
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/
+📁 .garbage/
+📁 Docs/
+📁 Views/
+📁 VSCodeiPadOS/
+📁 VSCodeiPadOS.xcodeproj/
+📁 VSCodeiPadOSTests/
+   bugs.md
+   build_output.log
+   build_output2.log
+   build.log
+   FeatureFlags.swift
+   Info.plist
+   Package.swift
+   TreeSitterLanguages.swift
+   TypingLagTest.swift
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/TreeSitterLanguages.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/TreeSitterLanguages.swift (lines 1-342 of 342)
+────────────────────────────────────────
+1: //
+2: //  TreeSitterLanguages.swift
+3: //  VSCodeiPadOS
+4: //
+5: //  Created on 2025-01-31.
+6: //
+7: 
+8: import Foundation
+9: 
+10: // TODO: Uncomment these imports as TreeSitter Swift packages become available
+11: // import TreeSitterSwift
+12: // import TreeSitterJavaScript
+13: // import TreeSitterTypeScript
+14: // import TreeSitterPython
+15: // import TreeSitterJSON
+16: // import TreeSitterHTML
+17: // import TreeSitterCSS
+18: // import TreeSitterMarkdown
+19: // import TreeSitterGo
+20: // import TreeSitterRust
+21: // import TreeSitterRuby
+22: // import TreeSitterJava
+23: // import TreeSitterC
+24: // import TreeSitterCPP
+25: // import TreeSitterBash
+26: // import TreeSitterYAML
+27: // import TreeSitterSQL
+28: //
+29: // TODO: Additional languages from the current implementation:
+30: // import TreeSitterKotlin        // For kt, kts files
+31: // import TreeSitterObjectiveC     // For m, mm files
+32: // import TreeSitterSCSS           // For scss, sass files
+33: // import TreeSitterLess           // For less files
+34: // import TreeSitterXML            // For xml, plist, svg files
+35: // import TreeSitterGraphQL        // For graphql, gql files
+36: // import TreeSitterPHP            // For php files
+37: 
+38: /// Provides language modes for syntax highlighting based on file extensions.
+39: /// This struct maps file extensions and special filenames to their appropriate
+40: /// TreeSitter language modes for syntax highlighting.
+41: public struct TreeSitterLanguages {
+42:     
+43:     /// Returns the appropriate language mode for a given filename.
+44:     /// - Parameter filename: The filename (with or without path) to analyze
+45:     /// - Returns: A LanguageMode instance for the detected language, or PlainTextLanguageMode() if unknown
+46:     public static func languageMode(for filename: String) -> LanguageMode {
+47:         let lower = filename.lowercased()
+48:         let ext = (filename as NSString).pathExtension.lowercased()
+49:         
+50:         // Special-case filenames without extensions
+51:         let lastComponent = (filename as NSString).lastPathComponent.lowercased()
+52:         if lastComponent == "dockerfile" || lastComponent == "dockerfile.*" {
+53:             // Dockerfile is typically bash-like, could use TreeSitterBash when available
+54:             return bashLanguageMode() // or PlainTextLanguageMode()
+55:         }
+56:         if lastComponent == ".env" || lower.hasSuffix("/.env") {
+57:             return PlainTextLanguageMode()
+58:         }
+59:         
+60:         switch ext {
+61:         // Swift
+62:         case "swift":
+63:             return swiftLanguageMode()
+64:         
+65:         // JavaScript
+66:         case "js", "mjs", "cjs":
+67:             return javaScriptLanguageMode()
+68:         case "jsx":
+69:             // JSX typically uses JavaScript grammar with JSX extensions
+70:             return javaScriptLanguageMode()
+71:         
+72:         // TypeScript
+73:         case "ts", "mts", "cts":
+74:             return typeScriptLanguageMode()
+75:         case "tsx":
+76:             // TSX typically uses TypeScript grammar with JSX extensions
+77:             return typeScriptLanguageMode()
+78:         
+79:         // Python
+80:         case "py", "pyw":
+81:             return pythonLanguageMode()
+82:         
+83:         // Ruby
+84:         case "rb", "ruby":
+85:             return rubyLanguageMode()
+86:         
+87:         // Go
+88:         case "go":
+89:             return goLanguageMode()
+90:         
+91:         // Rust
+92:         case "rs":
+93:             return rustLanguageMode()
+94:         
+95:         // Java
+96:         case "java":
+97:             return javaLanguageMode()
+98:         
+99:         // Kotlin (TODO: may not have Swift package yet)
+100:         case "kt", "kts":
+101:             return kotlinLanguageMode()
+102:         
+103:         // C
+104:         case "c", "h":
+105:             return cLanguageMode()
+106:         
+107:         // C++
+108:         case "cpp", "cc", "cxx", "hpp", "hh", "hxx":
+109:             return cppLanguageMode()
+110:         
+111:         // Objective-C (TODO: may not have Swift package yet)
+112:         case "m", "mm":
+113:             return objectiveCLanguageMode()
+114:         
+115:         // HTML
+116:         case "html", "htm":
+117:             return htmlLanguageMode()
+118:         
+119:         // CSS
+120:         case "css":
+121:             return cssLanguageMode()
+122:         
+123:         // SCSS/SASS (TODO: may not have Swift package yet)
+124:         case "scss", "sass":
+125:             return scssLanguageMode()
+126:         
+127:         // Less (TODO: may not have Swift package yet)
+128:         case "less":
+129:             return lessLanguageMode()
+130:         
+131:         // JSON
+132:         case "json", "jsonc":
+133:             return jsonLanguageMode()
+134:         
+135:         // XML (TODO: may not have Swift package yet)
+136:         case "xml", "plist", "svg":
+137:             return xmlLanguageMode()
+138:         
+139:         // YAML
+140:         case "yml", "yaml":
+141:             return yamlLanguageMode()
+142:         
+143:         // SQL
+144:         case "sql":
+145:             return sqlLanguageMode()
+146:         
+147:         // Shell scripts
+148:         case "sh", "bash", "zsh", "fish":
+149:             return bashLanguageMode()
+150:         
+151:         // Dockerfile (when it has an extension)
+152:         case "dockerfile":
+153:             return bashLanguageMode() // or PlainTextLanguageMode()
+154:         
+155:         // GraphQL (TODO: may not have Swift package yet)
+156:         case "graphql", "gql":
+157:             return graphqlLanguageMode()
+158:         
+159:         // Markdown
+160:         case "md", "markdown":
+161:             return markdownLanguageMode()
+162:         
+163:         // PHP (TODO: may not have Swift package yet)
+164:         case "php":
+165:             return phpLanguageMode()
+166:         
+167:         // Environment files
+168:         case "env":
+169:             return PlainTextLanguageMode()
+170:         
+171:         default:
+172:             return PlainTextLanguageMode()
+173:         }
+174:     }
+175:     
+176:     // MARK: - Language Mode Factory Methods
+177:     
+178:     private static func swiftLanguageMode() -> LanguageMode {
+179:         // TODO: Return TreeSitterSwift() when package is available
+180:         // return TreeSitterSwift()
+181:         return PlainTextLanguageMode()
+182:     }
+183:     
+184:     private static func javaScriptLanguageMode() -> LanguageMode {
+185:         // TODO: Return TreeSitterJavaScript() when package is available
+186:         // return TreeSitterJavaScript()
+187:         return PlainTextLanguageMode()
+188:     }
+189:     
+190:     private static func typeScriptLanguageMode() -> LanguageMode {
+191:         // TODO: Return TreeSitterTypeScript() when package is available
+192:         // return TreeSitterTypeScript()
+193:         return PlainTextLanguageMode()
+194:     }
+195:     
+196:     private static func pythonLanguageMode() -> LanguageMode {
+197:         // TODO: Return TreeSitterPython() when package is available
+198:         // return TreeSitterPython()
+199:         return PlainTextLanguageMode()
+200:     }
+201:     
+202:     private static func jsonLanguageMode() -> LanguageMode {
+203:         // TODO: Return TreeSitterJSON() when package is available
+204:         // return TreeSitterJSON()
+205:         return PlainTextLanguageMode()
+206:     }
+207:     
+208:     private static func htmlLanguageMode() -> LanguageMode {
+209:         // TODO: Return TreeSitterHTML() when package is available
+210:         // return TreeSitterHTML()
+211:         return PlainTextLanguageMode()
+212:     }
+213:     
+214:     private static func cssLanguageMode() -> LanguageMode {
+215:         // TODO: Return TreeSitterCSS() when package is available
+216:         // return TreeSitterCSS()
+217:         return PlainTextLanguageMode()
+218:     }
+219:     
+220:     private static func markdownLanguageMode() -> LanguageMode {
+221:         // TODO: Return TreeSitterMarkdown() when package is available
+222:         // return TreeSitterMarkdown()
+223:         return PlainTextLanguageMode()
+224:     }
+225:     
+226:     private static func goLanguageMode() -> LanguageMode {
+227:         // TODO: Return TreeSitterGo() when package is available
+228:         // return TreeSitterGo()
+229:         return PlainTextLanguageMode()
+230:     }
+231:     
+232:     private static func rustLanguageMode() -> LanguageMode {
+233:         // TODO: Return TreeSitterRust() when package is available
+234:         // return TreeSitterRust()
+235:         return PlainTextLanguageMode()
+236:     }
+237:     
+238:     private static func rubyLanguageMode() -> LanguageMode {
+239:         // TODO: Return TreeSitterRuby() when package is available
+240:         // return TreeSitterRuby()
+241:         return PlainTextLanguageMode()
+242:     }
+243:     
+244:     private static func javaLanguageMode() -> LanguageMode {
+245:         // TODO: Return TreeSitterJava() when package is available
+246:         // return TreeSitterJava()
+247:         return PlainTextLanguageMode()
+248:     }
+249:     
+250:     private static func cLanguageMode() -> LanguageMode {
+251:         // TODO: Return TreeSitterC() when package is available
+252:         // return TreeSitterC()
+253:         return PlainTextLanguageMode()
+254:     }
+255:     
+256:     private static func cppLanguageMode() -> LanguageMode {
+257:         // TODO: Return TreeSitterCPP() when package is available
+258:         // return TreeSitterCPP()
+259:         return PlainTextLanguageMode()
+260:     }
+261:     
+262:     private static func bashLanguageMode() -> LanguageMode {
+263:         // TODO: Return TreeSitterBash() when package is available
+264:         // return TreeSitterBash()
+265:         return PlainTextLanguageMode()
+266:     }
+267:     
+268:     private static func yamlLanguageMode() -> LanguageMode {
+269:         // TODO: Return TreeSitterYAML() when package is available
+270:         // return TreeSitterYAML()
+271:         return PlainTextLanguageMode()
+272:     }
+273:     
+274:     private static func sqlLanguageMode() -> LanguageMode {
+275:         // TODO: Return TreeSitterSQL() when package is available
+276:         // return TreeSitterSQL()
+277:         return PlainTextLanguageMode()
+278:     }
+279:     
+280:     // MARK: - Additional Language Factory Methods
+281:     
+282:     private static func kotlinLanguageMode() -> LanguageMode {
+283:         // TODO: Return TreeSitterKotlin() when package is available
+284:         return PlainTextLanguageMode()
+285:     }
+286:     
+287:     private static func objectiveCLanguageMode() -> LanguageMode {
+288:         // TODO: Return TreeSitterObjectiveC() when package is available
+289:         return PlainTextLanguageMode()
+290:     }
+291:     
+292:     private static func scssLanguageMode() -> LanguageMode {
+293:         // TODO: Return TreeSitterSCSS() when package is available
+294:         return PlainTextLanguageMode()
+295:     }
+296:     
+297:     private static func lessLanguageMode() -> LanguageMode {
+298:         // TODO: Return TreeSitterLess() when package is available
+299:         return PlainTextLanguageMode()
+300:     }
+301:     
+302:     private static func xmlLanguageMode() -> LanguageMode {
+303:         // TODO: Return TreeSitterXML() when package is available
+304:         return PlainTextLanguageMode()
+305:     }
+306:     
+307:     private static func graphqlLanguageMode() -> LanguageMode {
+308:         // TODO: Return TreeSitterGraphQL() when package is available
+309:         return PlainTextLanguageMode()
+310:     }
+311:     
+312:     private static func phpLanguageMode() -> LanguageMode {
+313:         // TODO: Return TreeSitterPHP() when package is available
+314:         return PlainTextLanguageMode()
+315:     }
+316: }
+317: 
+318: // MARK: - LanguageMode Protocol
+319: 
+320: /// Protocol that all TreeSitter language modes must conform to.
+321: /// This will be implemented by each TreeSitter language wrapper.
+322: public protocol LanguageMode {
+323:     /// The name of the language
+324:     var name: String { get }
+325:     
+326:     /// The file extensions associated with this language
+327:     var extensions: [String] { get }
+328:     
+329:     /// Create a new language mode instance
+330:     init()
+331: }
+332: 
+333: // MARK: - Plain Text Language Mode
+334: 
+335: /// Fallback language mode for files without specific syntax highlighting.
+336: public struct PlainTextLanguageMode: LanguageMode {
+337:     public let name = "Plain Text"
+338:     public let extensions: [String] = []
+339:     
+340:     public init() {}
+341: }
+342: 
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS/Views"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/Views/
+📁 Editor/
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS/Views/Editor"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/Views/Editor/
+   (empty directory)
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/
+📁 App/
+📁 Assets.xcassets/
+📁 Commands/
+📁 Docs/
+📁 Extensions/
+📁 Menus.bak/
+📁 Models/
+📁 Resources/
+📁 Services/
+📁 Tests/
+📁 UITests/
+📁 Utils/
+📁 Views/
+   .tooling_note.txt
+   ContentView_shift_arrow.patch
+   ContentView.swift
+   ContentView.swift.bak
+   FIX_SUMMARY.md
+   IMPLEMENTATION_SUMMARY.md
+   Info.plist
+   KEYBOARD_SHORTCUTS_SOURCE_OF_TRUTH.md
+   KeyboardShortcuts.md
+   MULTI_WINDOW_IMPLEMENTATION.md
+   MultiWindowSupport.md
+   SceneDelegate.swift
+   SyntaxHighlighter_Optimizations.md
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/
+📁 Editor/
+📁 Panels/
+   _tmp.txt
+   BranchMenu.swift
+   CommandPalette.swift
+   CommandPaletteView.swift
+   DiffComponents.swift
+   FileIconView.swift
+   FileTreeView.swift
+   GoToSymbol.swift
+   LaunchConfigView.swift
+   QuickOpen.swift
+   RunConfigView.swift
+   SidebarView.swift
+   SnippetPickerView.swift
+   StatusBarView.swift
+   TabBarView.swift
+   TasksView.swift
+   WorkspaceSettingsView.swift
+   WorkspaceTrustDialog.swift
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/
+   BreadcrumbsView.swift
+   ColorPickerView.swift
+   EditorSplitView.swift
+   FoldingLayoutManager.swift
+   GitGutterView.swift
+   HoverInfoView.swift
+   InlayHintsOverlay.swift
+   InlineSuggestionView.swift
+   JSONTreeView.swift
+   MergeConflictView.swift
+   MinimapView.swift
+   ModifierTapGestureRecognizer.swift
+   MultiCursorTextView.swift
+   PeekDefinitionView.swift
+   RunestoneEditorView 2.swift
+   RunestoneEditorView.swift
+   SplitEditorView.swift
+   StickyHeaderView.swift
+   SyntaxHighlightingTextView_Update.swift
+   SyntaxHighlightingTextView.swift
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift", "start_line": 1, "end_line": 150}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift (lines 2-150 of 2289)
+────────────────────────────────────────
+2: //  SyntaxHighlightingTextView.swift
+3: //  VSCodeiPadOS
+4: //
+5: //  Upgraded syntax highlighting with VSCode-like colors
+6: //
+7: 
+8: import SwiftUI
+9: import UIKit
+10: 
+11: /// UITextView wrapper with syntax highlighting support
+12: struct SyntaxHighlightingTextView: UIViewRepresentable {
+13:     @Binding var text: String
+14:     let filename: String
+15:     @Binding var scrollPosition: Int
+16:     /// Pixel scroll offset (contentOffset.y) for smooth gutter alignment.
+17:     @Binding var scrollOffset: CGFloat
+18:     @Binding var totalLines: Int
+19:     @Binding var visibleLines: Int
+20:     @Binding var currentLineNumber: Int
+21:     @Binding var currentColumn: Int
+22:     @Binding var cursorIndex: Int
+23:     @Binding var lineHeight: CGFloat
+24:     @Binding var requestedLineSelection: Int?
+25:     @Binding var requestedCursorIndex: Int?
+26: 
+27:     /// Autocomplete key handling hooks (return true if handled)
+28:     let onAcceptAutocomplete: (() -> Bool)?
+29:     let onDismissAutocomplete: (() -> Bool)?
+30: 
+31:     let isActive: Bool
+32:     let fontSize: CGFloat  // Explicit parameter to trigger SwiftUI updates
+33:     @EnvironmentObject var editorCore: EditorCore
+34: 
+35:     init(
+36:         text: Binding<String>,
+37:         filename: String,
+38:         scrollPosition: Binding<Int>,
+39:         scrollOffset: Binding<CGFloat> = .constant(0),
+40:         totalLines: Binding<Int>,
+41:         visibleLines: Binding<Int>,
+42:         currentLineNumber: Binding<Int>,
+43:         currentColumn: Binding<Int>,
+44:         cursorIndex: Binding<Int> = .constant(0),
+45:         lineHeight: Binding<CGFloat>,
+46:         isActive: Bool,
+47:         fontSize: CGFloat = 14.0,
+48:         requestedLineSelection: Binding<Int?> = .constant(nil),
+49:         requestedCursorIndex: Binding<Int?> = .constant(nil),
+50:         onAcceptAutocomplete: (() -> Bool)? = nil,
+51:         onDismissAutocomplete: (() -> Bool)? = nil
+52:     ) {
+53:         self._text = text
+54:         self.filename = filename
+55:         self._scrollPosition = scrollPosition
+56:         self._scrollOffset = scrollOffset
+57:         self._totalLines = totalLines
+58:         self._visibleLines = visibleLines
+59:         self._currentLineNumber = currentLineNumber
+60:         self._currentColumn = currentColumn
+61:         self._cursorIndex = cursorIndex
+62:         self._lineHeight = lineHeight
+63:         self.isActive = isActive
+64:         self.fontSize = fontSize
+65:         self._requestedLineSelection = requestedLineSelection
+66:         self._requestedCursorIndex = requestedCursorIndex
+67:         self.onAcceptAutocomplete = onAcceptAutocomplete
+68:         self.onDismissAutocomplete = onDismissAutocomplete
+69:     }
+70:     
+71:     // Compatibility init for older call sites (e.g. SplitEditorView) that pass editorCore explicitly.
+72:     init(
+73:         text: Binding<String>,
+74:         filename: String,
+75:         scrollPosition: Binding<Int>,
+76:         scrollOffset: Binding<CGFloat> = .constant(0),
+77:         totalLines: Binding<Int>,
+78:         visibleLines: Binding<Int>,
+79:         currentLineNumber: Binding<Int>,
+80:         currentColumn: Binding<Int>,
+81:         cursorIndex: Binding<Int> = .constant(0),
+82:         lineHeight: Binding<CGFloat>,
+83:         isActive: Bool,
+84:         editorCore: EditorCore,
+85:         requestedLineSelection: Binding<Int?> = .constant(nil),
+86:         requestedCursorIndex: Binding<Int?> = .constant(nil),
+87:         onAcceptAutocomplete: (() -> Bool)? = nil,
+88:         onDismissAutocomplete: (() -> Bool)? = nil
+89:     ) {
+90:         self.init(
+91:             text: text,
+92:             filename: filename,
+93:             scrollPosition: scrollPosition,
+94:             scrollOffset: scrollOffset,
+95:             totalLines: totalLines,
+96:             visibleLines: visibleLines,
+97:             currentLineNumber: currentLineNumber,
+98:             currentColumn: currentColumn,
+99:             cursorIndex: cursorIndex,
+100:             lineHeight: lineHeight,
+101:             isActive: isActive,
+102:             fontSize: editorCore.editorFontSize,
+103:             requestedLineSelection: requestedLineSelection,
+104:             requestedCursorIndex: requestedCursorIndex,
+105:             onAcceptAutocomplete: onAcceptAutocomplete,
+106:             onDismissAutocomplete: onDismissAutocomplete
+107:         )
+108:     }
+109: 
+110:     func makeCoordinator() -> Coordinator {
+111:         Coordinator(self)
+112:     }
+113:     
+114:     func makeUIView(context: Context) -> UITextView {
+115:         // Create custom TextKit stack with FoldingLayoutManager for code folding support
+116:         let textStorage = NSTextStorage()
+117:         let foldingLayoutManager = FoldingLayoutManager()
+118:         textStorage.addLayoutManager(foldingLayoutManager)
+119:         
+120:         let textContainer = NSTextContainer(size: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+121:         textContainer.widthTracksTextView = true
+122:         foldingLayoutManager.addTextContainer(textContainer)
+123:         
+124:         let textView = EditorTextView(frame: .zero, textContainer: textContainer)
+125:         
+126:         // Connect FoldingLayoutManager to EditorTextView
+127:         foldingLayoutManager.ownerTextView = textView
+128:         
+129:         textView.delegate = context.coordinator
+130:         textView.editorCore = editorCore
+131:         
+132:         // Code folding support
+133:         textView.foldingManager = CodeFoldingManager.shared
+134:         textView.fileId = filename
+135: 
+136:         // Autocomplete hooks
+137:         textView.onAcceptAutocomplete = onAcceptAutocomplete
+138:         textView.onDismissAutocomplete = onDismissAutocomplete
+139: 
+140:         textView.onPeekDefinition = {
+141:             context.coordinator.handlePeekDefinition(in: textView)
+142:         }
+143: 
+144:         textView.onEscape = {
+145:             context.coordinator.handleEscape()
+146:         }
+147: 
+148:         textView.onGoToLine = {
+149:             self.editorCore.showGoToLine = true
+150:         }
+
+
+>>>TOOL search
+{"query": "textColor", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "textColor"
+
+
+>>>TOOL search
+{"query": "foregroundColor", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "foregroundColor"
+
+
+>>>TOOL search
+{"query": "NSForegroundColorAttributeName", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "NSForegroundColorAttributeName"
+
+
+>>>TOOL search
+{"query": ".foreground", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for ".foreground"
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift", "start_line": 150, "end_line": 350}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift (lines 151-350 of 2289)
+────────────────────────────────────────
+151:         
+152:         // Wire up custom context menu actions
+153:         textView.onGoToDefinition = {
+154:             context.coordinator.handleGoToDefinition(in: textView)
+155:         }
+156:         
+157:         textView.onFindReferences = {
+158:             context.coordinator.handleFindReferences(in: textView)
+159:         }
+160:         
+161:         textView.onFormatDocument = {
+162:             context.coordinator.handleFormatDocument(in: textView)
+163:         }
+164:         
+165:         textView.onToggleComment = {
+166:             context.coordinator.handleToggleComment(in: textView)
+167:         }
+168:         
+169:         textView.onFold = {
+170:             context.coordinator.handleFold(in: textView)
+171:         }
+172:         
+173:         textView.onUnfold = {
+174:             context.coordinator.handleUnfold(in: textView)
+175:         }
+176:         
+177:         // Add pinch gesture for zoom (with delegate to allow simultaneous text selection)
+178:         let pinchGesture = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
+179:         pinchGesture.delegate = context.coordinator
+180:         textView.addGestureRecognizer(pinchGesture)
+181:         context.coordinator.pinchGesture = pinchGesture
+182:         
+183:         // Configure text view
+184:         textView.isEditable = true
+185:         textView.isSelectable = true
+186:         textView.autocapitalizationType = .none
+187:         textView.autocorrectionType = .no
+188:         textView.smartDashesType = .no
+189:         textView.smartQuotesType = .no
+190:         textView.smartInsertDeleteType = .no
+191:         textView.spellCheckingType = .no
+192:         
+193:         // Set font and appearance (use editorCore.editorFontSize)
+194:         textView.font = UIFont.monospacedSystemFont(ofSize: editorCore.editorFontSize, weight: .regular)
+195:         textView.textColor = UIColor(ThemeManager.shared.currentTheme.editorForeground)
+196:         textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
+197:         textView.tintColor = UIColor(ThemeManager.shared.currentTheme.cursor)
+198:         textView.keyboardType = .default
+199:         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+200:         
+201:         // Enable line wrapping
+202:         textView.textContainer.lineBreakMode = .byCharWrapping
+203:         textView.textContainer.widthTracksTextView = true
+204:         
+205:         // Calculate line height
+206:         if let font = textView.font {
+207:             DispatchQueue.main.async {
+208:                 self.lineHeight = font.lineHeight
+209:             }
+210:         }
+211:         
+212:         // Set initial text with syntax highlighting
+213:         textView.text = text
+214:         context.coordinator.applySyntaxHighlighting(to: textView)
+215:         context.coordinator.updateLineCount(textView)
+216:         
+217:         return textView
+218:     }
+219:     
+220:     func updateUIView(_ textView: UITextView, context: Context) {
+221:         // CRITICAL: Update coordinator's parent reference to current struct
+222:         // SwiftUI creates new struct instances on each update, so this keeps
+223:         // coordinator in sync with current bindings and properties
+224:         context.coordinator.parent = self
+225:         
+226:         // CRITICAL FIX: Apply initial highlighting FIRST on the very first updateUIView call
+227:         // This fixes the bug where syntax highlighting only appears after typing.
+228:         // makeUIView applies it, but the view may not be fully in hierarchy yet,
+229:         // causing the attributed text to be lost. This ensures it's applied reliably.
+230:         if !context.coordinator.hasAppliedInitialHighlighting && !textView.text.isEmpty {
+231:             context.coordinator.applySyntaxHighlighting(to: textView)
+232:             context.coordinator.hasAppliedInitialHighlighting = true
+233:         }
+234:         
+235:         // Update colors when theme changes
+236:         // NOTE: Only set backgroundColor and tintColor here. Do NOT set textColor
+237:         // as it interferes with attributedText syntax highlighting colors.
+238:         // The foreground color is handled entirely by the attributedText.
+239:         textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
+240:         textView.tintColor = UIColor(ThemeManager.shared.currentTheme.cursor)
+241:         
+242:         if let editorView = textView as? EditorTextView {
+243:             editorView.updateThemeColors(theme: ThemeManager.shared.currentTheme)
+244:         }
+245:         
+246:         // Update font size if changed (using explicit fontSize parameter for proper SwiftUI updates)
+247:         if let currentFont = textView.font, currentFont.pointSize != fontSize {
+248:             let selectedRange = textView.selectedRange
+249:             textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+250:             context.coordinator.applySyntaxHighlighting(to: textView)
+251:             textView.selectedRange = selectedRange
+252:             
+253:             // Update line height
+254:             if let font = textView.font {
+255:                 DispatchQueue.main.async {
+256:                     self.lineHeight = font.lineHeight
+257:                 }
+258:             }
+259:         }
+260:         
+261:         // Update text if changed externally
+262:         if textView.text != text {
+263:             let selectedRange = textView.selectedRange
+264:             textView.text = text
+265:             context.coordinator.applySyntaxHighlighting(to: textView)
+266:             context.coordinator.hasAppliedInitialHighlighting = true
+267:             textView.selectedRange = selectedRange
+268:         } else if context.coordinator.lastThemeId != ThemeManager.shared.currentTheme.id {
+269:             // Re-apply highlighting if theme changed
+270:             context.coordinator.applySyntaxHighlighting(to: textView)
+271:         }
+272:         
+273:         // Handle minimap scrolling - but ONLY if user is NOT actively scrolling
+274:         // This prevents the editor from fighting against user scroll due to async binding lag
+275:         if scrollPosition != context.coordinator.lastKnownScrollPosition && scrollPosition >= 0 && !context.coordinator.isUserScrolling {
+276:             // Update lastKnownScrollPosition FIRST to prevent race condition
+277:             // where user scroll gets overridden by stale binding value
+278:             context.coordinator.lastKnownScrollPosition = scrollPosition
+279:             context.coordinator.scrollToLine(scrollPosition, in: textView)
+280:         }
+281: 
+282:         // Handle line selection requests (e.g. tapping line numbers)
+283:         if let requested = requestedLineSelection,
+284:            requested != context.coordinator.lastRequestedLineSelection {
+285:             context.coordinator.lastRequestedLineSelection = requested
+286:             context.coordinator.scrollToAndSelectLine(requested, in: textView)
+287:             // Defer @Binding update to avoid "Publishing changes from within view updates"
+288:             DispatchQueue.main.async {
+289:                 self.requestedLineSelection = nil
+290:             }
+291:         }
+292: 
+293:         // Handle cursor index requests (e.g. accepting autocomplete)
+294:         if let requested = requestedCursorIndex,
+295:            requested != context.coordinator.lastRequestedCursorIndex {
+296:             context.coordinator.lastRequestedCursorIndex = requested
+297:             // Use UTF-16 count for NSRange compatibility
+298:             let textLength = (textView.text as NSString?)?.length ?? 0
+299:             let safeIndex = max(0, min(requested, textLength))
+300:             textView.selectedRange = NSRange(location: safeIndex, length: 0)
+301:             
+302:             // Ensure cursor is visible by scrolling to it
+303:             textView.scrollRangeToVisible(textView.selectedRange)
+304:             
+305:             // Defer @Binding update to avoid "Publishing changes from within view updates"
+306:             DispatchQueue.main.async {
+307:                 self.requestedCursorIndex = nil
+308:             }
+309: 
+310:             // Update SwiftUI state
+311:             context.coordinator.updateCursorPosition(textView)
+312:             context.coordinator.updateScrollPosition(textView)
+313:         }
+314:         
+315:         // Note: updateLineCount is called in textViewDidChange, no need to call here
+316:         // as it causes unnecessary state churn on every updateUIView
+317:     }
+318:     
+319:     // MARK: - Coordinator
+320:     
+321:     class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
+322:         var parent: SyntaxHighlightingTextView
+323:         var lastKnownScrollPosition: Int = 0
+324:         var lastThemeId: String = ""
+325:         var lastRequestedLineSelection: Int? = nil
+326:         var lastRequestedCursorIndex: Int? = nil
+327:         private var isUpdatingFromMinimap = false
+328:         private var highlightDebouncer: Timer?
+329:         weak var pinchGesture: UIPinchGestureRecognizer?
+330:         private var initialFontSize: CGFloat = 0
+331:         
+332:         // Track user scroll to prevent programmatic scroll fighting back
+333:         private var userScrollDebouncer: Timer?
+334:         var isUserScrolling = false
+335: 
+336:         // FEAT-044: Matching bracket highlight state
+337:         private var bracketHighlightRanges: [NSRange] = []
+338:         
+339:         // Track if initial highlighting has been applied (fixes highlighting not appearing on file open)
+340:         var hasAppliedInitialHighlighting = false
+341:         
+342:         // PERF: Track last line to avoid unnecessary redraws
+343:         private var lastKnownLineNumber: Int = -1
+344:         
+345:         // PERF: Debounce bracket matching to avoid O(n) scans on every cursor move
+346:         private var bracketMatchDebouncer: Timer?
+347:         
+348:         // PERFORMANCE: Large file highlighting optimization
+349:         // Files larger than this threshold get deferred full highlighting
+350:         private let largeFileThreshold = 10000  // 10k characters
+
+
+>>>TOOL search
+{"query": "applySyntaxHighlighting", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "applySyntaxHighlighting"
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift", "start_line": 350, "end_line": 550}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift (lines 351-550 of 2289)
+────────────────────────────────────────
+351:         private var largeFileHighlightDebouncer: Timer?
+352:         // Track if we have pending full highlight (for large files)
+353:         private var hasPendingFullHighlight = false
+354:         
+355:         init(_ parent: SyntaxHighlightingTextView) {
+356:             self.parent = parent
+357:         }
+358:         
+359:         // MARK: - UIGestureRecognizerDelegate
+360:         
+361:         // Allow pinch gesture to work simultaneously with text selection gestures
+362:         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+363:             // Allow pinch to work alongside native text selection gestures
+364:             return true
+365:         }
+366:         
+367:         func textViewDidBeginEditing(_ textView: UITextView) {
+368:             // Ensure syntax highlighting is current when user begins editing
+369:             // This handles cases where text was set but highlighting hasn't run yet
+370:             applySyntaxHighlighting(to: textView)
+371:         }
+372:         
+373:         func textViewDidChange(_ textView: UITextView) {
+374:             // Update parent text
+375:             parent.text = textView.text
+376:             
+377:             // Set typing attributes IMMEDIATELY so new characters have proper base styling
+378:             // This prevents flicker during the debounce period
+379:             let theme = ThemeManager.shared.currentTheme
+380:             let fontSize = parent.editorCore.editorFontSize
+381:             textView.typingAttributes = [
+382:                 .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
+383:                 .foregroundColor: UIColor(theme.editorForeground)
+384:             ]
+385:             
+386:             // PERFORMANCE FIX: Aggressive debounce strategy based on document size
+387:             // For large files, syntax highlighting is EXTREMELY expensive and causes lag
+388:             let textLength = textView.text.count
+389:             
+390:             // Large file threshold - above this, skip highlighting during active typing entirely
+391:             let largeFileThreshold = 10000
+392:             // Very large file threshold - above this, use extended delay
+393:             let veryLargeFileThreshold = 50000
+394:             
+395:             highlightDebouncer?.invalidate()
+396:             
+397:             if textLength > veryLargeFileThreshold {
+398:                 // VERY LARGE FILES (50k+): Wait 1.5 seconds of idle before highlighting
+399:                 // This prevents UI blocking entirely during active typing
+400:                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+401:                     self?.applyVisibleRangeHighlighting(to: textView)
+402:                 }
+403:             } else if textLength > largeFileThreshold {
+404:                 // LARGE FILES (10k-50k): Wait 1 second of idle, then highlight visible range only
+405:                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
+406:                     self?.applyVisibleRangeHighlighting(to: textView)
+407:                 }
+408:             } else if textLength > 5000 {
+409:                 // MEDIUM FILES (5k-10k): 300ms debounce, full highlighting on background thread
+410:                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+411:                     self?.applyHighlightingAsync(to: textView)
+412:                 }
+413:             } else {
+414:                 // SMALL FILES (<5k): 80ms debounce, direct highlighting (fast enough)
+415:                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
+416:                     DispatchQueue.main.async {
+417:                         self?.applySyntaxHighlighting(to: textView)
+418:                     }
+419:                 }
+420:             }
+421:             
+422:             updateLineCount(textView)
+423:             updateCursorPosition(textView)
+424:         }
+425:         
+426:         /// Async highlighting for large files - processes on background thread
+427:         func applyHighlightingAsync(to textView: UITextView) {
+428:             guard !isApplyingHighlighting else { return }
+429:             isApplyingHighlighting = true
+430:             
+431:             let text = textView.text ?? ""
+432:             let filename = parent.filename
+433:             let theme = ThemeManager.shared.currentTheme
+434:             let fontSize = parent.editorCore.editorFontSize
+435:             let selectedRange = textView.selectedRange
+436:             
+437:             // Process highlighting on background thread
+438:             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+439:                 let highlighter = VSCodeSyntaxHighlighter(theme: theme, fontSize: fontSize)
+440:                 let attributedText = highlighter.highlight(text, filename: filename)
+441:                 
+442:                 // Apply on main thread
+443:                 DispatchQueue.main.async {
+444:                     guard let self = self else { return }
+445:                     self.isApplyingHighlighting = false
+446:                     
+447:                     // Only apply if text hasn't changed while we were processing
+448:                     guard textView.text == text else { return }
+449:                     
+450:                     textView.attributedText = attributedText
+451:                     textView.selectedRange = selectedRange
+452:                     
+453:                     textView.typingAttributes = [
+454:                         .font: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
+455:                         .foregroundColor: UIColor(theme.editorForeground)
+456:                     ]
+457:                     
+458:                     self.lastThemeId = theme.id
+459:                 }
+460:             }
+461:         }
+462:         
+463:         /// PERFORMANCE: Visible-range-only highlighting for very large files
+464:         /// Only highlights the text that's currently visible on screen, dramatically reducing lag
+465:         func applyVisibleRangeHighlighting(to textView: UITextView) {
+466:             guard !isApplyingHighlighting else { return }
+467:             isApplyingHighlighting = true
+468:             
+469:             let text = textView.text ?? ""
+470:             let filename = parent.filename
+471:             let theme = ThemeManager.shared.currentTheme
+472:             let fontSize = parent.editorCore.editorFontSize
+473:             let selectedRange = textView.selectedRange
+474:             
+475:             // Calculate visible range with buffer
+476:             let visibleRect = textView.bounds
+477:             let textContainer = textView.textContainer
+478:             let layoutManager = textView.layoutManager
+479:             
+480:             // Get the glyph range for the visible rect
+481:             var visibleGlyphRange = NSRange()
+482:             layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { (rect, usedRect, container, glyphRange, stop) in
+483:                 if rect.intersects(visibleRect) {
+484:                     if visibleGlyphRange.length == 0 {
+485:                         visibleGlyphRange = glyphRange
+486:                     } else {
+487:                         visibleGlyphRange.length = glyphRange.location + glyphRange.length - visibleGlyphRange.location
+488:                     }
+489:                 } else if visibleGlyphRange.length > 0 && rect.minY > visibleRect.maxY {
+490:                     stop.pointee = true
+491:                 }
+492:             }
+493:             
+494:             // Convert glyph range to character range
+495:             var visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
+496:             
+497:             // Add buffer of ~50 lines before and after for smooth scrolling
+498:             let bufferChars = 5000
+499:             let rangeStart = max(0, visibleCharRange.location - bufferChars)
+500:             let rangeEnd = min(text.utf16.count, visibleCharRange.location + visibleCharRange.length + bufferChars)
+501:             visibleCharRange = NSRange(location: rangeStart, length: rangeEnd - rangeStart)
+502:             
+503:             // Process highlighting on background thread
+504:             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+505:                 // Extract the visible portion of text
+506:                 let nsText = text as NSString
+507:                 let safeRange = NSRange(
+508:                     location: visibleCharRange.location,
+509:                     length: min(visibleCharRange.length, nsText.length - visibleCharRange.location)
+510:                 )
+511:                 guard safeRange.length > 0 else {
+512:                     DispatchQueue.main.async {
+513:                         self?.isApplyingHighlighting = false
+514:                     }
+515:                     return
+516:                 }
+517:                 
+518:                 let visibleText = nsText.substring(with: safeRange)
+519:                 
+520:                 // Highlight only the visible portion
+521:                 let highlighter = VSCodeSyntaxHighlighter(theme: theme, fontSize: fontSize)
+522:                 let highlightedVisible = highlighter.highlight(visibleText, filename: filename)
+523:                 
+524:                 // Apply on main thread
+525:                 DispatchQueue.main.async {
+526:                     guard let self = self else { return }
+527:                     self.isApplyingHighlighting = false
+528:                     
+529:                     // Only apply if text hasn't changed while we were processing
+530:                     guard textView.text == text else { return }
+531:                     
+532:                     // Create full attributed string with base styling
+533:                     let fullAttributed = NSMutableAttributedString(string: text)
+534:                     let baseFont = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+535:                     let baseColor = UIColor(theme.editorForeground)
+536:                     let fullRange = NSRange(location: 0, length: text.utf16.count)
+537:                     fullAttributed.addAttribute(.font, value: baseFont, range: fullRange)
+538:                     fullAttributed.addAttribute(.foregroundColor, value: baseColor, range: fullRange)
+539:                     
+540:                     // Apply highlighted attributes only to visible range
+541:                     highlightedVisible.enumerateAttributes(in: NSRange(location: 0, length: highlightedVisible.length), options: []) { attrs, range, _ in
+542:                         let targetRange = NSRange(location: safeRange.location + range.location, length: range.length)
+543:                         if targetRange.location + targetRange.length <= fullAttributed.length {
+544:                             for (key, value) in attrs {
+545:                                 fullAttributed.addAttribute(key, value: value, range: targetRange)
+546:                             }
+547:                         }
+548:                     }
+549:                     
+550:                     textView.attributedText = fullAttributed
+
+
+>>>TOOL search
+{"query": "VSCodeSyntaxHighlighter", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "VSCodeSyntaxHighlighter"
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift", "start_line": 1500, "end_line": 1700}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift (lines 1501-1700 of 2289)
+────────────────────────────────────────
+1501:         let toggleCommentAction = UIAction(
+1502:             title: "Toggle Comment",
+1503:             image: UIImage(systemName: "text.quote"),
+1504:             identifier: UIAction.Identifier("com.vscode.toggleComment"),
+1505:             handler: { [weak self] _ in
+1506:                 self?.toggleComment(nil)
+1507:             }
+1508:         )
+1509:         
+1510:         // Group custom actions
+1511:         let customMenu = UIMenu(
+1512:             title: "",
+1513:             identifier: UIMenu.Identifier("com.vscode.customActions"),
+1514:             options: [.displayInline],
+1515:             children: [
+1516:                 goToDefinitionAction,
+1517:                 peekDefinitionAction,
+1518:                 findReferencesAction,
+1519:                 formatDocumentAction,
+1520:                 toggleCommentAction
+1521:             ]
+1522:         )
+1523:         
+1524:         // Insert custom menu after standard edit menu
+1525:         builder.insertChild(customMenu, atStartOfMenu: .text)
+1526:     }
+1527: }
+1528: 
+1529: // MARK: - VSCode-Style Syntax Highlighter
+1530: 
+1531: enum Language {
+1532:     case swift
+1533: 
+1534:     case javascript
+1535:     case typescript
+1536:     case jsx
+1537:     case tsx
+1538: 
+1539:     case python
+1540:     case ruby
+1541:     case go
+1542:     case rust
+1543:     case java
+1544:     case kotlin
+1545: 
+1546:     case c
+1547:     case cpp
+1548:     case objectiveC
+1549: 
+1550:     case html
+1551:     case css
+1552:     case scss
+1553:     case less
+1554:     case json
+1555:     case xml
+1556:     case yaml
+1557:     case sql
+1558: 
+1559:     case shell
+1560:     case dockerfile
+1561:     case graphql
+1562:     case markdown
+1563:     case php
+1564:     case env
+1565: 
+1566:     case plainText
+1567: }
+1568: 
+1569: struct VSCodeSyntaxHighlighter {
+1570:     private let baseFontSize: CGFloat
+1571:     let theme: Theme
+1572:     
+1573:     init(theme: Theme = ThemeManager.shared.currentTheme, fontSize: CGFloat = 14) {
+1574:         self.theme = theme
+1575:         self.baseFontSize = fontSize
+1576:     }
+1577:     
+1578:     func highlight(_ text: String, filename: String) -> NSAttributedString {
+1579:         let language = detectLanguage(from: filename)
+1580:         return highlight(text, language: language)
+1581:     }
+1582:     
+1583:     private func detectLanguage(from filename: String) -> Language {
+1584:         let lower = filename.lowercased()
+1585:         let ext = (filename as NSString).pathExtension.lowercased()
+1586: 
+1587:         // Special-case filenames without extensions
+1588:         if (filename as NSString).lastPathComponent.lowercased() == "dockerfile" { return .dockerfile }
+1589:         if (filename as NSString).lastPathComponent.lowercased() == ".env" { return .env }
+1590:         if lower.hasSuffix("/.env") { return .env }
+1591: 
+1592:         switch ext {
+1593:         case "swift": return .swift
+1594: 
+1595:         case "js", "mjs", "cjs": return .javascript
+1596:         case "jsx": return .jsx
+1597:         case "ts", "mts", "cts": return .typescript
+1598:         case "tsx": return .tsx
+1599: 
+1600:         case "py", "pyw": return .python
+1601:         case "rb", "ruby": return .ruby
+1602:         case "go": return .go
+1603:         case "rs": return .rust
+1604:         case "java": return .java
+1605:         case "kt", "kts": return .kotlin
+1606: 
+1607:         case "c", "h": return .c
+1608:         case "cpp", "cc", "cxx", "hpp", "hh", "hxx": return .cpp
+1609:         case "m", "mm": return .objectiveC
+1610: 
+1611:         case "html", "htm": return .html
+1612:         case "css": return .css
+1613:         case "scss", "sass": return .scss
+1614:         case "less": return .less
+1615:         case "json", "jsonc": return .json
+1616:         case "xml", "plist", "svg": return .xml
+1617:         case "yml", "yaml": return .yaml
+1618:         case "sql": return .sql
+1619: 
+1620:         case "sh", "bash", "zsh", "fish": return .shell
+1621:         case "dockerfile": return .dockerfile
+1622: 
+1623:         case "graphql", "gql": return .graphql
+1624: 
+1625:         case "md", "markdown": return .markdown
+1626:         case "php": return .php
+1627:         case "env": return .env
+1628: 
+1629:         default: return .plainText
+1630:         }
+1631:     }
+1632:     
+1633:     private func highlight(_ text: String, language: Language) -> NSAttributedString {
+1634:         let attributed = NSMutableAttributedString(string: text)
+1635:         let fullRange = NSRange(location: 0, length: text.utf16.count)
+1636:         
+1637:         // Base attributes
+1638:         let baseFont = UIFont.monospacedSystemFont(ofSize: baseFontSize, weight: .regular)
+1639:         attributed.addAttribute(.font, value: baseFont, range: fullRange)
+1640:         attributed.addAttribute(.foregroundColor, value: UIColor(theme.editorForeground), range: fullRange)
+1641:         
+1642:         // Apply language-specific highlighting
+1643:         switch language {
+1644:         case .swift: highlightSwift(attributed, text: text)
+1645:         case .javascript, .jsx: highlightJavaScript(attributed, text: text, isTS: false)
+1646:         case .typescript, .tsx: highlightJavaScript(attributed, text: text, isTS: true)
+1647:         case .python: highlightPython(attributed, text: text)
+1648:         case .html, .xml: highlightHTML(attributed, text: text)
+1649:         case .css, .scss, .less: highlightCSS(attributed, text: text)
+1650:         case .json: highlightJSON(attributed, text: text)
+1651:         case .markdown: highlightMarkdown(attributed, text: text)
+1652:         case .rust: highlightRust(attributed, text: text)
+1653:         case .go: highlightGo(attributed, text: text)
+1654:         case .java, .kotlin: highlightJava(attributed, text: text)
+1655:         case .c, .cpp, .objectiveC: highlightCpp(attributed, text: text)
+1656:         case .ruby: highlightRuby(attributed, text: text)
+1657:         case .php: highlightPHP(attributed, text: text)
+1658:         case .shell, .dockerfile: highlightShell(attributed, text: text)
+1659:         case .yaml, .env: highlightYAML(attributed, text: text)
+1660:         case .sql: highlightSQL(attributed, text: text)
+1661:         case .graphql: highlightGraphQL(attributed, text: text)
+1662:         case .plainText: break
+1663:         }
+1664:         
+1665:         // FEAT-038: Bracket Pair Colorization (applied last)
+1666:         highlightBracketPairs(attributed, text: text)
+1667:         
+1668:         return attributed
+1669:     }
+1670:     
+1671:     // MARK: - Bracket Pair Colorization
+1672:     
+1673:     private func highlightBracketPairs(_ attributed: NSMutableAttributedString, text: String) {
+1674:         let brackets: [Character] = ["{", "}", "[", "]", "(", ")"]
+1675:         let pairs: [Character: Character] = ["}": "{", "]": "[", ")": "("]
+1676:         
+1677:         var stack: [(char: Character, index: Int, depth: Int)] = []
+1678:         let colors = [
+1679:             UIColor(theme.bracketPair1),
+1680:             UIColor(theme.bracketPair2),
+1681:             UIColor(theme.bracketPair3),
+1682:             UIColor(theme.bracketPair4),
+1683:             UIColor(theme.bracketPair5),
+1684:             UIColor(theme.bracketPair6)
+1685:         ]
+1686:         
+1687:         // Scan text for brackets
+1688:         // Note: In a real implementation, we should skip brackets inside strings/comments
+1689:         // But since we apply this LAST, we can try to respect existing string/comment colors
+1690:         // OR implement a more robust parser. For now, simple scan.
+1691:         
+1692:         // Optimization: Use scanner or direct iteration
+1693:         let nsString = text as NSString
+1694:         var index = 0
+1695:         
+1696:         while index < text.utf16.count {
+1697:             let char = nsString.character(at: index)
+1698:             if let scalar = UnicodeScalar(char) {
+1699:                 let c = Character(scalar)
+1700:                 
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift", "start_line": 1700, "end_line": 1900}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift (lines 1701-1900 of 2289)
+────────────────────────────────────────
+1701:                 if brackets.contains(c) {
+1702:                     // Check if it's already colored as string/comment (heuristic)
+1703:                     // If color is string/comment, skip
+1704:                     // (Requires iterating attributes, which is slow. We'll just apply on top for now)
+1705:                     
+1706:                     if let open = pairs[c] { // Closing bracket
+1707:                         if let last = stack.last, last.char == open {
+1708:                             // Match found
+1709:                             let depth = last.depth
+1710:                             let color = colors[depth % colors.count]
+1711:                             
+1712:                             attributed.addAttribute(.foregroundColor, value: color, range: NSRange(location: index, length: 1))
+1713:                             attributed.addAttribute(.foregroundColor, value: color, range: NSRange(location: last.index, length: 1))
+1714:                             
+1715:                             stack.removeLast()
+1716:                         } else {
+1717:                             // Mismatched or extra closing bracket - unexpected
+1718:                             // Keep default color or mark red? Default for now.
+1719:                         }
+1720:                     } else { // Opening bracket
+1721:                         let depth = stack.count
+1722:                         stack.append((c, index, depth))
+1723:                         
+1724:                         // We'll color it when (and if) we find the match, or here?
+1725:                         // Better to color here tentatively, but matching is better.
+1726:                         // Let's color tentatively based on depth.
+1727:                         let color = colors[depth % colors.count]
+1728:                         attributed.addAttribute(.foregroundColor, value: color, range: NSRange(location: index, length: 1))
+1729:                     }
+1730:                 }
+1731:             }
+1732:             index += 1
+1733:         }
+1734:     }
+1735:     
+1736:     // MARK: - Swift Highlighting
+1737:     
+1738:     private func highlightSwift(_ attributed: NSMutableAttributedString, text: String) {
+1739:         // Keywords (purple/pink)
+1740:         let keywords = ["func", "var", "let", "if", "else", "for", "while", "return",
+1741:                        "class", "struct", "enum", "protocol", "extension", "import",
+1742:                        "private", "public", "internal", "fileprivate", "open",
+1743:                        "static", "final", "override", "mutating", "nonmutating",
+1744:                        "init", "deinit", "subscript", "typealias", "associatedtype",
+1745:                        "where", "throws", "rethrows", "async", "await", "actor",
+1746:                        "guard", "defer", "do", "try", "catch", "throw",
+1747:                        "switch", "case", "default", "break", "continue", "fallthrough",
+1748:                        "in", "is", "as", "inout", "some", "any", "Self",
+1749:                        "get", "set", "willSet", "didSet", "lazy", "weak", "unowned",
+1750:                        "@State", "@Binding", "@Published", "@ObservedObject", "@StateObject",
+1751:                        "@Environment", "@EnvironmentObject", "@ViewBuilder", "@MainActor",
+1752:                        "@escaping", "@autoclosure", "@available", "@objc", "@discardableResult"]
+1753:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+1754:         
+1755:         // Types (teal) - CamelCase words that aren't keywords
+1756:         let typePattern = "\\b[A-Z][a-zA-Z0-9]*\\b"
+1757:         highlightPattern(attributed, pattern: typePattern, color: UIColor(theme.type), text: text)
+1758:         
+1759:         // Function calls (yellow)
+1760:         let funcCallPattern = "\\b([a-z][a-zA-Z0-9]*)\\s*\\("
+1761:         highlightPattern(attributed, pattern: funcCallPattern, color: UIColor(theme.function), text: text, captureGroup: 1)
+1762:         
+1763:         // Constants (blue)
+1764:         let constants = ["true", "false", "nil", "self", "super"]
+1765:         highlightKeywords(attributed, keywords: constants, color: UIColor(theme.variable), text: text)
+1766:         
+1767:         // Comments MUST come late (green) - they override everything
+1768:         highlightComments(attributed, text: text, singleLine: "//", multiLineStart: "/*", multiLineEnd: "*/")
+1769:         
+1770:         // Strings AFTER comments (orange)
+1771:         highlightStrings(attributed, text: text)
+1772:         
+1773:         // Numbers (light green)
+1774:         highlightNumbers(attributed, text: text)
+1775:     }
+1776:     
+1777:     // MARK: - JavaScript/TypeScript Highlighting
+1778:     
+1779:     private func highlightJavaScript(_ attributed: NSMutableAttributedString, text: String, isTS: Bool) {
+1780:         var keywords = ["function", "var", "let", "const", "if", "else", "for", "while",
+1781:                        "return", "class", "extends", "new", "this", "super", "import",
+1782:                        "export", "default", "from", "as", "async", "await", "yield",
+1783:                        "try", "catch", "finally", "throw", "typeof", "instanceof",
+1784:                        "switch", "case", "break", "continue", "do", "in", "of",
+1785:                        "get", "set", "static", "constructor", "delete", "void",
+1786:                        "with", "debugger"]
+1787:         
+1788:         if isTS {
+1789:             keywords += ["interface", "type", "enum", "namespace", "module", "declare",
+1790:                         "implements", "public", "private", "protected", "readonly",
+1791:                         "abstract", "override", "keyof", "infer", "never", "unknown",
+1792:                         "any", "asserts", "is"]
+1793:         }
+1794:         
+1795:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+1796:         
+1797:         // Constants
+1798:         let constants = ["true", "false", "null", "undefined", "NaN", "Infinity"]
+1799:         highlightKeywords(attributed, keywords: constants, color: UIColor(theme.variable), text: text)
+1800:         
+1801:         // Function names (yellow) - regular calls + arrow functions
+1802:         let funcNamePattern = "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)\\b(?=\\s*(?:\\(|=>))"
+1803:         highlightPattern(attributed, pattern: funcNamePattern, color: UIColor(theme.function), text: text, captureGroup: 1)
+1804:         
+1805:         // Types (teal)
+1806:         let typePattern = "\\b[A-Z][a-zA-Z0-9]*\\b"
+1807:         highlightPattern(attributed, pattern: typePattern, color: UIColor(theme.type), text: text)
+1808:         
+1809:         highlightComments(attributed, text: text, singleLine: "//", multiLineStart: "/*", multiLineEnd: "*/")
+1810:         highlightStrings(attributed, text: text)
+1811:         highlightJSTemplateLiterals(attributed, text: text)
+1812:         highlightNumbers(attributed, text: text)
+1813:     }
+1814:     
+1815:     // MARK: - Python Highlighting
+1816:     
+1817:     private func highlightPython(_ attributed: NSMutableAttributedString, text: String) {
+1818:         let keywords = ["def", "class", "if", "elif", "else", "for", "while", "return",
+1819:                        "import", "from", "as", "try", "except", "finally", "raise",
+1820:                        "with", "assert", "yield", "lambda", "pass", "break", "continue",
+1821:                        "global", "nonlocal", "del", "in", "not", "and", "or", "is",
+1822:                        "async", "await", "match", "case"]
+1823:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+1824:         
+1825:         let constants = ["True", "False", "None", "self", "cls"]
+1826:         highlightKeywords(attributed, keywords: constants, color: UIColor(theme.variable), text: text)
+1827:         
+1828:         // Decorators (yellow)
+1829:         let decoratorPattern = "@[a-zA-Z_][a-zA-Z0-9_\\.]*"
+1830:         highlightPattern(attributed, pattern: decoratorPattern, color: UIColor(theme.function), text: text)
+1831:         
+1832:         // Function definitions (yellow)
+1833:         let funcDefPattern = "(?<=def\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+1834:         highlightPattern(attributed, pattern: funcDefPattern, color: UIColor(theme.function), text: text)
+1835:         
+1836:         // Class names (teal)
+1837:         let classPattern = "(?<=class\\s)[a-zA-Z_][a-zA-Z0-9_]*"
+1838:         highlightPattern(attributed, pattern: classPattern, color: UIColor(theme.type), text: text)
+1839:         
+1840:         // Built-in functions (yellow)
+1841:         let builtins = ["print", "len", "range", "str", "int", "float", "list", "dict", "set",
+1842:                        "tuple", "bool", "type", "isinstance", "hasattr", "getattr", "setattr",
+1843:                        "open", "input", "map", "filter", "reduce", "zip", "enumerate",
+1844:                        "sorted", "reversed", "min", "max", "sum", "abs", "round",
+1845:                        "super", "object", "Exception", "ValueError", "TypeError"]
+1846:         highlightKeywords(attributed, keywords: builtins, color: UIColor(theme.function), text: text)
+1847:         
+1848:         highlightComments(attributed, text: text, singleLine: "#", multiLineStart: nil, multiLineEnd: nil)
+1849:         highlightPythonStrings(attributed, text: text)
+1850:         highlightNumbers(attributed, text: text)
+1851:     }
+1852:     
+1853:     // MARK: - HTML Highlighting
+1854:     
+1855:     private func highlightHTML(_ attributed: NSMutableAttributedString, text: String) {
+1856:         // Tags (blue)
+1857:         let tagPattern = "</?\\s*([a-zA-Z][a-zA-Z0-9-]*)(?=[\\s>])"
+1858:         highlightPattern(attributed, pattern: tagPattern, color: UIColor(theme.keyword), text: text)
+1859:         
+1860:         // Attributes (light blue)
+1861:         let attrPattern = "\\s([a-zA-Z][a-zA-Z0-9-]*)\\s*="
+1862:         highlightPattern(attributed, pattern: attrPattern, color: UIColor(theme.variable), text: text, captureGroup: 1)
+1863:         
+1864:         // Angle brackets
+1865:         let bracketPattern = "[<>/?]"
+1866:         highlightPattern(attributed, pattern: bracketPattern, color: UIColor.gray, text: text)
+1867:         
+1868:         // Comments
+1869:         highlightHTMLComments(attributed, text: text)
+1870:         
+1871:         // Strings
+1872:         highlightStrings(attributed, text: text)
+1873:     }
+1874:     
+1875:     // MARK: - CSS Highlighting
+1876:     
+1877:     private func highlightCSS(_ attributed: NSMutableAttributedString, text: String) {
+1878:         // Selectors (yellow)
+1879:         let selectorPattern = "([.#]?[a-zA-Z][a-zA-Z0-9_-]*)\\s*\\{"
+1880:         highlightPattern(attributed, pattern: selectorPattern, color: UIColor(theme.function), text: text, captureGroup: 1)
+1881:         
+1882:         // Properties (light blue)
+1883:         let propertyPattern = "([a-zA-Z-]+)\\s*:"
+1884:         highlightPattern(attributed, pattern: propertyPattern, color: UIColor(theme.variable), text: text, captureGroup: 1)
+1885:         
+1886:         // Values with units
+1887:         let unitPattern = "\\b(\\d+)(px|em|rem|%|vh|vw|pt|cm|mm|in)\\b"
+1888:         highlightPattern(attributed, pattern: unitPattern, color: UIColor(theme.number), text: text)
+1889:         
+1890:         // Colors
+1891:         let hexPattern = "#[0-9a-fA-F]{3,8}\\b"
+1892:         highlightPattern(attributed, pattern: hexPattern, color: UIColor(theme.number), text: text)
+1893:         
+1894:         // Keywords
+1895:         let keywords = ["important", "inherit", "initial", "unset", "none", "auto",
+1896:                        "block", "inline", "flex", "grid", "absolute", "relative", "fixed"]
+1897:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+1898:         
+1899:         highlightComments(attributed, text: text, singleLine: nil, multiLineStart: "/*", multiLineEnd: "*/")
+1900:         highlightStrings(attributed, text: text)
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift", "start_line": 2050, "end_line": 2289}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift (lines 2051-2289 of 2289)
+────────────────────────────────────────
+2051:         highlightNumbers(attributed, text: text)
+2052:     }
+2053:     
+2054:     // MARK: - Ruby Highlighting
+2055:     
+2056:     private func highlightRuby(_ attributed: NSMutableAttributedString, text: String) {
+2057:         let keywords = ["def", "class", "module", "if", "elsif", "else", "unless", "case", "when",
+2058:                        "while", "until", "for", "do", "end", "begin", "rescue", "ensure", "raise",
+2059:                        "return", "yield", "break", "next", "redo", "retry", "self", "super",
+2060:                        "require", "require_relative", "include", "extend", "attr_reader", "attr_writer", "attr_accessor",
+2061:                        "public", "private", "protected", "alias", "and", "or", "not", "in"]
+2062:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+2063:         
+2064:         let constants = ["true", "false", "nil"]
+2065:         highlightKeywords(attributed, keywords: constants, color: UIColor(theme.variable), text: text)
+2066:         
+2067:         // Symbols (orange)
+2068:         let symbolPattern = ":[a-zA-Z_][a-zA-Z0-9_]*"
+2069:         highlightPattern(attributed, pattern: symbolPattern, color: UIColor(theme.string), text: text)
+2070:         
+2071:         // Instance variables (light blue)
+2072:         let ivarPattern = "@[a-zA-Z_][a-zA-Z0-9_]*"
+2073:         highlightPattern(attributed, pattern: ivarPattern, color: UIColor(theme.variable), text: text)
+2074:         
+2075:         highlightComments(attributed, text: text, singleLine: "#", multiLineStart: "=begin", multiLineEnd: "=end")
+2076:         highlightStrings(attributed, text: text)
+2077:         highlightNumbers(attributed, text: text)
+2078:     }
+2079:     
+2080:     // MARK: - PHP Highlighting
+2081:     
+2082:     private func highlightPHP(_ attributed: NSMutableAttributedString, text: String) {
+2083:         let keywords = ["function", "class", "interface", "trait", "extends", "implements", "use",
+2084:                        "public", "private", "protected", "static", "final", "abstract", "const",
+2085:                        "if", "else", "elseif", "switch", "case", "default", "for", "foreach", "while", "do",
+2086:                        "return", "break", "continue", "throw", "try", "catch", "finally",
+2087:                        "new", "clone", "instanceof", "echo", "print", "die", "exit",
+2088:                        "require", "require_once", "include", "include_once", "namespace"]
+2089:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+2090:         
+2091:         let constants = ["true", "false", "null", "TRUE", "FALSE", "NULL"]
+2092:         highlightKeywords(attributed, keywords: constants, color: UIColor(theme.variable), text: text)
+2093:         
+2094:         // Variables (light blue)
+2095:         let varPattern = "\\$[a-zA-Z_][a-zA-Z0-9_]*"
+2096:         highlightPattern(attributed, pattern: varPattern, color: UIColor(theme.variable), text: text)
+2097:         
+2098:         highlightComments(attributed, text: text, singleLine: "//", multiLineStart: "/*", multiLineEnd: "*/")
+2099:         highlightStrings(attributed, text: text)
+2100:         highlightNumbers(attributed, text: text)
+2101:     }
+2102:     
+2103:     // MARK: - Shell Highlighting
+2104:     
+2105:     private func highlightShell(_ attributed: NSMutableAttributedString, text: String) {
+2106:         let keywords = ["if", "then", "else", "elif", "fi", "for", "while", "do", "done", "case", "esac",
+2107:                        "function", "return", "exit", "break", "continue", "local", "export", "readonly",
+2108:                        "source", "alias", "unalias", "set", "unset", "shift", "eval", "exec",
+2109:                        "echo", "printf", "read", "cd", "pwd", "ls", "mkdir", "rm", "cp", "mv"]
+2110:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+2111:         
+2112:         // Variables (light blue)
+2113:         let varPattern = "\\$[a-zA-Z_][a-zA-Z0-9_]*|\\$\\{[^}]+\\}"
+2114:         highlightPattern(attributed, pattern: varPattern, color: UIColor(theme.variable), text: text)
+2115:         
+2116:         highlightComments(attributed, text: text, singleLine: "#", multiLineStart: nil, multiLineEnd: nil)
+2117:         highlightStrings(attributed, text: text)
+2118:         highlightNumbers(attributed, text: text)
+2119:     }
+2120:     
+2121:     // MARK: - YAML Highlighting
+2122:     
+2123:     private func highlightYAML(_ attributed: NSMutableAttributedString, text: String) {
+2124:         // Keys (light blue)
+2125:         let keyPattern = "^\\s*([a-zA-Z_][a-zA-Z0-9_-]*)\\s*:"
+2126:         highlightPattern(attributed, pattern: keyPattern, color: UIColor(theme.variable), text: text, options: .anchorsMatchLines, captureGroup: 1)
+2127:         
+2128:         // Booleans and null
+2129:         let constants = ["true", "false", "yes", "no", "on", "off", "null", "~"]
+2130:         highlightKeywords(attributed, keywords: constants, color: UIColor(theme.variable), text: text)
+2131:         
+2132:         highlightComments(attributed, text: text, singleLine: "#", multiLineStart: nil, multiLineEnd: nil)
+2133:         highlightStrings(attributed, text: text)
+2134:         highlightNumbers(attributed, text: text)
+2135:     }
+2136:     
+2137:     // MARK: - SQL Highlighting
+2138:     
+2139:     private func highlightSQL(_ attributed: NSMutableAttributedString, text: String) {
+2140:         let keywords = ["SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN",
+2141:                        "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "CREATE", "ALTER", "DROP",
+2142:                        "TABLE", "INDEX", "VIEW", "DATABASE", "SCHEMA", "PRIMARY", "KEY", "FOREIGN", "REFERENCES",
+2143:                        "JOIN", "INNER", "LEFT", "RIGHT", "OUTER", "FULL", "ON", "AS", "DISTINCT",
+2144:                        "ORDER", "BY", "ASC", "DESC", "GROUP", "HAVING", "LIMIT", "OFFSET", "UNION",
+2145:                        "NULL", "IS", "TRUE", "FALSE", "CASE", "WHEN", "THEN", "ELSE", "END",
+2146:                        "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CAST",
+2147:                        "select", "from", "where", "and", "or", "not", "in", "like", "between",
+2148:                        "insert", "into", "values", "update", "set", "delete", "create", "alter", "drop",
+2149:                        "table", "index", "view", "database", "schema", "primary", "key", "foreign", "references",
+2150:                        "join", "inner", "left", "right", "outer", "full", "on", "as", "distinct",
+2151:                        "order", "by", "asc", "desc", "group", "having", "limit", "offset", "union",
+2152:                        "null", "is", "true", "false", "case", "when", "then", "else", "end"]
+2153:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+2154:         
+2155:         let types = ["INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "FLOAT", "DOUBLE", "DECIMAL",
+2156:                     "VARCHAR", "CHAR", "TEXT", "BLOB", "DATE", "TIME", "DATETIME", "TIMESTAMP", "BOOLEAN",
+2157:                     "int", "integer", "bigint", "smallint", "tinyint", "float", "double", "decimal",
+2158:                     "varchar", "char", "text", "blob", "date", "time", "datetime", "timestamp", "boolean"]
+2159:         highlightKeywords(attributed, keywords: types, color: UIColor(theme.type), text: text)
+2160:         
+2161:         highlightComments(attributed, text: text, singleLine: "--", multiLineStart: "/*", multiLineEnd: "*/")
+2162:         highlightStrings(attributed, text: text)
+2163:         highlightNumbers(attributed, text: text)
+2164:     }
+2165:     
+2166:     // MARK: - GraphQL Highlighting
+2167:     
+2168:     private func highlightGraphQL(_ attributed: NSMutableAttributedString, text: String) {
+2169:         // Keywords
+2170:         let keywords = ["query", "mutation", "subscription", "fragment", "on", "type", 
+2171:                        "interface", "union", "enum", "scalar", "input", "extend", 
+2172:                        "directive", "schema", "implements"]
+2173:         highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
+2174:         
+2175:         // Built-in scalar types
+2176:         let types = ["Int", "Float", "String", "Boolean", "ID"]
+2177:         highlightKeywords(attributed, keywords: types, color: UIColor(theme.type), text: text)
+2178:         
+2179:         // Variables ($name)
+2180:         let variablePattern = "\\$[a-zA-Z_][a-zA-Z0-9_]*"
+2181:         highlightPattern(attributed, pattern: variablePattern, color: UIColor(theme.variable), text: text)
+2182:         
+2183:         // Directives (@deprecated, @skip, @include, etc.)
+2184:         let directivePattern = "@[a-zA-Z_][a-zA-Z0-9_]*"
+2185:         highlightPattern(attributed, pattern: directivePattern, color: UIColor(theme.function), text: text)
+2186:         
+2187:         // Comments (# single line)
+2188:         highlightComments(attributed, text: text, singleLine: "#", multiLineStart: nil, multiLineEnd: nil)
+2189:         
+2190:         // Strings
+2191:         highlightStrings(attributed, text: text)
+2192:         
+2193:         // Numbers
+2194:         highlightNumbers(attributed, text: text)
+2195:     }
+2196:     
+2197:     // MARK: - Helper Methods
+2198:     
+2199:     private func highlightKeywords(_ attributed: NSMutableAttributedString, keywords: [String], color: UIColor, text: String) {
+2200:         for keyword in keywords {
+2201:             let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b"
+2202:             highlightPattern(attributed, pattern: pattern, color: color, text: text)
+2203:         }
+2204:     }
+2205:     
+2206:     private func highlightPattern(_ attributed: NSMutableAttributedString, pattern: String, color: UIColor, text: String, options: NSRegularExpression.Options = [], captureGroup: Int = 0) {
+2207:         guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
+2208:         let range = NSRange(location: 0, length: text.utf16.count)
+2209:         
+2210:         regex.enumerateMatches(in: text, options: [], range: range) { match, _, _ in
+2211:             guard let match = match else { return }
+2212:             let matchRange = captureGroup > 0 && match.numberOfRanges > captureGroup
+2213:                 ? match.range(at: captureGroup)
+2214:                 : match.range
+2215:             if matchRange.location != NSNotFound {
+2216:                 attributed.addAttribute(.foregroundColor, value: color, range: matchRange)
+2217:             }
+2218:         }
+2219:     }
+2220:     
+2221:     private func highlightStrings(_ attributed: NSMutableAttributedString, text: String) {
+2222:         // Double-quoted strings
+2223:         let doublePattern = "\"(?:[^\"\\\\]|\\\\.)*\""
+2224:         highlightPattern(attributed, pattern: doublePattern, color: UIColor(theme.string), text: text)
+2225:         
+2226:         // Single-quoted strings
+2227:         let singlePattern = "'(?:[^'\\\\]|\\\\.)*'"
+2228:         highlightPattern(attributed, pattern: singlePattern, color: UIColor(theme.string), text: text)
+2229:     }
+2230:     
+2231:     private func highlightPythonStrings(_ attributed: NSMutableAttributedString, text: String) {
+2232:         // Triple-quoted strings first
+2233:         let tripleDoublePattern = "\"\"\"[\\s\\S]*?\"\"\""
+2234:         highlightPattern(attributed, pattern: tripleDoublePattern, color: UIColor(theme.string), text: text)
+2235:         
+2236:         let tripleSinglePattern = "'''[\\s\\S]*?'''"
+2237:         highlightPattern(attributed, pattern: tripleSinglePattern, color: UIColor(theme.string), text: text)
+2238:         
+2239:         // Then regular strings
+2240:         highlightStrings(attributed, text: text)
+2241:         
+2242:         // F-strings (with expressions highlighted differently)
+2243:         let fstringPattern = "f\"[^\"]*\"|f'[^']*'"
+2244:         highlightPattern(attributed, pattern: fstringPattern, color: UIColor(theme.string), text: text)
+2245:     }
+2246:     
+2247:     private func highlightJSTemplateLiterals(_ attributed: NSMutableAttributedString, text: String) {
+2248:         // Template literals
+2249:         let templatePattern = "`[^`]*`"
+2250:         highlightPattern(attributed, pattern: templatePattern, color: UIColor(theme.string), text: text)
+2251:     }
+2252:     
+2253:     private func highlightComments(_ attributed: NSMutableAttributedString, text: String, singleLine: String?, multiLineStart: String?, multiLineEnd: String?) {
+2254:         // Single-line comments
+2255:         if let single = singleLine {
+2256:             let pattern = "\(NSRegularExpression.escapedPattern(for: single)).*$"
+2257:             highlightPattern(attributed, pattern: pattern, color: UIColor(theme.comment), text: text, options: .anchorsMatchLines)
+2258:         }
+2259:         
+2260:         // Multi-line comments
+2261:         if let start = multiLineStart, let end = multiLineEnd {
+2262:             let pattern = "\(NSRegularExpression.escapedPattern(for: start))[\\s\\S]*?\(NSRegularExpression.escapedPattern(for: end))"
+2263:             highlightPattern(attributed, pattern: pattern, color: UIColor(theme.comment), text: text)
+2264:         }
+2265:     }
+2266:     
+2267:     private func highlightHTMLComments(_ attributed: NSMutableAttributedString, text: String) {
+2268:         let pattern = "<!--[\\s\\S]*?-->"
+2269:         highlightPattern(attributed, pattern: pattern, color: UIColor(theme.comment), text: text)
+2270:     }
+2271:     
+2272:     private func highlightNumbers(_ attributed: NSMutableAttributedString, text: String) {
+2273:         // Hex numbers
+2274:         let hexPattern = "\\b0[xX][0-9a-fA-F]+\\b"
+2275:         highlightPattern(attributed, pattern: hexPattern, color: UIColor(theme.number), text: text)
+2276:         
+2277:         // Binary numbers
+2278:         let binPattern = "\\b0[bB][01]+\\b"
+2279:         highlightPattern(attributed, pattern: binPattern, color: UIColor(theme.number), text: text)
+2280:         
+2281:         // Octal numbers
+2282:         let octPattern = "\\b0[oO][0-7]+\\b"
+2283:         highlightPattern(attributed, pattern: octPattern, color: UIColor(theme.number), text: text)
+2284:         
+2285:         // Decimal numbers (including floats and scientific notation)
+2286:         let decPattern = "\\b\\d+\\.?\\d*([eE][+-]?\\d+)?\\b"
+2287:         highlightPattern(attributed, pattern: decPattern, color: UIColor(theme.number), text: text)
+2288:     }
+2289: }
+
+
+>>>TOOL search
+{"query": "theme.string", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "theme.string"
+
+
+>>>TOOL search
+{"query": "struct Theme", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "struct Theme"
+
+
+>>>TOOL search
+{"query": "class Theme", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "class Theme"
+
+
+>>>TOOL search
+{"query": "Theme", "glob": "../vscode-ipados/**/*.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[search]
+No matches found for "Theme"
+
+
+>>>TOOL list_dir
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Models"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[list_dir]
+📁 ../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Models/
+   EditorState.swift
+   FileItem.swift
+   FileItemUTType.swift
+   FindViewModel.swift
+   MultiCursor.swift
+   Tab.swift
+   Theme.swift
+   ThemeManager.swift
+
+
+>>>TOOL read_file
+{"path": "../vscode-ipados/VSCodeiPadOS/VSCodeiPadOS/Models/Theme.swift"}
+>>>END
+
+---
+
+## 🔧 TOOL RESULTS
+
+[read_file]
+File: VSCodeiPadOS/VSCodeiPadOS/Models/Theme.swift (lines 1-887 of 887)
+────────────────────────────────────────
+1: import SwiftUI
+2: 
+3: struct Theme: Identifiable, Equatable, Hashable {
+4:     let id: String
+5:     let name: String
+6:     let isDark: Bool
+7:     
+8:     // Editor Colors
+9:     let editorBackground: Color
+10:     let editorForeground: Color
+11:     let selection: Color
+12:     let cursor: Color
+13:     let lineNumber: Color
+14:     let lineNumberActive: Color
+15:     let currentLineHighlight: Color
+16:     let bracketPair1: Color
+17:     let bracketPair2: Color
+18:     let bracketPair3: Color
+19:     let bracketPair4: Color
+20:     let bracketPair5: Color
+21:     let bracketPair6: Color
+22:     let indentGuide: Color
+23:     let indentGuideActive: Color
+24:     
+25:     // UI Colors
+26:     let sidebarBackground: Color
+27:     let sidebarForeground: Color
+28:     let sidebarSectionHeader: Color
+29:     let sidebarSelection: Color
+30:     let activityBarBackground: Color
+31:     let activityBarForeground: Color
+32:     let activityBarSelection: Color
+33:     let tabBarBackground: Color
+34:     let tabActiveBackground: Color
+35:     let tabInactiveBackground: Color
+36:     let tabActiveForeground: Color
+37:     let tabInactiveForeground: Color
+38:     let statusBarBackground: Color
+39:     let statusBarForeground: Color
+40:     
+41:     // Syntax Colors
+42:     let keyword: Color
+43:     let string: Color
+44:     let number: Color
+45:     let comment: Color
+46:     let function: Color
+47:     let type: Color
+48:     let variable: Color
+49:     
+50:     // Helper for Hex Colors
+51:     static func hex(_ hex: String) -> Color {
+52:         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+53:         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+54:         
+55:         var rgb: UInt64 = 0
+56:         Scanner(string: hexSanitized).scanHexInt64(&rgb)
+57:         
+58:         let r = Double((rgb & 0xFF0000) >> 16) / 255.0
+59:         let g = Double((rgb & 0x00FF00) >> 8) / 255.0
+60:         let b = Double(rgb & 0x0000FF) / 255.0
+61:         
+62:         return Color(red: r, green: g, blue: b)
+63:     }
+64:     
+65:     // MARK: - VS Code Default Themes
+66:     
+67:     static let darkPlus = Theme(
+68:         id: "dark_plus",
+69:         name: "Dark+ (Default Dark)",
+70:         isDark: true,
+71:         editorBackground: hex("#1E1E1E"),
+72:         editorForeground: hex("#D4D4D4"),
+73:         selection: hex("#264F78"),
+74:         cursor: hex("#AEAFAD"),
+75:         lineNumber: hex("#858585"),
+76:         lineNumberActive: hex("#C6C6C6"),
+77:         currentLineHighlight: hex("#FFFFFF").opacity(0.1),
+78:         bracketPair1: hex("#FFD700"),
+79:         bracketPair2: hex("#DA70D6"),
+80:         bracketPair3: hex("#179FFF"),
+81:         bracketPair4: hex("#FFD700"),
+82:         bracketPair5: hex("#DA70D6"),
+83:         bracketPair6: hex("#179FFF"),
+84:         indentGuide: hex("#404040"),
+85:         indentGuideActive: hex("#707070"),
+86:         sidebarBackground: hex("#252526"),
+87:         sidebarForeground: hex("#CCCCCC"),
+88:         sidebarSectionHeader: hex("#383838"),
+89:         sidebarSelection: hex("#37373D"),
+90:         activityBarBackground: hex("#333333"),
+91:         activityBarForeground: hex("#FFFFFF"),
+92:         activityBarSelection: hex("#FFFFFF"),
+93:         tabBarBackground: hex("#252526"),
+94:         tabActiveBackground: hex("#1E1E1E"),
+95:         tabInactiveBackground: hex("#2D2D2D"),
+96:         tabActiveForeground: hex("#FFFFFF"),
+97:         tabInactiveForeground: hex("#969696"),
+98:         statusBarBackground: hex("#007ACC"),
+99:         statusBarForeground: hex("#FFFFFF"),
+100:         keyword: hex("#569CD6"),
+101:         string: hex("#CE9178"),
+102:         number: hex("#B5CEA8"),
+103:         comment: hex("#6A9955"),
+104:         function: hex("#DCDCAA"),
+105:         type: hex("#4EC9B0"),
+106:         variable: hex("#9CDCFE")
+107:     )
+108:     
+109:     static let lightPlus = Theme(
+110:         id: "light_plus",
+111:         name: "Light+ (Default Light)",
+112:         isDark: false,
+113:         editorBackground: hex("#FFFFFF"),
+114:         editorForeground: hex("#000000"),
+115:         selection: hex("#ADD6FF"),
+116:         cursor: hex("#000000"),
+117:         lineNumber: hex("#237893"),
+118:         lineNumberActive: hex("#0B216F"),
+119:         currentLineHighlight: hex("#000000").opacity(0.07),
+120:         bracketPair1: hex("#0431FA"),
+121:         bracketPair2: hex("#319331"),
+122:         bracketPair3: hex("#7B3814"),
+123:         bracketPair4: hex("#0431FA"),
+124:         bracketPair5: hex("#319331"),
+125:         bracketPair6: hex("#7B3814"),
+126:         indentGuide: hex("#D3D3D3"),
+127:         indentGuideActive: hex("#939393"),
+128:         sidebarBackground: hex("#F3F3F3"),
+129:         sidebarForeground: hex("#616161"),
+130:         sidebarSectionHeader: hex("#E7E7E7"),
+131:         sidebarSelection: hex("#E4E6F1"),
+132:         activityBarBackground: hex("#2C2C2C"),
+133:         activityBarForeground: hex("#FFFFFF"),
+134:         activityBarSelection: hex("#FFFFFF"),
+135:         tabBarBackground: hex("#F3F3F3"),
+136:         tabActiveBackground: hex("#FFFFFF"),
+137:         tabInactiveBackground: hex("#ECECEC"),
+138:         tabActiveForeground: hex("#333333"),
+139:         tabInactiveForeground: hex("#8E8E8E"),
+140:         statusBarBackground: hex("#007ACC"),
+141:         statusBarForeground: hex("#FFFFFF"),
+142:         keyword: hex("#AF00DB"),
+143:         string: hex("#A31515"),
+144:         number: hex("#098658"),
+145:         comment: hex("#008000"),
+146:         function: hex("#795E26"),
+147:         type: hex("#267F99"),
+148:         variable: hex("#001080")
+149:     )
+150:     
+151:     static let monokai = Theme(
+152:         id: "monokai",
+153:         name: "Monokai",
+154:         isDark: true,
+155:         editorBackground: hex("#272822"),
+156:         editorForeground: hex("#F8F8F2"),
+157:         selection: hex("#49483E"),
+158:         cursor: hex("#F8F8F0"),
+159:         lineNumber: hex("#90908A"),
+160:         lineNumberActive: hex("#F8F8F2"),
+161:         currentLineHighlight: hex("#3E3D32"),
+162:         bracketPair1: hex("#F8F8F2"),
+163:         bracketPair2: hex("#F92672"),
+164:         bracketPair3: hex("#A6E22E"),
+165:         bracketPair4: hex("#F8F8F2"),
+166:         bracketPair5: hex("#F92672"),
+167:         bracketPair6: hex("#A6E22E"),
+168:         indentGuide: hex("#464741"),
+169:         indentGuideActive: hex("#75715E"),
+170:         sidebarBackground: hex("#272822"),
+171:         sidebarForeground: hex("#F8F8F2"),
+172:         sidebarSectionHeader: hex("#1E1F1C"),
+173:         sidebarSelection: hex("#49483E"),
+174:         activityBarBackground: hex("#1E1F1C"),
+175:         activityBarForeground: hex("#F8F8F2"),
+176:         activityBarSelection: hex("#F8F8F2"),
+177:         tabBarBackground: hex("#1E1F1C"),
+178:         tabActiveBackground: hex("#272822"),
+179:         tabInactiveBackground: hex("#34352F"),
+180:         tabActiveForeground: hex("#F8F8F2"),
+181:         tabInactiveForeground: hex("#88846F"),
+182:         statusBarBackground: hex("#75715E"),
+183:         statusBarForeground: hex("#F8F8F2"),
+184:         keyword: hex("#F92672"),
+185:         string: hex("#E6DB74"),
+186:         number: hex("#AE81FF"),
+187:         comment: hex("#75715E"),
+188:         function: hex("#A6E22E"),
+189:         type: hex("#66D9EF"),
+190:         variable: hex("#FD971F")
+191:     )
+192:     
+193:     static let solarizedDark = Theme(
+194:         id: "solarized_dark",
+195:         name: "Solarized Dark",
+196:         isDark: true,
+197:         editorBackground: hex("#002B36"),
+198:         editorForeground: hex("#839496"),
+199:         selection: hex("#274642"),
+200:         cursor: hex("#D30102"),
+201:         lineNumber: hex("#586E75"),
+202:         lineNumberActive: hex("#93A1A1"),
+203:         currentLineHighlight: hex("#0A2933"),
+204:         bracketPair1: hex("#859900"),
+205:         bracketPair2: hex("#2AA198"),
+206:         bracketPair3: hex("#268BD2"),
+207:         bracketPair4: hex("#859900"),
+208:         bracketPair5: hex("#2AA198"),
+209:         bracketPair6: hex("#268BD2"),
+210:         indentGuide: hex("#073642"),
+211:         indentGuideActive: hex("#586E75"),
+212:         sidebarBackground: hex("#00252E"),
+213:         sidebarForeground: hex("#93A1A1"),
+214:         sidebarSectionHeader: hex("#001F27"),
+215:         sidebarSelection: hex("#073642"),
+216:         activityBarBackground: hex("#002B36"),
+217:         activityBarForeground: hex("#93A1A1"),
+218:         activityBarSelection: hex("#FDF6E3"),
+219:         tabBarBackground: hex("#002B36"),
+220:         tabActiveBackground: hex("#002B36"),
+221:         tabInactiveBackground: hex("#00212B"),
+222:         tabActiveForeground: hex("#93A1A1"),
+223:         tabInactiveForeground: hex("#586E75"),
+224:         statusBarBackground: hex("#00212B"),
+225:         statusBarForeground: hex("#93A1A1"),
+226:         keyword: hex("#859900"),
+227:         string: hex("#2AA198"),
+228:         number: hex("#D33682"),
+229:         comment: hex("#586E75"),
+230:         function: hex("#268BD2"),
+231:         type: hex("#CB4B16"),
+232:         variable: hex("#B58900")
+233:     )
+234:     
+235:     static let solarizedLight = Theme(
+236:         id: "solarized_light",
+237:         name: "Solarized Light",
+238:         isDark: false,
+239:         editorBackground: hex("#FDF6E3"),
+240:         editorForeground: hex("#657B83"),
+241:         selection: hex("#EEE8D5"),
+242:         cursor: hex("#D30102"),
+243:         lineNumber: hex("#93A1A1"),
+244:         lineNumberActive: hex("#586E75"),
+245:         currentLineHighlight: hex("#EEE8D5"),
+246:         bracketPair1: hex("#859900"),
+247:         bracketPair2: hex("#2AA198"),
+248:         bracketPair3: hex("#268BD2"),
+249:         bracketPair4: hex("#859900"),
+250:         bracketPair5: hex("#2AA198"),
+251:         bracketPair6: hex("#268BD2"),
+252:         indentGuide: hex("#EEE8D5"),
+253:         indentGuideActive: hex("#93A1A1"),
+254:         sidebarBackground: hex("#EEE8D5"),
+255:         sidebarForeground: hex("#586E75"),
+256:         sidebarSectionHeader: hex("#DDD6C1"),
+257:         sidebarSelection: hex("#D3CBB8"),
+258:         activityBarBackground: hex("#DDD6C1"),
+259:         activityBarForeground: hex("#586E75"),
+260:         activityBarSelection: hex("#073642"),
+261:         tabBarBackground: hex("#EEE8D5"),
+262:         tabActiveBackground: hex("#FDF6E3"),
+263:         tabInactiveBackground: hex("#EEE8D5"),
+264:         tabActiveForeground: hex("#073642"),
+265:         tabInactiveForeground: hex("#93A1A1"),
+266:         statusBarBackground: hex("#EEE8D5"),
+267:         statusBarForeground: hex("#586E75"),
+268:         keyword: hex("#859900"),
+269:         string: hex("#2AA198"),
+270:         number: hex("#D33682"),
+271:         comment: hex("#93A1A1"),
+272:         function: hex("#268BD2"),
+273:         type: hex("#CB4B16"),
+274:         variable: hex("#B58900")
+275:     )
+276:     
+277:     static let dracula = Theme(
+278:         id: "dracula",
+279:         name: "Dracula",
+280:         isDark: true,
+281:         editorBackground: hex("#282A36"),
+282:         editorForeground: hex("#F8F8F2"),
+283:         selection: hex("#44475A"),
+284:         cursor: hex("#F8F8F2"),
+285:         lineNumber: hex("#6272A4"),
+286:         lineNumberActive: hex("#F8F8F2"),
+287:         currentLineHighlight: hex("#44475A"),
+288:         bracketPair1: hex("#F8F8F2"),
+289:         bracketPair2: hex("#FF79C6"),
+290:         bracketPair3: hex("#8BE9FD"),
+291:         bracketPair4: hex("#F8F8F2"),
+292:         bracketPair5: hex("#FF79C6"),
+293:         bracketPair6: hex("#8BE9FD"),
+294:         indentGuide: hex("#424450"),
+295:         indentGuideActive: hex("#6272A4"),
+296:         sidebarBackground: hex("#21222C"),
+297:         sidebarForeground: hex("#F8F8F2"),
+298:         sidebarSectionHeader: hex("#191A21"),
+299:         sidebarSelection: hex("#44475A"),
+300:         activityBarBackground: hex("#343746"),
+301:         activityBarForeground: hex("#F8F8F2"),
+302:         activityBarSelection: hex("#F8F8F2"),
+303:         tabBarBackground: hex("#191A21"),
+304:         tabActiveBackground: hex("#282A36"),
+305:         tabInactiveBackground: hex("#21222C"),
+306:         tabActiveForeground: hex("#F8F8F2"),
+307:         tabInactiveForeground: hex("#6272A4"),
+308:         statusBarBackground: hex("#BD93F9"),
+309:         statusBarForeground: hex("#282A36"),
+310:         keyword: hex("#FF79C6"),
+311:         string: hex("#F1FA8C"),
+312:         number: hex("#BD93F9"),
+313:         comment: hex("#6272A4"),
+314:         function: hex("#50FA7B"),
+315:         type: hex("#8BE9FD"),
+316:         variable: hex("#FFB86C")
+317:     )
+318:     
+319:     static let oneDarkPro = Theme(
+320:         id: "one_dark_pro",
+321:         name: "One Dark Pro",
+322:         isDark: true,
+323:         editorBackground: hex("#282C34"),
+324:         editorForeground: hex("#ABB2BF"),
+325:         selection: hex("#3E4451"),
+326:         cursor: hex("#528BFF"),
+327:         lineNumber: hex("#4B5263"),
+328:         lineNumberActive: hex("#ABB2BF"),
+329:         currentLineHighlight: hex("#2C313C"),
+330:         bracketPair1: hex("#C678DD"),
+331:         bracketPair2: hex("#61AFEF"),
+332:         bracketPair3: hex("#E5C07B"),
+333:         bracketPair4: hex("#C678DD"),
+334:         bracketPair5: hex("#61AFEF"),
+335:         bracketPair6: hex("#E5C07B"),
+336:         indentGuide: hex("#3B4048"),
+337:         indentGuideActive: hex("#5C6370"),
+338:         sidebarBackground: hex("#21252B"),
+339:         sidebarForeground: hex("#ABB2BF"),
+340:         sidebarSectionHeader: hex("#282C34"),
+341:         sidebarSelection: hex("#2C313A"),
+342:         activityBarBackground: hex("#282C34"),
+343:         activityBarForeground: hex("#ABB2BF"),
+344:         activityBarSelection: hex("#D7DAE0"),
+345:         tabBarBackground: hex("#21252B"),
+346:         tabActiveBackground: hex("#282C34"),
+347:         tabInactiveBackground: hex("#21252B"),
+348:         tabActiveForeground: hex("#D7DAE0"),
+349:         tabInactiveForeground: hex("#5C6370"),
+350:         statusBarBackground: hex("#21252B"),
+351:         statusBarForeground: hex("#9DA5B4"),
+352:         keyword: hex("#C678DD"),
+353:         string: hex("#98C379"),
+354:         number: hex("#D19A66"),
+355:         comment: hex("#5C6370"),
+356:         function: hex("#61AFEF"),
+357:         type: hex("#E5C07B"),
+358:         variable: hex("#E06C75")
+359:     )
+360:     
+361:     static let nord = Theme(
+362:         id: "nord",
+363:         name: "Nord",
+364:         isDark: true,
+365:         editorBackground: hex("#2E3440"),
+366:         editorForeground: hex("#D8DEE9"),
+367:         selection: hex("#434C5E"),
+368:         cursor: hex("#D8DEE9"),
+369:         lineNumber: hex("#4C566A"),
+370:         lineNumberActive: hex("#D8DEE9"),
+371:         currentLineHighlight: hex("#3B4252"),
+372:         bracketPair1: hex("#EBCB8B"),
+373:         bracketPair2: hex("#A3BE8C"),
+374:         bracketPair3: hex("#81A1C1"),
+375:         bracketPair4: hex("#EBCB8B"),
+376:         bracketPair5: hex("#A3BE8C"),
+377:         bracketPair6: hex("#81A1C1"),
+378:         indentGuide: hex("#434C5E"),
+379:         indentGuideActive: hex("#4C566A"),
+380:         sidebarBackground: hex("#2E3440"),
+381:         sidebarForeground: hex("#D8DEE9"),
+382:         sidebarSectionHeader: hex("#3B4252"),
+383:         sidebarSelection: hex("#3B4252"),
+384:         activityBarBackground: hex("#2E3440"),
+385:         activityBarForeground: hex("#D8DEE9"),
+386:         activityBarSelection: hex("#88C0D0"),
+387:         tabBarBackground: hex("#2E3440"),
+388:         tabActiveBackground: hex("#3B4252"),
+389:         tabInactiveBackground: hex("#2E3440"),
+390:         tabActiveForeground: hex("#D8DEE9"),
+391:         tabInactiveForeground: hex("#4C566A"),
+392:         statusBarBackground: hex("#3B4252"),
+393:         statusBarForeground: hex("#D8DEE9"),
+394:         keyword: hex("#81A1C1"),
+395:         string: hex("#A3BE8C"),
+396:         number: hex("#B48EAD"),
+397:         comment: hex("#616E88"),
+398:         function: hex("#88C0D0"),
+399:         type: hex("#8FBCBB"),
+400:         variable: hex("#D8DEE9")
+401:     )
+402:     
+403:     static let githubDark = Theme(
+404:         id: "github_dark",
+405:         name: "GitHub Dark",
+406:         isDark: true,
+407:         editorBackground: hex("#0D1117"),
+408:         editorForeground: hex("#C9D1D9"),
+409:         selection: hex("#163356"),
+410:         cursor: hex("#58A6FF"),
+411:         lineNumber: hex("#484F58"),
+412:         lineNumberActive: hex("#C9D1D9"),
+413:         currentLineHighlight: hex("#161B22"),
+414:         bracketPair1: hex("#79C0FF"),
+415:         bracketPair2: hex("#D2A8FF"),
+416:         bracketPair3: hex("#FFA657"),
+417:         bracketPair4: hex("#79C0FF"),
+418:         bracketPair5: hex("#D2A8FF"),
+419:         bracketPair6: hex("#FFA657"),
+420:         indentGuide: hex("#21262D"),
+421:         indentGuideActive: hex("#30363D"),
+422:         sidebarBackground: hex("#010409"),
+423:         sidebarForeground: hex("#C9D1D9"),
+424:         sidebarSectionHeader: hex("#161B22"),
+425:         sidebarSelection: hex("#1F2428"),
+426:         activityBarBackground: hex("#0D1117"),
+427:         activityBarForeground: hex("#C9D1D9"),
+428:         activityBarSelection: hex("#C9D1D9"),
+429:         tabBarBackground: hex("#010409"),
+430:         tabActiveBackground: hex("#0D1117"),
+431:         tabInactiveBackground: hex("#010409"),
+432:         tabActiveForeground: hex("#C9D1D9"),
+433:         tabInactiveForeground: hex("#8B949E"),
+434:         statusBarBackground: hex("#0D1117"),
+435:         statusBarForeground: hex("#58A6FF"),
+436:         keyword: hex("#FF7B72"),
+437:         string: hex("#A5D6FF"),
+438:         number: hex("#79C0FF"),
+439:         comment: hex("#8B949E"),
+440:         function: hex("#D2A8FF"),
+441:         type: hex("#79C0FF"),
+442:         variable: hex("#FFA657")
+443:     )
+444:     
+445:     static let githubLight = Theme(
+446:         id: "github_light",
+447:         name: "GitHub Light",
+448:         isDark: false,
+449:         editorBackground: hex("#FFFFFF"),
+450:         editorForeground: hex("#24292F"),
+451:         selection: hex("#B6E3FF"),
+452:         cursor: hex("#0969DA"),
+453:         lineNumber: hex("#8C959F"),
+454:         lineNumberActive: hex("#24292F"),
+455:         currentLineHighlight: hex("#F6F8FA"),
+456:         bracketPair1: hex("#0550AE"),
+457:         bracketPair2: hex("#8250DF"),
+458:         bracketPair3: hex("#953800"),
+459:         bracketPair4: hex("#0550AE"),
+460:         bracketPair5: hex("#8250DF"),
+461:         bracketPair6: hex("#953800"),
+462:         indentGuide: hex("#D0D7DE"),
+463:         indentGuideActive: hex("#8C959F"),
+464:         sidebarBackground: hex("#F6F8FA"),
+465:         sidebarForeground: hex("#24292F"),
+466:         sidebarSectionHeader: hex("#EAEEF2"),
+467:         sidebarSelection: hex("#DDFBE6"),
+468:         activityBarBackground: hex("#F6F8FA"),
+469:         activityBarForeground: hex("#24292F"),
+470:         activityBarSelection: hex("#24292F"),
+471:         tabBarBackground: hex("#F6F8FA"),
+472:         tabActiveBackground: hex("#FFFFFF"),
+473:         tabInactiveBackground: hex("#F6F8FA"),
+474:         tabActiveForeground: hex("#24292F"),
+475:         tabInactiveForeground: hex("#57606A"),
+476:         statusBarBackground: hex("#F6F8FA"),
+477:         statusBarForeground: hex("#0969DA"),
+478:         keyword: hex("#CF222E"),
+479:         string: hex("#0A3069"),
+480:         number: hex("#0550AE"),
+481:         comment: hex("#6E7781"),
+482:         function: hex("#8250DF"),
+483:         type: hex("#0550AE"),
+484:         variable: hex("#953800")
+485:     )
+486:     
+487:     static let cobalt2 = Theme(
+488:         id: "cobalt2",
+489:         name: "Cobalt2",
+490:         isDark: true,
+491:         editorBackground: hex("#193549"),
+492:         editorForeground: hex("#FFFFFF"),
+493:         selection: hex("#0D3A58"),
+494:         cursor: hex("#FEFB00"),
+495:         lineNumber: hex("#3D5F7D"),
+496:         lineNumberActive: hex("#FFFFFF"),
+497:         currentLineHighlight: hex("#1F4662"),
+498:         bracketPair1: hex("#FFC600"),
+499:         bracketPair2: hex("#FF628C"),
+500:         bracketPair3: hex("#80FFBB"),
+501:         bracketPair4: hex("#FFC600"),
+502:         bracketPair5: hex("#FF628C"),
+503:         bracketPair6: hex("#80FFBB"),
+504:         indentGuide: hex("#294B5C"),
+505:         indentGuideActive: hex("#3D5F7D"),
+506:         sidebarBackground: hex("#15232D"),
+507:         sidebarForeground: hex("#FFFFFF"),
+508:         sidebarSectionHeader: hex("#0D1A23"),
+509:         sidebarSelection: hex("#0D3A58"),
+510:         activityBarBackground: hex("#193549"),
+511:         activityBarForeground: hex("#FFFFFF"),
+512:         activityBarSelection: hex("#FFC600"),
+513:         tabBarBackground: hex("#15232D"),
+514:         tabActiveBackground: hex("#193549"),
+515:         tabInactiveBackground: hex("#15232D"),
+516:         tabActiveForeground: hex("#FFFFFF"),
+517:         tabInactiveForeground: hex("#3D5F7D"),
+518:         statusBarBackground: hex("#15232D"),
+519:         statusBarForeground: hex("#FFFFFF"),
+520:         keyword: hex("#FF9D00"),
+521:         string: hex("#A5FF90"),
+522:         number: hex("#FF628C"),
+523:         comment: hex("#0088FF"),
+524:         function: hex("#FFC600"),
+525:         type: hex("#80FFBB"),
+526:         variable: hex("#9EFFFF")
+527:     )
+528:     
+529:     static let ayuDark = Theme(
+530:         id: "ayu_dark",
+531:         name: "Ayu Dark",
+532:         isDark: true,
+533:         editorBackground: hex("#0A0E14"),
+534:         editorForeground: hex("#B3B1AD"),
+535:         selection: hex("#273747"),
+536:         cursor: hex("#E6B450"),
+537:         lineNumber: hex("#3D424D"),
+538:         lineNumberActive: hex("#E6B450"),
+539:         currentLineHighlight: hex("#0D1016"),
+540:         bracketPair1: hex("#FFB454"),
+541:         bracketPair2: hex("#59C2FF"),
+542:         bracketPair3: hex("#AAD94C"),
+543:         bracketPair4: hex("#FFB454"),
+544:         bracketPair5: hex("#59C2FF"),
+545:         bracketPair6: hex("#AAD94C"),
+546:         indentGuide: hex("#1C212B"),
+547:         indentGuideActive: hex("#3D424D"),
+548:         sidebarBackground: hex("#0D1016"),
+549:         sidebarForeground: hex("#B3B1AD"),
+550:         sidebarSectionHeader: hex("#0A0E14"),
+551:         sidebarSelection: hex("#273747"),
+552:         activityBarBackground: hex("#0A0E14"),
+553:         activityBarForeground: hex("#B3B1AD"),
+554:         activityBarSelection: hex("#E6B450"),
+555:         tabBarBackground: hex("#0D1016"),
+556:         tabActiveBackground: hex("#0A0E14"),
+557:         tabInactiveBackground: hex("#0D1016"),
+558:         tabActiveForeground: hex("#B3B1AD"),
+559:         tabInactiveForeground: hex("#3D424D"),
+560:         statusBarBackground: hex("#0D1016"),
+561:         statusBarForeground: hex("#B3B1AD"),
+562:         keyword: hex("#FF8F40"),
+563:         string: hex("#AAD94C"),
+564:         number: hex("#DFBFFF"),
+565:         comment: hex("#626A73"),
+566:         function: hex("#FFB454"),
+567:         type: hex("#59C2FF"),
+568:         variable: hex("#B3B1AD")
+569:     )
+570:     
+571:     static let ayuLight = Theme(
+572:         id: "ayu_light",
+573:         name: "Ayu Light",
+574:         isDark: false,
+575:         editorBackground: hex("#FAFAFA"),
+576:         editorForeground: hex("#5C6166"),
+577:         selection: hex("#D1E4F4"),
+578:         cursor: hex("#FF9940"),
+579:         lineNumber: hex("#9DA2A6"),
+580:         lineNumberActive: hex("#FF9940"),
+581:         currentLineHighlight: hex("#EFF0F1"),
+582:         bracketPair1: hex("#F2AE49"),
+583:         bracketPair2: hex("#399EE6"),
+584:         bracketPair3: hex("#86B300"),
+585:         bracketPair4: hex("#F2AE49"),
+586:         bracketPair5: hex("#399EE6"),
+587:         bracketPair6: hex("#86B300"),
+588:         indentGuide: hex("#E7E8E9"),
+589:         indentGuideActive: hex("#9DA2A6"),
+590:         sidebarBackground: hex("#F0F0F0"),
+591:         sidebarForeground: hex("#5C6166"),
+592:         sidebarSectionHeader: hex("#E7E7E7"),
+593:         sidebarSelection: hex("#D1E4F4"),
+594:         activityBarBackground: hex("#F0F0F0"),
+595:         activityBarForeground: hex("#5C6166"),
+596:         activityBarSelection: hex("#FF9940"),
+597:         tabBarBackground: hex("#F0F0F0"),
+598:         tabActiveBackground: hex("#FAFAFA"),
+599:         tabInactiveBackground: hex("#F0F0F0"),
+600:         tabActiveForeground: hex("#5C6166"),
+601:         tabInactiveForeground: hex("#9DA2A6"),
+602:         statusBarBackground: hex("#F0F0F0"),
+603:         statusBarForeground: hex("#5C6166"),
+604:         keyword: hex("#FA8D3E"),
+605:         string: hex("#86B300"),
+606:         number: hex("#A37ACC"),
+607:         comment: hex("#ABB0B6"),
+608:         function: hex("#F2AE49"),
+609:         type: hex("#399EE6"),
+610:         variable: hex("#5C6166")
+611:     )
+612:     
+613:     static let ayuMirage = Theme(
+614:         id: "ayu_mirage",
+615:         name: "Ayu Mirage",
+616:         isDark: true,
+617:         editorBackground: hex("#1F2430"),
+618:         editorForeground: hex("#CBCCC6"),
+619:         selection: hex("#33415E"),
+620:         cursor: hex("#FFCC66"),
+621:         lineNumber: hex("#707A8C"),
+622:         lineNumberActive: hex("#FFCC66"),
+623:         currentLineHighlight: hex("#232834"),
+624:         bracketPair1: hex("#FFD580"),
+625:         bracketPair2: hex("#73D0FF"),
+626:         bracketPair3: hex("#BAE67E"),
+627:         bracketPair4: hex("#FFD580"),
+628:         bracketPair5: hex("#73D0FF"),
+629:         bracketPair6: hex("#BAE67E"),
+630:         indentGuide: hex("#2D3640"),
+631:         indentGuideActive: hex("#707A8C"),
+632:         sidebarBackground: hex("#232834"),
+633:         sidebarForeground: hex("#CBCCC6"),
+634:         sidebarSectionHeader: hex("#1F2430"),
+635:         sidebarSelection: hex("#33415E"),
+636:         activityBarBackground: hex("#1F2430"),
+637:         activityBarForeground: hex("#CBCCC6"),
+638:         activityBarSelection: hex("#FFCC66"),
+639:         tabBarBackground: hex("#232834"),
+640:         tabActiveBackground: hex("#1F2430"),
+641:         tabInactiveBackground: hex("#232834"),
+642:         tabActiveForeground: hex("#CBCCC6"),
+643:         tabInactiveForeground: hex("#707A8C"),
+644:         statusBarBackground: hex("#232834"),
+645:         statusBarForeground: hex("#CBCCC6"),
+646:         keyword: hex("#FFA759"),
+647:         string: hex("#BAE67E"),
+648:         number: hex("#D4BFFF"),
+649:         comment: hex("#5C6773"),
+650:         function: hex("#FFD580"),
+651:         type: hex("#73D0FF"),
+652:         variable: hex("#CBCCC6")
+653:     )
+654:     
+655:     static let quietLight = Theme(
+656:         id: "quiet_light",
+657:         name: "Quiet Light",
+658:         isDark: false,
+659:         editorBackground: hex("#F5F5F5"),
+660:         editorForeground: hex("#333333"),
+661:         selection: hex("#C9D0D9"),
+662:         cursor: hex("#54494B"),
+663:         lineNumber: hex("#AAAAAA"),
+664:         lineNumberActive: hex("#333333"),
+665:         currentLineHighlight: hex("#E4F6D4"),
+666:         bracketPair1: hex("#7A3E9D"),
+667:         bracketPair2: hex("#448C27"),
+668:         bracketPair3: hex("#4B83CD"),
+669:         bracketPair4: hex("#7A3E9D"),
+670:         bracketPair5: hex("#448C27"),
+671:         bracketPair6: hex("#4B83CD"),
+672:         indentGuide: hex("#E0E0E0"),
+673:         indentGuideActive: hex("#AAAAAA"),
+674:         sidebarBackground: hex("#E7E7E7"),
+675:         sidebarForeground: hex("#333333"),
+676:         sidebarSectionHeader: hex("#DDDDDD"),
+677:         sidebarSelection: hex("#C9D0D9"),
+678:         activityBarBackground: hex("#E7E7E7"),
+679:         activityBarForeground: hex("#333333"),
+680:         activityBarSelection: hex("#333333"),
+681:         tabBarBackground: hex("#E7E7E7"),
+682:         tabActiveBackground: hex("#F5F5F5"),
+683:         tabInactiveBackground: hex("#E7E7E7"),
+684:         tabActiveForeground: hex("#333333"),
+685:         tabInactiveForeground: hex("#AAAAAA"),
+686:         statusBarBackground: hex("#E7E7E7"),
+687:         statusBarForeground: hex("#333333"),
+688:         keyword: hex("#4B83CD"),
+689:         string: hex("#448C27"),
+690:         number: hex("#AB6526"),
+691:         comment: hex("#AAAAAA"),
+692:         function: hex("#7A3E9D"),
+693:         type: hex("#7A3E9D"),
+694:         variable: hex("#333333")
+695:     )
+696:     
+697:     static let red = Theme(
+698:         id: "red",
+699:         name: "Red",
+700:         isDark: true,
+701:         editorBackground: hex("#390000"),
+702:         editorForeground: hex("#F8F8F8"),
+703:         selection: hex("#750000"),
+704:         cursor: hex("#FF0000"),
+705:         lineNumber: hex("#FF6666"),
+706:         lineNumberActive: hex("#FFFFFF"),
+707:         currentLineHighlight: hex("#500000"),
+708:         bracketPair1: hex("#FFFF66"),
+709:         bracketPair2: hex("#AAFFAA"),
+710:         bracketPair3: hex("#AADDFF"),
+711:         bracketPair4: hex("#FFFF66"),
+712:         bracketPair5: hex("#AAFFAA"),
+713:         bracketPair6: hex("#AADDFF"),
+714:         indentGuide: hex("#550000"),
+715:         indentGuideActive: hex("#CC6666"),
+716:         sidebarBackground: hex("#300000"),
+717:         sidebarForeground: hex("#F8F8F8"),
+718:         sidebarSectionHeader: hex("#500000"),
+719:         sidebarSelection: hex("#750000"),
+720:         activityBarBackground: hex("#390000"),
+721:         activityBarForeground: hex("#F8F8F8"),
+722:         activityBarSelection: hex("#FF0000"),
+723:         tabBarBackground: hex("#300000"),
+724:         tabActiveBackground: hex("#390000"),
+725:         tabInactiveBackground: hex("#300000"),
+726:         tabActiveForeground: hex("#FFFFFF"),
+727:         tabInactiveForeground: hex("#CC6666"),
+728:         statusBarBackground: hex("#FF0000"),
+729:         statusBarForeground: hex("#FFFFFF"),
+730:         keyword: hex("#FF6666"),
+731:         string: hex("#FFA0A0"),
+732:         number: hex("#FFD0D0"),
+733:         comment: hex("#CC6666"),
+734:         function: hex("#FFFF66"),
+735:         type: hex("#AAFFAA"),
+736:         variable: hex("#AADDFF")
+737:     )
+738:     
+739:     static let tomorrowNight = Theme(
+740:         id: "tomorrow_night",
+741:         name: "Tomorrow Night",
+742:         isDark: true,
+743:         editorBackground: hex("#1D1F21"),
+744:         editorForeground: hex("#C5C8C6"),
+745:         selection: hex("#373B41"),
+746:         cursor: hex("#AEAFAD"),
+747:         lineNumber: hex("#969896"),
+748:         lineNumberActive: hex("#C5C8C6"),
+749:         currentLineHighlight: hex("#282A2E"),
+750:         bracketPair1: hex("#F0C674"),
+751:         bracketPair2: hex("#B5BD68"),
+752:         bracketPair3: hex("#81A2BE"),
+753:         bracketPair4: hex("#F0C674"),
+754:         bracketPair5: hex("#B5BD68"),
+755:         bracketPair6: hex("#81A2BE"),
+756:         indentGuide: hex("#373B41"),
+757:         indentGuideActive: hex("#969896"),
+758:         sidebarBackground: hex("#1D1F21"),
+759:         sidebarForeground: hex("#C5C8C6"),
+760:         sidebarSectionHeader: hex("#282A2E"),
+761:         sidebarSelection: hex("#373B41"),
+762:         activityBarBackground: hex("#1D1F21"),
+763:         activityBarForeground: hex("#C5C8C6"),
+764:         activityBarSelection: hex("#81A2BE"),
+765:         tabBarBackground: hex("#1D1F21"),
+766:         tabActiveBackground: hex("#282A2E"),
+767:         tabInactiveBackground: hex("#1D1F21"),
+768:         tabActiveForeground: hex("#C5C8C6"),
+769:         tabInactiveForeground: hex("#969896"),
+770:         statusBarBackground: hex("#282A2E"),
+771:         statusBarForeground: hex("#C5C8C6"),
+772:         keyword: hex("#B294BB"),
+773:         string: hex("#B5BD68"),
+774:         number: hex("#DE935F"),
+775:         comment: hex("#969896"),
+776:         function: hex("#81A2BE"),
+777:         type: hex("#F0C674"),
+778:         variable: hex("#CC6666")
+779:     )
+780:     
+781:     static let tomorrowNightBlue = Theme(
+782:         id: "tomorrow_night_blue",
+783:         name: "Tomorrow Night Blue",
+784:         isDark: true,
+785:         editorBackground: hex("#002451"),
+786:         editorForeground: hex("#FFFFFF"),
+787:         selection: hex("#003F8E"),
+788:         cursor: hex("#FFFFFF"),
+789:         lineNumber: hex("#7285B7"),
+790:         lineNumberActive: hex("#FFFFFF"),
+791:         currentLineHighlight: hex("#00346E"),
+792:         bracketPair1: hex("#FFEEAD"),
+793:         bracketPair2: hex("#D1F1A9"),
+794:         bracketPair3: hex("#BBDAFF"),
+795:         bracketPair4: hex("#FFEEAD"),
+796:         bracketPair5: hex("#D1F1A9"),
+797:         bracketPair6: hex("#BBDAFF"),
+798:         indentGuide: hex("#003875"),
+799:         indentGuideActive: hex("#7285B7"),
+800:         sidebarBackground: hex("#001E40"),
+801:         sidebarForeground: hex("#FFFFFF"),
+802:         sidebarSectionHeader: hex("#003875"),
+803:         sidebarSelection: hex("#003F8E"),
+804:         activityBarBackground: hex("#002451"),
+805:         activityBarForeground: hex("#FFFFFF"),
+806:         activityBarSelection: hex("#BBDAFF"),
+807:         tabBarBackground: hex("#001E40"),
+808:         tabActiveBackground: hex("#002451"),
+809:         tabInactiveBackground: hex("#001E40"),
+810:         tabActiveForeground: hex("#FFFFFF"),
+811:         tabInactiveForeground: hex("#7285B7"),
+812:         statusBarBackground: hex("#003875"),
+813:         statusBarForeground: hex("#FFFFFF"),
+814:         keyword: hex("#EBBBFF"),
+815:         string: hex("#D1F1A9"),
+816:         number: hex("#FFC58F"),
+817:         comment: hex("#7285B7"),
+818:         function: hex("#BBDAFF"),
+819:         type: hex("#FFEEAD"),
+820:         variable: hex("#FF9DA4")
+821:     )
+822:     
+823:     static let highContrast = Theme(
+824:         id: "high_contrast",
+825:         name: "High Contrast",
+826:         isDark: true,
+827:         editorBackground: hex("#000000"),
+828:         editorForeground: hex("#FFFFFF"),
+829:         selection: hex("#FFFFFF").opacity(0.3),
+830:         cursor: hex("#FFFFFF"),
+831:         lineNumber: hex("#FFFFFF"),
+832:         lineNumberActive: hex("#FFFFFF"),
+833:         currentLineHighlight: hex("#FFFFFF").opacity(0.1),
+834:         bracketPair1: hex("#FFD700"),
+835:         bracketPair2: hex("#00FF00"),
+836:         bracketPair3: hex("#00BFFF"),
+837:         bracketPair4: hex("#FFD700"),
+838:         bracketPair5: hex("#00FF00"),
+839:         bracketPair6: hex("#00BFFF"),
+840:         indentGuide: hex("#FFFFFF").opacity(0.2),
+841:         indentGuideActive: hex("#FFFFFF").opacity(0.5),
+842:         sidebarBackground: hex("#000000"),
+843:         sidebarForeground: hex("#FFFFFF"),
+844:         sidebarSectionHeader: hex("#000000"),
+845:         sidebarSelection: hex("#FFFFFF").opacity(0.15),
+846:         activityBarBackground: hex("#000000"),
+847:         activityBarForeground: hex("#FFFFFF"),
+848:         activityBarSelection: hex("#FFFFFF"),
+849:         tabBarBackground: hex("#000000"),
+850:         tabActiveBackground: hex("#000000"),
+851:         tabInactiveBackground: hex("#000000"),
+852:         tabActiveForeground: hex("#FFFFFF"),
+853:         tabInactiveForeground: hex("#FFFFFF").opacity(0.6),
+854:         statusBarBackground: hex("#0000AA"),
+855:         statusBarForeground: hex("#FFFFFF"),
+856:         keyword: hex("#569CD6"),
+857:         string: hex("#CE9178"),
+858:         number: hex("#B5CEA8"),
+859:         comment: hex("#7CA668"),
+860:         function: hex("#DCDCAA"),
+861:         type: hex("#4EC9B0"),
+862:         variable: hex("#9CDCFE")
+863:     )
+864:     
+865:     // MARK: - All Themes
+866:     static let allThemes: [Theme] = [
+867:         .darkPlus,
+868:         .lightPlus,
+869:         .monokai,
+870:         .solarizedDark,
+871:         .solarizedLight,
+872:         .dracula,
+873:         .oneDarkPro,
+874:         .nord,
+875:         .githubDark,
+876:         .githubLight,
+877:         .cobalt2,
+878:         .ayuDark,
+879:         .ayuLight,
+880:         .ayuMirage,
+881:         .quietLight,
+882:         .red,
+883:         .tomorrowNight,
+884:         .tomorrowNightBlue,
+885:         .highContrast
+886:     ]
+887: }
+
+
+>>>REPORT
+## Critical Debug: Syntax Highlighting Color Path Traced
+
+### Key Finding: NO TreeSitterSyntaxHighlighter Exists
+The file `TreeSitterSyntaxHighlighter.swift` does **NOT exist** in this codebase. The project uses a **regex-based** `VSCodeSyntaxHighlighter` instead of TreeSitter.
+
+### Actual Highlighting Path Traced
+
+**File:** `VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift`
+
+#### 1. Token Color Source - Theme.swift (lines 42-48, 101)
+```swift
+// Theme struct defines:
+let string: Color  // Line 43
+
+// Dark+ theme sets (line 101):
+string: hex("#CE9178")  // ← THIS IS THE ORANGE COLOR
+```
+
+#### 2. VSCodeSyntaxHighlighter applies colors (lines 1569-1669)
+```swift
+struct VSCodeSyntaxHighlighter {
+    func highlight(_ text: String, language: Language) -> NSAttributedString {
+        // Line 1640: Base foreground applied to full range
+        attributed.addAttribute(.foregroundColor, value: UIColor(theme.editorForeground), range: fullRange)
+        
+        // Language-specific highlighting then overrides specific ranges
+    }
+}
+```
+
+#### 3. String Highlighting (lines 2221-2228)
+```swift
+private func highlightStrings(_ attributed: NSMutableAttributedString, text: String) {
+    let doublePattern = "\"(?:[^\"\\\\]|\\\\.)*\""
+    highlightPattern(attributed, pattern: doublePattern, color: UIColor(theme.string), text: text)
+    
+    let singlePattern = "'(?:[^'\\\\]|\\\\.)*'"
+    highlightPattern(attributed, pattern: singlePattern, color: UIColor(theme.string), text: text)
+}
+```
+
+#### 4. Pattern Application (lines 2206-2218)
+```swift
+private func highlightPattern(...) {
+    regex.enumerateMatches(...) { match, _, _ in
+        attributed.addAttribute(.foregroundColor, value: color, range: matchRange)  // Line 2216
+    }
+}
+```
+
+### Orange (#CE9178) IS Correct for Dark+
+The orange color is the **official VS Code Dark+ string color**. It's not a bug - it's the intended string literal color.
+
+### Potential Issues Found
+1. **Highlighting Order Bug (Swift, lines 1767-1774):**
+   - Comments applied BEFORE strings
+   - Strings applied LAST (after comments)
+   - This means quoted text INSIDE comments could be incorrectly colored orange
+
+2. **No TreeSitter** - All highlighting is regex-based, which is inherently imprecise and doesn't understand language context (e.g., can't distinguish string inside comment from real string)
+
+### Files Examined
+- `VSCodeiPadOS/VSCodeiPadOS/Views/Editor/SyntaxHighlightingTextView.swift` (2289 lines) - Contains VSCodeSyntaxHighlighter
+- `VSCodeiPadOS/VSCodeiPadOS/Models/Theme.swift` (887 lines) - Contains color definitions
+- `VSCodeiPadOS/TreeSitterLanguages.swift` (342 lines) - Stub file, all methods return PlainTextLanguageMode()
+>>>END

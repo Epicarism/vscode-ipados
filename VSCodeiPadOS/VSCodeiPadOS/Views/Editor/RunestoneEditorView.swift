@@ -99,14 +99,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         textView.keyboardType = .asciiCapable
         textView.keyboardDismissMode = .interactive
         
-        // Set theme and appearance
-        textView.theme = makeRunestoneTheme()
-        textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
-        
         // Content insets for padding
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         
-        // Set text with TreeSitter language support
+        // Set text with TreeSitter language support FIRST
         if let language = getTreeSitterLanguage(for: filename) {
             let state = TextViewState(text: text, language: language)
             textView.setState(state)
@@ -114,6 +110,11 @@ struct RunestoneEditorView: UIViewRepresentable {
             // No language support - fallback to plain text
             textView.text = text
         }
+        
+        // Set theme AFTER setState to ensure it takes effect
+        // setState may reset internal rendering state, so theme must come after
+        textView.theme = makeRunestoneTheme()
+        textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
         
         // Store reference for coordinator
         context.coordinator.textView = textView
@@ -173,6 +174,9 @@ struct RunestoneEditorView: UIViewRepresentable {
                 textView.text = text
             }
             
+            // CRITICAL: Re-apply theme AFTER setState - setState may reset rendering state
+            textView.theme = makeRunestoneTheme()
+            
             // Reset cursor to start for new file
             textView.selectedRange = NSRange(location: 0, length: 0)
             
@@ -189,6 +193,9 @@ struct RunestoneEditorView: UIViewRepresentable {
             } else {
                 textView.text = text
             }
+            
+            // CRITICAL: Re-apply theme AFTER setState - setState may reset rendering state
+            textView.theme = makeRunestoneTheme()
             
             // Update line count
             DispatchQueue.main.async {
@@ -588,11 +595,12 @@ class RunestoneEditorTheme: Runestone.Theme {
         // See: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#highlights
         let highlightName = rawHighlightName.lowercased()
         
-        // Debug: Log ALL highlight names to console (remove in production)
-        // print("🎨 HIGHLIGHT: '\(rawHighlightName)'")
+        // Debug: Log ALL highlight names to console (ENABLED FOR DEBUGGING)
+        print("🎨 HIGHLIGHT: '\(rawHighlightName)' -> ", terminator: "")
         
         // Keywords
         if highlightName.contains("keyword") {
+            print("keyword (blue)")
             return _keywordColor
         }
         
@@ -602,24 +610,20 @@ class RunestoneEditorTheme: Runestone.Theme {
         if highlightName.hasPrefix("string.special") ||
            highlightName.contains("label") ||
            highlightName.contains("property.definition") {
+            print("key/label (light blue)")
             return _variableColor  // Light blue #9CDCFE for keys
         }
         
         // Strings - but NOT if it's JUST "string" (let specific matches win)
         // Only color strings that are clearly values, not potential keys
         if highlightName.contains("string") {
-            // If it's exactly "string" with no qualifiers, it might be a key
-            // that was already colored by string.special.key - return nil to not overwrite
-            if rawHighlightName == "string" {
-                // For pure "string" captures, still color them (they're values)
-                // The issue is ordering - specific patterns should come AFTER in Runestone
-                return _stringColor
-            }
+            print("string (orange)")
             return _stringColor  // Orange #CE9178 for string values
         }
         
         // Numbers and constants
         if highlightName.contains("number") || highlightName == "constant.numeric" {
+            print("number (green)")
             return _numberColor
         }
         
@@ -682,6 +686,7 @@ class RunestoneEditorTheme: Runestone.Theme {
         }
         
         // Default: use standard text color
+        print("nil (default)")
         return nil
     }
     
