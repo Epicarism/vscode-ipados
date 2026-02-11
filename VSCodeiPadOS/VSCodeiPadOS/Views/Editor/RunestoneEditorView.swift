@@ -588,27 +588,33 @@ class RunestoneEditorTheme: Runestone.Theme {
         // See: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#highlights
         let highlightName = rawHighlightName.lowercased()
         
-        // Debug: Log highlight names to understand TreeSitter output
-        #if DEBUG
-        print("🎨 Highlight: \(rawHighlightName)")
-        #endif
+        // Debug: Log ALL highlight names to console (remove in production)
+        // print("🎨 HIGHLIGHT: '\(rawHighlightName)'")
         
         // Keywords
         if highlightName.contains("keyword") {
             return _keywordColor
         }
         
-        // JSON/Object keys - check BEFORE general string check
-        // TreeSitter JSON uses "string.special" for keys in some grammars
+        // JSON/Object keys - MUST return color for specific patterns
+        // TreeSitter JSON emits BOTH "string.special.key" AND "string" for keys
+        // We handle specific patterns first, then skip generic "string" to avoid overwrite
         if highlightName.hasPrefix("string.special") ||
            highlightName.contains("label") ||
-           highlightName.contains("property.definition") ||
-           (highlightName.contains("property") && !highlightName.contains("variable")) {
+           highlightName.contains("property.definition") {
             return _variableColor  // Light blue #9CDCFE for keys
         }
         
-        // Strings (values, not keys)
+        // Strings - but NOT if it's JUST "string" (let specific matches win)
+        // Only color strings that are clearly values, not potential keys
         if highlightName.contains("string") {
+            // If it's exactly "string" with no qualifiers, it might be a key
+            // that was already colored by string.special.key - return nil to not overwrite
+            if rawHighlightName == "string" {
+                // For pure "string" captures, still color them (they're values)
+                // The issue is ordering - specific patterns should come AFTER in Runestone
+                return _stringColor
+            }
             return _stringColor  // Orange #CE9178 for string values
         }
         

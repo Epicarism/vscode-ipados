@@ -1,0 +1,734 @@
+//
+//  RunestoneEditorView.swift
+//  VSCodeiPadOS
+//
+//  High-performance code editor using Runestone with TreeSitter syntax highlighting.
+//  Provides native line numbers, code folding, and efficient rendering for large files.
+//
+
+import SwiftUI
+import UIKit
+import Runestone
+import TreeSitterSwiftRunestone
+import TreeSitterJavaScriptRunestone
+import TreeSitterPythonRunestone
+import TreeSitterJSONRunestone
+import TreeSitterHTMLRunestone
+import TreeSitterCSSRunestone
+import TreeSitterGoRunestone
+import TreeSitterRustRunestone
+
+// Feature flag now uses centralized FeatureFlags.useRunestoneEditor
+
+/// UIViewRepresentable wrapper for Runestone's TextView
+/// Provides native TreeSitter syntax highlighting, line numbers, and code folding
+struct RunestoneEditorView: UIViewRepresentable {
+    @Binding var text: String
+    let filename: String
+    @Binding var scrollOffset: CGFloat
+    @Binding var totalLines: Int
+    @Binding var currentLineNumber: Int
+    @Binding var currentColumn: Int
+    @Binding var cursorIndex: Int
+    let isActive: Bool
+    let fontSize: CGFloat
+    @EnvironmentObject var editorCore: EditorCore
+    
+    // Settings from AppStorage
+    @AppStorage("wordWrap") private var wordWrapEnabled: Bool = true
+    @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
+    
+    /// Autocomplete key handling hooks (return true if handled)
+    let onAcceptAutocomplete: (() -> Bool)?
+    let onDismissAutocomplete: (() -> Bool)?
+    
+    init(
+        text: Binding<String>,
+        filename: String,
+        scrollOffset: Binding<CGFloat> = .constant(0),
+        totalLines: Binding<Int>,
+        currentLineNumber: Binding<Int>,
+        currentColumn: Binding<Int>,
+        cursorIndex: Binding<Int> = .constant(0),
+        isActive: Bool,
+        fontSize: CGFloat = 14.0,
+        onAcceptAutocomplete: (() -> Bool)? = nil,
+        onDismissAutocomplete: (() -> Bool)? = nil
+    ) {
+        self._text = text
+        self.filename = filename
+        self._scrollOffset = scrollOffset
+        self._totalLines = totalLines
+        self._currentLineNumber = currentLineNumber
+        self._currentColumn = currentColumn
+        self._cursorIndex = cursorIndex
+        self.isActive = isActive
+        self.fontSize = fontSize
+        self.onAcceptAutocomplete = onAcceptAutocomplete
+        self.onDismissAutocomplete = onDismissAutocomplete
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeUIView(context: Context) -> TextView {
+        let textView = TextView()
+        textView.editorDelegate = context.coordinator
+        
+        // Configure line numbers (from settings)
+        textView.showLineNumbers = showLineNumbers
+        textView.lineSelectionDisplayType = .line
+        
+        // Configure line wrapping (from settings)
+        textView.isLineWrappingEnabled = wordWrapEnabled
+        
+        // Configure editing
+        textView.isEditable = true
+        textView.isSelectable = true
+        
+        // Disable autocorrect/autocapitalize for code editing
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        textView.smartQuotesType = .no
+        textView.smartDashesType = .no
+        textView.smartInsertDeleteType = .no
+        textView.spellCheckingType = .no
+        
+        // Configure keyboard
+        textView.keyboardType = .asciiCapable
+        textView.keyboardDismissMode = .interactive
+        
+        // Set theme and appearance
+        textView.theme = makeRunestoneTheme()
+        textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
+        
+        // Content insets for padding
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        
+        // Set text with TreeSitter language support
+        if let language = getTreeSitterLanguage(for: filename) {
+            let state = TextViewState(text: text, language: language)
+            textView.setState(state)
+        } else {
+            // No language support - fallback to plain text
+            textView.text = text
+        }
+        
+        // Store reference for coordinator
+        context.coordinator.textView = textView
+        
+        // Initial line count
+        DispatchQueue.main.async {
+            self.totalLines = self.countLines(in: text)
+        }
+        
+        return textView
+    }
+    
+    func updateUIView(_ textView: TextView, context: Context) {
+        // Update coordinator's parent reference for current bindings
+        context.coordinator.parent = self
+        
+        // Update theme if changed
+        let currentThemeId = ThemeManager.shared.currentTheme.id
+        if context.coordinator.lastThemeId != currentThemeId {
+            context.coordinator.lastThemeId = currentThemeId
+            textView.theme = makeRunestoneTheme()
+            textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
+        }
+        
+        // Update font size if changed
+        if context.coordinator.lastFontSize != fontSize {
+            context.coordinator.lastFontSize = fontSize
+            textView.theme = makeRunestoneTheme()
+        }
+        
+        // Update settings if changed (live toggle support)
+        if textView.showLineNumbers != showLineNumbers {
+            textView.showLineNumbers = showLineNumbers
+        }
+        if textView.isLineWrappingEnabled != wordWrapEnabled {
+            textView.isLineWrappingEnabled = wordWrapEnabled
+        }
+        
+        // CRITICAL: Only call setState() when safe (not during active editing)
+        // Calling setState() during editing corrupts Runestone's lineManager
+        // and causes crash at TextEditHelper.swift:27 (force unwrap on linePosition)
+        
+        let isFileSwitching = context.coordinator.lastFilename != filename
+        let currentText = textView.text
+        let textChanged = currentText != text
+        let isActivelyEditing = textView.isFirstResponder
+        
+        if isFileSwitching {
+            // User switched to a different file - safe to call setState()
+            context.coordinator.lastFilename = filename
+            context.coordinator.hasBeenEdited = false
+            
+            if let language = getTreeSitterLanguage(for: filename) {
+                let state = TextViewState(text: text, language: language)
+                textView.setState(state)
+            } else {
+                textView.text = text
+            }
+            
+            // Reset cursor to start for new file
+            textView.selectedRange = NSRange(location: 0, length: 0)
+            
+            // Update line count
+            DispatchQueue.main.async {
+                self.totalLines = self.countLines(in: text)
+            }
+        } else if textChanged && !context.coordinator.hasBeenEdited && !isActivelyEditing && !context.coordinator.isUpdatingFromTextView {
+            // Text changed externally (e.g., initial load, external modification)
+            // Safe to update since user hasn't started editing yet
+            if let language = getTreeSitterLanguage(for: filename) {
+                let state = TextViewState(text: text, language: language)
+                textView.setState(state)
+            } else {
+                textView.text = text
+            }
+            
+            // Update line count
+            DispatchQueue.main.async {
+                self.totalLines = self.countLines(in: text)
+            }
+        }
+        // If user HAS edited OR is actively editing, DO NOTHING
+        // Let the user's edits remain - don't corrupt the lineManager
+    }
+    
+    // MARK: - Runestone Theme Factory
+    
+    private func makeRunestoneTheme() -> RunestoneEditorTheme {
+        let appTheme = ThemeManager.shared.currentTheme
+        return RunestoneEditorTheme(
+            fontSize: fontSize,
+            backgroundColor: UIColor(appTheme.editorBackground),
+            textColor: UIColor(appTheme.editorForeground),
+            gutterBackgroundColor: UIColor(appTheme.editorBackground),
+            gutterHairlineColor: UIColor(appTheme.lineNumber).withAlphaComponent(0.3),
+            lineNumberColor: UIColor(appTheme.lineNumber),
+            selectedLineBackgroundColor: UIColor(appTheme.currentLineHighlight),
+            selectedLinesLineNumberColor: UIColor(appTheme.lineNumberActive),
+            selectedLinesGutterBackgroundColor: UIColor(appTheme.currentLineHighlight),
+            invisibleCharactersColor: UIColor(appTheme.editorForeground).withAlphaComponent(0.3),
+            pageGuideHairlineColor: UIColor(appTheme.editorForeground).withAlphaComponent(0.1),
+            pageGuideBackgroundColor: UIColor(appTheme.editorBackground),
+            markedTextBackgroundColor: UIColor(appTheme.selection).withAlphaComponent(0.5),
+            keywordColor: UIColor(appTheme.keyword),
+            stringColor: UIColor(appTheme.string),
+            numberColor: UIColor(appTheme.number),
+            commentColor: UIColor(appTheme.comment),
+            functionColor: UIColor(appTheme.function),
+            typeColor: UIColor(appTheme.type),
+            variableColor: UIColor(appTheme.variable)
+        )
+    }
+    
+    // MARK: - Language Mode Mapping
+    
+    /// Gets the actual TreeSitter Language object for a given filename
+    /// Returns nil for plain text files (no syntax highlighting)
+    private func getTreeSitterLanguage(for filename: String) -> Runestone.TreeSitterLanguage? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        let lastComponent = (filename as NSString).lastPathComponent.lowercased()
+        
+        // Special-case filenames without extensions
+        if lastComponent == "dockerfile" || lastComponent.hasPrefix("dockerfile.") {
+            return nil // Bash support not in package list yet
+        }
+        if lastComponent == ".env" || lastComponent.hasPrefix(".env.") {
+            return nil // Plain text
+        }
+        if lastComponent == "makefile" || lastComponent == "gnumakefile" {
+            return nil // Bash support not in package list yet
+        }
+        if lastComponent == "podfile" || lastComponent == "gemfile" {
+            return nil // Ruby support not in package list yet
+        }
+        if lastComponent == "package.json" || lastComponent == "tsconfig.json" {
+            return TreeSitterLanguage.json
+        }
+        
+        switch ext {
+        // Swift
+        case "swift":
+            return TreeSitterLanguage.swift
+        
+        // JavaScript
+        case "js", "mjs", "cjs", "jsx":
+            return TreeSitterLanguage.javaScript
+        
+        // TypeScript - use JavaScript as fallback
+        case "ts", "mts", "cts", "tsx":
+            return TreeSitterLanguage.javaScript
+        
+        // Python
+        case "py", "pyw", "pyi":
+            return TreeSitterLanguage.python
+        
+        // Go
+        case "go":
+            return TreeSitterLanguage.go
+        
+        // Rust
+        case "rs":
+            return TreeSitterLanguage.rust
+        
+        // JSON
+        case "json", "jsonc":
+            return TreeSitterLanguage.json
+        
+        // HTML
+        case "html", "htm", "xhtml":
+            return TreeSitterLanguage.html
+        
+        // CSS
+        case "css", "scss":
+            return TreeSitterLanguage.css
+        
+        // XML - use HTML as fallback
+        case "xml", "plist", "svg":
+            return TreeSitterLanguage.html
+        
+        // Default - no syntax highlighting
+        default:
+            return nil
+        }
+    }
+
+    
+    // MARK: - Helpers
+    
+    private func countLines(in text: String) -> Int {
+        guard !text.isEmpty else { return 1 }
+        var count = 1
+        var index = text.startIndex
+        while index < text.endIndex {
+            if text[index] == "\n" {
+                count += 1
+            }
+            index = text.index(after: index)
+        }
+        return count
+    }
+    
+    // MARK: - Coordinator
+    
+    class Coordinator: NSObject, TextViewDelegate {
+        var parent: RunestoneEditorView
+        weak var textView: TextView?
+        var isUpdatingFromTextView = false
+        var lastFontSize: CGFloat = 14.0
+        var lastThemeId: String = ""
+        var currentLanguage: Language?
+        
+        // Track file identity to know when to call setState()
+        var lastFilename: String = ""
+        var hasBeenEdited: Bool = false
+        
+        // Debounced text sync to avoid SwiftUI re-renders on every keystroke
+        private var textSyncWorkItem: DispatchWorkItem?
+        private let debounceInterval: TimeInterval = 0.5 // 500ms
+        
+        init(_ parent: RunestoneEditorView) {
+            self.parent = parent
+            self.lastFontSize = parent.fontSize
+            self.lastThemeId = ThemeManager.shared.currentTheme.id
+            self.lastFilename = parent.filename
+        }
+        
+        deinit {
+            // Cancel any pending debounced updates
+            textSyncWorkItem?.cancel()
+        }
+        
+        // MARK: - TextViewDelegate
+        
+        func textViewDidChange(_ textView: TextView) {
+            // Mark that user has edited - blocks setState() calls until file switch
+            hasBeenEdited = true
+            
+            // Cancel any pending debounced update
+            textSyncWorkItem?.cancel()
+            
+            // Create new debounced work item
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.isUpdatingFromTextView = true
+                defer { self.isUpdatingFromTextView = false }
+                
+                // Update text binding (debounced - only after typing stops)
+                self.parent.text = textView.text
+                
+                // Update line count
+                DispatchQueue.main.async {
+                    self.parent.totalLines = self.parent.countLines(in: textView.text)
+                }
+            }
+            
+            // Schedule the update after debounce interval
+            textSyncWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+        }
+        
+        /// Immediately sync text to SwiftUI binding (call on save/tab-switch)
+        func syncTextImmediately() {
+            // Cancel any pending debounced update
+            textSyncWorkItem?.cancel()
+            
+            guard let textView = textView else { return }
+            
+            isUpdatingFromTextView = true
+            defer { isUpdatingFromTextView = false }
+            
+            // Immediate sync
+            parent.text = textView.text
+            parent.totalLines = parent.countLines(in: textView.text)
+        }
+        
+        func textViewDidChangeSelection(_ textView: TextView) {
+            updateCursorPosition(in: textView)
+        }
+        
+        func textViewDidBeginEditing(_ textView: TextView) {
+            // Could be used for focus handling
+        }
+        
+        func textViewDidEndEditing(_ textView: TextView) {
+            // Could be used for focus handling
+        }
+        
+        func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            // Handle Tab key for autocomplete acceptance
+            if text == "\t" {
+                if let onAccept = parent.onAcceptAutocomplete, onAccept() {
+                    return false
+                }
+            }
+            
+            // Handle Escape key for autocomplete dismissal
+            // Note: Escape key events are typically handled via key commands, not here
+            
+            return true
+        }
+        
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            // Update scroll offset binding for gutter synchronization
+            DispatchQueue.main.async {
+                self.parent.scrollOffset = scrollView.contentOffset.y
+            }
+        }
+        
+        // MARK: - Cursor Position Calculation
+        
+        private func updateCursorPosition(in textView: TextView) {
+            let selectedRange = textView.selectedRange
+            let text = textView.text as NSString
+            let cursorLocation = selectedRange.location
+            
+            // Calculate line and column from cursor location
+            var lineNumber = 1
+            var columnNumber = 1
+            var currentLineStart = 0
+            
+            for i in 0..<min(cursorLocation, text.length) {
+                if text.character(at: i) == UInt16(UnicodeScalar("\n").value) {
+                    lineNumber += 1
+                    currentLineStart = i + 1
+                }
+            }
+            
+            // Column is the offset from the start of the current line
+            columnNumber = cursorLocation - currentLineStart + 1
+            
+            // Update bindings on main thread to avoid SwiftUI state update warnings
+            DispatchQueue.main.async {
+                self.parent.cursorIndex = cursorLocation
+                self.parent.currentLineNumber = lineNumber
+                self.parent.currentColumn = columnNumber
+            }
+        }
+    }
+}
+
+// MARK: - Runestone Theme Implementation
+
+/// Custom theme implementation for Runestone that maps app theme colors to editor appearance
+class RunestoneEditorTheme: Runestone.Theme {
+    let fontSize: CGFloat
+    
+    // Core colors
+    private let _backgroundColor: UIColor
+    private let _textColor: UIColor
+    private let _gutterBackgroundColor: UIColor
+    private let _gutterHairlineColor: UIColor
+    private let _lineNumberColor: UIColor
+    private let _selectedLineBackgroundColor: UIColor
+    private let _selectedLinesLineNumberColor: UIColor
+    private let _selectedLinesGutterBackgroundColor: UIColor
+    private let _invisibleCharactersColor: UIColor
+    private let _pageGuideHairlineColor: UIColor
+    private let _pageGuideBackgroundColor: UIColor
+    private let _markedTextBackgroundColor: UIColor
+    
+    // Syntax colors
+    private let _keywordColor: UIColor
+    private let _stringColor: UIColor
+    private let _numberColor: UIColor
+    private let _commentColor: UIColor
+    private let _functionColor: UIColor
+    private let _typeColor: UIColor
+    private let _variableColor: UIColor
+    
+    init(
+        fontSize: CGFloat,
+        backgroundColor: UIColor,
+        textColor: UIColor,
+        gutterBackgroundColor: UIColor,
+        gutterHairlineColor: UIColor,
+        lineNumberColor: UIColor,
+        selectedLineBackgroundColor: UIColor,
+        selectedLinesLineNumberColor: UIColor,
+        selectedLinesGutterBackgroundColor: UIColor,
+        invisibleCharactersColor: UIColor,
+        pageGuideHairlineColor: UIColor,
+        pageGuideBackgroundColor: UIColor,
+        markedTextBackgroundColor: UIColor,
+        keywordColor: UIColor,
+        stringColor: UIColor,
+        numberColor: UIColor,
+        commentColor: UIColor,
+        functionColor: UIColor,
+        typeColor: UIColor,
+        variableColor: UIColor
+    ) {
+        self.fontSize = fontSize
+        self._backgroundColor = backgroundColor
+        self._textColor = textColor
+        self._gutterBackgroundColor = gutterBackgroundColor
+        self._gutterHairlineColor = gutterHairlineColor
+        self._lineNumberColor = lineNumberColor
+        self._selectedLineBackgroundColor = selectedLineBackgroundColor
+        self._selectedLinesLineNumberColor = selectedLinesLineNumberColor
+        self._selectedLinesGutterBackgroundColor = selectedLinesGutterBackgroundColor
+        self._invisibleCharactersColor = invisibleCharactersColor
+        self._pageGuideHairlineColor = pageGuideHairlineColor
+        self._pageGuideBackgroundColor = pageGuideBackgroundColor
+        self._markedTextBackgroundColor = markedTextBackgroundColor
+        self._keywordColor = keywordColor
+        self._stringColor = stringColor
+        self._numberColor = numberColor
+        self._commentColor = commentColor
+        self._functionColor = functionColor
+        self._typeColor = typeColor
+        self._variableColor = variableColor
+    }
+    
+    // MARK: - Theme Protocol Properties
+    
+    var font: UIFont {
+        UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
+    
+    var textColor: UIColor {
+        _textColor
+    }
+    
+    var gutterBackgroundColor: UIColor {
+        _gutterBackgroundColor
+    }
+    
+    var gutterHairlineColor: UIColor {
+        _gutterHairlineColor
+    }
+    
+    var lineNumberColor: UIColor {
+        _lineNumberColor
+    }
+    
+    var lineNumberFont: UIFont {
+        UIFont.monospacedSystemFont(ofSize: max(fontSize - 2, 10), weight: .regular)
+    }
+    
+    var selectedLineBackgroundColor: UIColor {
+        _selectedLineBackgroundColor
+    }
+    
+    var selectedLinesLineNumberColor: UIColor {
+        _selectedLinesLineNumberColor
+    }
+    
+    var selectedLinesGutterBackgroundColor: UIColor {
+        _selectedLinesGutterBackgroundColor
+    }
+    
+    var invisibleCharactersColor: UIColor {
+        _invisibleCharactersColor
+    }
+    
+    var pageGuideHairlineColor: UIColor {
+        _pageGuideHairlineColor
+    }
+    
+    var pageGuideBackgroundColor: UIColor {
+        _pageGuideBackgroundColor
+    }
+    
+    var markedTextBackgroundColor: UIColor {
+        _markedTextBackgroundColor
+    }
+    
+    // MARK: - Syntax Highlighting
+    
+    func textColor(for rawHighlightName: String) -> UIColor? {
+        // Map TreeSitter highlight names to colors
+        // See: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#highlights
+        let highlightName = rawHighlightName.lowercased()
+        
+        // Debug: Log highlight names to understand TreeSitter output
+        #if DEBUG
+        print("🎨 Highlight: \(rawHighlightName)")
+        #endif
+        
+        // Keywords
+        if highlightName.contains("keyword") {
+            return _keywordColor
+        }
+        
+        // JSON/Object keys - check BEFORE general string check
+        // TreeSitter JSON uses "string.special" for keys in some grammars
+        if highlightName.hasPrefix("string.special") ||
+           highlightName.contains("label") ||
+           highlightName.contains("property.definition") ||
+           (highlightName.contains("property") && !highlightName.contains("variable")) {
+            return _variableColor  // Light blue #9CDCFE for keys
+        }
+        
+        // Strings (values, not keys)
+        if highlightName.contains("string") {
+            return _stringColor  // Orange #CE9178 for string values
+        }
+        
+        // Numbers and constants
+        if highlightName.contains("number") || highlightName == "constant.numeric" {
+            return _numberColor
+        }
+        
+        // Comments
+        if highlightName.contains("comment") {
+            return _commentColor
+        }
+        
+        // Functions and methods
+        if highlightName.contains("function") || highlightName.contains("method") {
+            return _functionColor
+        }
+        
+        // Types, classes, structs
+        if highlightName.contains("type") || highlightName.contains("class") ||
+           highlightName.contains("struct") || highlightName.contains("interface") ||
+           highlightName.contains("enum") {
+            return _typeColor
+        }
+        
+        // Variables, parameters, properties
+        if highlightName.contains("variable") || highlightName.contains("parameter") ||
+           highlightName.contains("property") || highlightName.contains("field") {
+            return _variableColor
+        }
+        
+        // Constants and booleans - use keyword color
+        if highlightName.contains("constant") || highlightName.contains("boolean") {
+            return _keywordColor
+        }
+        
+        // Operators - use keyword color
+        if highlightName.contains("operator") {
+            return _keywordColor
+        }
+        
+        // Namespaces and modules - use type color
+        if highlightName.contains("namespace") || highlightName.contains("module") {
+            return _typeColor
+        }
+        
+        // Tags (HTML, XML) - use type color
+        if highlightName.contains("tag") {
+            return _typeColor
+        }
+        
+        // Attributes - use variable color
+        if highlightName.contains("attribute") {
+            return _variableColor
+        }
+        
+        // Spell checking highlights - ignore (return nil to use default)
+        if highlightName.contains("spell") {
+            return nil
+        }
+        
+        // Include/import statements - use keyword color
+        if highlightName.contains("include") {
+            return _keywordColor
+        }
+        
+        // Default: use standard text color
+        return nil
+    }
+    
+    func fontTraits(for rawHighlightName: String) -> FontTraits {
+        let highlightName = rawHighlightName.lowercased()
+        
+        // Make comments italic
+        if highlightName.contains("comment") {
+            return .italic
+        }
+        
+        // Make keywords bold
+        if highlightName.contains("keyword") {
+            return .bold
+        }
+        
+        return []
+    }
+}
+
+
+
+// MARK: - Preview
+#if DEBUG
+struct RunestoneEditorView_Previews: PreviewProvider {
+    @State static var text = """
+    func hello() {
+        print("Hello, World!")
+    }
+    
+    // This is a comment
+    let number = 42
+    let string = "test"
+    """
+    @State static var scrollOffset: CGFloat = 0
+    @State static var totalLines = 7
+    @State static var currentLineNumber = 1
+    @State static var currentColumn = 1
+    @State static var cursorIndex = 0
+    
+    static var previews: some View {
+        RunestoneEditorView(
+            text: $text,
+            filename: "test.swift",
+            scrollOffset: $scrollOffset,
+            totalLines: $totalLines,
+            currentLineNumber: $currentLineNumber,
+            currentColumn: $currentColumn,
+            cursorIndex: $cursorIndex,
+            isActive: true,
+            fontSize: 14
+        )
+        .environmentObject(EditorCore())
+    }
+}
+#endif
