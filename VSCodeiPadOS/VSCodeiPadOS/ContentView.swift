@@ -329,9 +329,12 @@ struct DemoFileTree: View {
                 .foregroundColor(theme.sidebarForeground.opacity(0.6))
                 .padding(.vertical, 8)
             
-            DemoFileRow(name: "main.swift", editorCore: editorCore, theme: theme)
-            DemoFileRow(name: "ContentView.swift", editorCore: editorCore, theme: theme)
-            DemoFileRow(name: "README.md", editorCore: editorCore, theme: theme)
+            DemoFileRow(name: "Welcome.swift", editorCore: editorCore, theme: theme)
+            DemoFileRow(name: "example.js", editorCore: editorCore, theme: theme)
+            DemoFileRow(name: "example.py", editorCore: editorCore, theme: theme)
+            DemoFileRow(name: "package.json", editorCore: editorCore, theme: theme)
+            DemoFileRow(name: "index.html", editorCore: editorCore, theme: theme)
+            DemoFileRow(name: "styles.css", editorCore: editorCore, theme: theme)
         }
     }
 }
@@ -351,7 +354,9 @@ struct DemoFileRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture {
-            editorCore.addTab(fileName: name, content: "// \(name)\n\n")
+            if let tab = editorCore.tabs.first(where: { $0.fileName == name }) {
+                editorCore.selectTab(id: tab.id)
+            }
         }
     }
 }
@@ -582,6 +587,18 @@ struct IDEEditorView: View {
                 .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
 
+                // Inlay Hints Overlay (type hints, parameter names)
+                InlayHintsOverlay(
+                    code: text,
+                    language: tab.language,
+                    scrollPosition: scrollPosition,
+                    lineHeight: lineHeight,
+                    fontSize: editorCore.editorFontSize,
+                    gutterWidth: (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0,
+                    rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80
+                )
+                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
+                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
                 if showAutocomplete && !autocomplete.suggestionItems.isEmpty {
                     AutocompletePopup(
                         suggestions: autocomplete.suggestionItems,

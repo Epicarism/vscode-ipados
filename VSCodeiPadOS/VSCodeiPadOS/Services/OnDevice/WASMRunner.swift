@@ -125,7 +125,8 @@ public struct WASMConfiguration {
 /// **Architecture:**
 /// Uses WKWebView with a hidden web view to execute WASM in Safari's JavaScriptCore engine.
 /// Communication happens via WKUserContentController message handlers.
-public actor WASMRunner: NSObject {
+@MainActor
+public final class WASMRunner: NSObject {
     
     // MARK: - Properties
     
@@ -540,14 +541,14 @@ public actor WASMRunner: NSObject {
 // MARK: - WKScriptMessageHandler
 
 extension WASMRunner: WKScriptMessageHandler {
-    nonisolated public func userContentController(
+    public func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
         guard let body = message.body as? [String: Any],
               let type = body["type"] as? String else { return }
         
-        Task {
+        Task { @MainActor in
             await handleMessage(type: type, body: body)
         }
     }

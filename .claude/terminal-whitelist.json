@@ -10,7 +10,8 @@
     "cat *",
     "ls *",
     "open *",
-    "sleep *"
+    "sleep *",
+    "echo *"
   ],
   "blocklist": [
     "rm -rf /*",
@@ -111,7 +112,16 @@
     "dd if=*of=/dev/*",
     "> /dev/sda",
     "chmod -R 777 /",
+    "chown -R *:* /",
+    "rm -rf /*",
+    "rm -rf /",
+    "sudo rm -rf *",
+    ":(){:|:&};:",
+    "mkfs.*",
+    "dd if=*of=/dev/*",
+    "> /dev/sda",
+    "chmod -R 777 /",
     "chown -R *:* /"
   ],
-  "updatedAt": 1770768076207
+  "updatedAt": 1770808147820
 }

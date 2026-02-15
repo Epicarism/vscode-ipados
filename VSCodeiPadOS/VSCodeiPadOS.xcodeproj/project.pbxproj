@@ -100,6 +100,16 @@
 		1148 /* RunestoneThemeAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2148 /* RunestoneThemeAdapter.swift */; };
 		1149 /* TreeSitterLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */; };
 		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
+		1150 /* JSRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2150 /* JSRunner.swift */; };
+		1151 /* CodeAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2151 /* CodeAnalyzer.swift */; };
+		1152 /* RunnerSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152 /* RunnerSelector.swift */; };
+		1153 /* RunnerWarningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2153 /* RunnerWarningView.swift */; };
+		1154 /* WASMRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2154 /* WASMRunner.swift */; };
+		1155 /* PythonRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2155 /* PythonRunner.swift */; };
+		1156 /* MockRunners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2156 /* MockRunners.swift */; };
+		1157 /* NodeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2157 /* NodeRunner.swift */; };
+		1158 /* SwiftRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2158 /* SwiftRunner.swift */; };
+		1159 /* PythonRunnerAlt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2159 /* PythonRunnerAlt.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -197,6 +207,16 @@
 		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
+		2150 /* JSRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSRunner.swift; sourceTree = "<group>"; };
+		2151 /* CodeAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAnalyzer.swift; sourceTree = "<group>"; };
+		2152 /* RunnerSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerSelector.swift; sourceTree = "<group>"; };
+		2153 /* RunnerWarningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerWarningView.swift; sourceTree = "<group>"; };
+		2154 /* WASMRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WASMRunner.swift; sourceTree = "<group>"; };
+		2155 /* PythonRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRunner.swift; sourceTree = "<group>"; };
+		2156 /* MockRunners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRunners.swift; sourceTree = "<group>"; };
+		2157 /* NodeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeRunner.swift; sourceTree = "<group>"; };
+		2158 /* SwiftRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftRunner.swift; sourceTree = "<group>"; };
+		2159 /* PythonRunnerAlt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRunnerAlt.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -299,6 +319,9 @@
 				2142 /* SSHManager.swift */,
 				2148 /* RunestoneThemeAdapter.swift */,
 				4013 /* NativeGit */,
+				4014 /* OnDevice */,
+				4015 /* Runners */,
+				2152 /* RunnerSelector.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -377,6 +400,7 @@
 				2050 /* SettingsView.swift */,
 				2051 /* TerminalView.swift */,
 				2053 /* DebugView.swift */,
+				2153 /* RunnerWarningView.swift */,
 			);
 			path = Panels;
 			sourceTree = "<group>";
@@ -402,6 +426,28 @@
 				2146 /* NativeGitWriter.swift */,
 			);
 			path = NativeGit;
+			sourceTree = "<group>";
+		};
+		4014 /* OnDevice */ = {
+			isa = PBXGroup;
+			children = (
+				2150 /* JSRunner.swift */,
+				2154 /* WASMRunner.swift */,
+				2151 /* CodeAnalyzer.swift */,
+				2155 /* PythonRunner.swift */,
+				2156 /* MockRunners.swift */,
+			);
+			path = OnDevice;
+			sourceTree = "<group>";
+		};
+		4015 /* Runners */ = {
+			isa = PBXGroup;
+			children = (
+				2157 /* NodeRunner.swift */,
+				2158 /* SwiftRunner.swift */,
+				2159 /* PythonRunnerAlt.swift */,
+			);
+			path = Runners;
 			sourceTree = "<group>";
 		};
 		4099 /* Products */ = {
@@ -597,6 +643,17 @@
 				1146 /* NativeGitWriter.swift in Sources */,
 				1147 /* RunestoneEditorView.swift in Sources */,
 				1148 /* RunestoneThemeAdapter.swift in Sources */,
+				1149 /* TreeSitterLanguages.swift in Sources */,
+				1150 /* JSRunner.swift in Sources */,
+				1151 /* CodeAnalyzer.swift in Sources */,
+				1152 /* RunnerSelector.swift in Sources */,
+				1153 /* RunnerWarningView.swift in Sources */,
+				1154 /* WASMRunner.swift in Sources */,
+				1155 /* PythonRunner.swift in Sources */,
+				1156 /* MockRunners.swift in Sources */,
+				1157 /* NodeRunner.swift in Sources */,
+				1158 /* SwiftRunner.swift in Sources */,
+				1159 /* PythonRunnerAlt.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

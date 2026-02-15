@@ -1,15 +1,18 @@
 import Foundation
+import Foundation
+
+#if os(macOS)
 
 // MARK: - Base Runner Protocol
 
 /// Base protocol for all language runners
-protocol Runner {
+protocol ToolingRunner {
     /// The language this runner handles
     static var language: String { get }
-    
+
     /// Execute a command
     func execute(command: String, in directory: URL, environment: [String: String]?) async throws -> ProcessResult
-    
+
     /// Check if the required tooling is available
     func checkAvailability() async -> RunnerAvailability
 }
@@ -160,7 +163,7 @@ struct NodeError {
 // MARK: - NodeRunner
 
 /// Specialized runner for Node.js/JavaScript/TypeScript execution
-final class NodeRunner: Runner {
+final class NodeRunner: ToolingRunner {
     static let language = "javascript"
     
     // MARK: - Properties
@@ -839,3 +842,5 @@ extension NodeRunner {
         return scripts[name] != nil
     }
 }
+
+#endif

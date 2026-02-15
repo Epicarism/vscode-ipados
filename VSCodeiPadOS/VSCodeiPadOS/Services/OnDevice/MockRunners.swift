@@ -5,7 +5,7 @@ import WebKit
 /// MARK: - Protocol Definitions
 
 /// Protocol for all code runners (real and mock)
-public protocol CodeRunner: Actor {
+public protocol CodeRunner: AnyObject {
     associatedtype ResultType
     
     var runnerId: String { get }
@@ -42,7 +42,6 @@ public protocol MockConfigurable {
 // MARK: - Mock JS Runner
 
 /// Mock implementation of JSRunner for testing
-@MainActor
 public final class MockJSRunner: CodeRunner, MockConfigurable {
     public typealias ResultType = JSValue
     
@@ -162,16 +161,14 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
     }
     
     private func createJSValue(from value: Any) -> JSValue {
-        // In real implementation, this would be actual JSValue
-        // For mock, we create a simple wrapper
-        return MockJSValue(wrapped: value)
+        let ctx = JSContext()!
+        return JSValue(object: value, in: ctx)
     }
 }
 
 // MARK: - Mock Python Runner
 
 /// Mock implementation of PythonRunner for testing
-@MainActor
 public final class MockPythonRunner: CodeRunner, MockConfigurable {
     public typealias ResultType = String
     
@@ -318,7 +315,6 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
 // MARK: - Mock WASM Runner
 
 /// Mock implementation of WASMRunner for testing
-@MainActor
 public final class MockWASMRunner: CodeRunner, MockConfigurable {
     public typealias ResultType = Any
     

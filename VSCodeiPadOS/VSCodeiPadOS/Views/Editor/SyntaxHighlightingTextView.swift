@@ -706,15 +706,25 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             guard !isUpdatingFromMinimap else { return }
             isUpdatingFromMinimap = true
             
-            let lines = textView.text.components(separatedBy: .newlines)
-            guard line >= 0 && line < lines.count else {
-                isUpdatingFromMinimap = false
-                return
+            // Optimized: Use NSString enumeration instead of splitting entire text
+            let nsText = textView.text as NSString
+            var currentLine = 0
+            var characterPosition = 0
+            var foundLine = false
+            
+            nsText.enumerateSubstrings(in: NSRange(location: 0, length: nsText.length), options: [.byLines, .substringNotRequired]) { _, substringRange, _, stop in
+                if currentLine == line {
+                    characterPosition = substringRange.location
+                    foundLine = true
+                    stop.pointee = true
+                    return
+                }
+                currentLine += 1
             }
             
-            var characterPosition = 0
-            for i in 0..<line {
-                characterPosition += lines[i].count + 1
+            guard foundLine || (line == 0 && nsText.length == 0) else {
+                isUpdatingFromMinimap = false
+                return
             }
             
             if let position = textView.position(from: textView.beginningOfDocument, offset: characterPosition) {
@@ -729,16 +739,27 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
 
         func scrollToAndSelectLine(_ line: Int, in textView: UITextView) {
-            let lines = textView.text.components(separatedBy: .newlines)
-            guard line >= 0 && line < lines.count else { return }
-
+            // Optimized: Use NSString enumeration instead of splitting entire text
+            let nsText = textView.text as NSString
+            var currentLine = 0
             var characterPosition = 0
-            for i in 0..<line {
-                characterPosition += lines[i].count + 1
+            var lineLength = 0
+            var foundLine = false
+            
+            nsText.enumerateSubstrings(in: NSRange(location: 0, length: nsText.length), options: .byLines) { substring, substringRange, _, stop in
+                if currentLine == line {
+                    characterPosition = substringRange.location
+                    lineLength = substringRange.length
+                    foundLine = true
+                    stop.pointee = true
+                    return
+                }
+                currentLine += 1
             }
+            
+            guard foundLine else { return }
 
             // FEAT-041: select entire line (excluding trailing newline)
-            let lineLength = (lines[line] as NSString).length
             let range = NSRange(location: characterPosition, length: lineLength)
             textView.selectedRange = range
 
@@ -1334,10 +1355,14 @@ class EditorTextView: MultiCursorTextView {
     }
 
     @objc func handleTab() {
-        if onAcceptAutocomplete?() == true {
-            return
+        // Dispatch to avoid modifying @Binding during view update cycle
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.onAcceptAutocomplete?() == true {
+                return
+            }
+            self.insertText("\t")
         }
-        insertText("\t")
     }
     
     @objc func handleEscape() {
@@ -1528,7 +1553,7 @@ class EditorTextView: MultiCursorTextView {
 
 // MARK: - VSCode-Style Syntax Highlighter
 
-enum Language {
+enum SyntaxLanguage {
     case swift
 
     case javascript
@@ -1580,7 +1605,7 @@ struct VSCodeSyntaxHighlighter {
         return highlight(text, language: language)
     }
     
-    private func detectLanguage(from filename: String) -> Language {
+    private func detectLanguage(from filename: String) -> SyntaxLanguage {
         let lower = filename.lowercased()
         let ext = (filename as NSString).pathExtension.lowercased()
 
@@ -1630,7 +1655,7 @@ struct VSCodeSyntaxHighlighter {
         }
     }
     
-    private func highlight(_ text: String, language: Language) -> NSAttributedString {
+    private func highlight(_ text: String, language: SyntaxLanguage) -> NSAttributedString {
         let attributed = NSMutableAttributedString(string: text)
         let fullRange = NSRange(location: 0, length: text.utf16.count)
         

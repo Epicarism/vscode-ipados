@@ -90,7 +90,7 @@ struct SwiftBuildConfig {
 // MARK: - SwiftRunner
 
 /// Specialized runner for Swift code execution via SSH
-struct SwiftRunner {
+final class SwiftRunner {
     let name = "Swift"
     let supportedExtensions = ["swift"]
     let languageId = "swift"
@@ -633,21 +633,9 @@ extension SwiftRunner {
 
 extension SSHManager {
     /// Convenience method for SwiftRunner compatibility
-    func execute(command: String) async throws -> (stdout: String, stderr: String, exitCode: Int) {
-        return try await withCheckedThrowingContinuation { continuation in
-            self.executeCommand(command: command) { result in
-                switch result {
-                case .success(let output):
-                    continuation.resume(returning: (
-                        stdout: output.stdout,
-                        stderr: output.stderr,
-                        exitCode: output.exitCode
-                    ))
-                case .failure(let error):
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+    func execute(command: String, timeout: TimeInterval = 30) async throws -> (stdout: String, stderr: String, exitCode: Int) {
+        let result = try await executeCommand(command, timeout: timeout)
+        return (stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode)
     }
 }
 
@@ -667,7 +655,7 @@ protocol Runner {
 // MARK: - SwiftRunner Conformance
 
 extension SwiftRunner: Runner {
-    // Already implemented above
+    // Conformance via the methods/properties above
 }
 
 // MARK: - Package.swift Parsing

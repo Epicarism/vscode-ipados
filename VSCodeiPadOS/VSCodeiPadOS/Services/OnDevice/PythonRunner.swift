@@ -153,7 +153,7 @@ enum PythonRunnerError: Error, LocalizedError {
 /// // For remote execution (requires server):
 /// let result = try await runner.executeRemote(code: pythonCode, endpoint: serverURL)
 /// ```
-actor PythonRunner {
+actor PyodidePythonRunner {
     
     // MARK: - Properties
     
@@ -224,7 +224,7 @@ actor PythonRunner {
     
     /// Analyzes Python code to determine execution requirements.
     /// - Returns: Detection result with recommendations
-    func analyze(code: String) -> CodeAnalysisResult {
+    func analyze(code: String) -> PyodideCodeAnalysisResult {
         let requiresHeavyLibraries = heavyLibraryPatterns.contains { pattern in
             code.range(of: pattern, options: .regularExpression) != nil
         }
@@ -243,7 +243,7 @@ actor PythonRunner {
         
         let estimatedComplexity = estimateComplexity(code)
         
-        return CodeAnalysisResult(
+        return PyodideCodeAnalysisResult(
             requiresNativeExecution: false,  // Never possible on iOS
             requiresWASMExecution: requiresHeavyLibraries,
             requiresRemoteExecution: requiresHeavyLibraries || estimatedComplexity > .high,
@@ -411,7 +411,7 @@ actor PythonRunner {
 
 // MARK: - Supporting Types
 
-struct CodeAnalysisResult {
+struct PyodideCodeAnalysisResult {
     let requiresNativeExecution: Bool
     let requiresWASMExecution: Bool
     let requiresRemoteExecution: Bool
@@ -446,7 +446,7 @@ enum ExecutionBackend: String {
 
 // MARK: - Convenience Extensions
 
-extension PythonRunner {
+extension PyodidePythonRunner {
     /// Quick check if code can run locally (WASM).
     func canExecuteLocally(_ code: String) -> Bool {
         let analysis = analyze(code: code)
@@ -468,7 +468,7 @@ extension PythonRunner {
  Example implementation pattern:
  
  class PythonExecutionController: ObservableObject {
-     private let runner = PythonRunner()
+    private let runner = PyodidePythonRunner()
      
      func executePython(_ code: String) async {
          let analysis = await runner.analyze(code: code)

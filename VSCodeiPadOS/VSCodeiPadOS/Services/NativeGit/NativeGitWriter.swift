@@ -310,6 +310,293 @@ final class NativeGitWriter {
         throw GitManagerError.invalidRepository
     }
 
+    // MARK: - Staging Operations
+
+    /// Stage a file by adding/updating its entry in the git index
+    func stageFile(path: String) throws {
+        // Read working directory file
+        let fileURL = repoURL.appendingPathComponent(path)
+        let fileData = try Data(contentsOf: fileURL)
+        
+        // Get file attributes
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let mtime = (attrs[.modificationDate] as? Date) ?? Date()
+        let size = (attrs[.size] as? Int) ?? fileData.count
+        
+        // Write blob object and get SHA
+        let blobSha = try writeObject(type: .blob, content: fileData)
+        
+        // Read current index
+        var entries = (try? readIndex().entries) ?? []
+        
+        // Determine file mode
+        let mode: UInt32
+        if let posixPerms = attrs[.posixPermissions] as? Int, (posixPerms & 0o111) != 0 {
+            mode = 0o100755
+        } else {
+            mode = 0o100644
+        }
+        
+        // Create new entry
+        let newEntry = GitIndexEntry(
+            ctime: mtime,
+            mtime: mtime,
+            dev: 0,
+            ino: 0,
+            mode: mode,
+            uid: 0,
+            gid: 0,
+            size: size,
+            sha: blobSha,
+            flags: UInt16(min(path.utf8.count, 0xFFF)),
+            path: path
+        )
+        
+        // Update or add entry
+        if let idx = entries.firstIndex(where: { $0.path == path }) {
+            entries[idx] = newEntry
+        } else {
+            entries.append(newEntry)
+        }
+        
+        // Sort entries by path (git requires sorted index)
+        entries.sort { $0.path < $1.path }
+        
+        // Write updated index
+        try writeIndex(entries: entries)
+    }
+    
+    /// Unstage a file by restoring HEAD entry or removing if new file
+    func unstageFile(path: String) throws {
+        var entries = (try? readIndex().entries) ?? []
+        
+        // Get HEAD tree entry for this path
+        let headSha = headTreeSHA(forPath: path)
+        
+        if let headSha = headSha {
+            // File was in HEAD - restore that entry
+            if let idx = entries.firstIndex(where: { $0.path == path }) {
+                // Keep most fields but restore SHA from HEAD
+                let old = entries[idx]
+                let restored = GitIndexEntry(
+                    ctime: old.ctime,
+                    mtime: old.mtime,
+                    dev: old.dev,
+                    ino: old.ino,
+                    mode: old.mode,
+                    uid: old.uid,
+                    gid: old.gid,
+                    size: old.size,
+                    sha: headSha,
+                    flags: old.flags,
+                    path: path
+                )
+                entries[idx] = restored
+            }
+        } else {
+            // File was NOT in HEAD (new file) - remove from index
+            entries.removeAll { $0.path == path }
+        }
+        
+        try writeIndex(entries: entries)
+    }
+    
+    /// Stage all modified and untracked files
+    func stageAll() throws {
+        guard let reader = NativeGitReader(repositoryURL: repoURL) else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        let statuses = reader.status()
+        
+        for status in statuses {
+            // Stage files that have working directory changes
+            if status.working == .modified || status.working == .deleted || status.working == .untracked {
+                if status.working == .deleted {
+                    // For deleted files, remove from index
+                    var entries = (try? readIndex().entries) ?? []
+                    entries.removeAll { $0.path == status.path }
+                    try writeIndex(entries: entries)
+                } else {
+                    try stageFile(path: status.path)
+                }
+            }
+        }
+    }
+    
+    /// Get the blob SHA for a path in HEAD tree
+    private func headTreeSHA(forPath path: String) -> String? {
+        guard let headSha = (try? headCommitSHA()) ?? nil else {
+            return nil
+        }
+        
+        guard let reader = NativeGitReader(repositoryURL: repoURL) else {
+            return nil
+        }
+        
+        guard let commit = reader.parseCommit(sha: headSha),
+              let treeSha = commit.treeSHA else {
+            return nil
+        }
+        
+        return blobSHAFromTree(path: path, treeSHA: treeSha, reader: reader)
+    }
+    
+    private func blobSHAFromTree(path: String, treeSHA: String, reader: NativeGitReader) -> String? {
+        let components = path.split(separator: "/").map(String.init)
+        return blobSHAFromTree(components: components, treeSHA: treeSHA, reader: reader)
+    }
+    
+    private func blobSHAFromTree(components: [String], treeSHA: String, reader: NativeGitReader) -> String? {
+        guard !components.isEmpty,
+              let treeObj = reader.readObject(sha: treeSHA),
+              treeObj.type == .tree else {
+            return nil
+        }
+        
+        let entries = parseTreeEntriesForWrite(data: treeObj.data)
+        let head = components[0]
+        
+        if components.count == 1 {
+            // Looking for a blob
+            return entries.first { $0.name == head && !$0.mode.hasPrefix("40") }?.sha
+        } else {
+            // Looking for a subtree
+            guard let dir = entries.first(where: { $0.name == head && $0.mode.hasPrefix("40") }) else {
+                return nil
+            }
+            return blobSHAFromTree(components: Array(components.dropFirst()), treeSHA: dir.sha, reader: reader)
+        }
+    }
+    
+    private func parseTreeEntriesForWrite(data: Data) -> [(mode: String, name: String, sha: String)] {
+        var entries: [(String, String, String)] = []
+        var offset = 0
+        
+        while offset < data.count {
+            guard let spaceIndex = data[offset...].firstIndex(of: 0x20) else { break }
+            let modeData = data[offset..<spaceIndex]
+            guard let mode = String(data: modeData, encoding: .ascii) else { break }
+            
+            let nameStart = spaceIndex + 1
+            guard let nullIndex = data[nameStart...].firstIndex(of: 0) else { break }
+            let nameData = data[nameStart..<nullIndex]
+            guard let name = String(data: nameData, encoding: .utf8) else { break }
+            
+            let shaStart = nullIndex + 1
+            let shaEnd = shaStart + 20
+            guard shaEnd <= data.count else { break }
+            let shaData = data[shaStart..<shaEnd]
+            let sha = shaData.map { String(format: "%02x", $0) }.joined()
+            
+            entries.append((mode, name, sha))
+            offset = shaEnd
+        }
+        
+        return entries
+    }
+    
+    // MARK: - Index Writing
+    
+    /// Write a valid git index v2 file
+    private func writeIndex(entries: [GitIndexEntry]) throws {
+        var data = Data()
+        
+        // Header: DIRC magic
+        data.append(contentsOf: "DIRC".utf8)
+        
+        // Version 2 (4 bytes, big endian)
+        var version: UInt32 = 2
+        data.append(contentsOf: withUnsafeBytes(of: version.bigEndian) { Array($0) })
+        
+        // Entry count (4 bytes, big endian)
+        var entryCount = UInt32(entries.count)
+        data.append(contentsOf: withUnsafeBytes(of: entryCount.bigEndian) { Array($0) })
+        
+        // Write each entry
+        for entry in entries {
+            let entryStart = data.count
+            
+            // ctime seconds (4 bytes)
+            var ctimeSec = UInt32(entry.ctime.timeIntervalSince1970)
+            data.append(contentsOf: withUnsafeBytes(of: ctimeSec.bigEndian) { Array($0) })
+            
+            // ctime nanoseconds (4 bytes)
+            let ctimeNano = UInt32((entry.ctime.timeIntervalSince1970 - Double(ctimeSec)) * 1_000_000_000)
+            var ctimeNanoVal = ctimeNano
+            data.append(contentsOf: withUnsafeBytes(of: ctimeNanoVal.bigEndian) { Array($0) })
+            
+            // mtime seconds (4 bytes)
+            var mtimeSec = UInt32(entry.mtime.timeIntervalSince1970)
+            data.append(contentsOf: withUnsafeBytes(of: mtimeSec.bigEndian) { Array($0) })
+            
+            // mtime nanoseconds (4 bytes)
+            let mtimeNano = UInt32((entry.mtime.timeIntervalSince1970 - Double(mtimeSec)) * 1_000_000_000)
+            var mtimeNanoVal = mtimeNano
+            data.append(contentsOf: withUnsafeBytes(of: mtimeNanoVal.bigEndian) { Array($0) })
+            
+            // dev (4 bytes)
+            var dev = entry.dev
+            data.append(contentsOf: withUnsafeBytes(of: dev.bigEndian) { Array($0) })
+            
+            // ino (4 bytes)
+            var ino = entry.ino
+            data.append(contentsOf: withUnsafeBytes(of: ino.bigEndian) { Array($0) })
+            
+            // mode (4 bytes)
+            var mode = entry.mode
+            data.append(contentsOf: withUnsafeBytes(of: mode.bigEndian) { Array($0) })
+            
+            // uid (4 bytes)
+            var uid = entry.uid
+            data.append(contentsOf: withUnsafeBytes(of: uid.bigEndian) { Array($0) })
+            
+            // gid (4 bytes)
+            var gid = entry.gid
+            data.append(contentsOf: withUnsafeBytes(of: gid.bigEndian) { Array($0) })
+            
+            // size (4 bytes)
+            var size = UInt32(entry.size)
+            data.append(contentsOf: withUnsafeBytes(of: size.bigEndian) { Array($0) })
+            
+            // SHA (20 bytes)
+            let shaBytes = try Self.hexToBytes(entry.sha)
+            data.append(contentsOf: shaBytes)
+            
+            // Flags (2 bytes) - name length in lower 12 bits
+            let nameLen = min(entry.path.utf8.count, 0xFFF)
+            var flags = UInt16(nameLen)
+            data.append(contentsOf: withUnsafeBytes(of: flags.bigEndian) { Array($0) })
+            
+            // Path (variable length, null terminated)
+            data.append(contentsOf: entry.path.utf8)
+            data.append(0) // null terminator
+            
+            // Padding to 8-byte boundary
+            let entryLen = data.count - entryStart
+            let padding = (8 - (entryLen % 8)) % 8
+            for _ in 0..<padding {
+                data.append(0)
+            }
+        }
+        
+        // Footer: SHA1 checksum of entire file content
+        let checksum = Self.sha1Bytes(data)
+        data.append(contentsOf: checksum)
+        
+        // Write to index file
+        let indexPath = gitDir.appendingPathComponent("index")
+        try data.write(to: indexPath, options: [.atomic])
+    }
+    
+    private static func sha1Bytes(_ data: Data) -> [UInt8] {
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        data.withUnsafeBytes { ptr in
+            _ = CC_SHA1(ptr.baseAddress, CC_LONG(data.count), &digest)
+        }
+        return digest
+    }
+
     private static func hexToBytes(_ hex: String) throws -> [UInt8] {
         guard hex.count % 2 == 0 else { throw GitManagerError.invalidRepository }
         var bytes: [UInt8] = []

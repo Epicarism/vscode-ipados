@@ -732,8 +732,14 @@ mod tests {
     // MARK: - Tab Management
 
     func addTab(fileName: String = "Untitled.swift", content: String = "", url: URL? = nil) {
-        // Check if file is already open
+        // Check if file is already open by URL
         if let url = url, let existingTab = tabs.first(where: { $0.url == url }) {
+            activeTabId = existingTab.id
+            return
+        }
+        
+        // For tabs without URLs (demo/untitled), check by fileName to avoid duplicates
+        if url == nil, let existingTab = tabs.first(where: { $0.url == nil && $0.fileName == fileName }) {
             activeTabId = existingTab.id
             return
         }

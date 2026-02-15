@@ -16,6 +16,7 @@ public enum Language: String, CaseIterable, Sendable {
     case rust = "rust"
     case lua = "lua"
     case wasm = "wasm"
+    case unknown = "unknown"
     
     /// Returns true if the language can potentially run on-device
     public var supportsOnDeviceExecution: Bool {
@@ -30,7 +31,7 @@ public enum Language: String, CaseIterable, Sendable {
             return true // Transpiles to JS
         case .wasm:
             return true // WebAssembly via WKWebView
-        case .bash, .ruby, .php, .go, .rust:
+        case .bash, .ruby, .php, .go, .rust, .unknown:
             return false // Requires interpreter/compiler not on iOS
         }
     }
@@ -49,7 +50,51 @@ public enum Language: String, CaseIterable, Sendable {
         case .rust: return ["rs"]
         case .lua: return ["lua"]
         case .wasm: return ["wasm"]
+        case .unknown: return []
         }
+    }
+    
+    /// Detect language from file extension or code content
+    public static func detect(from filename: String, code: String? = nil) -> Language {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "js", "mjs": return .javascript
+        case "ts", "tsx": return .typescript
+        case "py", "pyw": return .python
+        case "swift": return .swift
+        case "sh", "bash": return .bash
+        case "rb": return .ruby
+        case "php": return .php
+        case "go": return .go
+        case "rs": return .rust
+        case "lua": return .lua
+        case "wasm": return .wasm
+        default:
+            // Try to detect from code heuristics
+            if let code = code {
+                return detectFromCode(code)
+            }
+            return .unknown
+        }
+    }
+    
+    private static func detectFromCode(_ code: String) -> Language {
+        if code.contains("func ") && code.contains("{") && (code.contains("var ") || code.contains("let ")) {
+            return .swift
+        }
+        if code.contains("def ") && code.contains(":") {
+            return .python
+        }
+        if code.contains("function ") || code.contains("const ") || code.contains("let ") {
+            if code.contains(": ") && code.contains("interface ") {
+                return .typescript
+            }
+            return .javascript
+        }
+        if code.contains("#!/bin/bash") || code.contains("#!/bin/sh") {
+            return .bash
+        }
+        return .unknown
     }
 }
 
@@ -384,7 +429,9 @@ public final class RunnerSelector: Sendable {
         }
         
         let strategy = analyze(code: code, language: language)
-        let canRun = strategy == .onDevice || (strategy == .hybrid && factors.allSatisfy { $0.status != .fail })
+        let isHybrid: Bool
+        if case .hybrid = strategy { isHybrid = true } else { isHybrid = false }
+        let canRun = strategy == .onDevice || (isHybrid && factors.allSatisfy { $0.status != .fail })
         
         return DeviceExecutionResult(
             canRunOnDevice: canRun,

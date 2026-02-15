@@ -153,6 +153,7 @@ class GitManager: ObservableObject {
     
     private var workingDirectory: URL?
     private var nativeReader: NativeGitReader?
+    private var nativeWriter: NativeGitWriter?
     
     private init() {}
     
@@ -163,9 +164,11 @@ class GitManager: ObservableObject {
         
         if let url {
             self.nativeReader = NativeGitReader(repositoryURL: url)
+            self.nativeWriter = NativeGitWriter(repositoryURL: url)
             self.isRepository = (self.nativeReader != nil)
         } else {
             self.nativeReader = nil
+            self.nativeWriter = nil
             self.isRepository = false
         }
         
@@ -275,25 +278,38 @@ class GitManager: ObservableObject {
     }
     
     func stage(file: String) async throws {
-        throw GitManagerError.sshNotConnected
+        guard let writer = nativeWriter else {
+            throw GitManagerError.invalidRepository
+        }
+        try writer.stageFile(path: file)
+        await refresh()
     }
     
     func stageAll() async throws {
-        throw GitManagerError.sshNotConnected
+        guard let writer = nativeWriter else {
+            throw GitManagerError.invalidRepository
+        }
+        try writer.stageAll()
+        await refresh()
     }
     
     func unstage(file: String) async throws {
-        throw GitManagerError.sshNotConnected
+        guard let writer = nativeWriter else {
+            throw GitManagerError.invalidRepository
+        }
+        try writer.unstageFile(path: file)
+        await refresh()
     }
     
     func commit(message: String) async throws {
-        guard workingDirectory != nil else {
+        guard let dir = workingDirectory else {
             throw GitManagerError.noRepository
         }
-        
-        // Native commit requires NativeGitWriter which isn't in Xcode project yet
-        // TODO: Add NativeGit folder to Xcode project to enable offline commits
-        throw GitManagerError.sshNotConnected
+        guard let writer = nativeWriter else {
+            throw GitManagerError.invalidRepository
+        }
+        let sha = try writer.commit(message: message)
+        await refresh()
     }
     
     func checkout(branch: String) async throws {

@@ -432,7 +432,8 @@ class JSRunner {
         }
         
         if value.isNumber {
-            if let int = value.toInt32() {
+            let int = value.toInt32()
+            if Double(int) == value.toDouble() {
                 return Int(int)
             }
             return value.toDouble()
@@ -508,7 +509,7 @@ extension JSRunner {
      */
     func executeToInt(code: String) async throws -> Int? {
         let result = try await execute(code: code)
-        return result.toInt32().map(Int.init)
+        return Int(result.toInt32())
     }
     
     /**
@@ -532,7 +533,14 @@ extension JSRunner {
      */
     func executeToDictionary(code: String) async throws -> [String: Any]? {
         let result = try await execute(code: code)
-        return result.toDictionary()
+        guard let dict = result.toDictionary() else { return nil }
+        var stringDict: [String: Any] = [:]
+        for (key, value) in dict {
+            if let stringKey = key as? String {
+                stringDict[stringKey] = value
+            }
+        }
+        return stringDict.isEmpty ? nil : stringDict
     }
     
     /**
