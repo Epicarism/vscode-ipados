@@ -49,7 +49,8 @@ struct VSCodeiPadOSApp: App {
 
 struct FileMenuCommands: Commands {
     var body: some Commands {
-        CommandMenu("File") {
+        // Add to existing system File menu
+        CommandGroup(replacing: .newItem) {
             Button("New File") {
                 NotificationCenter.default.post(name: NSNotification.Name("NewFile"), object: nil)
             }
@@ -59,13 +60,14 @@ struct FileMenuCommands: Commands {
                 // Request new window via UIKit
             }
             .keyboardShortcut("n", modifiers: [.command, .option])
-            
+        }
+        
+        CommandGroup(after: .newItem) {
             Divider()
             
             Button("Open...") {
                 NotificationCenter.default.post(name: NSNotification.Name("OpenFile"), object: nil)
             }
-            // Note: Cmd+O removed - conflicts with UITextView
             
             Divider()
             
@@ -93,9 +95,9 @@ struct FileMenuCommands: Commands {
 
 struct EditMenuCommands: Commands {
     var body: some Commands {
-        CommandMenu("Edit") {
-            // Note: Undo/Redo/Cut/Copy/Paste/SelectAll removed
-            // They conflict with UITextView's built-in handlers
+        // Add Find/Replace to existing Edit menu (after pasteboard operations)
+        CommandGroup(after: .pasteboard) {
+            Divider()
             
             Button("Find") {
                 NotificationCenter.default.post(name: NSNotification.Name("ShowFind"), object: nil)
@@ -134,30 +136,31 @@ struct SelectionMenuCommands: Commands {
 
 struct ViewMenuCommands: Commands {
     var body: some Commands {
-        CommandMenu("View") {
-            Button("Command Palette") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowCommandPalette"), object: nil)
-            }
-            .keyboardShortcut("p", modifiers: [.command, .shift])
-            
-            Divider()
-            
+        // Add to existing system View menu
+        CommandGroup(replacing: .sidebar) {
             Button("Toggle Sidebar") {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleSidebar"), object: nil)
             }
-            .keyboardShortcut("b", modifiers: .command)
+            // Note: Cmd+B shortcut handled by UIKeyCommand in editor to override Bold
+        }
+        
+        CommandGroup(after: .sidebar) {
+            Button("Command Palette") {
+                NotificationCenter.default.post(name: NSNotification.Name("ShowCommandPalette"), object: nil)
+            }
+            // Note: Cmd+Shift+P shortcut handled by UIKeyCommand in editor
             
             Button("Toggle Terminal") {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleTerminal"), object: nil)
             }
-            .keyboardShortcut("`", modifiers: .command)
+            .keyboardShortcut("j", modifiers: .command)
             
             Divider()
             
             Button("Zoom In") {
                 NotificationCenter.default.post(name: NSNotification.Name("ZoomIn"), object: nil)
             }
-            .keyboardShortcut("=", modifiers: .command)  // Use = instead of + (standard)
+            .keyboardShortcut("+", modifiers: .command)
             
             Button("Zoom Out") {
                 NotificationCenter.default.post(name: NSNotification.Name("ZoomOut"), object: nil)
@@ -228,6 +231,16 @@ struct RunMenuCommands: Commands {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleBreakpoint"), object: nil)
             }
             .keyboardShortcut("b", modifiers: [.command, .shift])
+            
+            Divider()
+            
+            Button("Run Sample WASM") {
+                NotificationCenter.default.post(name: NSNotification.Name("RunSampleWASM"), object: nil)
+            }
+            
+            Button("Run JavaScript") {
+                NotificationCenter.default.post(name: NSNotification.Name("RunJavaScript"), object: nil)
+            }
         }
     }
 }

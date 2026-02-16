@@ -107,6 +107,13 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) { SettingsView(themeManager: themeManager) }
+        .sheet(isPresented: $editorCore.showSaveAsDialog) {
+            IDESaveAsPicker(
+                editorCore: editorCore,
+                content: editorCore.saveAsContent,
+                suggestedName: editorCore.activeTab?.fileName ?? "Untitled.txt"
+            )
+        }
         .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
         .onChange(of: editorCore.activeTab?.fileName) { newFileName in
             updateWindowTitle()
@@ -175,6 +182,47 @@ struct ContentView: View {
                 // Show the terminal/panel and switch to Output tab so user can see output
                 showTerminal = true
                 NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunSampleWASM"))) { _ in
+            // Run the bundled test.wasm sample
+            Task {
+                await runSampleWASM()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunJavaScript"))) { _ in
+            // Run current file as JavaScript
+            if let activeTab = editorCore.activeTab {
+                Task {
+                    await runJavaScript(code: activeTab.content, fileName: activeTab.fileName)
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartDebugging"))) { _ in
+            // Start a real debug session for the current .js file
+            if let activeTab = editorCore.activeTab {
+                let ext = (activeTab.fileName as NSString).pathExtension.lowercased()
+                if ext == "js" || ext == "mjs" {
+                    let fileId = activeTab.url?.path ?? activeTab.fileName
+                    DebugManager.shared.startDebugging(
+                        code: activeTab.content,
+                        fileName: activeTab.fileName,
+                        fileId: fileId
+                    )
+                    showTerminal = true
+                    // Switch to Debug Console in the panel
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("SwitchToDebugConsole"),
+                        object: nil
+                    )
+                } else {
+                    DebugManager.shared.consoleEntries.append(
+                        DebugManager.ConsoleEntry(
+                            message: "Debug not supported for .\(ext) files. Only .js is supported.",
+                            kind: .error
+                        )
+                    )
+                }
             }
         }
         .environmentObject(themeManager)
@@ -435,7 +483,7 @@ struct IDEEditorView: View {
     @State private var currentLineNumber: Int = 1
     @State private var currentColumn: Int = 1
     @State private var cursorIndex: Int = 0
-    @State private var lineHeight: CGFloat = 17
+    @State private var lineHeight: CGFloat = 20  // Updated dynamically based on font size
     @State private var requestedCursorIndex: Int? = nil
     @State private var requestedLineSelection: Int? = nil
 
@@ -457,8 +505,9 @@ struct IDEEditorView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
-                    // Only show custom line numbers for legacy editor (Runestone has built-in line numbers)
-                    if lineNumbersStyle != "off" && !useRunestoneEditor {
+                    // Show custom gutter with fold arrows + breakpoints (always, even with Runestone)
+                    // Runestone's built-in line numbers are disabled to avoid duplication
+                    if lineNumbersStyle != "off" {
                         LineNumbersWithFolding(
                             fileId: tab.url?.path ?? tab.fileName,
                             totalLines: totalLines,
@@ -647,8 +696,14 @@ struct IDEEditorView: View {
         .onChange(of: currentColumn) { col in
             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: col)
         }
+        .onChange(of: editorCore.editorFontSize) { newSize in
+            // Update lineHeight to match Runestone's line height (~1.4x font size)
+            lineHeight = ceil(newSize * 1.4)
+        }
         .onAppear {
             findViewModel.editorCore = editorCore
+            // Set initial lineHeight based on font size
+            lineHeight = ceil(editorCore.editorFontSize * 1.4)
         }
     }
     
@@ -1056,6 +1111,50 @@ struct IDEDocumentPicker: UIViewControllerRepresentable {
     }
 }
 
+// MARK: - Save As Document Picker
+struct IDESaveAsPicker: UIViewControllerRepresentable {
+    @ObservedObject var editorCore: EditorCore
+    let content: String
+    let suggestedName: String
+    
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        // Create a temporary file to export
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempURL = tempDir.appendingPathComponent(suggestedName)
+        try? content.write(to: tempURL, atomically: true, encoding: .utf8)
+        
+        let picker = UIDocumentPickerViewController(forExporting: [tempURL], asCopy: false)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator { Coordinator(editorCore: editorCore) }
+    
+    class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let editorCore: EditorCore
+        init(editorCore: EditorCore) { self.editorCore = editorCore }
+        
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            if let savedURL = urls.first {
+                // Update the active tab with the new URL
+                if let tabId = editorCore.activeTabId,
+                   let index = editorCore.tabs.firstIndex(where: { $0.id == tabId }) {
+                    editorCore.tabs[index].url = savedURL
+                    editorCore.tabs[index].fileName = savedURL.lastPathComponent
+                    editorCore.tabs[index].isUnsaved = false
+                }
+            }
+            editorCore.showSaveAsDialog = false
+        }
+        
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            editorCore.showSaveAsDialog = false
+        }
+    }
+}
+
 // MARK: - Sidebar Search View
 
 struct SidebarSearchView: View {
@@ -1139,6 +1238,80 @@ struct SidebarSearchView: View {
         .onChange(of: searchText) { query in
             if query.isEmpty { searchResults = [] }
             else { searchResults = [("ContentView.swift", 15, "Text(\"\(query)\")"), ("main.swift", 8, "// \(query)")] }
+        }
+    }
+}
+
+// MARK: - Local Code Execution
+
+extension ContentView {
+    /// Run the bundled test.wasm sample
+    func runSampleWASM() async {
+        // Find the bundled test.wasm
+        guard let wasmURL = Bundle.main.url(forResource: "test", withExtension: "wasm") else {
+            await MainActor.run {
+                showTerminal = true
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "❌ Error: test.wasm not found in bundle\n"])
+            }
+            return
+        }
+        
+        await MainActor.run {
+            showTerminal = true
+            NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
+            NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "▶ Running bundled WASM: test.wasm\n─────────────────────────────────────\n"])
+        }
+        
+        do {
+            let config = WASMConfiguration.default
+            let runner = try WASMRunner(configuration: config)
+            
+            try await runner.load(from: wasmURL)
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "✓ Module loaded\n"])
+            }
+            
+            // Call main() which returns 42
+            let result = try await runner.execute(function: "main", args: [])
+            
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
+            }
+            
+            await runner.unload()
+        } catch {
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
+            }
+        }
+    }
+    
+    /// Run JavaScript code using JSRunner
+    func runJavaScript(code: String, fileName: String) async {
+        await MainActor.run {
+            showTerminal = true
+            NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
+            NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "▶ Running JavaScript: \(fileName)\n─────────────────────────────────────\n"])
+        }
+        
+        let runner = JSRunner()
+        
+        // Capture console output
+        runner.setConsoleHandler { message in
+            Task { @MainActor in
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "\(message)\n"])
+            }
+        }
+        
+        do {
+            let result = try await runner.execute(code: code)
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
+            }
+        } catch {
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
+            }
         }
     }
 }

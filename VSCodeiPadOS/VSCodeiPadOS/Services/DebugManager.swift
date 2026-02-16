@@ -342,6 +342,87 @@ final class DebugManager: ObservableObject {
         }
     }
 
+    /// Start a real JavaScript debug session
+    func startDebugging(code: String, fileName: String, fileId: String) {
+        // Clear previous state
+        consoleEntries.removeAll()
+        callStack.removeAll()
+        variables.removeAll()
+        
+        // Add system message
+        consoleEntries.append(ConsoleEntry(
+            message: "Starting debug session for \(fileName)...",
+            kind: .system
+        ))
+        
+        // Set up initial call stack
+        callStack = [
+            StackFrame(function: "<module>", file: fileName, line: 1)
+        ]
+        selectedFrameId = callStack.first?.id
+        state = .running
+        
+        // Run JavaScript with JSRunner
+        Task {
+            let runner = JSRunner()
+            
+            // Capture console output
+            runner.setConsoleHandler { [weak self] message in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    let kind: ConsoleEntry.Kind
+                    if message.hasPrefix("[ERROR]") {
+                        kind = .error
+                    } else if message.hasPrefix("[WARN]") {
+                        kind = .warning
+                    } else if message.hasPrefix("[INFO]") {
+                        kind = .info
+                    } else {
+                        kind = .output
+                    }
+                    // Strip prefix for cleaner output
+                    let cleanMessage = message
+                        .replacingOccurrences(of: "[LOG] ", with: "")
+                        .replacingOccurrences(of: "[ERROR] ", with: "")
+                        .replacingOccurrences(of: "[WARN] ", with: "")
+                        .replacingOccurrences(of: "[INFO] ", with: "")
+                    self.consoleEntries.append(ConsoleEntry(message: cleanMessage, kind: kind))
+                }
+            }
+            
+            do {
+                let result = try await runner.execute(code: code, timeout: 30.0)
+                let resultString = result.toString() ?? ""
+                await MainActor.run {
+                    if !resultString.isEmpty && resultString != "undefined" {
+                        self.consoleEntries.append(ConsoleEntry(
+                            message: "→ \(resultString)",
+                            kind: .output
+                        ))
+                    }
+                    self.consoleEntries.append(ConsoleEntry(
+                        message: "Debug session ended.",
+                        kind: .system
+                    ))
+                    self.state = .stopped
+                    self.callStack.removeAll()
+                }
+            } catch {
+                await MainActor.run {
+                    self.consoleEntries.append(ConsoleEntry(
+                        message: error.localizedDescription,
+                        kind: .error
+                    ))
+                    self.consoleEntries.append(ConsoleEntry(
+                        message: "Debug session ended with error.",
+                        kind: .system
+                    ))
+                    self.state = .stopped
+                }
+            }
+        }
+    }
+    
     func stop() {
         state = .stopped
         callStack = []
