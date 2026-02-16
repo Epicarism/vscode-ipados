@@ -1,4 +1,180 @@
 import SwiftUI
+import SwiftUI
+import WebKit
+
+// MARK: - Tunnel Configuration
+
+struct TunnelConfig: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var url: String
+    var type: TunnelType
+    var lastUsed: Date?
+    
+    enum TunnelType: String, Codable, CaseIterable {
+        case vscodeDevTunnel = "VS Code Tunnel"
+        case codeServer = "code-server"
+        case codespaces = "GitHub Codespaces"
+        case custom = "Custom URL"
+        
+        var icon: String {
+            switch self {
+            case .vscodeDevTunnel: return "bolt.fill"
+            case .codeServer: return "server.rack"
+            case .codespaces: return "cloud.fill"
+            case .custom: return "link"
+            }
+        }
+        
+        var placeholder: String {
+            switch self {
+            case .vscodeDevTunnel: return "https://vscode.dev/tunnel/machine-name"
+            case .codeServer: return "https://your-server.com:8080"
+            case .codespaces: return "https://codespace-name.github.dev"
+            case .custom: return "https://..."
+            }
+        }
+    }
+}
+
+// MARK: - Tunnel Manager
+
+class TunnelManager: ObservableObject {
+    static let shared = TunnelManager()
+    
+    @Published var configs: [TunnelConfig] = []
+    @Published var activeConfig: TunnelConfig?
+    @Published var isConnected = false
+    
+    private let configsKey = "tunnelConfigs"
+    private let activeConfigKey = "activeTunnelConfigId"
+    
+    private init() {
+        loadConfigs()
+    }
+    
+    func loadConfigs() {
+        if let data = UserDefaults.standard.data(forKey: configsKey),
+           let decoded = try? JSONDecoder().decode([TunnelConfig].self, from: data) {
+            configs = decoded
+        }
+        
+        if let activeId = UserDefaults.standard.string(forKey: activeConfigKey),
+           let uuid = UUID(uuidString: activeId) {
+            activeConfig = configs.first { $0.id == uuid }
+        }
+    }
+    
+    func saveConfigs() {
+        if let encoded = try? JSONEncoder().encode(configs) {
+            UserDefaults.standard.set(encoded, forKey: configsKey)
+        }
+    }
+    
+    func addConfig(_ config: TunnelConfig) {
+        configs.append(config)
+        saveConfigs()
+    }
+    
+    func removeConfig(_ config: TunnelConfig) {
+        configs.removeAll { $0.id == config.id }
+        if activeConfig?.id == config.id {
+            activeConfig = nil
+            isConnected = false
+        }
+        saveConfigs()
+    }
+    
+    func connect(to config: TunnelConfig) {
+        var updatedConfig = config
+        updatedConfig.lastUsed = Date()
+        
+        if let index = configs.firstIndex(where: { $0.id == config.id }) {
+            configs[index] = updatedConfig
+            saveConfigs()
+        }
+        
+        activeConfig = updatedConfig
+        UserDefaults.standard.set(config.id.uuidString, forKey: activeConfigKey)
+        isConnected = true
+    }
+    
+    func disconnect() {
+        isConnected = false
+    }
+}
+
+// MARK: - Add Tunnel Sheet
+
+struct AddTunnelSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var tunnelManager = TunnelManager.shared
+    
+    @State private var name = ""
+    @State private var url = ""
+    @State private var selectedType: TunnelConfig.TunnelType = .vscodeDevTunnel
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    Picker("Type", selection: $selectedType) {
+                        ForEach(TunnelConfig.TunnelType.allCases, id: \.self) { type in
+                            Label(type.rawValue, systemImage: type.icon)
+                                .tag(type)
+                        }
+                    }
+                    
+                    TextField("Name", text: $name, prompt: Text("My MacBook"))
+                    
+                    TextField("URL", text: $url, prompt: Text(selectedType.placeholder))
+                        .textContentType(.URL)
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                }
+                
+                Section {
+                    Button("Add Server") {
+                        let config = TunnelConfig(
+                            name: name.isEmpty ? selectedType.rawValue : name,
+                            url: url,
+                            type: selectedType
+                        )
+                        tunnelManager.addConfig(config)
+                        dismiss()
+                    }
+                    .disabled(url.isEmpty)
+                }
+                
+                Section(header: Text("Help")) {
+                    switch selectedType {
+                    case .vscodeDevTunnel:
+                        Text("Run `code tunnel` on your machine, then copy the vscode.dev URL.")
+                            .font(.caption)
+                    case .codeServer:
+                        Text("Install code-server on your server and enter its URL with port.")
+                            .font(.caption)
+                    case .codespaces:
+                        Text("Open your Codespace on github.com, then copy the URL.")
+                            .font(.caption)
+                    case .custom:
+                        Text("Enter any URL that serves VS Code or Monaco editor.")
+                            .font(.caption)
+                    }
+                }
+            }
+            .navigationTitle("Add Server")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Settings View
 
 struct SettingsView: View {
     @ObservedObject var themeManager: ThemeManager
@@ -13,6 +189,7 @@ struct SettingsView: View {
         case editor = "Editor"
         case workbench = "Workbench"
         case features = "Features"
+        case connectedMode = "Connected Mode"
         case extensions = "Extensions"
         case accounts = "Accounts"
         
@@ -22,6 +199,7 @@ struct SettingsView: View {
             case .editor: return "text.cursor"
             case .workbench: return "sidebar.left"
             case .features: return "star"
+            case .connectedMode: return "bolt.horizontal.fill"
             case .extensions: return "puzzlepiece.extension"
             case .accounts: return "person.crop.circle"
             }
@@ -197,6 +375,13 @@ struct SettingsDetailView: View {
                 }
             }
 
+            if shouldShow(category: .connectedMode) {
+                Section(header: Text("Connected Mode")) {
+                    if matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected") {
+                        ConnectedModeSettingsSection()
+                    }
+                }
+            }
             if shouldShow(category: .accounts) {
                 Section(header: Text("GitHub Account")) {
                     if matchesSearch("GitHub") || matchesSearch("Account") || matchesSearch("Login") {
@@ -226,6 +411,9 @@ struct SettingsDetailView: View {
             }
             if category == .workbench {
                 return matchesSearch("Theme")
+            }
+            if category == .connectedMode {
+                return matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected")
             }
             if category == .features {
                 return matchesSearch("Auto Save")
@@ -420,6 +608,327 @@ struct ThemePreviewView: View {
                     }
                 )
         }
+    }
+}
+
+// MARK: - Connected Mode Settings Section
+
+struct ConnectedModeSettingsSection: View {
+    @ObservedObject var tunnelManager = TunnelManager.shared
+    @State private var showingAddTunnel = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Connect to VS Code Server for full IDE features like code folding, git, terminal, and extensions.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            if tunnelManager.configs.isEmpty {
+                Button(action: { showingAddTunnel = true }) {
+                    Label("Add Server", systemImage: "plus.circle")
+                }
+            } else {
+                ForEach(tunnelManager.configs) { config in
+                    HStack {
+                        Image(systemName: config.type.icon)
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading) {
+                            Text(config.name)
+                                .font(.subheadline)
+                            Text(config.url)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Button("Connect") {
+                            tunnelManager.connect(to: config)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    .padding(.vertical, 4)
+                }
+                
+                Button(action: { showingAddTunnel = true }) {
+                    Label("Add Another Server", systemImage: "plus")
+                }
+                .font(.caption)
+            }
+        }
+        .sheet(isPresented: $showingAddTunnel) {
+            AddTunnelSheet()
+        }
+    }
+}
+
+// MARK: - VS Code WebView (WKWebView with JS debugging)
+
+import WebKit
+
+class VSCodeWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    var parent: VSCodeWebView
+    
+    init(_ parent: VSCodeWebView) {
+        self.parent = parent
+    }
+    
+    // MARK: - JavaScript Console Capture
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "consoleLog" {
+            print("[JS Console] \(message.body)")
+        } else if message.name == "consoleError" {
+            print("[JS ERROR] \(message.body)")
+        } else if message.name == "vsCodeError" {
+            print("[VS Code Error] \(message.body)")
+        }
+    }
+    
+    // MARK: - Navigation Delegate
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        print("[WebView] Started loading: \(webView.url?.absoluteString ?? "unknown")")
+    }
+    
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        print("[WebView] Finished loading: \(webView.url?.absoluteString ?? "unknown")")
+        // Inject error catcher after page loads
+        let errorCatcher = """
+        window.onerror = function(msg, url, line, col, error) {
+            window.webkit.messageHandlers.vsCodeError.postMessage(
+                'Error: ' + msg + ' at ' + url + ':' + line + ':' + col
+            );
+            return false;
+        };
+        window.onunhandledrejection = function(event) {
+            window.webkit.messageHandlers.vsCodeError.postMessage(
+                'Unhandled Promise: ' + event.reason
+            );
+        };
+        """
+        webView.evaluateJavaScript(errorCatcher, completionHandler: nil)
+    }
+    
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        print("[WebView] Navigation failed: \(error.localizedDescription)")
+    }
+    
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        print("[WebView] Provisional navigation failed: \(error.localizedDescription)")
+    }
+    
+    // MARK: - UI Delegate (handle alerts, confirms, prompts)
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        print("[JS Alert] \(message)")
+        completionHandler()
+    }
+    
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        print("[JS Confirm] \(message)")
+        completionHandler(true)
+    }
+    
+    // Handle new window requests (popups) - open in same webview
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        print("[WebView] Popup requested: \(navigationAction.request.url?.absoluteString ?? "unknown")")
+        // Load popup URL in same webview instead of blocking
+        if let url = navigationAction.request.url {
+            webView.load(URLRequest(url: url))
+        }
+        return nil
+    }
+}
+
+struct VSCodeWebView: UIViewRepresentable {
+    let url: URL
+    let onDismiss: () -> Void
+    
+    func makeCoordinator() -> VSCodeWebViewCoordinator {
+        VSCodeWebViewCoordinator(self)
+    }
+    
+    func makeUIView(context: Context) -> WKWebView {
+        // Configure for VS Code web
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default() // Persist cookies/storage
+        
+        // Enable required features
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
+        
+        // JavaScript message handlers for debugging
+        let contentController = WKUserContentController()
+        contentController.add(context.coordinator, name: "consoleLog")
+        contentController.add(context.coordinator, name: "consoleError")
+        contentController.add(context.coordinator, name: "vsCodeError")
+        
+        // Intercept console.log and console.error
+        let consoleScript = WKUserScript(source: """
+            (function() {
+                var originalLog = console.log;
+                var originalError = console.error;
+                var originalWarn = console.warn;
+                
+                console.log = function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    window.webkit.messageHandlers.consoleLog.postMessage(args.map(String).join(' '));
+                    originalLog.apply(console, arguments);
+                };
+                
+                console.error = function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    window.webkit.messageHandlers.consoleError.postMessage(args.map(String).join(' '));
+                    originalError.apply(console, arguments);
+                };
+                
+                console.warn = function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    window.webkit.messageHandlers.consoleLog.postMessage('[WARN] ' + args.map(String).join(' '));
+                    originalWarn.apply(console, arguments);
+                };
+            })();
+        """, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        contentController.addUserScript(consoleScript)
+        
+        config.userContentController = contentController
+        
+        // Allow inline media playback
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        webView.scrollView.isScrollEnabled = true
+        
+        // Custom user agent to avoid mobile detection issues
+        webView.customUserAgent = "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        
+        // Load the URL
+        print("[WebView] Loading: \(url.absoluteString)")
+        webView.load(URLRequest(url: url))
+        
+        return webView
+    }
+    
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        // Only reload if URL changed significantly
+    }
+}
+
+// MARK: - VS Code Tunnel View (Connected Mode)
+
+struct VSCodeTunnelView: View {
+    @ObservedObject var tunnelManager = TunnelManager.shared
+    @EnvironmentObject var themeManager: ThemeManager
+    
+    @State private var showingAddTunnel = false
+    
+    var body: some View {
+        Group {
+            if let config = tunnelManager.activeConfig, tunnelManager.isConnected {
+                // Full WKWebView with JS debugging
+                VSCodeWebView(
+                    url: URL(string: config.url) ?? URL(string: "https://vscode.dev")!,
+                    onDismiss: { tunnelManager.disconnect() }
+                )
+                .ignoresSafeArea()
+            } else {
+                disconnectedView
+            }
+        }
+    }
+    
+    // WKWebView with JS console/error capture for debugging
+    
+    private var disconnectedView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Connected Mode").font(.title2).fontWeight(.semibold)
+                    Text("Connect to VS Code Server for full IDE features").font(.subheadline).foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(action: { showingAddTunnel = true }) {
+                    Image(systemName: "plus.circle.fill").font(.title2)
+                }
+            }
+            .padding()
+            .background(themeManager.currentTheme.sidebarBackground)
+            
+            Divider()
+            
+            if tunnelManager.configs.isEmpty {
+                emptyStateView
+            } else {
+                serverListView
+            }
+        }
+        .background(themeManager.currentTheme.editorBackground)
+        .sheet(isPresented: $showingAddTunnel) { AddTunnelSheet() }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "server.rack").font(.system(size: 64)).foregroundColor(.secondary)
+            Text("No Servers Configured").font(.title3).fontWeight(.medium)
+            Text("Add a VS Code tunnel, code-server, or\nGitHub Codespace to get started.")
+                .font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
+            Button(action: { showingAddTunnel = true }) {
+                Label("Add Server", systemImage: "plus")
+            }.buttonStyle(.borderedProminent)
+            Spacer()
+            
+            VStack(alignment: .leading, spacing: 12) {
+                helpItem(icon: "bolt.fill", title: "VS Code Tunnel", description: "Run `code tunnel` on your machine")
+                helpItem(icon: "server.rack", title: "code-server", description: "Self-hosted VS Code in browser")
+                helpItem(icon: "cloud.fill", title: "Codespaces", description: "GitHub's cloud dev environments")
+            }
+            .padding()
+            .background(themeManager.currentTheme.sidebarBackground.opacity(0.5))
+            .cornerRadius(12)
+            .padding()
+        }
+    }
+    
+    private func helpItem(icon: String, title: String, description: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).font(.title3).foregroundColor(.accentColor).frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline).fontWeight(.medium)
+                Text(description).font(.caption).foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private var serverListView: some View {
+        List {
+            ForEach(tunnelManager.configs) { config in
+                Button(action: { tunnelManager.connect(to: config) }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: config.type.icon).font(.title2).foregroundColor(.accentColor).frame(width: 32)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(config.name).font(.headline).foregroundColor(.primary)
+                            Text(config.url).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                            if let lastUsed = config.lastUsed {
+                                Text("Last used: \(lastUsed.formatted(.relative(presentation: .named)))")
+                                    .font(.caption2).foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+            .onDelete { indexSet in
+                for index in indexSet { tunnelManager.removeConfig(tunnelManager.configs[index]) }
+            }
+        }
+        .listStyle(.insetGrouped)
     }
 }
 

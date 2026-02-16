@@ -76,8 +76,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         let textView = TextView()
         textView.editorDelegate = context.coordinator
         
-        // Configure line numbers (from settings)
-        textView.showLineNumbers = showLineNumbers
+        // Disable Runestone's built-in line numbers - we use custom LineNumbers gutter
+        textView.showLineNumbers = false
         textView.lineSelectionDisplayType = .line
         
         // Configure line wrapping (from settings)
@@ -145,10 +145,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.theme = makeRunestoneTheme()
         }
         
-        // Update settings if changed (live toggle support)
-        if textView.showLineNumbers != showLineNumbers {
-            textView.showLineNumbers = showLineNumbers
-        }
+        // Line numbers always disabled - using custom LineNumbers gutter
+        // Word wrap toggle still works
         if textView.isLineWrappingEnabled != wordWrapEnabled {
             textView.isLineWrappingEnabled = wordWrapEnabled
         }

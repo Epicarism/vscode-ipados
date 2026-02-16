@@ -77,13 +77,23 @@ class EditorCore: ObservableObject {
     @Published var showAIAssistant = false
     @Published var showGoToLine = false
     @Published var showGoToSymbol = false
-    @Published var editorFontSize: CGFloat = 14.0
+    @Published var editorFontSize: CGFloat = {
+        let stored = UserDefaults.standard.double(forKey: "fontSize")
+        return stored > 0 ? CGFloat(stored) : 14.0
+    }() {
+        didSet {
+            UserDefaults.standard.set(editorFontSize, forKey: "fontSize")
+        }
+    }
+    private var fontSizeObserver: NSObjectProtocol?
     @Published var isZenMode = false
     @Published var isFocusMode = false
 
     // Snippet picker support
     @Published var showSnippetPicker = false
     @Published var pendingSnippetInsertion: Snippet?
+    @Published var showSaveAsDialog = false
+    var saveAsContent: String = ""
 
     // Cursor tracking
     @Published var cursorPosition = CursorPosition()
@@ -142,6 +152,25 @@ class EditorCore: ObservableObject {
         let exampleTabs = Self.createExampleTabs()
         tabs.append(contentsOf: exampleTabs)
         activeTabId = exampleTabs.first?.id ?? UUID()
+
+        // Observe UserDefaults changes from Settings slider
+        fontSizeObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            let stored = UserDefaults.standard.double(forKey: "fontSize")
+            if stored > 0, CGFloat(stored) != self.editorFontSize {
+                self.editorFontSize = CGFloat(stored)
+            }
+        }
+    }
+
+    deinit {
+        if let fontSizeObserver {
+            NotificationCenter.default.removeObserver(fontSizeObserver)
+        }
     }
     
     /// Creates example tabs demonstrating syntax highlighting for all supported languages

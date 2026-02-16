@@ -309,14 +309,7 @@ struct CommandPaletteView: View {
                 editorCore.showQuickOpen = true
                 dismiss()
             },
-            Command(name: "Collapse All", shortcut: "⌘K ⌘[", icon: "minus.rectangle.on.rectangle", category: .view) {
-                CodeFoldingManager.shared.collapseAll()
-                dismiss()
-            },
-            Command(name: "Expand All", shortcut: "⌘K ⌘]", icon: "plus.rectangle.on.rectangle", category: .view) {
-                CodeFoldingManager.shared.expandAll()
-                dismiss()
-            },
+            // Folding commands removed - use VS Code tunnel for real folding
             
             // Go Commands
             Command(name: "Go to File", shortcut: "⌘P", icon: "doc.text.magnifyingglass", category: .go) {

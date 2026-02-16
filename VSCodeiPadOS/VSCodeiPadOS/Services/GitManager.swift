@@ -313,51 +313,129 @@ class GitManager: ObservableObject {
     }
     
     func checkout(branch: String) async throws {
-        throw GitManagerError.sshNotConnected
+        // Local branch checkout via ref file manipulation
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(branch)")
+        guard FileManager.default.fileExists(atPath: refPath.path) else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        // Update HEAD to point to the branch
+        let headPath = repoURL.appendingPathComponent(".git/HEAD")
+        try "ref: refs/heads/\(branch)\n".write(to: headPath, atomically: true, encoding: .utf8)
+        
+        currentBranch = branch
+        await refresh()
     }
     
     func createBranch(name: String) async throws {
-        throw GitManagerError.sshNotConnected
+        guard let repoURL = workingDirectory,
+              let reader = nativeReader,
+              let headSHA = reader.headSHA() else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        // Create branch ref file
+        let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(name)")
+        try headSHA.write(to: refPath, atomically: true, encoding: .utf8)
+        
+        await refresh()
     }
     
     func deleteBranch(name: String) async throws {
-        throw GitManagerError.sshNotConnected
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Can't delete current branch
+        guard name != currentBranch else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(name)")
+        try FileManager.default.removeItem(at: refPath)
+        
+        await refresh()
     }
     
     func pull() async throws {
-        throw GitManagerError.sshNotConnected
+        // Pull requires network access to GitHub API
+        // For now, mark as not available - requires GitHub token setup
+        guard KeychainManager.shared.getGitHubToken() != nil else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        // TODO: Implement full pull via GitHub API when GitHubAPIClient is integrated
+        throw GitManagerError.notAvailableOnIOS
     }
     
     func push() async throws {
-        throw GitManagerError.sshNotConnected
+        // Push requires network access to GitHub API
+        guard KeychainManager.shared.getGitHubToken() != nil else {
+            throw GitManagerError.sshNotConnected
+        }
+        
+        // TODO: Implement full push via GitHub API when GitHubAPIClient is integrated
+        throw GitManagerError.notAvailableOnIOS
     }
     
     func stashPush(message: String?) async throws {
-        throw GitManagerError.sshNotConnected
+        // Stash not implemented for native git
+        throw GitManagerError.notAvailableOnIOS
     }
     
     func stashPop(index: Int) async throws {
-        throw GitManagerError.sshNotConnected
+        throw GitManagerError.notAvailableOnIOS
     }
     
     func stashDrop(index: Int) async throws {
-        throw GitManagerError.sshNotConnected
+        throw GitManagerError.notAvailableOnIOS
     }
     
     func discard(file: String) async throws {
-        throw GitManagerError.sshNotConnected
+        // Discard changes by restoring from HEAD
+        guard let repoURL = workingDirectory,
+              let reader = nativeReader else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        // Get file content from HEAD
+        if let headSHA = reader.headSHA(),
+           let content = reader.fileContentsString(atPath: file, commitSHA: headSHA) {
+            let filePath = repoURL.appendingPathComponent(file)
+            try content.write(to: filePath, atomically: true, encoding: .utf8)
+        } else {
+            // File doesn't exist in HEAD - delete it
+            let filePath = repoURL.appendingPathComponent(file)
+            try? FileManager.default.removeItem(at: filePath)
+        }
+        
+        await refresh()
     }
     
     func discardAll() async throws {
-        throw GitManagerError.sshNotConnected
+        // Discard all changes by restoring each file from HEAD
+        for change in unstagedChanges {
+            try await discard(file: change.path)
+        }
+        for file in untrackedFiles {
+            guard let repoURL = workingDirectory else { continue }
+            let filePath = repoURL.appendingPathComponent(file.path)
+            try? FileManager.default.removeItem(at: filePath)
+        }
+        await refresh()
     }
     
     func discardChanges(file: String) async throws {
-        throw GitManagerError.sshNotConnected
+        try await discard(file: file)
     }
     
     func fetch() async throws {
-        throw GitManagerError.sshNotConnected
+        // Fetch requires network - same as pull
+        try await pull()
     }
     
     /// Alias for lastError for compatibility

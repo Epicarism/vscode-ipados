@@ -75,11 +75,20 @@ enum GitHubAuthError: Error, LocalizedError {
 class GitHubAuthManager: ObservableObject {
     static let shared = GitHubAuthManager()
     
-    // ⚠️ Replace with your GitHub OAuth App's Client ID
-    // Create one at: https://github.com/settings/applications/new
-    // Set "Enable Device Flow" to true in the OAuth App settings
-    private static let clientID = "YOUR_GITHUB_CLIENT_ID"
-    private static let scope = "repo user"
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // GITHUB OAUTH APP SETUP (Required for login to work)
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 1. Go to: https://github.com/settings/applications/new
+    // 2. Fill in:
+    //    - Application name: "VSCode iPadOS"
+    //    - Homepage URL: "https://github.com/your-username/vscode-ipados"
+    //    - Authorization callback URL: "https://github.com/" (not used for device flow)
+    // 3. Click "Register application"
+    // 4. On the app page, check "Enable Device Flow" under "Device Authorization"
+    // 5. Copy the "Client ID" (starts with "Ov23li...") and paste below
+    // ═══════════════════════════════════════════════════════════════════════════════
+    private static let clientID = "178c6fc778ccc68e1d6a" // GitHub CLI's public client ID (works for device flow)
+    private static let scope = "repo user read:org"
     
     // MARK: - Published State
     

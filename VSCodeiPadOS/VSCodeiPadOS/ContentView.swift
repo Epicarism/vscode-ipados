@@ -26,207 +26,168 @@ struct ContentView: View {
     private var theme: Theme { themeManager.currentTheme }
     
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    IDEActivityBar(editorCore: editorCore, selectedTab: $selectedSidebarTab, showSettings: $showSettings, showTerminal: $showTerminal)
-                    
-                    if editorCore.showSidebar {
-                        sidebarContent.frame(width: editorCore.sidebarWidth)
-                    }
-                    
-                    VStack(spacing: 0) {
-                        IDETabBar(editorCore: editorCore, theme: theme)
-                        
-                        if let tab = editorCore.activeTab {
-                            IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
-                                .id(tab.id)  // Force view recreation when tab changes
-                        } else {
-                            IDEWelcomeView(editorCore: editorCore, showFolderPicker: $showingFolderPicker, theme: theme)
-                        }
-                        
-                        StatusBarView(editorCore: editorCore)
+        mainContentView
+            .sheet(isPresented: $showingDocumentPicker) { IDEDocumentPicker(editorCore: editorCore) }
+            .sheet(isPresented: $showingFolderPicker) {
+                IDEFolderPicker(fileNavigator: fileNavigator) { url in
+                    if trustManager.isTrusted(url: url) {
+                        finishOpeningWorkspace(url)
+                    } else {
+                        pendingTrustURL = url
                     }
                 }
-                
-                if showTerminal {
-                    PanelView(isVisible: $showTerminal, height: $terminalHeight)
+            }
+            .sheet(isPresented: $showSettings) { SettingsView(themeManager: themeManager) }
+            .sheet(isPresented: $editorCore.showSaveAsDialog) {
+                IDESaveAsPicker(
+                    editorCore: editorCore,
+                    content: editorCore.saveAsContent,
+                    suggestedName: editorCore.activeTab?.fileName ?? "Untitled.txt"
+                )
+            }
+            .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
+            .onChange(of: editorCore.activeTab?.fileName) { _ in updateWindowTitle() }
+            .onChange(of: editorCore.tabs.count) { _ in updateWindowTitle() }
+            .onChange(of: editorCore.activeTabId) { _ in updateWindowTitle() }
+            .onChange(of: editorCore.activeTab?.isUnsaved) { _ in updateWindowTitle() }
+            .onAppear {
+                editorCore.fileNavigator = fileNavigator
+                updateWindowTitle()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowCommandPalette"))) { _ in editorCore.showCommandPalette = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTerminal"))) { _ in showTerminal.toggle() }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSidebar"))) { _ in editorCore.toggleSidebar() }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowQuickOpen"))) { _ in editorCore.showQuickOpen = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToSymbol"))) { _ in editorCore.showGoToSymbol = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToLine"))) { _ in editorCore.showGoToLine = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowAIAssistant"))) { _ in editorCore.showAIAssistant = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewFile"))) { _ in editorCore.addTab() }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveFile"))) { _ in editorCore.saveActiveTab() }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseTab"))) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFind"))) { _ in editorCore.showSearch = true }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomIn"))) { _ in editorCore.zoomIn() }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomOut"))) { _ in editorCore.zoomOut() }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunWithoutDebugging"))) { _ in
+                if let activeTab = editorCore.activeTab {
+                    CodeExecutionService.shared.executeCurrentFile(fileName: activeTab.fileName, content: activeTab.content)
+                    showTerminal = true
+                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunSampleWASM"))) { _ in Task { await runSampleWASM() } }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunJavaScript"))) { _ in
+                if let activeTab = editorCore.activeTab {
+                    Task { await runJavaScript(code: activeTab.content, fileName: activeTab.fileName) }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartDebugging"))) { _ in
+                if let activeTab = editorCore.activeTab {
+                    let ext = (activeTab.fileName as NSString).pathExtension.lowercased()
+                    if ext == "js" || ext == "mjs" {
+                        let fileId = activeTab.url?.path ?? activeTab.fileName
+                        DebugManager.shared.startDebugging(code: activeTab.content, fileName: activeTab.fileName, fileId: fileId)
+                        showTerminal = true
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToDebugConsole"), object: nil)
+                    } else {
+                        DebugManager.shared.consoleEntries.append(DebugManager.ConsoleEntry(message: "Debug not supported for .\(ext) files. Only .js is supported.", kind: .error))
+                    }
+                }
+            }
+            .environmentObject(themeManager)
+            .environmentObject(editorCore)
+    }
+    
+    // MARK: - Extracted View Components
+    
+    @ObservedObject private var tunnelManager = TunnelManager.shared
+    
+    @ViewBuilder
+    private var mainContentView: some View {
+        // Connected Mode takes over the entire screen when active
+        if tunnelManager.isConnected {
+            VSCodeTunnelView()
+                .environmentObject(themeManager)
+        } else {
+            ZStack {
+                mainLayout
+                overlayViews
             }
             .background(theme.editorBackground)
-            
-            // Overlays - Command Palette (Cmd+Shift+P)
-            if editorCore.showCommandPalette {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showCommandPalette = false }
-                CommandPaletteView(editorCore: editorCore, showSettings: $showSettings, showTerminal: $showTerminal)
-            }
-            
-            // Quick Open (Cmd+P)
-            if editorCore.showQuickOpen {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showQuickOpen = false }
-                QuickOpenView(editorCore: editorCore, fileNavigator: fileNavigator)
-            }
-            
-            // Go To Symbol (Cmd+Shift+O)
-            if editorCore.showGoToSymbol {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToSymbol = false }
-                GoToSymbolView(editorCore: editorCore, onGoToLine: { _ in })
-            }
-            
-            // AI Assistant
-            if editorCore.showAIAssistant {
-                HStack { Spacer(); AIAssistantView(editorCore: editorCore).frame(width: 400, height: 500).padding() }
-            }
-            
-            // Go To Line (Ctrl+G)
-            if editorCore.showGoToLine {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToLine = false }
-                GoToLineView(isPresented: $editorCore.showGoToLine, onGoToLine: { _ in })
-            }
-            
-            // Workspace Trust Dialog
-            if let trustURL = pendingTrustURL {
-                Color.black.opacity(0.4).ignoresSafeArea()
-                WorkspaceTrustDialog(workspaceURL: trustURL, onTrust: {
-                    trustManager.trust(url: trustURL)
-                    finishOpeningWorkspace(trustURL)
-                    pendingTrustURL = nil
-                }, onCancel: {
-                    pendingTrustURL = nil
-                })
-            }
         }
-        .sheet(isPresented: $showingDocumentPicker) { IDEDocumentPicker(editorCore: editorCore) }
-        .sheet(isPresented: $showingFolderPicker) {
-            IDEFolderPicker(fileNavigator: fileNavigator) { url in
-                if trustManager.isTrusted(url: url) {
-                    finishOpeningWorkspace(url)
-                } else {
-                    pendingTrustURL = url
+    }
+    
+    @ViewBuilder
+    private var mainLayout: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                IDEActivityBar(editorCore: editorCore, selectedTab: $selectedSidebarTab, showSettings: $showSettings, showTerminal: $showTerminal)
+                
+                if editorCore.showSidebar {
+                    sidebarContent.frame(width: editorCore.sidebarWidth)
+                }
+                
+                VStack(spacing: 0) {
+                    IDETabBar(editorCore: editorCore, theme: theme)
+                    
+                    if let tab = editorCore.activeTab {
+                        IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
+                            .id(tab.id)
+                    } else {
+                        IDEWelcomeView(editorCore: editorCore, showFolderPicker: $showingFolderPicker, theme: theme)
+                    }
+                    
+                    StatusBarView(editorCore: editorCore)
                 }
             }
-        }
-        .sheet(isPresented: $showSettings) { SettingsView(themeManager: themeManager) }
-        .sheet(isPresented: $editorCore.showSaveAsDialog) {
-            IDESaveAsPicker(
-                editorCore: editorCore,
-                content: editorCore.saveAsContent,
-                suggestedName: editorCore.activeTab?.fileName ?? "Untitled.txt"
-            )
-        }
-        .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
-        .onChange(of: editorCore.activeTab?.fileName) { newFileName in
-            updateWindowTitle()
-        }
-        .onChange(of: editorCore.tabs.count) { _ in
-            updateWindowTitle()
-        }
-        .onChange(of: editorCore.activeTabId) { _ in
-            updateWindowTitle()
-        }
-        .onChange(of: editorCore.activeTab?.isUnsaved) { _ in
-            updateWindowTitle()
-        }
-        .onAppear {
-            // Wire up EditorCore -> FileSystemNavigator so save operations can route through it.
-            editorCore.fileNavigator = fileNavigator
-            updateWindowTitle()
-        }
-        // MARK: - Notification Handlers for Menu Keyboard Shortcuts
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowCommandPalette"))) { _ in
-            editorCore.showCommandPalette = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTerminal"))) { _ in
-            showTerminal.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSidebar"))) { _ in
-            editorCore.toggleSidebar()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowQuickOpen"))) { _ in
-            editorCore.showQuickOpen = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToSymbol"))) { _ in
-            editorCore.showGoToSymbol = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToLine"))) { _ in
-            editorCore.showGoToLine = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowAIAssistant"))) { _ in
-            editorCore.showAIAssistant = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewFile"))) { _ in
-            editorCore.addTab()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveFile"))) { _ in
-            editorCore.saveActiveTab()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseTab"))) { _ in
-            if let id = editorCore.activeTabId { editorCore.closeTab(id: id) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFind"))) { _ in
-            editorCore.showSearch = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomIn"))) { _ in
-            editorCore.zoomIn()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomOut"))) { _ in
-            editorCore.zoomOut()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunWithoutDebugging"))) { _ in
-            // Execute the current file using JSRunner for .js files
-            if let activeTab = editorCore.activeTab {
-                CodeExecutionService.shared.executeCurrentFile(
-                    fileName: activeTab.fileName,
-                    content: activeTab.content
-                )
-                // Show the terminal/panel and switch to Output tab so user can see output
-                showTerminal = true
-                NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
+            
+            if showTerminal {
+                PanelView(isVisible: $showTerminal, height: $terminalHeight)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunSampleWASM"))) { _ in
-            // Run the bundled test.wasm sample
-            Task {
-                await runSampleWASM()
-            }
+    }
+    
+    @ViewBuilder
+    private var overlayViews: some View {
+        // Command Palette (Cmd+Shift+P)
+        if editorCore.showCommandPalette {
+            Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showCommandPalette = false }
+            CommandPaletteView(editorCore: editorCore, showSettings: $showSettings, showTerminal: $showTerminal)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunJavaScript"))) { _ in
-            // Run current file as JavaScript
-            if let activeTab = editorCore.activeTab {
-                Task {
-                    await runJavaScript(code: activeTab.content, fileName: activeTab.fileName)
-                }
-            }
+        
+        // Quick Open (Cmd+P)
+        if editorCore.showQuickOpen {
+            Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showQuickOpen = false }
+            QuickOpenView(editorCore: editorCore, fileNavigator: fileNavigator)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartDebugging"))) { _ in
-            // Start a real debug session for the current .js file
-            if let activeTab = editorCore.activeTab {
-                let ext = (activeTab.fileName as NSString).pathExtension.lowercased()
-                if ext == "js" || ext == "mjs" {
-                    let fileId = activeTab.url?.path ?? activeTab.fileName
-                    DebugManager.shared.startDebugging(
-                        code: activeTab.content,
-                        fileName: activeTab.fileName,
-                        fileId: fileId
-                    )
-                    showTerminal = true
-                    // Switch to Debug Console in the panel
-                    NotificationCenter.default.post(
-                        name: NSNotification.Name("SwitchToDebugConsole"),
-                        object: nil
-                    )
-                } else {
-                    DebugManager.shared.consoleEntries.append(
-                        DebugManager.ConsoleEntry(
-                            message: "Debug not supported for .\(ext) files. Only .js is supported.",
-                            kind: .error
-                        )
-                    )
-                }
-            }
+        
+        // Go To Symbol (Cmd+Shift+O)
+        if editorCore.showGoToSymbol {
+            Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToSymbol = false }
+            GoToSymbolView(editorCore: editorCore, onGoToLine: { _ in })
         }
-        .environmentObject(themeManager)
-        .environmentObject(editorCore)
+        
+        // AI Assistant
+        if editorCore.showAIAssistant {
+            HStack { Spacer(); AIAssistantView(editorCore: editorCore).frame(width: 400, height: 500).padding() }
+        }
+        
+        // Go To Line (Ctrl+G)
+        if editorCore.showGoToLine {
+            Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToLine = false }
+            GoToLineView(isPresented: $editorCore.showGoToLine, onGoToLine: { _ in })
+        }
+        
+        // Workspace Trust Dialog
+        if let trustURL = pendingTrustURL {
+            Color.black.opacity(0.4).ignoresSafeArea()
+            WorkspaceTrustDialog(workspaceURL: trustURL, onTrust: {
+                trustManager.trust(url: trustURL)
+                finishOpeningWorkspace(trustURL)
+                pendingTrustURL = nil
+            }, onCancel: {
+                pendingTrustURL = nil
+            })
+        }
     }
     
     private func finishOpeningWorkspace(_ url: URL) {
@@ -489,7 +450,7 @@ struct IDEEditorView: View {
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
-    @ObservedObject private var foldingManager = CodeFoldingManager.shared
+    // Code folding removed - will use VS Code tunnel for real folding
     @StateObject private var findViewModel = FindViewModel()
     
     var body: some View {
@@ -505,20 +466,17 @@ struct IDEEditorView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
-                    // Show custom gutter with fold arrows + breakpoints (always, even with Runestone)
-                    // Runestone's built-in line numbers are disabled to avoid duplication
+                    // Simple line numbers gutter (folding/breakpoints removed)
                     if lineNumbersStyle != "off" {
-                        LineNumbersWithFolding(
-                            fileId: tab.url?.path ?? tab.fileName,
+                        LineNumbers(
                             totalLines: totalLines,
                             currentLine: currentLineNumber,
                             scrollOffset: scrollOffset,
                             lineHeight: lineHeight,
                             requestedLineSelection: $requestedLineSelection,
-                            foldingManager: foldingManager,
                             theme: theme
                         )
-                        .frame(width: 60)
+                        .frame(width: 44)
                         .background(theme.sidebarBackground.opacity(0.5))
                     }
                     
@@ -608,7 +566,7 @@ struct IDEEditorView: View {
                             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
-                            foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path ?? tab.fileName)
+                            // Folding removed - using VS Code tunnel for real folding
                         }
                         .onChange(of: cursorIndex) { newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
@@ -684,11 +642,11 @@ struct IDEEditorView: View {
         }
         .onAppear {
             text = tab.content
-            foldingManager.detectFoldableRegions(in: text, filePath: tab.url?.path ?? tab.fileName)
+            // Folding detection removed
         }
         .onChange(of: tab.id) { _ in
             text = tab.content
-            foldingManager.detectFoldableRegions(in: text, filePath: tab.url?.path ?? tab.fileName)
+            // Folding detection removed
         }
         .onChange(of: currentLineNumber) { line in
             editorCore.cursorPosition = CursorPosition(line: line, column: currentColumn)
@@ -710,17 +668,14 @@ struct IDEEditorView: View {
     // Autocomplete insertion is handled by AutocompleteManager.acceptSuggestion(...)
 }
 
-// MARK: - Line Numbers with Folding
+// MARK: - Line Numbers (Simple)
 
-struct LineNumbersWithFolding: View {
-    let fileId: String
+struct LineNumbers: View {
     let totalLines: Int
     let currentLine: Int
     let scrollOffset: CGFloat
     let lineHeight: CGFloat
     @Binding var requestedLineSelection: Int?
-    @ObservedObject var foldingManager: CodeFoldingManager
-    @ObservedObject private var debugManager = DebugManager.shared
     let theme: Theme
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
@@ -728,50 +683,17 @@ struct LineNumbersWithFolding: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .trailing, spacing: 0) {
-                // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
-                // so line numbers stay vertically aligned with the first line of text.
                 ForEach(0..<totalLines, id: \.self) { lineIndex in
-                    if !foldingManager.isLineFolded(line: lineIndex) {
-                        HStack(spacing: 2) {
-                            Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
-                                Circle()
-                                    .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color.red : Color.clear)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.red.opacity(0.6), lineWidth: 1)
-                                            .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
-                                    )
-                                    .frame(width: 10, height: 10)
-                                    .padding(.leading, 2)
-                            }
-                            .buttonStyle(.plain)
-                            .frame(width: 14, height: lineHeight)
-
-                            if foldingManager.isFoldable(line: lineIndex) {
-                                Button(action: { foldingManager.toggleFold(at: lineIndex) }) {
-                                    Image(systemName: foldingManager.foldRegions.first(where: { $0.startLine == lineIndex })?.isFolded == true ? "chevron.right" : "chevron.down")
-                                        .font(.system(size: 8))
-                                        .foregroundColor(theme.lineNumber)
-                                }
-                                .buttonStyle(.plain)
-                                .frame(width: 14, height: lineHeight)
-                            } else {
-                                Spacer().frame(width: 14)
-                            }
-
-                            Text(displayText(for: lineIndex))
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(lineIndex + 1 == currentLine ? theme.lineNumberActive : theme.lineNumber)
-                                .frame(height: lineHeight)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    // FEAT-041: click line number selects entire line
-                                    requestedLineSelection = lineIndex
-                                }
-                        }
+                    Text(displayText(for: lineIndex))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(lineIndex + 1 == currentLine ? theme.lineNumberActive : theme.lineNumber)
+                        .frame(height: lineHeight)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(.trailing, 4)
-                    }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            requestedLineSelection = lineIndex
+                        }
                 }
             }
             .padding(.top, 8)
@@ -783,7 +705,6 @@ struct LineNumbersWithFolding: View {
     private func displayText(for lineIndex: Int) -> String {
         switch lineNumbersStyle {
         case "relative":
-            // VS Code-style: current line shows absolute, others show relative distance
             let lineNumber = lineIndex + 1
             if lineNumber == currentLine { return "\(lineNumber)" }
             return "\(abs(lineNumber - currentLine))"
