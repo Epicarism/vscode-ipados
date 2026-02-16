@@ -185,8 +185,35 @@ class LocalLLMService: ObservableObject {
         }
     }
     
-    /// Patch tokenizer_config.json ONLY if completely missing chat_template
-    /// Qwen3 and most models have working templates - DON'T OVERWRITE THEM
+    /// Patch tokenizer_config.json to fix known issues with MLX community models.
+    ///
+    /// ## Nanbeige 4.1 Chat Template Fix
+    ///
+    /// **Problem:** `mlx-community/Nanbeige4.1-3B-heretic-4bit` is missing the `chat_template`
+    /// field entirely in its `tokenizer_config.json`. The official `Nanbeige/Nanbeige4.1-3B` has
+    /// the template, but the MLX community quantization stripped it out. Without a chat template,
+    /// the model receives raw unformatted text instead of properly delimited messages, causing
+    /// broken/looping output.
+    ///
+    /// **Root Cause:** Nanbeige uses non-standard STX/ETX control characters (U+0002/U+0003)
+    /// as message delimiters instead of ChatML's `<|im_start|>/<|im_end|>` tokens. Format:
+    /// ```
+    /// ␂system\n{system_prompt}␃\n
+    /// ␂user\n{user_message}␃\n
+    /// ␂assistant\n{response}␃\n
+    /// ```
+    /// The official template also defaults to Chinese system prompts ("你是南北阁...").
+    ///
+    /// **Fix:** Two cases:
+    /// 1. MLX version (no template): Inject full Jinja template with STX/ETX tokens + English defaults
+    /// 2. Official version (Chinese defaults): String-replace Chinese prompts with English equivalents
+    ///
+    /// ## TokenizerClass Fix
+    ///
+    /// The MLX version also uses `"TokenizersBackend"` as `tokenizer_class`, which
+    /// `swift-transformers` doesn't recognize. We patch it to `"PreTrainedTokenizerFast"`.
+    ///
+    /// - Parameter url: Path to the downloaded `tokenizer_config.json`
     private func patchTokenizerConfig(at url: URL) throws {
         let data = try Data(contentsOf: url)
         guard var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
