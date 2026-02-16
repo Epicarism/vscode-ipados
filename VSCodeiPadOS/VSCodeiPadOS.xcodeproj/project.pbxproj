@@ -52,6 +52,7 @@
 		1069 /* FileTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2069 /* FileTreeView.swift */; };
 		1070 /* SpotlightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* SpotlightManager.swift */; };
 		1099 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2099 /* Assets.xcassets */; };
+		1100 /* test.wasm in Resources */ = {isa = PBXBuildFile; fileRef = 2100 /* test.wasm */; };
 		1101 /* BranchMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2101 /* BranchMenu.swift */; };
 		1102 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2102 /* CommandPalette.swift */; };
 		1103 /* DiffComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2103 /* DiffComponents.swift */; };
@@ -112,6 +113,10 @@
 		1159 /* PythonRunnerAlt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2159 /* PythonRunnerAlt.swift */; };
 		1160 /* CodeExecutionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2160 /* CodeExecutionService.swift */; };
 		1161 /* OutputPanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2161 /* OutputPanelManager.swift */; };
+		1162 /* WordOccurrenceHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2162 /* WordOccurrenceHighlighter.swift */; };
+		1163 /* GitHubAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2163 /* GitHubAuthManager.swift */; };
+		1164 /* GitHubLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2164 /* GitHubLoginView.swift */; };
+		1165 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2165 /* KeychainManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -160,6 +165,7 @@
 		2069 /* FileTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeView.swift; sourceTree = "<group>"; };
 		2070 /* SpotlightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightManager.swift; sourceTree = "<group>"; };
 		2099 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2100 /* test.wasm */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/test.wasm; sourceTree = "<group>"; };
 		2101 /* BranchMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMenu.swift; sourceTree = "<group>"; };
 		2102 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
 		2103 /* DiffComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffComponents.swift; sourceTree = "<group>"; };
@@ -221,6 +227,10 @@
 		2159 /* PythonRunnerAlt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRunnerAlt.swift; sourceTree = "<group>"; };
 		2160 /* CodeExecutionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeExecutionService.swift; sourceTree = "<group>"; };
 		2161 /* OutputPanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputPanelManager.swift; sourceTree = "<group>"; };
+		2162 /* WordOccurrenceHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordOccurrenceHighlighter.swift; sourceTree = "<group>"; };
+		2163 /* GitHubAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubAuthManager.swift; sourceTree = "<group>"; };
+		2164 /* GitHubLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubLoginView.swift; sourceTree = "<group>"; };
+		2165 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -239,6 +249,7 @@
 			children = (
 				2001 /* ContentView.swift */,
 				2099 /* Assets.xcassets */,
+				2100 /* test.wasm */,
 				4002 /* App */,
 				4003 /* Commands */,
 				4004 /* Extensions */,
@@ -328,6 +339,9 @@
 				2152 /* RunnerSelector.swift */,
 				2160 /* CodeExecutionService.swift */,
 				2161 /* OutputPanelManager.swift */,
+				2162 /* WordOccurrenceHighlighter.swift */,
+				2163 /* GitHubAuthManager.swift */,
+				2165 /* KeychainManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -350,6 +364,7 @@
 				2107 /* QuickOpen.swift */,
 				2101 /* BranchMenu.swift */,
 				2114 /* WorkspaceTrustDialog.swift */,
+				2164 /* GitHubLoginView.swift */,
 				4008 /* Editor */,
 				4009 /* Main */,
 				4010 /* Panels */,
@@ -548,6 +563,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1099 /* Assets.xcassets in Resources */,
+				1100 /* test.wasm in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -662,6 +678,10 @@
 				1159 /* PythonRunnerAlt.swift in Sources */,
 				1160 /* CodeExecutionService.swift in Sources */,
 				1161 /* OutputPanelManager.swift in Sources */,
+				1162 /* WordOccurrenceHighlighter.swift in Sources */,
+				1163 /* GitHubAuthManager.swift in Sources */,
+				1164 /* GitHubLoginView.swift in Sources */,
+				1165 /* KeychainManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -14,6 +14,7 @@ struct SettingsView: View {
         case workbench = "Workbench"
         case features = "Features"
         case extensions = "Extensions"
+        case accounts = "Accounts"
         
         var id: String { rawValue }
         var icon: String {
@@ -22,6 +23,7 @@ struct SettingsView: View {
             case .workbench: return "sidebar.left"
             case .features: return "star"
             case .extensions: return "puzzlepiece.extension"
+            case .accounts: return "person.crop.circle"
             }
         }
     }
@@ -195,6 +197,14 @@ struct SettingsDetailView: View {
                 }
             }
 
+            if shouldShow(category: .accounts) {
+                Section(header: Text("GitHub Account")) {
+                    if matchesSearch("GitHub") || matchesSearch("Account") || matchesSearch("Login") {
+                        GitHubLoginView()
+                    }
+                }
+            }
+
             if shouldShow(category: .extensions) {
                 Section(header: Text("Extensions")) {
                     if matchesSearch("AI Assistant") {
@@ -222,6 +232,9 @@ struct SettingsDetailView: View {
             }
             if category == .extensions {
                 return matchesSearch("AI Assistant")
+            }
+            if category == .accounts {
+                return matchesSearch("GitHub") || matchesSearch("Account") || matchesSearch("Login")
             }
         }
         return self.category == category
