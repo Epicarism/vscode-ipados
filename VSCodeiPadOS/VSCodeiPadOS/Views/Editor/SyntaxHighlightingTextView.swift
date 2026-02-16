@@ -336,6 +336,10 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         // FEAT-044: Matching bracket highlight state
         private var bracketHighlightRanges: [NSRange] = []
         
+        // FEAT-NEW: Word occurrence highlight state
+        private var wordOccurrenceRanges: [NSRange] = []
+        private var wordOccurrenceDebouncer: Timer?
+
         // Track if initial highlighting has been applied (fixes highlighting not appearing on file open)
         var hasAppliedInitialHighlighting = false
         
@@ -569,6 +573,12 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 bracketMatchDebouncer?.invalidate()
                 bracketMatchDebouncer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
                     self?.updateMatchingBracketHighlight(textView)
+                }
+                
+                // FEAT-NEW: Word occurrence highlighting - debounced for performance
+                wordOccurrenceDebouncer?.invalidate()
+                wordOccurrenceDebouncer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { [weak self] _ in
+                    self?.updateWordOccurrenceHighlights(textView)
                 }
 
                 // PERF: Only trigger redraw when line actually changes (not on every cursor move)
@@ -908,12 +918,17 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
         
         func handleFold(in textView: UITextView) {
-            CodeFoldingManager.shared.foldCurrentLine()
+            // Get the current cursor line (0-indexed)
+            let cursorLine = parent.currentLineNumber - 1
+            CodeFoldingManager.shared.foldAtLine(cursorLine)
         }
         
         func handleUnfold(in textView: UITextView) {
-            CodeFoldingManager.shared.unfoldCurrentLine()
+            // Get the current cursor line (0-indexed)
+            let cursorLine = parent.currentLineNumber - 1
+            CodeFoldingManager.shared.unfoldAtLine(cursorLine)
         }
+
         
         @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
             guard let textView = gesture.view as? UITextView else { return }
@@ -1049,7 +1064,46 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 
             bracketHighlightRanges = [r1, r2]
         }
+        
+        // MARK: - FEAT-NEW Word Occurrence Highlighting
+        
+        private func updateWordOccurrenceHighlights(_ textView: UITextView) {
+            // Clear existing highlights
+            if !wordOccurrenceRanges.isEmpty {
+                for r in wordOccurrenceRanges {
+                    textView.textStorage.removeAttribute(.backgroundColor, range: r)
+                }
+                wordOccurrenceRanges.removeAll()
+            }
+            
+            let selection = textView.selectedRange
+            let text = textView.text ?? ""
+            
+            // Only highlight when there's a selection (word selected)
+            guard selection.length > 0 else { return }
+            
+            // Get occurrences
+            let occurrences = WordOccurrenceHighlighter.shared.findOccurrences(in: text, selection: selection)
+            
+            // Need at least 2 occurrences (including the selected one) to show highlights
+            guard occurrences.count >= 2 else { return }
+            
+            let theme = ThemeManager.shared.currentTheme
+            let highlightColor = WordOccurrenceHighlighter.highlightColor(for: theme)
+            
+            // Apply highlights to all occurrences EXCEPT the current selection
+            for occurrence in occurrences {
+                // Skip the currently selected occurrence
+                if occurrence.range.location == selection.location && occurrence.range.length == selection.length {
+                    continue
+                }
+                
+                textView.textStorage.addAttribute(.backgroundColor, value: highlightColor, range: occurrence.range)
+                wordOccurrenceRanges.append(occurrence.range)
+            }
+        }
     }
+
 }
 
 // MARK: - FoldingLayoutManager
@@ -1145,7 +1199,7 @@ class EditorTextView: MultiCursorTextView {
     private var indentGuideColor: UIColor = .separator
     private var activeIndentGuideColor: UIColor = .label
     private var currentLineHighlightColor: UIColor = .clear
-    
+
     // PERF: Cached values to avoid recalculating on every draw()
     private var cachedTabSize: Int = 4
     private var cachedSpaceWidth: CGFloat = 0
@@ -1202,7 +1256,7 @@ class EditorTextView: MultiCursorTextView {
             context.setFillColor(currentLineHighlightColor.cgColor)
             context.fill(lineRect)
         }
-        
+
         // 2. Draw Text (super implementation)
         super.draw(rect)
         
@@ -1355,8 +1409,9 @@ class EditorTextView: MultiCursorTextView {
     }
 
     @objc func handleTab() {
-        // Dispatch to avoid modifying @Binding during view update cycle
-        DispatchQueue.main.async { [weak self] in
+        // Defer to next runloop iteration to avoid modifying @Binding during view update cycle
+        // Using asyncAfter(.now()) instead of async to guarantee execution AFTER current cycle completes
+        DispatchQueue.main.asyncAfter(deadline: .now()) { [weak self] in
             guard let self = self else { return }
             if self.onAcceptAutocomplete?() == true {
                 return

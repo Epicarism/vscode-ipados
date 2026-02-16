@@ -10,7 +10,7 @@ enum OutputStreamType {
 }
 
 /// A single line entry in the output panel with metadata
-struct OutputLine: Identifiable, Equatable {
+struct TaskOutputLine: Identifiable, Equatable {
     let id: UUID
     let text: String
     let streamType: OutputStreamType
@@ -34,14 +34,14 @@ struct OutputLine: Identifiable, Equatable {
         self.ansiAttributes = ansiAttributes
     }
     
-    static func == (lhs: OutputLine, rhs: OutputLine) -> Bool {
+    static func == (lhs: TaskOutputLine, rhs: TaskOutputLine) -> Bool {
         lhs.id == rhs.id && lhs.text == rhs.text && lhs.streamType == rhs.streamType
     }
 }
 
 // MARK: - Output Channel
 
-enum OutputChannel: String, CaseIterable, Identifiable {
+enum TaskOutputChannel: String, CaseIterable, Identifiable {
     case tasks = "Tasks"
     case git = "Git"
     case extensions = "Extensions"
@@ -216,24 +216,24 @@ struct ANSIColorParser {
 // MARK: - Remote Execution Status
 
 /// Tracks the state of remote execution for progress indication
-struct RemoteExecutionStatus: Equatable {
+struct TaskRemoteExecutionStatus: Equatable {
     let isRunning: Bool
     let command: String?
     let startTime: Date?
     let progressMessage: String?
     
-    static let idle = RemoteExecutionStatus(isRunning: false, command: nil, startTime: nil, progressMessage: nil)
+    static let idle = TaskRemoteExecutionStatus(isRunning: false, command: nil, startTime: nil, progressMessage: nil)
 }
 
 // MARK: - Streaming Output Manager
 
 /// AsyncStream-based output handling for remote execution
 actor StreamingOutputManager {
-    private var continuations: [UUID: AsyncStream<OutputLine>.Continuation] = [:]
-    private var outputHandlers: [UUID: (OutputLine) -> Void] = [:]
+    private var continuations: [UUID: AsyncStream<TaskOutputLine>.Continuation] = [:]
+    private var outputHandlers: [UUID: (TaskOutputLine) -> Void] = [:]
     
     /// Create a new streaming session
-    func createStream(sessionId: UUID) -> AsyncStream<OutputLine> {
+    func createStream(sessionId: UUID) -> AsyncStream<TaskOutputLine> {
         AsyncStream { continuation in
             self.continuations[sessionId] = continuation
             
@@ -246,7 +246,7 @@ actor StreamingOutputManager {
     }
     
     /// Emit output to a specific session
-    func emit(sessionId: UUID, line: OutputLine) {
+    func emit(sessionId: UUID, line: TaskOutputLine) {
         if let continuation = continuations[sessionId] {
             continuation.yield(line)
         }
@@ -263,7 +263,7 @@ actor StreamingOutputManager {
     }
     
     /// Register a sync handler for a session
-    func registerHandler(sessionId: UUID, handler: @escaping (OutputLine) -> Void) {
+    func registerHandler(sessionId: UUID, handler: @escaping (TaskOutputLine) -> Void) {
         outputHandlers[sessionId] = handler
     }
     
@@ -276,21 +276,21 @@ actor StreamingOutputManager {
 // MARK: - Output Panel Manager
 
 @MainActor
-final class OutputPanelManager: ObservableObject {
-    static let shared = OutputPanelManager()
+final class TaskOutputPanelManager: ObservableObject {
+    static let shared = TaskOutputPanelManager()
 
-    @Published var selectedChannel: OutputChannel = .tasks
+    @Published var selectedChannel: TaskOutputChannel = .tasks
     @Published var isAutoScrollEnabled: Bool = true
     @Published var showTimestamps: Bool = false
     @Published var wordWrapEnabled: Bool = true
     @Published var searchQuery: String = ""
-    @Published private(set) var remoteExecutionStatus: RemoteExecutionStatus = .idle
+    @Published private(set) var remoteExecutionStatus: TaskRemoteExecutionStatus = .idle
     
     // New: Streaming manager for remote execution
     private let streamingManager = StreamingOutputManager()
     
     // Channel -> output lines (now storing OutputLine instead of String)
-    @Published private(set) var outputLines: [OutputChannel: [OutputLine]] = [
+    @Published private(set) var outputLines: [TaskOutputChannel: [TaskOutputLine]] = [
         .tasks: [],
         .git: [],
         .extensions: [],
@@ -298,8 +298,8 @@ final class OutputPanelManager: ObservableObject {
     ]
     
     // Legacy support: computed property for string lines
-    var logs: [OutputChannel: [String]] {
-        var result: [OutputChannel: [String]] = [:]
+    var logs: [TaskOutputChannel: [String]] {
+        var result: [TaskOutputChannel: [String]] = [:]
         for (channel, lines) in outputLines {
             result[channel] = lines.map { $0.text }
         }
@@ -310,11 +310,11 @@ final class OutputPanelManager: ObservableObject {
     
     // MARK: - Legacy String-Based Methods
     
-    func clear(_ channel: OutputChannel) {
+    func clear(_ channel: TaskOutputChannel) {
         outputLines[channel] = []
     }
 
-    func append(_ text: String, to channel: OutputChannel, streamType: OutputStreamType = .stdout) {
+    func append(_ text: String, to channel: TaskOutputChannel, streamType: OutputStreamType = .stdout) {
         let lines = text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
@@ -326,11 +326,11 @@ final class OutputPanelManager: ObservableObject {
         }
     }
 
-    func appendLine(_ line: String, to channel: OutputChannel, streamType: OutputStreamType = .stdout) {
+    func appendLine(_ line: String, to channel: TaskOutputChannel, streamType: OutputStreamType = .stdout) {
         let hasAnsi = ANSIColorParser.containsAnsiCodes(line)
         let (cleanText, attributes) = hasAnsi ? ANSIColorParser.parse(line) : (line, [:])
         
-        let outputLine = OutputLine(
+        let outputLine = TaskOutputLine(
             text: cleanText,
             streamType: streamType,
             timestamp: Date(),
@@ -346,8 +346,8 @@ final class OutputPanelManager: ObservableObject {
     // MARK: - Streaming Methods
     
     /// Start streaming output for remote execution
-    func startRemoteExecution(command: String, sessionId: UUID = UUID()) async -> AsyncStream<OutputLine> {
-        remoteExecutionStatus = RemoteExecutionStatus(
+    func startRemoteExecution(command: String, sessionId: UUID = UUID()) async -> AsyncStream<TaskOutputLine> {
+        remoteExecutionStatus = TaskRemoteExecutionStatus(
             isRunning: true,
             command: command,
             startTime: Date(),
@@ -363,7 +363,7 @@ final class OutputPanelManager: ObservableObject {
     }
     
     /// Stream a line to remote output (can be called from AsyncStream)
-    func streamLine(_ line: OutputLine, to channel: OutputChannel = .remote, sessionId: UUID? = nil) {
+    func streamLine(_ line: TaskOutputLine, to channel: TaskOutputChannel = .remote, sessionId: UUID? = nil) {
         var current = outputLines[channel] ?? []
         current.append(line)
         outputLines[channel] = current
@@ -378,7 +378,7 @@ final class OutputPanelManager: ObservableObject {
     /// Complete remote execution
     func finishRemoteExecution(sessionId: UUID? = nil, exitMessage: String? = nil) {
         if let message = exitMessage {
-            let exitLine = OutputLine(
+            let exitLine = TaskOutputLine(
                 text: message,
                 streamType: .stdout,
                 timestamp: Date()
@@ -398,7 +398,7 @@ final class OutputPanelManager: ObservableObject {
     /// Update progress message during remote execution
     func updateProgressMessage(_ message: String) {
         guard remoteExecutionStatus.isRunning else { return }
-        remoteExecutionStatus = RemoteExecutionStatus(
+        remoteExecutionStatus = TaskRemoteExecutionStatus(
             isRunning: true,
             command: remoteExecutionStatus.command,
             startTime: remoteExecutionStatus.startTime,
@@ -409,7 +409,7 @@ final class OutputPanelManager: ObservableObject {
     // MARK: - Filtering
     
     /// Get filtered lines based on search query and channel
-    func filteredLines(for channel: OutputChannel) -> [OutputLine] {
+    func filteredLines(for channel: TaskOutputChannel) -> [TaskOutputLine] {
         let lines = outputLines[channel] ?? []
         
         guard !searchQuery.isEmpty else {
@@ -423,7 +423,7 @@ final class OutputPanelManager: ObservableObject {
     }
     
     /// Get lines for a specific stream type only
-    func lines(for channel: OutputChannel, streamType: OutputStreamType? = nil) -> [OutputLine] {
+    func lines(for channel: TaskOutputChannel, streamType: OutputStreamType? = nil) -> [TaskOutputLine] {
         let lines = filteredLines(for: channel)
         
         if let streamType = streamType {
@@ -434,7 +434,7 @@ final class OutputPanelManager: ObservableObject {
     }
     
     /// Legacy string lines support
-    func stringLines(for channel: OutputChannel) -> [String] {
+    func stringLines(for channel: TaskOutputChannel) -> [String] {
         return filteredLines(for: channel).map { line in
             if showTimestamps {
                 let formatter = DateFormatter()
@@ -471,7 +471,7 @@ final class OutputPanelManager: ObservableObject {
     }
     
     /// Get count of filtered vs total lines for display
-    func filterStats(for channel: OutputChannel) -> (filtered: Int, total: Int) {
+    func filterStats(for channel: TaskOutputChannel) -> (filtered: Int, total: Int) {
         let total = outputLines[channel]?.count ?? 0
         let filtered = filteredLines(for: channel).count
         return (filtered, total)
@@ -609,8 +609,8 @@ final class TasksManager: ObservableObject {
     // MARK: - Run Task
 
     func run(_ task: VSCodeTask) {
-        OutputPanelManager.shared.selectedChannel = .tasks
-        OutputPanelManager.shared.appendLine("[Task] \(task.label)", to: .tasks)
+        TaskOutputPanelManager.shared.selectedChannel = .tasks
+        TaskOutputPanelManager.shared.appendLine("[Task] \(task.label)", to: .tasks)
 
         isRunning = true
         runningTaskLabel = task.label
@@ -622,19 +622,19 @@ final class TasksManager: ObservableObject {
             do {
                 try Self.runWithProcess(task: task, workspaceRootURL: self.workspaceRootURL) { chunk in
                     Task { @MainActor in
-                        OutputPanelManager.shared.append(chunk, to: .tasks)
+                        TaskOutputPanelManager.shared.append(chunk, to: .tasks)
                     }
                 }
 
                 let elapsed = Date().timeIntervalSince(start)
                 Task { @MainActor in
-                    OutputPanelManager.shared.appendLine(String(format: "[Task] Finished (%.2fs)", elapsed), to: .tasks)
+                    TaskOutputPanelManager.shared.appendLine(String(format: "[Task] Finished (%.2fs)", elapsed), to: .tasks)
                     self.isRunning = false
                     self.runningTaskLabel = nil
                 }
             } catch {
                 Task { @MainActor in
-                    OutputPanelManager.shared.appendLine("[Task] Error: \(error.localizedDescription)", to: .tasks)
+                    TaskOutputPanelManager.shared.appendLine("[Task] Error: \(error.localizedDescription)", to: .tasks)
                     self.lastErrorMessage = error.localizedDescription
                     self.isRunning = false
                     self.runningTaskLabel = nil

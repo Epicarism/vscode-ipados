@@ -49,6 +49,12 @@ struct LanguageSpecificOptions: Codable, Equatable {
     var goRaceDetector: Bool
     var rustRelease: Bool
     
+    // WASM options
+    var wasmFunction: String
+    var wasmArgs: String
+    var wasmEnableWASI: Bool
+    var wasmDebugLogging: Bool
+    
     init(language: ProgrammingLanguage = .python,
          pythonModuleMode: Bool = false,
          pythonUnbuffered: Bool = false,
@@ -58,7 +64,11 @@ struct LanguageSpecificOptions: Codable, Equatable {
          nodeExperimentalModules: Bool = false,
          nodeNoWarnings: Bool = false,
          goRaceDetector: Bool = false,
-         rustRelease: Bool = false) {
+         rustRelease: Bool = false,
+         wasmFunction: String = "main",
+         wasmArgs: String = "",
+         wasmEnableWASI: Bool = true,
+         wasmDebugLogging: Bool = false) {
         self.language = language
         self.pythonModuleMode = pythonModuleMode
         self.pythonUnbuffered = pythonUnbuffered
@@ -69,6 +79,10 @@ struct LanguageSpecificOptions: Codable, Equatable {
         self.nodeNoWarnings = nodeNoWarnings
         self.goRaceDetector = goRaceDetector
         self.rustRelease = rustRelease
+        self.wasmFunction = wasmFunction
+        self.wasmArgs = wasmArgs
+        self.wasmEnableWASI = wasmEnableWASI
+        self.wasmDebugLogging = wasmDebugLogging
     }
 }
 
@@ -79,6 +93,7 @@ enum ProgrammingLanguage: String, Codable, CaseIterable, Identifiable {
     case rust = "Rust"
     case ruby = "Ruby"
     case php = "PHP"
+    case wasm = "WebAssembly"
     case other = "Other"
     
     var id: String { rawValue }
@@ -91,7 +106,24 @@ enum ProgrammingLanguage: String, Codable, CaseIterable, Identifiable {
         case .rust: return "🦀"
         case .ruby: return "💎"
         case .php: return "🐘"
+        case .wasm: return "⚡"
         case .other: return "📄"
+        }
+    }
+    
+    /// Detect language from file extension
+    static func detect(from filePath: String?) -> ProgrammingLanguage {
+        guard let path = filePath else { return .other }
+        let ext = (path as NSString).pathExtension.lowercased()
+        switch ext {
+        case "py": return .python
+        case "js", "mjs", "cjs": return .node
+        case "go": return .go
+        case "rs": return .rust
+        case "rb": return .ruby
+        case "php": return .php
+        case "wasm": return .wasm
+        default: return .other
         }
     }
 }
@@ -223,14 +255,24 @@ class RunConfigViewModel: ObservableObject {
     // MARK: - Execution
     
     func execute(withFile filePath: String?) async {
-        guard let remoteRunner = remoteRunner else {
-            alertMessage = "RemoteRunner not configured"
-            showSaveAlert = true
+        isExecuting = true
+        executionOutput = ""
+        
+        // Check if this is a WASM file - use on-device WASMRunner
+        if currentConfig.languageOptions.language == .wasm,
+           let path = filePath,
+           path.hasSuffix(".wasm") {
+            await executeWASM(filePath: path)
             return
         }
         
-        isExecuting = true
-        executionOutput = ""
+        // For other languages, use remote runner
+        guard let remoteRunner = remoteRunner else {
+            alertMessage = "RemoteRunner not configured"
+            showSaveAlert = true
+            isExecuting = false
+            return
+        }
         
         do {
             let result = try await remoteRunner.execute(
@@ -248,6 +290,80 @@ class RunConfigViewModel: ObservableObject {
         }
         
         isExecuting = false
+    }
+    
+    /// Execute a WebAssembly file using on-device WASMRunner
+    private func executeWASM(filePath: String) async {
+        let startTime = Date()
+        executionOutput = "⚡ Starting WebAssembly execution...\n"
+        executionOutput += "📁 File: \(filePath)\n"
+        executionOutput += "🔧 Function: \(currentConfig.languageOptions.wasmFunction)\n\n"
+        
+        do {
+            // Create configuration
+            var config = WASMConfiguration.default
+            config.enableDebugLogging = currentConfig.languageOptions.wasmDebugLogging
+            config.wasiMode = currentConfig.languageOptions.wasmEnableWASI ? .stub : .disabled
+            
+            // Create runner
+            let runner = try WASMRunner(configuration: config)
+            
+            // Load the WASM file
+            let url = URL(fileURLWithPath: filePath)
+            try await runner.load(from: url)
+            executionOutput += "✅ Module loaded successfully\n"
+            
+            // Configure WASI if enabled
+            if currentConfig.languageOptions.wasmEnableWASI {
+                try await runner.configureWASI()
+                executionOutput += "✅ WASI configured\n"
+            }
+            
+            // Parse arguments
+            let args: [Any] = parseWASMArgs(currentConfig.languageOptions.wasmArgs)
+            
+            // Execute the function
+            executionOutput += "\n🚀 Executing function '\(currentConfig.languageOptions.wasmFunction)'...\n"
+            let result = try await runner.execute(
+                function: currentConfig.languageOptions.wasmFunction,
+                args: args
+            )
+            
+            let duration = Date().timeIntervalSince(startTime)
+            executionOutput += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            executionOutput += "📤 Result: \(result)\n"
+            executionOutput += "⏱️ Duration: \(String(format: "%.3f", duration))s\n"
+            executionOutput += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            
+            // Clean up
+            await runner.unload()
+            
+        } catch let error as WASMError {
+            executionOutput += "\n❌ WASM Error: \(error.localizedDescription)\n"
+            alertMessage = error.localizedDescription
+            showSaveAlert = true
+        } catch {
+            executionOutput += "\n❌ Error: \(error.localizedDescription)\n"
+            alertMessage = "WASM execution error: \(error.localizedDescription)"
+            showSaveAlert = true
+        }
+        
+        isExecuting = false
+    }
+    
+    /// Parse WASM arguments from string (comma-separated, supports integers and floats)
+    private func parseWASMArgs(_ argsString: String) -> [Any] {
+        guard !argsString.isEmpty else { return [] }
+        
+        return argsString.split(separator: ",").compactMap { arg -> Any? in
+            let trimmed = arg.trimmingCharacters(in: .whitespaces)
+            if let intVal = Int(trimmed) {
+                return intVal
+            } else if let doubleVal = Double(trimmed) {
+                return doubleVal
+            }
+            return trimmed
+        }
     }
     
     // MARK: - Helpers
@@ -591,6 +707,8 @@ struct RunConfigView: View {
             goOptionsView
         case .rust:
             rustOptionsView
+        case .wasm:
+            wasmOptionsView
         default:
             Text("No specific options available for \(viewModel.currentConfig.languageOptions.language.rawValue)")
                 .foregroundColor(.secondary)
@@ -624,6 +742,57 @@ struct RunConfigView: View {
     private var rustOptionsView: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Release mode (--release)", isOn: $viewModel.currentConfig.languageOptions.rustRelease)
+        }
+    }
+    
+    private var wasmOptionsView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Function name
+            HStack {
+                Text("Function to call:")
+                    .font(.subheadline)
+                Spacer()
+            }
+            TextField("main", text: $viewModel.currentConfig.languageOptions.wasmFunction)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.system(.body, design: .monospaced))
+            
+            // Arguments
+            HStack {
+                Text("Arguments (comma-separated):")
+                    .font(.subheadline)
+                Spacer()
+            }
+            TextField("e.g., 5, 3, 2.5", text: $viewModel.currentConfig.languageOptions.wasmArgs)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(.system(.body, design: .monospaced))
+            
+            Text("Supports integers and floating point numbers")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Divider()
+            
+            // Options
+            Toggle("Enable WASI support", isOn: $viewModel.currentConfig.languageOptions.wasmEnableWASI)
+            Text("WASI provides basic system interface (stubbed on iOS)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Toggle("Debug logging", isOn: $viewModel.currentConfig.languageOptions.wasmDebugLogging)
+            
+            // Info box
+            VStack(alignment: .leading, spacing: 4) {
+                Label("On-Device Execution", systemImage: "cpu")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("WebAssembly runs directly on your iPad using WKWebView's JavaScript engine. No server required!")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(10)
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(8)
         }
     }
     

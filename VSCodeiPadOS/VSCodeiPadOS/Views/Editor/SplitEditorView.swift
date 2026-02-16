@@ -624,6 +624,19 @@ struct PaneEditorView: View {
             .padding(.leading, 70) // Offset for line numbers + folding icons
             .padding(.trailing, 60) // Offset for minimap
             
+            // Inlay Hints Overlay (type hints, parameter names)
+            InlayHintsOverlay(
+                code: text,
+                language: tab.language,
+                scrollPosition: scrollPosition,
+                lineHeight: lineHeight,
+                fontSize: 14,
+                gutterWidth: lineNumbersStyle != "off" ? 70 : 0,
+                rightReservedWidth: 60
+            )
+            .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for line numbers
+            .padding(.trailing, 60) // Offset for minimap
+            
             // Peek Definition Overlay
             if let peekState = editorCore.peekState, editorCore.activeTabId == tab.id {
                  // Calculate simplified position: center of screen for now, but conceptually "inline"
@@ -656,9 +669,13 @@ struct PaneEditorView: View {
         }
         .onAppear {
             text = tab.content
+            // Detect foldable regions for this file
+            foldingManager.detectFoldableRegions(in: text, filePath: fileId)
         }
         .onChange(of: tab.id) { _ in
             text = tab.content
+            // Re-detect foldable regions for new file
+            foldingManager.detectFoldableRegions(in: text, filePath: fileId)
         }
         .onChange(of: pane.scrollOffset) { newOffset in
             guard splitManager.syncScroll else { return }

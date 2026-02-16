@@ -165,6 +165,18 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomOut"))) { _ in
             editorCore.zoomOut()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunWithoutDebugging"))) { _ in
+            // Execute the current file using JSRunner for .js files
+            if let activeTab = editorCore.activeTab {
+                CodeExecutionService.shared.executeCurrentFile(
+                    fileName: activeTab.fileName,
+                    content: activeTab.content
+                )
+                // Show the terminal/panel and switch to Output tab so user can see output
+                showTerminal = true
+                NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
+            }
+        }
         .environmentObject(themeManager)
         .environmentObject(editorCore)
     }

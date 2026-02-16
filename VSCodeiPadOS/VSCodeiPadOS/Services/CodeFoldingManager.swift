@@ -64,8 +64,14 @@ struct UserDefaultsKeys {
     static let foldStatePrefix = "codeFoldingState_"
 }
 
+// MARK: - Notification for layout invalidation
+extension Notification.Name {
+    static let codeFoldingDidChange = Notification.Name("codeFoldingDidChange")
+}
+
 // MARK: - Code Folding Manager
 class CodeFoldingManager: ObservableObject {
+
     static let shared = CodeFoldingManager()
     
     @Published var foldRegions: [FoldRegion] = []
@@ -848,8 +854,12 @@ class CodeFoldingManager: ObservableObject {
                 collapsedLines.insert(line)
             }
         }
+        
+        // Notify observers (FoldingLayoutManager) to invalidate layout
+        NotificationCenter.default.post(name: .codeFoldingDidChange, object: self)
     }
 }
+
 
 // MARK: - Fold Statistics
 struct FoldStatistics {

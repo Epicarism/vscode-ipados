@@ -1,20 +1,40 @@
 import UIKit
 
 /// TextKit layout manager that collapses line fragments for lines marked folded in CodeFoldingManager.
-///
 /// This is a view-level folding implementation (it does NOT modify the underlying text).
+
 final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     weak var ownerTextView: EditorTextView?
+    private var foldingObserver: NSObjectProtocol?
 
     override init() {
         super.init()
         self.delegate = self
+        setupFoldingObserver()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         self.delegate = self
+        setupFoldingObserver()
     }
+
+    deinit {
+        if let observer = foldingObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private func setupFoldingObserver() {
+        foldingObserver = NotificationCenter.default.addObserver(
+            forName: .codeFoldingDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.invalidateFoldingLayout()
+        }
+    }
+
 
     func layoutManager(
         _ layoutManager: NSLayoutManager,
@@ -66,5 +86,14 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         }
 
         return line
+    }
+
+    /// Invalidate layout to reflect fold state changes.
+    /// Call this after toggling fold regions.
+    func invalidateFoldingLayout() {
+        guard let textStorage = self.textStorage else { return }
+        let fullRange = NSRange(location: 0, length: textStorage.length)
+        self.invalidateLayout(forCharacterRange: fullRange, actualCharacterRange: nil)
+        self.invalidateDisplay(forCharacterRange: fullRange)
     }
 }

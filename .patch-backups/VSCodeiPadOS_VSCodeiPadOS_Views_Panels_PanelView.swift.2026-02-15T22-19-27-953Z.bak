@@ -1,0 +1,141 @@
+import SwiftUI
+import SwiftUI
+
+enum PanelTab: String, CaseIterable, Identifiable {
+    case problems = "Problems"
+    case output = "Output"
+    case terminal = "Terminal"
+    case debugConsole = "Debug Console"
+    
+    var id: String { rawValue }
+    
+    var icon: String {
+        switch self {
+        case .problems: return "exclamationmark.triangle"
+        case .output: return "list.bullet.rectangle"
+        case .terminal: return "terminal"
+        case .debugConsole: return "ant.circle"
+        }
+    }
+}
+
+struct PanelView: View {
+    @Binding var isVisible: Bool
+    @Binding var height: CGFloat
+    @State private var selectedTab: PanelTab = .terminal
+    @State private var isMaximized: Bool = false
+    @State private var previousHeight: CGFloat = 200
+    
+    // Resize state
+    @GestureState private var dragOffset: CGFloat = 0
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Resize Handle
+            Rectangle()
+                .fill(Color(UIColor.separator))
+                .frame(height: 1)
+                .overlay(
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(height: 8)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newHeight = height - value.translation.height
+                                    height = max(100, min(newHeight, UIScreen.main.bounds.height - 100))
+                                }
+                        )
+                )
+            
+            // Tab Bar
+            HStack(spacing: 0) {
+                ForEach(PanelTab.allCases) { tab in
+                    PanelTabButton(tab: tab, isSelected: selectedTab == tab) {
+                        selectedTab = tab
+                    }
+                }
+                
+                Spacer()
+                
+                // Panel Controls
+                HStack(spacing: 12) {
+                    Button(action: {
+                        if isMaximized {
+                            height = previousHeight
+                        } else {
+                            previousHeight = height
+                            height = UIScreen.main.bounds.height - 100
+                        }
+                        isMaximized.toggle()
+                    }) {
+                        Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12))
+                    }
+                    
+                    Button(action: { isVisible = false }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12))
+                    }
+                }
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+            }
+            .frame(height: 35)
+            .background(Color(UIColor.secondarySystemBackground))
+            
+            Divider()
+            
+            // Content
+            Group {
+                switch selectedTab {
+                case .problems:
+                    ProblemsView()
+                case .output:
+                    OutputView()
+                case .terminal:
+                    TerminalView()
+                case .debugConsole:
+                    Text("Debug Console Placeholder") // Create view later if needed
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(UIColor.systemBackground))
+                }
+            }
+            .frame(height: isMaximized ? UIScreen.main.bounds.height - 140 : height - 36)
+        }
+        .background(Color(UIColor.systemBackground))
+    }
+}
+
+struct PanelTabButton: View {
+    let tab: PanelTab
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(tab.rawValue.uppercased())
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                
+                if tab == .problems {
+                    Circle()
+                        .fill(Color.secondary)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .foregroundColor(isSelected ? .primary : .secondary)
+            .padding(.horizontal, 12)
+            .frame(maxHeight: .infinity)
+            .background(isSelected ? Color(UIColor.systemBackground) : Color.clear)
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(isSelected ? .clear : Color(UIColor.separator))
+                , alignment: .bottom
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
