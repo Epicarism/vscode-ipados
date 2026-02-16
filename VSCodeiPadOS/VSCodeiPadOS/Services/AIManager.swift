@@ -13,6 +13,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
     case deepseek = "DeepSeek"
     case mistral = "Mistral"
     case ollama = "Ollama (Local)"
+    case localMLX = "Local AI (On-Device)"
     
     var id: String { rawValue }
     
@@ -65,6 +66,14 @@ enum AIProvider: String, CaseIterable, Identifiable {
                 AIModel(id: "mistral", name: "Mistral", provider: .ollama),
                 AIModel(id: "deepseek-coder", name: "DeepSeek Coder", provider: .ollama)
             ]
+        case .localMLX:
+            return [
+                AIModel(id: "nanbeige-3b-4bit", name: "Nanbeige 4.1 3B (Q4)", provider: .localMLX),
+                AIModel(id: "qwen3-1.7b-4bit", name: "Qwen3 1.7B (Q4)", provider: .localMLX),
+                AIModel(id: "qwen3-0.6b-4bit", name: "Qwen3 0.6B (Q4)", provider: .localMLX),
+                AIModel(id: "qwen3-4b-4bit", name: "Qwen3 4B (Q4)", provider: .localMLX),
+                AIModel(id: "nanbeige-1b-4bit", name: "Nanbeige 4.1 1B (Q4)", provider: .localMLX)
+            ]
         case .groq:
             return [
                 AIModel(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", provider: .groq),
@@ -99,6 +108,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
         case .deepseek: return "https://api.deepseek.com/v1"
         case .mistral: return "https://api.mistral.ai/v1"
         case .ollama: return "http://localhost:11434/api"
+        case .localMLX: return "local://mlx"
         }
     }
     
@@ -113,6 +123,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
         case .deepseek: return "fish.fill"
         case .mistral: return "wind"
         case .ollama: return "laptopcomputer"
+        case .localMLX: return "cpu"
         }
     }
 }
@@ -288,6 +299,7 @@ class AIManager: ObservableObject {
         case .deepseek: return !deepseekKey.isEmpty
         case .mistral: return !mistralKey.isEmpty
         case .ollama: return true // Ollama doesn't require API key
+        case .localMLX: return true // Local model, no API key needed
         }
     }
     
@@ -302,6 +314,7 @@ class AIManager: ObservableObject {
         case .deepseek: return deepseekKey
         case .mistral: return mistralKey
         case .ollama: return ""
+        case .localMLX: return ""
         }
     }
     
@@ -417,6 +430,8 @@ class AIManager: ObservableObject {
             return try await callMistral(messages: messages, context: context)
         case .ollama:
             return try await callOllama(messages: messages, context: context)
+        case .localMLX:
+            return try await callLocalMLX(messages: messages, context: context)
         }
     }
     
@@ -908,11 +923,38 @@ class AIManager: ObservableObject {
         return content
     }
     
+    // MARK: - Local MLX (On-Device)
+    
+    @MainActor
+    private func callLocalMLX(messages: [ChatMessage], context: String?) async throws -> String {
+        let localLLM = LocalLLMService.shared
+        
+        // Auto-load model if not loaded
+        if !localLLM.isModelLoaded {
+            await localLLM.loadModel()
+        }
+        
+        guard localLLM.isModelLoaded else {
+            throw AIError.apiError("Failed to load local model")
+        }
+        
+        // Convert messages to the format LocalLLMService expects
+        let systemPrompt = buildSystemPrompt(context: context)
+        var chatMessages: [(role: String, content: String)] = []
+        
+        for msg in messages {
+            chatMessages.append((role: msg.role.rawValue, content: msg.content))
+        }
+        
+        let response = try await localLLM.chat(messages: chatMessages, systemPrompt: systemPrompt)
+        return response
+    }
+    
     // MARK: - Helpers
     
     private func buildSystemPrompt(context: String?) -> String {
         var prompt = """
-You are an expert coding assistant integrated into a code editor on iPadOS. You help developers write, debug, explain, and improve their code.
+You are an expert coding assistant integrated into a code editor on iPadOS. You help developers write, debug, explain, and improve their code. Always respond in English.
 
 Guidelines:
 - Provide clear, concise explanations
@@ -920,6 +962,8 @@ Guidelines:
 - Suggest best practices and optimizations
 - Be helpful with debugging and error resolution
 - When generating code, ensure it's complete and runnable
+- ALWAYS respond in English regardless of input language
+- Never output raw XML tags like <think> or </think>
 """
         
         if let context = context, !context.isEmpty {

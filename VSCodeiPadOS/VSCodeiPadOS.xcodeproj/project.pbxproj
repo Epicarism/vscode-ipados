@@ -36,6 +36,7 @@
 		1053 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2053 /* DebugView.swift */; };
 		1054 /* WorkspaceTrustManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2054 /* WorkspaceTrustManager.swift */; };
 		1055 /* AIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2055 /* AIManager.swift */; };
+		8003 /* LocalLLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004 /* LocalLLMService.swift */; };
 		1056 /* ColorPickerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2056 /* ColorPickerManager.swift */; };
 		1057 /* GitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2057 /* GitManager.swift */; };
 		1058 /* GitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2058 /* GitService.swift */; };
@@ -53,8 +54,10 @@
 		1070 /* SpotlightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* SpotlightManager.swift */; };
 		1099 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2099 /* Assets.xcassets */; };
 		1100 /* test.wasm in Resources */ = {isa = PBXBuildFile; fileRef = 2100 /* test.wasm */; };
+		8005 /* LocalModels.json in Resources */ = {isa = PBXBuildFile; fileRef = 8006 /* LocalModels.json */; };
 		1101 /* BranchMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2101 /* BranchMenu.swift */; };
 		1102 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2102 /* CommandPalette.swift */; };
+		1901 /* KeyCommandBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2901 /* KeyCommandBridge.swift */; };
 		1103 /* DiffComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2103 /* DiffComponents.swift */; };
 		1104 /* FileIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2104 /* FileIconView.swift */; };
 		1105 /* GoToSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2105 /* GoToSymbol.swift */; };
@@ -149,6 +152,7 @@
 		2053 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		2054 /* WorkspaceTrustManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTrustManager.swift; sourceTree = "<group>"; };
 		2055 /* AIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIManager.swift; sourceTree = "<group>"; };
+		8004 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
 		2056 /* ColorPickerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerManager.swift; sourceTree = "<group>"; };
 		2057 /* GitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitManager.swift; sourceTree = "<group>"; };
 		2058 /* GitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitService.swift; sourceTree = "<group>"; };
@@ -166,8 +170,10 @@
 		2070 /* SpotlightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightManager.swift; sourceTree = "<group>"; };
 		2099 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2100 /* test.wasm */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/test.wasm; sourceTree = "<group>"; };
+		8006 /* LocalModels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/LocalModels.json; sourceTree = "<group>"; };
 		2101 /* BranchMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMenu.swift; sourceTree = "<group>"; };
 		2102 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
+		2901 /* KeyCommandBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyCommandBridge.swift; sourceTree = "<group>"; };
 		2103 /* DiffComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffComponents.swift; sourceTree = "<group>"; };
 		2104 /* FileIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIconView.swift; sourceTree = "<group>"; };
 		2105 /* GoToSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToSymbol.swift; sourceTree = "<group>"; };
@@ -250,6 +256,7 @@
 				2001 /* ContentView.swift */,
 				2099 /* Assets.xcassets */,
 				2100 /* test.wasm */,
+				8006 /* LocalModels.json */,
 				4002 /* App */,
 				4003 /* Commands */,
 				4004 /* Extensions */,
@@ -317,6 +324,7 @@
 				2052 /* DebugManager.swift */,
 				2054 /* WorkspaceTrustManager.swift */,
 				2055 /* AIManager.swift */,
+				8004 /* LocalLLMService.swift */,
 				2056 /* ColorPickerManager.swift */,
 				2057 /* GitManager.swift */,
 				2058 /* GitService.swift */,
@@ -359,6 +367,7 @@
 				2105 /* GoToSymbol.swift */,
 				2113 /* WorkspaceSettingsView.swift */,
 				2102 /* CommandPalette.swift */,
+				2901 /* KeyCommandBridge.swift */,
 				2110 /* StatusBarView.swift */,
 				2112 /* TasksView.swift */,
 				2107 /* QuickOpen.swift */,
@@ -505,6 +514,8 @@
 				8965966D2F3B9FB5005B984D /* TreeSitterCSSRunestone */,
 				8965966E2F3B9FB6005B984D /* TreeSitterGoRunestone */,
 				8965966F2F3B9FB7005B984D /* TreeSitterRustRunestone */,
+				89659701AAAA0002005B984D /* MLXLLM */,
+				89659703AAAA0004005B984D /* MLXLMCommon */,
 			);
 			productName = VSCodeiPadOS;
 			productReference = 3000 /* VSCodeiPadOS.app */;
@@ -537,6 +548,7 @@
 			packageReferences = (
 				896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */,
 				896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */,
+				89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 			);
 			productRefGroup = 4099 /* Products */;
 			projectDirPath = "";
@@ -564,6 +576,7 @@
 			files = (
 				1099 /* Assets.xcassets in Resources */,
 				1100 /* test.wasm in Resources */,
+				8005 /* LocalModels.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -610,6 +623,7 @@
 				1105 /* GoToSymbol.swift in Sources */,
 				1113 /* WorkspaceSettingsView.swift in Sources */,
 				1102 /* CommandPalette.swift in Sources */,
+				1901 /* KeyCommandBridge.swift in Sources */,
 				1110 /* StatusBarView.swift in Sources */,
 				1112 /* TasksView.swift in Sources */,
 				1107 /* QuickOpen.swift in Sources */,
@@ -648,6 +662,7 @@
 				1053 /* DebugView.swift in Sources */,
 				1054 /* WorkspaceTrustManager.swift in Sources */,
 				1055 /* AIManager.swift in Sources */,
+				8003 /* LocalLLMService.swift in Sources */,
 				1056 /* ColorPickerManager.swift in Sources */,
 				1057 /* GitManager.swift in Sources */,
 				1058 /* GitService.swift in Sources */,
@@ -799,7 +814,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -854,7 +869,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -904,6 +919,14 @@
 				minimumVersion = 0.1.10;
 			};
 		};
+		89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -951,6 +974,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */;
 			productName = TreeSitterRustRunestone;
+		};
+		89659701AAAA0002005B984D /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
+		};
+		89659703AAAA0004005B984D /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
 		};
 
 /* End XCSwiftPackageProductDependency section */

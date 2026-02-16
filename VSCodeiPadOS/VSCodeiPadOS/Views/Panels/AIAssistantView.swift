@@ -111,10 +111,39 @@ struct AIAssistantView: View {
     
     private func insertCode(_ code: String) {
         if let index = editorCore.activeTabIndex {
-            editorCore.tabs[index].content += "\n" + code
+            // Insert at cursor position
+            let content = editorCore.tabs[index].content
+            let lines = content.components(separatedBy: "\n")
+            let cursorLine = min(editorCore.cursorPosition.line, lines.count)
+            
+            // Build new content with code inserted at cursor line
+            var newLines = lines
+            let insertionCode = "\n" + code + "\n"
+            if cursorLine < newLines.count {
+                newLines.insert(insertionCode, at: cursorLine + 1)
+            } else {
+                newLines.append(insertionCode)
+            }
+            editorCore.tabs[index].content = newLines.joined(separator: "\n")
+            
+            // Post notification for visual feedback
+            NotificationCenter.default.post(name: NSNotification.Name("CodeInserted"), object: nil, userInfo: ["code": code])
+            print("[AI] Inserted \(code.count) chars at line \(cursorLine)")
         } else {
-            editorCore.addTab(fileName: "Generated.swift", content: code)
+            // No active tab - create a new one with the code
+            let ext = detectExtension(from: code)
+            editorCore.addTab(fileName: "Generated.\(ext)", content: code)
         }
+    }
+    
+    private func detectExtension(from code: String) -> String {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed.contains("import swift") || trimmed.contains("func ") || trimmed.contains("struct ") || trimmed.contains("class ") { return "swift" }
+        if trimmed.contains("function ") || trimmed.contains("const ") || trimmed.contains("let ") || trimmed.contains("=>") { return "js" }
+        if trimmed.contains("def ") || trimmed.contains("import ") || trimmed.contains("print(") { return "py" }
+        if trimmed.contains("<html") || trimmed.contains("<div") { return "html" }
+        if trimmed.contains("#include") { return "c" }
+        return "swift"
     }
 }
 
@@ -605,6 +634,28 @@ struct AISettingsView: View {
                     }
                     
                     Text("Run Ollama on your Mac and connect over WiFi")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Local AI Settings
+                Section(header: Text("Local AI (On-Device)")) {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text("Model Cache")
+                            Text("Clear to fix chat template issues")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("Clear Cache") {
+                            LocalLLMService.shared.clearModelCache()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                    }
+                    
+                    Text("Models will re-download on next use with fixed chat templates.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

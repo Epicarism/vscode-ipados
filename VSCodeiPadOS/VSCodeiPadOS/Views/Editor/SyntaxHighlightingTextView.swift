@@ -1379,23 +1379,8 @@ class EditorTextView: MultiCursorTextView {
             action: #selector(handleUnfold)
         ))
         
-        // Toggle Terminal: Cmd+J (not in standard system menus, safe to define here)
-        let toggleTerminalCmd = UIKeyCommand(
-            input: "j",
-            modifierFlags: .command,
-            action: #selector(handleToggleTerminal),
-            discoverabilityTitle: "Toggle Panel"
-        )
-        toggleTerminalCmd.wantsPriorityOverSystemBehavior = true
-        commands.append(toggleTerminalCmd)
-        
-        // AI Assistant: Cmd+Shift+A (not conflicting with system Select All which is Cmd+A)
-        commands.append(UIKeyCommand(
-            input: "a",
-            modifierFlags: [.command, .shift],
-            action: #selector(handleShowAIAssistant),
-            discoverabilityTitle: "AI Assistant"
-        ))
+        // NOTE: Cmd+Shift+P, Cmd+Shift+A, Cmd+J, Cmd+B are now handled
+        // globally via AppDelegate.buildMenu() so they work regardless of focus.
         
         return commands
     }

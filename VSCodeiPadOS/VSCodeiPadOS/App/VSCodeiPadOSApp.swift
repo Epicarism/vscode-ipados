@@ -10,21 +10,21 @@ struct VSCodeiPadOSApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(editorCore)
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WindowTitleDidChange"))) { notification in
-                    if let userInfo = notification.userInfo,
-                       let title = userInfo["title"] as? String {
-                        windowTitle = title
-                        updateWindowTitle(title)
+            KeyCommandBridge {
+                ContentView()
+                    .environmentObject(editorCore)
+                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WindowTitleDidChange"))) { notification in
+                        if let userInfo = notification.userInfo,
+                           let title = userInfo["title"] as? String {
+                            windowTitle = title
+                            updateWindowTitle(title)
+                        }
                     }
-                }
+            }
         }
         .commands {
-            // Hide conflicting system menus by replacing with empty content
+            // Hide conflicting system text editing menu
             CommandGroup(replacing: .textEditing) { }
-            CommandGroup(replacing: .help) { }
-            
             // VS Code-style menu bar (our custom menus)
             FileMenuCommands()
             EditMenuCommands()
@@ -148,12 +148,17 @@ struct ViewMenuCommands: Commands {
             Button("Command Palette") {
                 NotificationCenter.default.post(name: NSNotification.Name("ShowCommandPalette"), object: nil)
             }
-            // Note: Cmd+Shift+P shortcut handled by UIKeyCommand in editor
+            // Shortcut Cmd+Shift+P handled by AppDelegate.buildMenu
             
             Button("Toggle Terminal") {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleTerminal"), object: nil)
             }
-            .keyboardShortcut("j", modifiers: .command)
+            // Shortcut Cmd+J handled by AppDelegate.buildMenu
+            
+            Button("AI Assistant") {
+                NotificationCenter.default.post(name: NSNotification.Name("ShowAIAssistant"), object: nil)
+            }
+            // Shortcut Cmd+Shift+A handled by AppDelegate.buildMenu
             
             Divider()
             
@@ -267,7 +272,8 @@ struct TerminalMenuCommands: Commands {
 
 struct HelpMenuCommands: Commands {
     var body: some Commands {
-        CommandMenu("Help") {
+        // Replace system Help menu content
+        CommandGroup(replacing: .help) {
             Button("Documentation") {
                 if let url = URL(string: "https://code.visualstudio.com/docs") {
                     UIApplication.shared.open(url)
@@ -277,7 +283,7 @@ struct HelpMenuCommands: Commands {
             Button("Keyboard Shortcuts") {
                 NotificationCenter.default.post(name: NSNotification.Name("ShowKeyboardShortcuts"), object: nil)
             }
-            .keyboardShortcut("k", modifiers: [.command, .shift])
+            .keyboardShortcut("/", modifiers: [.command])
             
             Divider()
             

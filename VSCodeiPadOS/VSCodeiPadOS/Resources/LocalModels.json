@@ -1,0 +1,55 @@
+{
+    "version": 4,
+    "defaultModelId": "nanbeige-3b-4bit",
+    "models": [
+        {
+            "id": "nanbeige-3b-4bit",
+            "name": "Nanbeige 4.1 3B (Q4)",
+            "repo": "mlx-community/Nanbeige2-8B-Chat-4bit",
+            "contextLength": 32768,
+            "estimatedMemoryMB": 1800,
+            "chatTemplate": "chatml",
+            "description": "DEFAULT - Best quality for coding tasks"
+        },
+        {
+            "id": "qwen3-1.7b-4bit",
+            "name": "Qwen3 1.7B (Q4)",
+            "repo": "mlx-community/Qwen3-1.7B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 1100,
+            "chatTemplate": "chatml",
+            "description": "Good balance of speed/quality, English-focused"
+        },
+        {
+            "id": "qwen3-0.6b-4bit",
+            "name": "Qwen3 0.6B (Q4)",
+            "repo": "mlx-community/Qwen3-0.6B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 400,
+            "chatTemplate": "chatml",
+            "description": "Smallest - 0.3GB, very fast"
+        },
+        {
+            "id": "qwen3-4b-4bit",
+            "name": "Qwen3 4B (Q4)",
+            "repo": "mlx-community/Qwen3-4B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 2500,
+            "chatTemplate": "chatml",
+            "description": "Larger - better quality, needs more RAM"
+        },
+        {
+            "id": "nanbeige-1b-4bit",
+            "name": "Nanbeige 4.1 1B (Q4)",
+            "repo": "mlx-community/Nanbeige2-1B-Chat-4bit",
+            "contextLength": 32768,
+            "estimatedMemoryMB": 800,
+            "chatTemplate": "chatml",
+            "description": "Smaller Nanbeige variant"
+        }
+    ],
+    "_notes": {
+        "why_nanbeige": "Nanbeige 4.1 3B offers best quality for coding tasks on device",
+        "updating": "Add models to the array, app picks up on next launch"
+    }
+}
