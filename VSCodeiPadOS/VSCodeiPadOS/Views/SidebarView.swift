@@ -115,7 +115,30 @@ struct SidebarView: View {
         case 0:
             IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showFolderPicker, theme: theme)
         case 1:
-            SidebarSearchView(theme: theme)
+            if let rootURL = fileNavigator.rootURL {
+                SearchView(
+                    onResultSelected: { filePath, lineNumber in
+                        if let url = URL(string: "file://" + filePath) {
+                            editorCore.openFile(from: url)
+                            editorCore.requestedGoToLine = lineNumber
+                        }
+                    },
+                    rootURL: rootURL
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "folder.badge.questionmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(theme.sidebarForeground.opacity(0.3))
+                    Text("Open a folder to search")
+                        .font(.caption)
+                        .foregroundColor(theme.sidebarForeground.opacity(0.6))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .background(theme.sidebarBackground)
+            }
         case 2:
             GitView()
         case 3:

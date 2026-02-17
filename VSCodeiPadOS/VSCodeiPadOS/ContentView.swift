@@ -236,7 +236,32 @@ struct ContentView: View {
         case 0:
             IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
         case 1:
-            SidebarSearchView(theme: theme)
+            if let rootURL = fileNavigator.rootURL {
+                SearchView(
+                    onResultSelected: { filePath, lineNumber in
+                        // Open file and go to line
+                        if let url = URL(string: "file://" + filePath) {
+                            editorCore.openFile(from: url)
+                            editorCore.requestedGoToLine = lineNumber
+                        }
+                    },
+                    rootURL: rootURL
+                )
+            } else {
+                // No workspace open - show placeholder
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "folder.badge.questionmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(theme.sidebarForeground.opacity(0.3))
+                    Text("Open a folder to search")
+                        .font(.caption)
+                        .foregroundColor(theme.sidebarForeground.opacity(0.6))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .background(theme.sidebarBackground)
+            }
         case 2:
             GitView()
         case 3:
@@ -1248,92 +1273,6 @@ struct IDESaveAsPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Sidebar Search View
-
-struct SidebarSearchView: View {
-    let theme: Theme
-    @State private var searchText = ""
-    @State private var replaceText = ""
-    @State private var showReplace = false
-    @State private var searchResults: [(fileName: String, line: Int, preview: String)] = []
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("SEARCH").font(.caption).fontWeight(.semibold).foregroundColor(theme.sidebarForeground.opacity(0.7))
-                Spacer()
-            }.padding(.horizontal, 12).padding(.vertical, 8)
-            
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass").foregroundColor(theme.sidebarForeground.opacity(0.6)).font(.caption)
-                TextField("Search", text: $searchText).textFieldStyle(.plain).font(.system(size: 13))
-                    .foregroundColor(theme.sidebarForeground)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill").foregroundColor(theme.sidebarForeground.opacity(0.6)).font(.caption)
-                    }
-                }
-            }
-            .padding(8)
-            .background(theme.editorBackground)
-            .cornerRadius(6)
-            .padding(.horizontal, 12)
-            
-            HStack {
-                Button(action: { showReplace.toggle() }) {
-                    Image(systemName: showReplace ? "chevron.down" : "chevron.right").font(.caption2)
-                    Text("Replace").font(.caption)
-                }.foregroundColor(theme.sidebarForeground.opacity(0.7))
-                Spacer()
-            }.padding(.horizontal, 12).padding(.vertical, 6)
-            
-            if showReplace {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right").foregroundColor(theme.sidebarForeground.opacity(0.6)).font(.caption)
-                    TextField("Replace", text: $replaceText).textFieldStyle(.plain).font(.system(size: 13))
-                        .foregroundColor(theme.sidebarForeground)
-                }
-                .padding(8)
-                .background(theme.editorBackground)
-                .cornerRadius(6)
-                .padding(.horizontal, 12)
-            }
-            
-            Divider().padding(.top, 8)
-            
-            if searchText.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Image(systemName: "magnifyingglass").font(.largeTitle).foregroundColor(theme.sidebarForeground.opacity(0.3))
-                    Text("Search in files").font(.caption).foregroundColor(theme.sidebarForeground.opacity(0.6))
-                    Spacer()
-                }.frame(maxWidth: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(0..<searchResults.count, id: \.self) { i in
-                            let result = searchResults[i]
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Image(systemName: "doc.text").font(.caption2).foregroundColor(theme.sidebarForeground.opacity(0.6))
-                                    Text(result.fileName).font(.system(size: 11, weight: .medium)).foregroundColor(theme.sidebarForeground)
-                                    Spacer()
-                                    Text(":\(result.line)").font(.system(size: 10, design: .monospaced)).foregroundColor(theme.sidebarForeground.opacity(0.6))
-                                }
-                                Text(result.preview).font(.system(size: 11, design: .monospaced)).foregroundColor(theme.sidebarForeground.opacity(0.7)).lineLimit(1)
-                            }.padding(.horizontal, 12).padding(.vertical, 6)
-                        }
-                    }
-                }
-            }
-        }
-        .background(theme.sidebarBackground)
-        .onChange(of: searchText) { query in
-            if query.isEmpty { searchResults = [] }
-            else { searchResults = [("ContentView.swift", 15, "Text(\"\(query)\")"), ("main.swift", 8, "// \(query)")] }
-        }
-    }
-}
 
 // MARK: - Local Code Execution
 
