@@ -312,6 +312,20 @@ class LocalLLMService: ObservableObject {
     }
     
     // MARK: - Chat Interface (non-streaming)
+    //
+    // IMPORTANT: MLXChatSession.respond(to:) OVERWRITES the internal messages array
+    // with just [.user(prompt)], losing any system instructions set during init.
+    // The system prompt set via `instructions:` only survives through KV cache on
+    // subsequent calls within the SAME session, but on a fresh session it's lost
+    // entirely because respond() replaces messages BEFORE the first generate() call.
+    //
+    // FIX: We embed the system prompt directly into the user message text so it
+    // always reaches the model regardless of how ChatSession handles messages.
+    // This works reliably with all chat templates (ChatML, Nanbeige STX/ETX, etc.)
+    // because the instructions appear as user content.
+    //
+    // For conversation history, we also embed prior messages since ChatSession
+    // only processes the last user message.
     
     func chat(messages: [(role: String, content: String)], systemPrompt: String? = nil) async throws -> String {
         guard isModelLoaded, let container = modelContainer else {
@@ -326,16 +340,54 @@ class LocalLLMService: ObservableObject {
         defer { isGenerating = false }
         
         let system = systemPrompt ?? defaultSystemPrompt
-        let session = MLXChatSession(container, instructions: system, generateParameters: generateParams)
         
-        // Get last user message only
-        let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
+        // Build a comprehensive prompt that includes system instructions + conversation history.
+        // We embed everything into the user message because MLXChatSession.respond()
+        // overwrites the messages array, losing system instructions.
+        let augmentedPrompt = buildAugmentedPrompt(system: system, messages: messages)
         
-        let response = try await session.respond(to: lastUserMessage)
+        // Create a fresh session for each call (no stale KV cache issues)
+        let session = MLXChatSession(container, generateParameters: generateParams)
+        let response = try await session.respond(to: augmentedPrompt)
         
         // Strip thinking tags
         let cleaned = stripThinkingTags(response)
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    /// Build a single prompt string that includes system instructions and conversation history.
+    /// Uses Nanbeige's native format: \u{0002}role\n{content}\u{0003}\n
+    /// This ensures the model sees everything regardless of ChatSession's message handling.
+    private func buildAugmentedPrompt(system: String, messages: [(role: String, content: String)]) -> String {
+        // Nanbeige uses STX (\u{0002}) and ETX (\u{0003}) control characters
+        let STX = "\u{0002}"  // Start of Text
+        let ETX = "\u{0003}"  // End of Text
+        
+        var prompt = ""
+        
+        // System instructions first
+        prompt += "\(STX)system\n\(system)\(ETX)\n"
+        
+        // Conversation history
+        for msg in messages {
+            switch msg.role.lowercased() {
+            case "user":
+                prompt += "\(STX)user\n\(msg.content)\(ETX)\n"
+            case "assistant":
+                prompt += "\(STX)assistant\n\(msg.content)\(ETX)\n"
+            case "system":
+                // Already handled above, skip duplicate system messages
+                continue
+            default:
+                // Treat unknown as user
+                prompt += "\(STX)user\n\(msg.content)\(ETX)\n"
+            }
+        }
+        
+        // Add generation prompt - tells model to start assistant response
+        prompt += "\(STX)assistant\n"
+        
+        return prompt
     }
     
     // MARK: - Streaming Chat (for UI)
@@ -358,13 +410,13 @@ class LocalLLMService: ObservableObject {
                 
                 do {
                     let system = systemPrompt ?? self.defaultSystemPrompt
-                    let session = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
+                    let augmentedPrompt = self.buildAugmentedPrompt(system: system, messages: messages)
                     
-                    // Get last user message only
-                    let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
+                    // Fresh session — no stale KV cache, system prompt embedded in user text
+                    let session = MLXChatSession(container, generateParameters: self.generateParams)
                     
                     // Stream response
-                    for try await chunk in session.streamResponse(to: lastUserMessage) {
+                    for try await chunk in session.streamResponse(to: augmentedPrompt) {
                         if !chunk.isEmpty {
                             self.currentResponse += chunk
                             continuation.yield(chunk)

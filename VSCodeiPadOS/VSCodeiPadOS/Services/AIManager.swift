@@ -126,6 +126,26 @@ enum AIProvider: String, CaseIterable, Identifiable {
         case .localMLX: return "cpu"
         }
     }
+    
+    /// Whether this provider supports native function/tool calling via API
+    var supportsNativeTools: Bool {
+        switch self {
+        case .openai, .anthropic, .groq, .deepseek, .mistral, .kimi, .glm:
+            return true
+        case .google, .ollama, .localMLX:
+            return false
+        }
+    }
+    
+    /// Whether this provider uses OpenAI-compatible chat completions format
+    var isOpenAICompatible: Bool {
+        switch self {
+        case .openai, .groq, .deepseek, .mistral, .kimi, .glm:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - AI Model
@@ -213,6 +233,9 @@ class AIManager: ObservableObject {
     @Published var error: String?
     @Published var streamingResponse = ""
     
+    /// Maximum number of tool-call rounds before forcing a text response
+    private let maxToolRounds = 5
+    
     var selectedProvider: AIProvider {
         get { AIProvider(rawValue: selectedProviderRaw) ?? .openai }
         set { selectedProviderRaw = newValue.rawValue }
@@ -298,8 +321,8 @@ class AIManager: ObservableObject {
         case .groq: return !groqKey.isEmpty
         case .deepseek: return !deepseekKey.isEmpty
         case .mistral: return !mistralKey.isEmpty
-        case .ollama: return true // Ollama doesn't require API key
-        case .localMLX: return true // Local model, no API key needed
+        case .ollama: return true
+        case .localMLX: return true
         }
     }
     
@@ -318,10 +341,15 @@ class AIManager: ObservableObject {
         }
     }
     
+    /// Whether the current provider supports tool/function calling
+    var supportsToolCalling: Bool {
+        return selectedProvider.supportsNativeTools
+    }
+    
     // MARK: - Send Message
     
     @MainActor
-    func sendMessage(_ content: String, context: String? = nil) async {
+    func sendMessage(_ content: String, context: String? = nil, toolExecutor: AIToolExecutor? = nil) async {
         guard hasValidAPIKey() else {
             error = "Please set your API key in settings"
             return
@@ -342,7 +370,12 @@ class AIManager: ObservableObject {
         streamingResponse = ""
         
         do {
-            let response = try await makeAPIRequest(messages: currentSession.messages, context: context)
+            let response: String
+            if let executor = toolExecutor {
+                response = try await makeToolAwareRequest(messages: currentSession.messages, context: context, toolExecutor: executor)
+            } else {
+                response = try await makeAPIRequest(messages: currentSession.messages, context: context, agentMode: false)
+            }
             let assistantMessage = ChatMessage(role: .assistant, content: response, codeBlocks: extractCodeBlocks(from: response))
             currentSession.messages.append(assistantMessage)
             updateSession()
@@ -351,6 +384,425 @@ class AIManager: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    // MARK: - Tool-Aware Request (works for ALL providers)
+    
+    @MainActor
+    private func makeToolAwareRequest(messages: [ChatMessage], context: String?, toolExecutor: AIToolExecutor) async throws -> String {
+        if selectedProvider.supportsNativeTools {
+            // Native tool calling: OpenAI, Anthropic, Groq, DeepSeek, Mistral, Kimi, GLM
+            switch selectedProvider {
+            case .anthropic:
+                return try await callAnthropicWithTools(messages: messages, context: context, toolExecutor: toolExecutor)
+            default:
+                // All OpenAI-compatible providers
+                return try await callOpenAICompatibleWithTools(messages: messages, context: context, toolExecutor: toolExecutor)
+            }
+        } else {
+            // Text-based tool calling: Google, Ollama, Local MLX
+            return try await callWithTextBasedTools(messages: messages, context: context, toolExecutor: toolExecutor)
+        }
+    }
+    
+    // MARK: - OpenAI-Compatible with Tools (OpenAI, Groq, DeepSeek, Mistral, Kimi, GLM)
+    
+    private func callOpenAICompatibleWithTools(messages: [ChatMessage], context: String?, toolExecutor: AIToolExecutor) async throws -> String {
+        let provider = selectedProvider
+        let baseURL: String
+        let apiKey: String
+        
+        switch provider {
+        case .openai:
+            baseURL = AIProvider.openai.baseURL
+            apiKey = openAIKey
+        case .groq:
+            baseURL = AIProvider.groq.baseURL
+            apiKey = groqKey
+        case .deepseek:
+            baseURL = AIProvider.deepseek.baseURL
+            apiKey = deepseekKey
+        case .mistral:
+            baseURL = AIProvider.mistral.baseURL
+            apiKey = mistralKey
+        case .kimi:
+            baseURL = AIProvider.kimi.baseURL
+            apiKey = kimiKey
+        case .glm:
+            baseURL = AIProvider.glm.baseURL
+            apiKey = glmKey
+        default:
+            return try await makeAPIRequest(messages: messages, context: context, agentMode: true)
+        }
+        
+        let url = URL(string: "\(baseURL)/chat/completions")!
+        let systemPrompt = buildAgentSystemPrompt(context: context)
+        let tools = AITool.allCases.map { $0.openAIFunction }
+        
+        // Build initial messages
+        var conversationHistory: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt]
+        ]
+        for msg in messages {
+            conversationHistory.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        // Tool loop — allow up to maxToolRounds of tool calls
+        for round in 0..<maxToolRounds {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            var body: [String: Any] = [
+                "model": selectedModel.id,
+                "messages": conversationHistory,
+                "tools": tools,
+                "tool_choice": round < maxToolRounds - 1 ? "auto" : "none",
+                "max_tokens": 4096,
+                "temperature": 0.7
+            ]
+            
+            // Some providers don't support tool_choice "none", use "auto" for last round too
+            if provider == .groq || provider == .glm {
+                body["tool_choice"] = "auto"
+            }
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AIError.invalidResponse
+            }
+            
+            if httpResponse.statusCode != 200 {
+                if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = errorJson["error"] as? [String: Any],
+                   let message = error["message"] as? String {
+                    throw AIError.apiError(message)
+                }
+                throw AIError.httpError(httpResponse.statusCode)
+            }
+            
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let choices = json?["choices"] as? [[String: Any]],
+                  let firstChoice = choices.first,
+                  let message = firstChoice["message"] as? [String: Any] else {
+                throw AIError.invalidResponse
+            }
+            
+            // Check for tool calls
+            if let toolCalls = message["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty {
+                // Add the assistant message with tool calls to history
+                conversationHistory.append(message)
+                
+                // Execute each tool and add results
+                for toolCallData in toolCalls {
+                    guard let function = toolCallData["function"] as? [String: Any],
+                          let toolName = function["name"] as? String,
+                          let tool = AITool(rawValue: toolName),
+                          let argsString = function["arguments"] as? String,
+                          let argsData = argsString.data(using: .utf8),
+                          let args = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
+                        continue
+                    }
+                    
+                    let toolCallId = toolCallData["id"] as? String ?? UUID().uuidString
+                    let stringArgs = args.mapValues { "\($0)" }
+                    let toolCall = ToolCall(id: toolCallId, tool: tool, arguments: stringArgs)
+                    
+                    let result = await toolExecutor.execute(toolCall)
+                    let resultContent = result.success ? result.output : "Error: \(result.error ?? "Unknown error")"
+                    
+                    // Add tool result to conversation history in OpenAI format
+                    conversationHistory.append([
+                        "role": "tool",
+                        "tool_call_id": toolCallId,
+                        "content": resultContent
+                    ])
+                }
+                
+                // Continue loop — model will see tool results and can call more tools or respond
+                continue
+            }
+            
+            // No tool calls — return the text content
+            if let content = message["content"] as? String {
+                return content
+            }
+            
+            throw AIError.invalidResponse
+        }
+        
+        // Exceeded max rounds — do one final request with no tools
+        return try await makeAPIRequest(messages: messages, context: context, agentMode: true)
+    }
+    
+    // MARK: - Anthropic with Tools (proper tool loop)
+    
+    private func callAnthropicWithTools(messages: [ChatMessage], context: String?, toolExecutor: AIToolExecutor) async throws -> String {
+        let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages")!
+        let systemPrompt = buildAgentSystemPrompt(context: context)
+        let tools = AITool.allCases.map { $0.anthropicTool }
+        
+        // Build initial messages
+        var conversationHistory: [[String: Any]] = []
+        for msg in messages where msg.role != .system {
+            conversationHistory.append(["role": msg.role.rawValue, "content": msg.content])
+        }
+        
+        // Tool loop
+        for _ in 0..<maxToolRounds {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue(anthropicKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let body: [String: Any] = [
+                "model": selectedModel.id,
+                "max_tokens": 4096,
+                "system": systemPrompt,
+                "messages": conversationHistory,
+                "tools": tools
+            ]
+            
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AIError.invalidResponse
+            }
+            
+            if httpResponse.statusCode != 200 {
+                if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = errorJson["error"] as? [String: Any],
+                   let message = error["message"] as? String {
+                    throw AIError.apiError(message)
+                }
+                throw AIError.httpError(httpResponse.statusCode)
+            }
+            
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let contentBlocks = json?["content"] as? [[String: Any]] else {
+                throw AIError.invalidResponse
+            }
+            
+            let stopReason = json?["stop_reason"] as? String
+            
+            var textParts: [String] = []
+            var hasToolUse = false
+            var assistantContent: [[String: Any]] = []
+            var toolResultContent: [[String: Any]] = []
+            
+            for block in contentBlocks {
+                guard let type = block["type"] as? String else { continue }
+                
+                if type == "text", let text = block["text"] as? String {
+                    textParts.append(text)
+                    assistantContent.append(["type": "text", "text": text])
+                } else if type == "tool_use" {
+                    hasToolUse = true
+                    assistantContent.append(block)
+                    
+                    guard let toolName = block["name"] as? String,
+                          let tool = AITool(rawValue: toolName),
+                          let input = block["input"] as? [String: Any],
+                          let toolUseId = block["id"] as? String else {
+                        continue
+                    }
+                    
+                    let stringArgs = input.mapValues { "\($0)" }
+                    let toolCall = ToolCall(id: toolUseId, tool: tool, arguments: stringArgs)
+                    let result = await toolExecutor.execute(toolCall)
+                    let resultContent = result.success ? result.output : "Error: \(result.error ?? "Unknown error")"
+                    
+                    toolResultContent.append([
+                        "type": "tool_result",
+                        "tool_use_id": toolUseId,
+                        "content": resultContent
+                    ])
+                }
+            }
+            
+            if hasToolUse {
+                // Add assistant message with tool_use blocks
+                conversationHistory.append(["role": "assistant", "content": assistantContent])
+                // Add user message with tool_result blocks
+                conversationHistory.append(["role": "user", "content": toolResultContent])
+                // Continue loop
+                continue
+            }
+            
+            // No tool use or stop_reason == "end_turn" — return text
+            if !textParts.isEmpty {
+                return textParts.joined(separator: "\n")
+            }
+            
+            // Fallback if stop_reason indicates we're done
+            if stopReason == "end_turn" {
+                return textParts.joined(separator: "\n")
+            }
+            
+            throw AIError.invalidResponse
+        }
+        
+        // Exceeded max rounds
+        return try await makeAPIRequest(messages: messages, context: context, agentMode: true)
+    }
+    
+    // MARK: - Text-Based Tools (Google, Ollama, Local MLX)
+    // For providers without native tool APIs, we include tools in the system prompt
+    // and parse structured JSON tool calls from the model's text output.
+    
+    private func callWithTextBasedTools(messages: [ChatMessage], context: String?, toolExecutor: AIToolExecutor) async throws -> String {
+        let systemPrompt = buildTextToolSystemPrompt(context: context)
+        
+        var conversationMessages = messages
+        
+        for _ in 0..<maxToolRounds {
+            let response = try await makeAPIRequest(messages: conversationMessages, context: nil, agentMode: false, systemOverride: systemPrompt)
+            
+            // Parse tool calls using the universal parser
+            let parsedTools = ToolCallParser.parse(response)
+            
+            if parsedTools.isEmpty {
+                // No tool calls found — return the response as-is
+                return response
+            }
+            
+            // Execute parsed tool calls
+            var toolResults: [String] = []
+            for parsed in parsedTools {
+                guard let tool = parsed.tool else { continue }
+                let toolCall = ToolCall(tool: tool, arguments: parsed.stringArguments)
+                let result = await toolExecutor.execute(toolCall)
+                if result.success {
+                    toolResults.append("<tool_result name=\"\(tool.rawValue)\">\n\(result.output)\n</tool_result>")
+                } else {
+                    toolResults.append("<tool_result name=\"\(tool.rawValue)\" error=\"true\">\n\(result.error ?? "Unknown error")\n</tool_result>")
+                }
+            }
+            
+            // Add assistant response and tool results to conversation
+            conversationMessages.append(ChatMessage(role: .assistant, content: response))
+            conversationMessages.append(ChatMessage(role: .user, content: "Tool results:\n\n\(toolResults.joined(separator: "\n\n"))\n\nContinue based on these results."))
+        }
+        
+        // Final round without tools
+        return try await makeAPIRequest(messages: conversationMessages, context: nil, agentMode: false, systemOverride: systemPrompt)
+    }
+    
+    // Old parseTextToolCalls removed - now using ToolCallParser.parse()
+    
+    // MARK: - Agent System Prompts
+    
+    /// System prompt for providers with native tool calling
+    private func buildAgentSystemPrompt(context: String?) -> String {
+        var prompt = """
+You are an expert AI coding assistant integrated into VS Code for iPadOS. You have access to tools that let you interact with the user's workspace.
+
+## YOUR TOOLS
+You have the following tools available:
+- **read_file**: Read file contents by path
+- **write_file**: Write/overwrite a file (provide COMPLETE content)
+- **create_file**: Create a new file with content
+- **list_directory**: List files in a directory
+- **search_files**: Search text across workspace files
+- **get_current_file**: Get the active file's content and metadata
+- **get_open_tabs**: List all open tabs
+- **get_workspace_info**: Get workspace name, path, file/folder counts
+- **insert_code**: Insert code at the cursor position
+- **replace_selection**: Replace currently selected text
+
+## RULES
+1. When the user asks to modify code, USE TOOLS to actually make changes. Don't just show code — apply it.
+2. Use read_file FIRST to see a file's current state before writing changes.
+3. Use search_files to find code across the project.
+4. write_file must contain the COMPLETE file content (it overwrites).
+5. Use insert_code for adding new code at cursor, replace_selection for replacing selected text.
+6. You can call multiple tools in sequence to accomplish complex tasks.
+7. Provide clear explanations of what you did after making changes.
+8. Ask for clarification if the request is ambiguous.
+"""
+        
+        if let context = context, !context.isEmpty {
+            prompt += "\n\n--- CURRENT CONTEXT ---\n\(context)"
+        }
+        
+        return prompt
+    }
+    
+    /// System prompt for providers WITHOUT native tool calling (tools described in text)
+    /// Uses XML format that most local models understand
+    private func buildTextToolSystemPrompt(context: String?) -> String {
+        var prompt = """
+You are an expert AI coding assistant in VS Code for iPadOS. You have tools to interact with files. Always respond in English.
+
+## TOOL CALLING FORMAT
+To call a tool, use this XML format:
+
+<tool_call>
+{"name": "tool_name", "arguments": {"arg": "value"}}
+</tool_call>
+
+## IMPORTANT: FILE PATHS
+Use the EXACT filename shown in the file list. Examples:
+- "Welcome.swift" ✓
+- "example.js" ✓  
+- "/Users/..." ✗ (never use absolute paths)
+
+## AVAILABLE TOOLS
+
+**list_directory** - See available files (use "" for root)
+<tool_call>
+{"name": "list_directory", "arguments": {"path": ""}}
+</tool_call>
+
+**read_file** - Read a file's contents
+<tool_call>
+{"name": "read_file", "arguments": {"path": "Welcome.swift"}}
+</tool_call>
+
+**write_file** - Update a file (provide COMPLETE content)
+<tool_call>
+{"name": "write_file", "arguments": {"path": "file.swift", "content": "full content here"}}
+</tool_call>
+
+**create_file** - Create new file
+<tool_call>
+{"name": "create_file", "arguments": {"path": "new.swift", "content": "content"}}
+</tool_call>
+
+**search_files** - Search in files
+<tool_call>
+{"name": "search_files", "arguments": {"query": "text", "glob": "*.swift"}}
+</tool_call>
+
+**get_current_file** - Get the active file
+<tool_call>
+{"name": "get_current_file", "arguments": {}}
+</tool_call>
+
+**get_open_tabs** - List open tabs
+<tool_call>
+{"name": "get_open_tabs", "arguments": {}}
+</tool_call>
+
+## WORKFLOW
+1. First call list_directory to see available files
+2. Use read_file before modifying a file
+3. write_file must contain the COMPLETE new file content
+4. After tool results, explain what you did
+"""
+        
+        if let context = context, !context.isEmpty {
+            prompt += "\n\n--- CURRENT FILE ---\n\(context)"
+        }
+        
+        return prompt
     }
     
     // MARK: - Code Actions
@@ -399,7 +851,7 @@ class AIManager: ObservableObject {
         
         do {
             let messages = [ChatMessage(role: .user, content: prompt)]
-            let response = try await makeAPIRequest(messages: messages, context: nil)
+            let response = try await makeAPIRequest(messages: messages, context: nil, agentMode: false)
             isLoading = false
             return response
         } catch {
@@ -408,49 +860,53 @@ class AIManager: ObservableObject {
         }
     }
     
-    // MARK: - API Request
+    // MARK: - API Request (non-tool path)
     
-    private func makeAPIRequest(messages: [ChatMessage], context: String?) async throws -> String {
+    private func makeAPIRequest(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         switch selectedProvider {
         case .openai:
-            return try await callOpenAI(messages: messages, context: context)
+            return try await callOpenAI(messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .anthropic:
-            return try await callAnthropic(messages: messages, context: context)
+            return try await callAnthropic(messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .google:
-            return try await callGoogle(messages: messages, context: context)
+            return try await callGoogle(messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .kimi:
-            return try await callKimi(messages: messages, context: context)
+            return try await callOpenAICompatible(provider: .kimi, apiKey: kimiKey, messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .glm:
-            return try await callGLM(messages: messages, context: context)
+            return try await callOpenAICompatible(provider: .glm, apiKey: glmKey, messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .groq:
-            return try await callGroq(messages: messages, context: context)
+            return try await callOpenAICompatible(provider: .groq, apiKey: groqKey, messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .deepseek:
-            return try await callDeepSeek(messages: messages, context: context)
+            return try await callOpenAICompatible(provider: .deepseek, apiKey: deepseekKey, messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .mistral:
-            return try await callMistral(messages: messages, context: context)
+            return try await callOpenAICompatible(provider: .mistral, apiKey: mistralKey, messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .ollama:
-            return try await callOllama(messages: messages, context: context)
+            return try await callOllama(messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         case .localMLX:
-            return try await callLocalMLX(messages: messages, context: context)
+            return try await callLocalMLX(messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
         }
     }
     
     // MARK: - OpenAI API
     
-    private func callOpenAI(messages: [ChatMessage], context: String?) async throws -> String {
-        let url = URL(string: "\(AIProvider.openai.baseURL)/chat/completions")!
+    private func callOpenAI(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
+        return try await callOpenAICompatible(provider: .openai, apiKey: openAIKey, messages: messages, context: context, agentMode: agentMode, systemOverride: systemOverride)
+    }
+    
+    // MARK: - Unified OpenAI-Compatible Call
+    
+    private func callOpenAICompatible(provider: AIProvider, apiKey: String, messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
+        let url = URL(string: "\(provider.baseURL)/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(openAIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         var apiMessages: [[String: String]] = []
         
-        // Add system message with context
-        let systemPrompt = buildSystemPrompt(context: context)
+        let systemPrompt = systemOverride ?? (agentMode ? buildAgentSystemPrompt(context: context) : buildSystemPrompt(context: context))
         apiMessages.append(["role": "system", "content": systemPrompt])
         
-        // Add conversation messages
         for msg in messages {
             apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
         }
@@ -492,7 +948,7 @@ class AIManager: ObservableObject {
     
     // MARK: - Anthropic API
     
-    private func callAnthropic(messages: [ChatMessage], context: String?) async throws -> String {
+    private func callAnthropic(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -501,12 +957,11 @@ class AIManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         var apiMessages: [[String: String]] = []
-        
         for msg in messages where msg.role != .system {
             apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
         }
         
-        let systemPrompt = buildSystemPrompt(context: context)
+        let systemPrompt = systemOverride ?? (agentMode ? buildAgentSystemPrompt(context: context) : buildSystemPrompt(context: context))
         
         let body: [String: Any] = [
             "model": selectedModel.id,
@@ -544,7 +999,7 @@ class AIManager: ObservableObject {
     
     // MARK: - Google API
     
-    private func callGoogle(messages: [ChatMessage], context: String?) async throws -> String {
+    private func callGoogle(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let url = URL(string: "\(AIProvider.google.baseURL)/models/\(selectedModel.id):generateContent?key=\(googleKey)")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -552,11 +1007,9 @@ class AIManager: ObservableObject {
         
         var parts: [[String: Any]] = []
         
-        // Add system context
-        let systemPrompt = buildSystemPrompt(context: context)
+        let systemPrompt = systemOverride ?? (agentMode ? buildTextToolSystemPrompt(context: context) : buildSystemPrompt(context: context))
         parts.append(["text": "System: \(systemPrompt)"])
         
-        // Add messages
         for msg in messages {
             let role = msg.role == .assistant ? "Model" : "User"
             parts.append(["text": "\(role): \(msg.content)"])
@@ -593,8 +1046,8 @@ class AIManager: ObservableObject {
         guard let candidates = json?["candidates"] as? [[String: Any]],
               let firstCandidate = candidates.first,
               let content = firstCandidate["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let firstPart = parts.first,
+              let respParts = content["parts"] as? [[String: Any]],
+              let firstPart = respParts.first,
               let text = firstPart["text"] as? String else {
             throw AIError.invalidResponse
         }
@@ -604,7 +1057,7 @@ class AIManager: ObservableObject {
     
     // MARK: - Ollama API
     
-    private func callOllama(messages: [ChatMessage], context: String?) async throws -> String {
+    private func callOllama(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let url = URL(string: "\(ollamaHost)/api/chat")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -612,11 +1065,9 @@ class AIManager: ObservableObject {
         
         var apiMessages: [[String: String]] = []
         
-        // Add system message
-        let systemPrompt = buildSystemPrompt(context: context)
+        let systemPrompt = systemOverride ?? (agentMode ? buildTextToolSystemPrompt(context: context) : buildSystemPrompt(context: context))
         apiMessages.append(["role": "system", "content": systemPrompt])
         
-        // Add messages
         for msg in messages {
             apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
         }
@@ -648,285 +1099,10 @@ class AIManager: ObservableObject {
         return content
     }
     
-    // MARK: - Kimi API (Moonshot)
-    
-    private func callKimi(messages: [ChatMessage], context: String?) async throws -> String {
-        let url = URL(string: "\(AIProvider.kimi.baseURL)/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(kimiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        var apiMessages: [[String: String]] = []
-        
-        // Add system message with context
-        let systemPrompt = buildSystemPrompt(context: context)
-        apiMessages.append(["role": "system", "content": systemPrompt])
-        
-        // Add conversation messages
-        for msg in messages {
-            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
-        }
-        
-        let body: [String: Any] = [
-            "model": selectedModel.id,
-            "messages": apiMessages,
-            "max_tokens": 4096,
-            "temperature": 0.7
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let error = errorJson["error"] as? [String: Any],
-               let message = error["message"] as? String {
-                throw AIError.apiError(message)
-            }
-            throw AIError.httpError(httpResponse.statusCode)
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let choices = json?["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AIError.invalidResponse
-        }
-        
-        return content
-    }
-    
-    // MARK: - GLM API (Zhipu)
-    
-    private func callGLM(messages: [ChatMessage], context: String?) async throws -> String {
-        let url = URL(string: "\(AIProvider.glm.baseURL)/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(glmKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        var apiMessages: [[String: String]] = []
-        
-        // Add system message with context
-        let systemPrompt = buildSystemPrompt(context: context)
-        apiMessages.append(["role": "system", "content": systemPrompt])
-        
-        // Add conversation messages
-        for msg in messages {
-            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
-        }
-        
-        let body: [String: Any] = [
-            "model": selectedModel.id,
-            "messages": apiMessages,
-            "max_tokens": 4096,
-            "temperature": 0.7
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let error = errorJson["error"] as? [String: Any],
-               let message = error["message"] as? String {
-                throw AIError.apiError(message)
-            }
-            throw AIError.httpError(httpResponse.statusCode)
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let choices = json?["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AIError.invalidResponse
-        }
-        
-        return content
-    }
-    
-    // MARK: - Groq API
-    
-    private func callGroq(messages: [ChatMessage], context: String?) async throws -> String {
-        let url = URL(string: "\(AIProvider.groq.baseURL)/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(groqKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        var apiMessages: [[String: String]] = []
-        
-        // Add system message with context
-        let systemPrompt = buildSystemPrompt(context: context)
-        apiMessages.append(["role": "system", "content": systemPrompt])
-        
-        // Add conversation messages
-        for msg in messages {
-            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
-        }
-        
-        let body: [String: Any] = [
-            "model": selectedModel.id,
-            "messages": apiMessages,
-            "max_tokens": 4096,
-            "temperature": 0.7
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let error = errorJson["error"] as? [String: Any],
-               let message = error["message"] as? String {
-                throw AIError.apiError(message)
-            }
-            throw AIError.httpError(httpResponse.statusCode)
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let choices = json?["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AIError.invalidResponse
-        }
-        
-        return content
-    }
-    
-    // MARK: - DeepSeek API
-    
-    private func callDeepSeek(messages: [ChatMessage], context: String?) async throws -> String {
-        let url = URL(string: "\(AIProvider.deepseek.baseURL)/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(deepseekKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        var apiMessages: [[String: String]] = []
-        
-        // Add system message with context
-        let systemPrompt = buildSystemPrompt(context: context)
-        apiMessages.append(["role": "system", "content": systemPrompt])
-        
-        // Add conversation messages
-        for msg in messages {
-            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
-        }
-        
-        let body: [String: Any] = [
-            "model": selectedModel.id,
-            "messages": apiMessages,
-            "max_tokens": 4096,
-            "temperature": 0.7
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let error = errorJson["error"] as? [String: Any],
-               let message = error["message"] as? String {
-                throw AIError.apiError(message)
-            }
-            throw AIError.httpError(httpResponse.statusCode)
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let choices = json?["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AIError.invalidResponse
-        }
-        
-        return content
-    }
-    
-    // MARK: - Mistral API
-    
-    private func callMistral(messages: [ChatMessage], context: String?) async throws -> String {
-        let url = URL(string: "\(AIProvider.mistral.baseURL)/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(mistralKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        var apiMessages: [[String: String]] = []
-        
-        // Add system message with context
-        let systemPrompt = buildSystemPrompt(context: context)
-        apiMessages.append(["role": "system", "content": systemPrompt])
-        
-        // Add conversation messages
-        for msg in messages {
-            apiMessages.append(["role": msg.role.rawValue, "content": msg.content])
-        }
-        
-        let body: [String: Any] = [
-            "model": selectedModel.id,
-            "messages": apiMessages,
-            "max_tokens": 4096,
-            "temperature": 0.7
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let error = errorJson["error"] as? [String: Any],
-               let message = error["message"] as? String {
-                throw AIError.apiError(message)
-            }
-            throw AIError.httpError(httpResponse.statusCode)
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let choices = json?["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AIError.invalidResponse
-        }
-        
-        return content
-    }
-    
     // MARK: - Local MLX (On-Device)
     
     @MainActor
-    private func callLocalMLX(messages: [ChatMessage], context: String?) async throws -> String {
+    private func callLocalMLX(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let localLLM = LocalLLMService.shared
         
         // Auto-load model if not loaded
@@ -938,8 +1114,7 @@ class AIManager: ObservableObject {
             throw AIError.apiError("Failed to load local model")
         }
         
-        // Convert messages to the format LocalLLMService expects
-        let systemPrompt = buildSystemPrompt(context: context)
+        let systemPrompt = systemOverride ?? (agentMode ? buildTextToolSystemPrompt(context: context) : buildSystemPrompt(context: context))
         var chatMessages: [(role: String, content: String)] = []
         
         for msg in messages {

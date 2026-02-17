@@ -5,10 +5,17 @@ import SwiftUI
 struct AIAssistantView: View {
     @StateObject private var aiManager = AIManager()
     @ObservedObject var editorCore: EditorCore
+    var fileNavigator: FileSystemNavigator?
     @State private var userInput = ""
     @State private var showSettings = false
     @State private var showHistory = false
+    @State private var showTools = false
     @FocusState private var isInputFocused: Bool
+    
+    // Tool executor for AI agent capabilities
+    private var toolExecutor: AIToolExecutor {
+        AIToolExecutor(editorCore: editorCore, fileNavigator: fileNavigator)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -101,12 +108,64 @@ struct AIAssistantView: View {
         let message = userInput
         userInput = ""
         
-        // Get current file context if available
-        let context = editorCore.activeTab?.content
+        // Build rich context for the AI
+        let context = buildAgentContext()
         
         Task {
-            await aiManager.sendMessage(message, context: context)
+            await aiManager.sendMessage(message, context: context, toolExecutor: toolExecutor)
         }
+    }
+    
+    private func buildAgentContext() -> String {
+        var sections: [String] = []
+        
+        // Workspace info
+        if let rootURL = fileNavigator?.rootURL {
+            sections.append("## Workspace")
+            sections.append("Path: \(rootURL.path)")
+            sections.append("Name: \(rootURL.lastPathComponent)")
+        }
+        
+        // Open tabs
+        if !editorCore.tabs.isEmpty {
+            sections.append("\n## Open Tabs")
+            for tab in editorCore.tabs {
+                let marker = tab.id == editorCore.activeTabId ? "→ " : "  "
+                let unsaved = tab.isUnsaved ? " ●" : ""
+                sections.append("\(marker)\(tab.fileName) [\(tab.language.displayName)]\(unsaved)")
+            }
+        }
+        
+        // Current file with full content
+        if let tab = editorCore.activeTab {
+            sections.append("\n## Current File: \(tab.fileName)")
+            sections.append("Language: \(tab.language.displayName)")
+            sections.append("Lines: \(tab.lineCount)")
+            sections.append("Cursor: Line \(editorCore.cursorPosition.line), Column \(editorCore.cursorPosition.column)")
+            
+            // Include file content (truncated if very large)
+            let content = tab.content
+            let lines = content.components(separatedBy: "\n")
+            if lines.count <= 500 {
+                sections.append("\n```\(tab.language.rawValue)\n\(content)\n```")
+            } else {
+                // Show context around cursor
+                let cursorLine = editorCore.cursorPosition.line
+                let startLine = max(0, cursorLine - 100)
+                let endLine = min(lines.count, cursorLine + 100)
+                let visibleContent = lines[startLine..<endLine].joined(separator: "\n")
+                sections.append("\n(Showing lines \(startLine+1)-\(endLine) of \(lines.count))")
+                sections.append("```\(tab.language.rawValue)\n\(visibleContent)\n```")
+            }
+        }
+        
+        // Selected text
+        let selection = editorCore.currentSelection; if !selection.isEmpty {
+            sections.append("\n## Selected Text")
+            sections.append("```\n\(selection)\n```")
+        }
+        
+        return sections.joined(separator: "\n")
     }
     
     private func insertCode(_ code: String) {

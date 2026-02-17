@@ -36,6 +36,8 @@
 		1053 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2053 /* DebugView.swift */; };
 		1054 /* WorkspaceTrustManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2054 /* WorkspaceTrustManager.swift */; };
 		1055 /* AIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2055 /* AIManager.swift */; };
+		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
+		9001 /* AIAgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002 /* AIAgentTools.swift */; };
 		8003 /* LocalLLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004 /* LocalLLMService.swift */; };
 		1056 /* ColorPickerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2056 /* ColorPickerManager.swift */; };
 		1057 /* GitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2057 /* GitManager.swift */; };
@@ -158,7 +160,9 @@
 		2053 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		2054 /* WorkspaceTrustManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTrustManager.swift; sourceTree = "<group>"; };
 		2055 /* AIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIManager.swift; sourceTree = "<group>"; };
+		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
 		8004 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
+		9002 /* AIAgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAgentTools.swift; sourceTree = "<group>"; };
 		2056 /* ColorPickerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerManager.swift; sourceTree = "<group>"; };
 		2057 /* GitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitManager.swift; sourceTree = "<group>"; };
 		2058 /* GitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitService.swift; sourceTree = "<group>"; };
@@ -336,6 +340,8 @@
 				2052 /* DebugManager.swift */,
 				2054 /* WorkspaceTrustManager.swift */,
 				2055 /* AIManager.swift */,
+				9902 /* ToolCallParser.swift */,
+				9002 /* AIAgentTools.swift */,
 				8004 /* LocalLLMService.swift */,
 				8010 /* ExtensionManager.swift */,
 				8014 /* NotificationManager.swift */,
@@ -680,6 +686,8 @@
 				1053 /* DebugView.swift in Sources */,
 				1054 /* WorkspaceTrustManager.swift in Sources */,
 				1055 /* AIManager.swift in Sources */,
+				9901 /* ToolCallParser.swift in Sources */,
+				9001 /* AIAgentTools.swift in Sources */,
 				8003 /* LocalLLMService.swift in Sources */,
 				1056 /* ColorPickerManager.swift in Sources */,
 				1057 /* GitManager.swift in Sources */,

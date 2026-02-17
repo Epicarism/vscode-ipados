@@ -173,7 +173,7 @@ struct ContentView: View {
         
         // AI Assistant
         if editorCore.showAIAssistant {
-            HStack { Spacer(); AIAssistantView(editorCore: editorCore).frame(width: 400, height: 500).padding() }
+            HStack { Spacer(); AIAssistantView(editorCore: editorCore, fileNavigator: fileNavigator).frame(width: 400, height: 500).padding() }
         }
         
         // Go To Line (Ctrl+G)
