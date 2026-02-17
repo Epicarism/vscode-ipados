@@ -266,6 +266,8 @@ struct SettingsDetailView: View {
     @AppStorage("minimapEnabled") private var minimapEnabled: Bool = true
     @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
+    @AppStorage("trimTrailingWhitespace") private var trimTrailingWhitespace: Bool = false
+    @AppStorage("insertFinalNewline") private var insertFinalNewline: Bool = false
     
     var body: some View {
         Form {
@@ -317,6 +319,14 @@ struct SettingsDetailView: View {
                         .onChange(of: lineNumbersStyle) { newValue in
                             showLineNumbers = (newValue != "off")
                         }
+                    }
+                    
+                    if matchesSearch("Trim Whitespace") {
+                        Toggle("Trim Trailing Whitespace", isOn: $trimTrailingWhitespace)
+                    }
+                    
+                    if matchesSearch("Final Newline") {
+                        Toggle("Insert Final Newline", isOn: $insertFinalNewline)
                     }
                 }
             }

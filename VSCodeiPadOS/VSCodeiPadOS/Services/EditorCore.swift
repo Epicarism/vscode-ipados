@@ -874,14 +874,19 @@ mod tests {
         guard let index = activeTabIndex,
               let url = tabs[index].url else { return }
 
+        // Apply file cleanup settings before saving
+        var contentToSave = tabs[index].content
+        contentToSave = applyFileSaveSettings(to: contentToSave)
+        tabs[index].content = contentToSave
+
         do {
             if let fileNavigator {
-                try fileNavigator.writeFile(at: url, content: tabs[index].content)
+                try fileNavigator.writeFile(at: url, content: contentToSave)
             } else {
                 // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
                 let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
                 defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+                try contentToSave.write(to: url, atomically: true, encoding: .utf8)
             }
 
             tabs[index].isUnsaved = false
@@ -889,19 +894,55 @@ mod tests {
             print("Error saving file: \(error)")
         }
     }
+    
+    /// Applies trim whitespace and insert final newline settings
+    private func applyFileSaveSettings(to content: String) -> String {
+        // Read settings directly from UserDefaults to avoid MainActor isolation issues
+        let trimWhitespace = UserDefaults.standard.bool(forKey: "trimTrailingWhitespace")
+        let insertNewline = UserDefaults.standard.bool(forKey: "insertFinalNewline")
+        
+        var result = content
+        
+        // Trim trailing whitespace from each line
+        if trimWhitespace {
+            let lines = result.components(separatedBy: "\n")
+            let trimmedLines = lines.map { line in
+                var trimmed = line
+                while trimmed.hasSuffix(" ") || trimmed.hasSuffix("\t") {
+                    trimmed.removeLast()
+                }
+                return trimmed
+            }
+            result = trimmedLines.joined(separator: "\n")
+        }
+        
+        // Insert final newline if missing
+        if insertNewline {
+            if !result.isEmpty && !result.hasSuffix("\n") {
+                result.append("\n")
+            }
+        }
+        
+        return result
+    }
 
     func saveAllTabs() {
         for index in tabs.indices {
             guard let url = tabs[index].url, tabs[index].isUnsaved else { continue }
 
+            // Apply file cleanup settings before saving
+            var contentToSave = tabs[index].content
+            contentToSave = applyFileSaveSettings(to: contentToSave)
+            tabs[index].content = contentToSave
+
             do {
                 if let fileNavigator {
-                    try fileNavigator.writeFile(at: url, content: tabs[index].content)
+                    try fileNavigator.writeFile(at: url, content: contentToSave)
                 } else {
                     // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
                     let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
                     defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                    try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+                    try contentToSave.write(to: url, atomically: true, encoding: .utf8)
                 }
 
                 tabs[index].isUnsaved = false

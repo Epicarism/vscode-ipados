@@ -33,6 +33,14 @@ final class SettingsManager: ObservableObject {
         willSet { objectWillChange.send() }
     }
 
+    @AppStorage("trimTrailingWhitespace") var trimTrailingWhitespace: Bool = false {
+        willSet { objectWillChange.send() }
+    }
+
+    @AppStorage("insertFinalNewline") var insertFinalNewline: Bool = false {
+        willSet { objectWillChange.send() }
+    }
+
     private init() {}
 
     // MARK: - Types
