@@ -6,6 +6,8 @@ struct StatusBarView: View {
     @ObservedObject private var git = GitManager.shared
 
     @State private var showGitSheet = false
+    @State private var showNotificationCenter = false
+    @ObservedObject private var notifications = NotificationManager.shared
 
     var theme: Theme { themeManager.currentTheme }
 
@@ -85,9 +87,25 @@ struct StatusBarView: View {
                         // Future: Change Language Mode
                     }
 
-                    // Feedback / Notification bell
-                    StatusBarItem(text: "", icon: "bell", theme: theme) {
-                        // Future: Notifications
+                    // Notification bell with unread badge
+                    ZStack(alignment: .topTrailing) {
+                        StatusBarItem(text: "", icon: "bell", theme: theme) {
+                            showNotificationCenter.toggle()
+                            notifications.markAllRead()
+                        }
+                        if notifications.unreadCount > 0 {
+                            Text("\(min(notifications.unreadCount, 99))")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(Color.accentColor)
+                                .cornerRadius(6)
+                                .offset(x: -2, y: 2)
+                        }
+                    }
+                    .popover(isPresented: $showNotificationCenter) {
+                        NotificationCenterView(manager: notifications)
                     }
                 }
             }

@@ -111,6 +111,9 @@ struct ContentView: View {
             ZStack {
                 mainLayout
                 overlayViews
+                
+                // Toast notifications (bottom-right)
+                NotificationToastOverlay(manager: NotificationManager.shared)
             }
             .background(theme.editorBackground)
         }
