@@ -166,7 +166,9 @@ struct ContentView: View {
         // Go To Symbol (Cmd+Shift+O)
         if editorCore.showGoToSymbol {
             Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToSymbol = false }
-            GoToSymbolView(editorCore: editorCore, onGoToLine: { _ in })
+            GoToSymbolView(editorCore: editorCore, onGoToLine: { line in
+                editorCore.requestedGoToLine = line
+            })
         }
         
         // AI Assistant
@@ -177,7 +179,9 @@ struct ContentView: View {
         // Go To Line (Ctrl+G)
         if editorCore.showGoToLine {
             Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { editorCore.showGoToLine = false }
-            GoToLineView(isPresented: $editorCore.showGoToLine, onGoToLine: { _ in })
+            GoToLineView(isPresented: $editorCore.showGoToLine, onGoToLine: { line in
+                editorCore.requestedGoToLine = line
+            })
         }
         
         // Workspace Trust Dialog
@@ -666,6 +670,12 @@ struct IDEEditorView: View {
         .onChange(of: editorCore.editorFontSize) { newSize in
             // Update lineHeight to match Runestone's line height (~1.4x font size)
             lineHeight = ceil(newSize * 1.4)
+        }
+        .onChange(of: editorCore.requestedGoToLine) { line in
+            if let line = line {
+                requestedLineSelection = line - 1  // Convert 1-indexed to 0-indexed
+                editorCore.requestedGoToLine = nil  // Clear the request
+            }
         }
         .onAppear {
             findViewModel.editorCore = editorCore

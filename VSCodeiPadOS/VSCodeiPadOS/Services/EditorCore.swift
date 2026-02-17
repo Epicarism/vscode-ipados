@@ -106,6 +106,9 @@ class EditorCore: ObservableObject {
     // Selection request for find/replace navigation
     @Published var requestedSelection: NSRange?
 
+    // Go to line request (from GoToLineView)
+    @Published var requestedGoToLine: Int?
+
     // UI Panel state
     @Published var showPanel = false
     @Published var showRenameSymbol = false
