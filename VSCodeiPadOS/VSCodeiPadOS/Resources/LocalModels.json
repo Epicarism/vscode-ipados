@@ -1,7 +1,16 @@
 {
-    "version": 5,
+    "version": 6,
     "defaultModelId": "qwen3-8b-4bit",
     "models": [
+        {
+            "id": "qwen3-14b-4bit",
+            "name": "Qwen3 14B (Q4) 🔥",
+            "repo": "mlx-community/Qwen3-14B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 8500,
+            "chatTemplate": "chatml",
+            "description": "BEST quality. 16GB iPad only. Exceptional coding & reasoning."
+        },
         {
             "id": "qwen3-8b-4bit",
             "name": "Qwen3 8B (Q4) ⭐",
@@ -9,7 +18,7 @@
             "contextLength": 40960,
             "estimatedMemoryMB": 5000,
             "chatTemplate": "chatml",
-            "description": "DEFAULT - Best coding model for 16GB iPad. Tool use capable."
+            "description": "DEFAULT - Great coding model. Tool use capable."
         },
         {
             "id": "qwen3-4b-4bit",
@@ -18,7 +27,7 @@
             "contextLength": 40960,
             "estimatedMemoryMB": 2500,
             "chatTemplate": "chatml",
-            "description": "Great quality, fast inference"
+            "description": "Fast, great quality for size"
         },
         {
             "id": "qwen3-1.7b-4bit",
@@ -30,22 +39,13 @@
             "description": "Fast, good for simple tasks"
         },
         {
-            "id": "codestral-7b-4bit",
-            "name": "Codestral 25.01 7B (Q4)",
-            "repo": "mlx-community/Codestral-25.01-4bit",
-            "contextLength": 32768,
-            "estimatedMemoryMB": 4500,
-            "chatTemplate": "mistral",
-            "description": "Mistral's code-specialized model. Excellent for coding."
-        },
-        {
-            "id": "deepseek-coder-7b-4bit",
-            "name": "DeepSeek Coder V2 Lite (Q4)",
-            "repo": "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit",
-            "contextLength": 32768,
-            "estimatedMemoryMB": 5500,
+            "id": "qwen3-0.6b-4bit",
+            "name": "Qwen3 0.6B (Q4)",
+            "repo": "mlx-community/Qwen3-0.6B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 400,
             "chatTemplate": "chatml",
-            "description": "DeepSeek's code model. Great at tool use."
+            "description": "Tiny - instant responses, basic tasks only"
         },
         {
             "id": "nanbeige-3b-4bit",
@@ -54,20 +54,21 @@
             "contextLength": 32768,
             "estimatedMemoryMB": 1800,
             "chatTemplate": "chatml",
-            "description": "Previous default, good quality"
+            "description": "Good multilingual coding model"
         },
         {
-            "id": "qwen3-0.6b-4bit",
-            "name": "Qwen3 0.6B (Q4)",
-            "repo": "mlx-community/Qwen3-0.6B-4bit",
-            "contextLength": 40960,
-            "estimatedMemoryMB": 400,
+            "id": "nanbeige-1b-4bit",
+            "name": "Nanbeige 4.1 1B (Q4)",
+            "repo": "mlx-community/Nanbeige2-1B-Chat-4bit",
+            "contextLength": 32768,
+            "estimatedMemoryMB": 800,
             "chatTemplate": "chatml",
-            "description": "Tiny - instant responses, basic tasks only"
+            "description": "Small Nanbeige, fast responses"
         }
     ],
     "_notes": {
-        "memory_tiers": "16GB iPad: 8GB budget (can run 7-8B Q4). 8GB iPad: 4GB budget (3-4B Q4). 4GB: 2GB budget (0.6-1.7B).",
-        "updating": "Add models to the array, app picks up on next launch. Repo must be on mlx-community HuggingFace."
+        "memory_tiers": "16GB iPad: 12GB budget (14B Q4!). 8GB iPad: 5GB budget (7-8B Q4). 4GB: 2GB budget.",
+        "upcoming": "Qwen 3.5 Mini - add when mlx-community publishes 4bit",
+        "updating": "Add models to the array. Repo must be on mlx-community HuggingFace."
     }
 }

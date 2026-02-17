@@ -155,14 +155,16 @@ class LocalLLMService: ObservableObject {
         let gib: UInt64 = 1024 * 1024 * 1024
         
         // Memory budget tiers:
-        // 16GB devices (iPad Pro M4): 8GB for model - can run 7B Q8 or 13B Q4
-        // 8GB devices: 4GB for model - can run 3-7B Q4
+        // 16GB devices (iPad Pro M4): 12GB for model - leaves ~4GB for iOS + app UI
+        //   Can run 7B Q8, 13B Q4, even 14B Q4 models
+        //   Memory warning handler will unload if we get too close
+        // 8GB devices: 5GB for model - can run 7B Q4
         // 4GB devices: 2GB for model - small models only
         let budgetBytes: UInt64
         if physical >= 16 * gib {
-            budgetBytes = 8 * gib
+            budgetBytes = 12 * gib
         } else if physical >= 8 * gib {
-            budgetBytes = 4 * gib
+            budgetBytes = 5 * gib
         } else if physical >= 4 * gib {
             budgetBytes = 2 * gib
         } else {
