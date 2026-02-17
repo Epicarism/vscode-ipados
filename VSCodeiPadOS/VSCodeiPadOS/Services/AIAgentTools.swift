@@ -236,7 +236,7 @@ struct AIAgentContext: Codable {
 
 class AIToolExecutor {
     weak var editorCore: EditorCore?
-    weak var fileNavigator: FileSystemNavigator?
+    var fileNavigator: FileSystemNavigator?
     
     init(editorCore: EditorCore? = nil, fileNavigator: FileSystemNavigator? = nil) {
         self.editorCore = editorCore

@@ -373,6 +373,8 @@ class AIManager: ObservableObject {
             let response: String
             if let executor = toolExecutor {
                 response = try await makeToolAwareRequest(messages: currentSession.messages, context: context, toolExecutor: executor)
+            } else if selectedProvider == .localMLX {
+                response = try await callLocalMLXStreaming(messages: currentSession.messages, context: context, agentMode: false)
             } else {
                 response = try await makeAPIRequest(messages: currentSession.messages, context: context, agentMode: false)
             }
@@ -1123,6 +1125,106 @@ Use the EXACT filename shown in the file list. Examples:
         
         let response = try await localLLM.chat(messages: chatMessages, systemPrompt: systemPrompt)
         return response
+    }
+    
+    // MARK: - Local MLX Streaming
+    
+    @MainActor
+    private func callLocalMLXStreaming(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
+        let localLLM = LocalLLMService.shared
+        
+        // Auto-load model if not loaded
+        if !localLLM.isModelLoaded {
+            await localLLM.loadModel()
+        }
+        
+        guard localLLM.isModelLoaded else {
+            throw AIError.apiError("Failed to load local model")
+        }
+        
+        let systemPrompt = systemOverride ?? (agentMode ? buildTextToolSystemPrompt(context: context) : buildSystemPrompt(context: context))
+        var chatMessages: [(role: String, content: String)] = []
+        
+        for msg in messages {
+            chatMessages.append((role: msg.role.rawValue, content: msg.content))
+        }
+        
+        // Use streaming chat
+        let stream = localLLM.chatStream(messages: chatMessages, systemPrompt: systemPrompt)
+        
+        var fullResponse = ""
+        // Incremental think-tag stripping state
+        var insideThinkBlock = false
+        var pendingBuffer = ""  // Buffer for potential partial tags
+        
+        for try await chunk in stream {
+            fullResponse += chunk
+            
+            // Incremental think-tag stripping
+            pendingBuffer += chunk
+            
+            // Process buffer for think tags
+            while true {
+                if insideThinkBlock {
+                    // Look for closing </think> tag
+                    if let closeRange = pendingBuffer.range(of: "</think>") {
+                        // Discard everything up to and including </think>
+                        pendingBuffer = String(pendingBuffer[closeRange.upperBound...])
+                        insideThinkBlock = false
+                    } else if pendingBuffer.count > 20 {
+                        // Keep only last few chars in case </think> is split across chunks
+                        let keepCount = min(pendingBuffer.count, 8)
+                        pendingBuffer = String(pendingBuffer.suffix(keepCount))
+                        break
+                    } else {
+                        break
+                    }
+                } else {
+                    // Look for opening <think> tag
+                    if let openRange = pendingBuffer.range(of: "<think>") {
+                        // Emit text before <think>
+                        let before = String(pendingBuffer[pendingBuffer.startIndex..<openRange.lowerBound])
+                        if !before.isEmpty {
+                            streamingResponse += before
+                        }
+                        pendingBuffer = String(pendingBuffer[openRange.upperBound...])
+                        insideThinkBlock = true
+                    } else {
+                        // No <think> found — check for partial tag at end
+                        // e.g. buffer ends with "<thi" which could be start of "<think>"
+                        let tagPrefix = "<think>"
+                        var safeEnd = pendingBuffer.count
+                        for i in 1..<tagPrefix.count {
+                            if pendingBuffer.hasSuffix(String(tagPrefix.prefix(i))) {
+                                safeEnd = pendingBuffer.count - i
+                                break
+                            }
+                        }
+                        if safeEnd > 0 {
+                            let safeText = String(pendingBuffer.prefix(safeEnd))
+                            if !safeText.isEmpty {
+                                streamingResponse += safeText
+                            }
+                            pendingBuffer = String(pendingBuffer.suffix(pendingBuffer.count - safeEnd))
+                        }
+                        break
+                    }
+                }
+            }
+        }
+        
+        // Flush remaining buffer (if not inside a think block)
+        if !insideThinkBlock && !pendingBuffer.isEmpty {
+            // Final check: strip any stray </think> tags
+            let cleaned = pendingBuffer.replacingOccurrences(of: "</think>", with: "")
+            if !cleaned.isEmpty {
+                streamingResponse += cleaned
+            }
+        }
+        
+        // Return the clean display text (what was streamed to the UI)
+        let finalResponse = streamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
+        return finalResponse.isEmpty ? fullResponse.trimmingCharacters(in: .whitespacesAndNewlines) : finalResponse
     }
     
     // MARK: - Helpers

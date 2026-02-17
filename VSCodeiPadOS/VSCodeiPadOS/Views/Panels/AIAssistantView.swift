@@ -12,10 +12,7 @@ struct AIAssistantView: View {
     @State private var showTools = false
     @FocusState private var isInputFocused: Bool
     
-    // Tool executor for AI agent capabilities
-    private var toolExecutor: AIToolExecutor {
-        AIToolExecutor(editorCore: editorCore, fileNavigator: fileNavigator)
-    }
+    // Tool executor - created per-use in sendMessage() to strongly capture fileNavigator
     
     var body: some View {
         VStack(spacing: 0) {
@@ -37,18 +34,58 @@ struct AIAssistantView: View {
                                 .id(message.id)
                         }
                         
-                        // Loading indicator
+                        // Streaming response / loading indicator
                         if aiManager.isLoading {
-                            HStack {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                                Text("Thinking...")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Spacer()
+                            if !aiManager.streamingResponse.isEmpty {
+                                // Show streaming tokens as an in-progress assistant message bubble
+                                HStack(alignment: .top, spacing: 12) {
+                                    // Avatar
+                                    Circle()
+                                        .fill(Color.purple)
+                                        .frame(width: 32, height: 32)
+                                        .overlay(
+                                            Image(systemName: "brain")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(.white)
+                                        )
+                                    
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        // Role label with streaming indicator
+                                        HStack(spacing: 6) {
+                                            Text("Assistant")
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.secondary)
+                                            ProgressView()
+                                                .scaleEffect(0.6)
+                                        }
+                                        
+                                        // Streaming message content with markdown-like rendering
+                                        MessageContentView(
+                                            content: aiManager.streamingResponse,
+                                            codeBlocks: [],
+                                            onInsertCode: insertCode
+                                        )
+                                        .opacity(0.9)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 4)
+                                .id("streaming")
+                            } else {
+                                // Show thinking spinner before tokens start arriving
+                                HStack {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                    Text("Thinking...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                                .padding()
+                                .id("loading")
                             }
-                            .padding()
-                            .id("loading")
                         }
                         
                         // Error message
@@ -73,6 +110,18 @@ struct AIAssistantView: View {
                     withAnimation {
                         if let lastId = aiManager.currentSession.messages.last?.id {
                             proxy.scrollTo(lastId, anchor: .bottom)
+                        }
+                    }
+                }
+                .onChange(of: aiManager.streamingResponse) { _ in
+                    // Auto-scroll as streaming tokens arrive
+                    if aiManager.isLoading {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            if !aiManager.streamingResponse.isEmpty {
+                                proxy.scrollTo("streaming", anchor: .bottom)
+                            } else {
+                                proxy.scrollTo("loading", anchor: .bottom)
+                            }
                         }
                     }
                 }
@@ -111,8 +160,11 @@ struct AIAssistantView: View {
         // Build rich context for the AI
         let context = buildAgentContext()
         
+        // Create executor once per send; it strongly holds fileNavigator for the entire async call
+        let executor = AIToolExecutor(editorCore: editorCore, fileNavigator: fileNavigator)
+        
         Task {
-            await aiManager.sendMessage(message, context: context, toolExecutor: toolExecutor)
+            await aiManager.sendMessage(message, context: context, toolExecutor: executor)
         }
     }
     
