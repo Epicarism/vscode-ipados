@@ -121,7 +121,7 @@ struct SidebarView: View {
         case 3:
             DebugView()
         case 4:
-            ExtensionsView()
+            ExtensionsPanel()
         case 5:
             TestView()
         default:
@@ -268,20 +268,4 @@ struct ResizeHandle: View {
     }
 }
 
-// MARK: - Placeholders for Missing Views
-
-
-
-struct ExtensionsView: View {
-    var body: some View {
-        VStack {
-            Text("Extensions")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding()
-            Spacer()
-        }
-    }
-}
-
-
+// MARK: - Placeholders removed - ExtensionsView moved to Panels/ExtensionsView.swift

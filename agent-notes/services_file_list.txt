@@ -1,0 +1,60 @@
+VSCodeiPadOS/VSCodeiPadOS/Services files (from find):
+- AIManager.swift
+- AutocompleteManager.swift
+- BracketMatchingManager.swift
+- CodeExecutionService.swift
+- CodeFoldingManager.swift
+- ColorPickerManager.swift
+- DebugManager.swift
+- EditorCore.swift
+- ErrorParser.swift
+- FileSystemNavigator.swift
+- GitHubAuthManager.swift
+- GitManager.swift
+- GitService.swift
+- HoverInfoManager.swift
+- InlayHintsManager.swift
+- InlineSuggestionManager.swift
+- KeychainManager.swift
+- LaunchManager.swift
+- LocalLLMService.swift
+- NavigationManager.swift
+- OutputPanelManager.swift
+- RecentFileManager.swift
+- RemoteDebugger.swift
+- RemoteRunner.swift
+- RunestoneThemeAdapter 2.swift
+- RunestoneThemeAdapter.swift
+- RunnerSelector.existing.swift
+- RunnerSelector.swift
+- SearchManager.swift
+- SettingsManager.swift
+- SFTPManager.swift
+- SSHManager.swift
+- SnippetsManager.swift
+- SpotlightManager.swift
+- SuggestionCache.swift
+- TasksManager.swift
+- ThemeManager.swift.bak
+- WindowStateManager.swift
+- WordOccurrenceHighlighter.swift
+- WorkspaceManager.swift
+- WorkspaceTrustManager.swift
+NativeGit/
+- NativeGitReader.swift
+- NativeGitWriter.swift
+- SSHGitClient.swift
+OnDevice/
+- CodeAnalyzer.swift
+- IntegrationTests.swift
+- JSRunner.swift
+- JSRunnerTests.swift
+- MockRunners.swift
+- PythonRunner.swift
+- WASMRunner.swift
+- WASMRunnerTests.swift
+Runners/
+- NodeRunner.swift
+- PythonRunner.swift
+- PythonRunnerAlt.swift
+- SwiftRunner.swift

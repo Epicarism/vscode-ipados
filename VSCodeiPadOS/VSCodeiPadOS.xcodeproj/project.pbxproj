@@ -120,6 +120,8 @@
 		1163 /* GitHubAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2163 /* GitHubAuthManager.swift */; };
 		1164 /* GitHubLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2164 /* GitHubLoginView.swift */; };
 		1165 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2165 /* KeychainManager.swift */; };
+		8011 /* ExtensionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8010 /* ExtensionManager.swift */; };
+		8013 /* ExtensionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8012 /* ExtensionsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -237,6 +239,8 @@
 		2163 /* GitHubAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubAuthManager.swift; sourceTree = "<group>"; };
 		2164 /* GitHubLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubLoginView.swift; sourceTree = "<group>"; };
 		2165 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		8010 /* ExtensionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionManager.swift; sourceTree = "<group>"; };
+		8012 /* ExtensionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -325,6 +329,7 @@
 				2054 /* WorkspaceTrustManager.swift */,
 				2055 /* AIManager.swift */,
 				8004 /* LocalLLMService.swift */,
+				8010 /* ExtensionManager.swift */,
 				2056 /* ColorPickerManager.swift */,
 				2057 /* GitManager.swift */,
 				2058 /* GitService.swift */,
@@ -431,6 +436,7 @@
 				2051 /* TerminalView.swift */,
 				2053 /* DebugView.swift */,
 				2153 /* RunnerWarningView.swift */,
+				8012 /* ExtensionsView.swift */,
 			);
 			path = Panels;
 			sourceTree = "<group>";
@@ -697,6 +703,8 @@
 				1163 /* GitHubAuthManager.swift in Sources */,
 				1164 /* GitHubLoginView.swift in Sources */,
 				1165 /* KeychainManager.swift in Sources */,
+				8011 /* ExtensionManager.swift in Sources */,
+				8013 /* ExtensionsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

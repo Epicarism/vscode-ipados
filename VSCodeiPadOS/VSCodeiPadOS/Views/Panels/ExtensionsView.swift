@@ -1,0 +1,524 @@
+//
+//  ExtensionsView.swift
+//  VSCodeiPadOS
+//
+//  Full VS Code-style Extensions panel with search, filters,
+//  install/uninstall, enable/disable, and detail view.
+//
+
+import SwiftUI
+
+// MARK: - Main Extensions View
+
+struct ExtensionsPanel: View {
+    @StateObject private var manager = ExtensionManager.shared
+    @State private var selectedExtension: IDEExtension? = nil
+    @State private var showDetail: Bool = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Search bar
+            extensionSearchBar
+            
+            // Filter tabs
+            filterTabs
+            
+            Divider()
+            
+            // Extension list
+            if manager.filteredExtensions.isEmpty {
+                emptyState
+            } else {
+                extensionList
+            }
+        }
+        .sheet(item: $selectedExtension) { ext in
+            ExtensionDetailView(extension_: ext, manager: manager)
+        }
+    }
+    
+    // MARK: - Search Bar
+    
+    private var extensionSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+            
+            TextField("Search Extensions in Marketplace", text: $manager.searchText)
+                .font(.system(size: 13))
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            
+            if !manager.searchText.isEmpty {
+                Button(action: { manager.searchText = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(UIColor.tertiarySystemBackground))
+        .cornerRadius(6)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+    
+    // MARK: - Filter Tabs
+    
+    private var filterTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(ExtensionFilter.allCases, id: \.rawValue) { filter in
+                    filterButton(filter)
+                }
+                
+                Divider()
+                    .frame(height: 16)
+                    .padding(.horizontal, 4)
+                
+                // Category dropdown
+                Menu {
+                    Button("All Categories") {
+                        manager.selectedCategory = nil
+                    }
+                    Divider()
+                    ForEach(ExtensionCategory.allCases, id: \.rawValue) { category in
+                        Button(action: { manager.selectedCategory = category }) {
+                            Label(category.rawValue, systemImage: category.icon)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: manager.selectedCategory?.icon ?? "line.3.horizontal.decrease")
+                            .font(.system(size: 10))
+                        Text(manager.selectedCategory?.rawValue ?? "Category")
+                            .font(.system(size: 11))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(manager.selectedCategory != nil ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .cornerRadius(4)
+                    .foregroundColor(manager.selectedCategory != nil ? .accentColor : .secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+    }
+    
+    private func filterButton(_ filter: ExtensionFilter) -> some View {
+        let isSelected = manager.selectedFilter == filter
+        let count = filterCount(filter)
+        
+        return Button(action: { manager.selectedFilter = filter }) {
+            HStack(spacing: 4) {
+                Text(filter.rawValue)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                if count > 0 && filter == .installed {
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.accentColor.opacity(0.2))
+                        .cornerRadius(4)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            .cornerRadius(4)
+            .foregroundColor(isSelected ? .accentColor : .secondary)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func filterCount(_ filter: ExtensionFilter) -> Int {
+        switch filter {
+        case .installed: return manager.installedCount
+        default: return 0
+        }
+    }
+    
+    // MARK: - Extension List
+    
+    private var extensionList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(manager.filteredExtensions) { ext in
+                    ExtensionRowView(
+                        extension_: ext,
+                        manager: manager,
+                        onTap: { selectedExtension = ext }
+                    )
+                    Divider().padding(.leading, 52)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Empty State
+    
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: emptyIcon)
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.5))
+            Text(emptyMessage)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            if manager.selectedFilter == .installed && manager.searchText.isEmpty {
+                Button("Browse Marketplace") {
+                    manager.selectedFilter = .popular
+                }
+                .font(.system(size: 13))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            Spacer()
+        }
+        .padding()
+    }
+    
+    private var emptyIcon: String {
+        manager.searchText.isEmpty ? "puzzlepiece" : "magnifyingglass"
+    }
+    
+    private var emptyMessage: String {
+        if !manager.searchText.isEmpty {
+            return "No extensions matching '\(manager.searchText)'"
+        }
+        switch manager.selectedFilter {
+        case .installed: return "No extensions installed yet"
+        case .recommended: return "No recommendations available"
+        default: return "No extensions found"
+        }
+    }
+}
+
+// MARK: - Extension Row
+
+struct ExtensionRowView: View {
+    let extension_: IDEExtension
+    @ObservedObject var manager: ExtensionManager
+    let onTap: () -> Void
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 10) {
+                // Icon
+                extensionIcon
+                
+                // Info
+                VStack(alignment: .leading, spacing: 3) {
+                    // Name + version
+                    HStack(spacing: 6) {
+                        Text(extension_.displayName)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        Text("v\(extension_.version)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Description
+                    Text(extension_.description)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                    
+                    // Publisher + stats
+                    HStack(spacing: 8) {
+                        Text(extension_.publisher)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 9))
+                            Text(extension_.formattedDownloads)
+                                .font(.system(size: 10))
+                        }
+                        .foregroundColor(.secondary)
+                        
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                            Text(String(format: "%.1f", extension_.rating))
+                                .font(.system(size: 10))
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Install/Manage button
+                actionButton
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isHovering ? Color(UIColor.systemFill).opacity(0.5) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+    
+    private var extensionIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(iconBackground)
+                .frame(width: 36, height: 36)
+            Image(systemName: extension_.iconName)
+                .font(.system(size: 16))
+                .foregroundColor(iconForeground)
+        }
+    }
+    
+    private var iconBackground: Color {
+        switch extension_.category {
+        case .themes: return Color.purple.opacity(0.15)
+        case .languages: return Color.blue.opacity(0.15)
+        case .snippets: return Color.green.opacity(0.15)
+        case .linters: return Color.orange.opacity(0.15)
+        case .formatters: return Color.teal.opacity(0.15)
+        case .debuggers: return Color.red.opacity(0.15)
+        case .keymaps: return Color.gray.opacity(0.15)
+        case .other: return Color.indigo.opacity(0.15)
+        }
+    }
+    
+    private var iconForeground: Color {
+        switch extension_.category {
+        case .themes: return .purple
+        case .languages: return .blue
+        case .snippets: return .green
+        case .linters: return .orange
+        case .formatters: return .teal
+        case .debuggers: return .red
+        case .keymaps: return .gray
+        case .other: return .indigo
+        }
+    }
+    
+    @ViewBuilder
+    private var actionButton: some View {
+        if extension_.isInstalled {
+            Menu {
+                if extension_.isEnabled {
+                    Button(action: { manager.toggleEnabled(extension_) }) {
+                        Label("Disable", systemImage: "pause.circle")
+                    }
+                } else {
+                    Button(action: { manager.toggleEnabled(extension_) }) {
+                        Label("Enable", systemImage: "play.circle")
+                    }
+                }
+                Divider()
+                Button(role: .destructive, action: { manager.uninstall(extension_) }) {
+                    Label("Uninstall", systemImage: "trash")
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    if !extension_.isEnabled {
+                        Image(systemName: "pause.circle")
+                            .font(.system(size: 10))
+                    }
+                    Text(extension_.isEnabled ? "Installed" : "Disabled")
+                        .font(.system(size: 11))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(UIColor.systemFill))
+                .cornerRadius(4)
+                .foregroundColor(extension_.isEnabled ? .secondary : .orange)
+            }
+        } else {
+            Button(action: { manager.install(extension_) }) {
+                Text("Install")
+                    .font(.system(size: 11, weight: .medium))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Extension Detail View
+
+struct ExtensionDetailView: View {
+    let extension_: IDEExtension
+    @ObservedObject var manager: ExtensionManager
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Header
+                    headerSection
+                    
+                    Divider()
+                    
+                    // Details
+                    detailsSection
+                    
+                    Divider()
+                    
+                    // Category & Tags
+                    categorySection
+                    
+                    Divider()
+                    
+                    // Description
+                    descriptionSection
+                    
+                    Spacer()
+                }
+                .padding(20)
+            }
+            .navigationTitle(extension_.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+    
+    private var headerSection: some View {
+        HStack(alignment: .top, spacing: 16) {
+            // Large icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.tertiarySystemBackground))
+                    .frame(width: 64, height: 64)
+                Image(systemName: extension_.iconName)
+                    .font(.system(size: 28))
+                    .foregroundColor(.accentColor)
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(extension_.displayName)
+                    .font(.system(size: 20, weight: .bold))
+                
+                HStack(spacing: 4) {
+                    Text(extension_.publisher)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.accentColor)
+                    
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.accentColor)
+                }
+                
+                Text(extension_.description)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Install button
+            if let current = manager.catalogExtensions.first(where: { $0.id == extension_.id }) {
+                if current.isInstalled {
+                    Button(action: { manager.uninstall(current) }) {
+                        Text("Uninstall")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color(UIColor.systemFill))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: { manager.install(current) }) {
+                        Text("Install")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+    
+    private var detailsSection: some View {
+        HStack(spacing: 24) {
+            detailItem(title: "Version", value: extension_.version)
+            detailItem(title: "Downloads", value: extension_.formattedDownloads)
+            detailItem(title: "Rating", value: String(format: "%.1f ★", extension_.rating))
+            detailItem(title: "Publisher", value: extension_.publisher)
+        }
+    }
+    
+    private func detailItem(title: String, value: String) -> some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold))
+        }
+    }
+    
+    private var categorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Category")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+            
+            HStack {
+                Label(extension_.category.rawValue, systemImage: extension_.category.icon)
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(UIColor.tertiarySystemBackground))
+                    .cornerRadius(4)
+            }
+        }
+    }
+    
+    private var descriptionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Details")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+            
+            Text(extension_.description)
+                .font(.system(size: 13))
+                .foregroundColor(.primary)
+            
+            Text("Extension ID: \(extension_.fullId)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.top, 8)
+        }
+    }
+}
