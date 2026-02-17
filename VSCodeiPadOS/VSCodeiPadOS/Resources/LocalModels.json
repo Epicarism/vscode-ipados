@@ -1,33 +1,15 @@
 {
-    "version": 4,
-    "defaultModelId": "nanbeige-3b-4bit",
+    "version": 5,
+    "defaultModelId": "qwen3-8b-4bit",
     "models": [
         {
-            "id": "nanbeige-3b-4bit",
-            "name": "Nanbeige 4.1 3B (Q4)",
-            "repo": "mlx-community/Nanbeige2-8B-Chat-4bit",
-            "contextLength": 32768,
-            "estimatedMemoryMB": 1800,
-            "chatTemplate": "chatml",
-            "description": "DEFAULT - Best quality for coding tasks"
-        },
-        {
-            "id": "qwen3-1.7b-4bit",
-            "name": "Qwen3 1.7B (Q4)",
-            "repo": "mlx-community/Qwen3-1.7B-4bit",
+            "id": "qwen3-8b-4bit",
+            "name": "Qwen3 8B (Q4) ⭐",
+            "repo": "mlx-community/Qwen3-8B-4bit",
             "contextLength": 40960,
-            "estimatedMemoryMB": 1100,
+            "estimatedMemoryMB": 5000,
             "chatTemplate": "chatml",
-            "description": "Good balance of speed/quality, English-focused"
-        },
-        {
-            "id": "qwen3-0.6b-4bit",
-            "name": "Qwen3 0.6B (Q4)",
-            "repo": "mlx-community/Qwen3-0.6B-4bit",
-            "contextLength": 40960,
-            "estimatedMemoryMB": 400,
-            "chatTemplate": "chatml",
-            "description": "Smallest - 0.3GB, very fast"
+            "description": "DEFAULT - Best coding model for 16GB iPad. Tool use capable."
         },
         {
             "id": "qwen3-4b-4bit",
@@ -36,20 +18,56 @@
             "contextLength": 40960,
             "estimatedMemoryMB": 2500,
             "chatTemplate": "chatml",
-            "description": "Larger - better quality, needs more RAM"
+            "description": "Great quality, fast inference"
         },
         {
-            "id": "nanbeige-1b-4bit",
-            "name": "Nanbeige 4.1 1B (Q4)",
-            "repo": "mlx-community/Nanbeige2-1B-Chat-4bit",
-            "contextLength": 32768,
-            "estimatedMemoryMB": 800,
+            "id": "qwen3-1.7b-4bit",
+            "name": "Qwen3 1.7B (Q4)",
+            "repo": "mlx-community/Qwen3-1.7B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 1100,
             "chatTemplate": "chatml",
-            "description": "Smaller Nanbeige variant"
+            "description": "Fast, good for simple tasks"
+        },
+        {
+            "id": "codestral-7b-4bit",
+            "name": "Codestral 25.01 7B (Q4)",
+            "repo": "mlx-community/Codestral-25.01-4bit",
+            "contextLength": 32768,
+            "estimatedMemoryMB": 4500,
+            "chatTemplate": "mistral",
+            "description": "Mistral's code-specialized model. Excellent for coding."
+        },
+        {
+            "id": "deepseek-coder-7b-4bit",
+            "name": "DeepSeek Coder V2 Lite (Q4)",
+            "repo": "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit",
+            "contextLength": 32768,
+            "estimatedMemoryMB": 5500,
+            "chatTemplate": "chatml",
+            "description": "DeepSeek's code model. Great at tool use."
+        },
+        {
+            "id": "nanbeige-3b-4bit",
+            "name": "Nanbeige 4.1 3B (Q4)",
+            "repo": "mlx-community/Nanbeige2-8B-Chat-4bit",
+            "contextLength": 32768,
+            "estimatedMemoryMB": 1800,
+            "chatTemplate": "chatml",
+            "description": "Previous default, good quality"
+        },
+        {
+            "id": "qwen3-0.6b-4bit",
+            "name": "Qwen3 0.6B (Q4)",
+            "repo": "mlx-community/Qwen3-0.6B-4bit",
+            "contextLength": 40960,
+            "estimatedMemoryMB": 400,
+            "chatTemplate": "chatml",
+            "description": "Tiny - instant responses, basic tasks only"
         }
     ],
     "_notes": {
-        "why_nanbeige": "Nanbeige 4.1 3B offers best quality for coding tasks on device",
-        "updating": "Add models to the array, app picks up on next launch"
+        "memory_tiers": "16GB iPad: 8GB budget (can run 7-8B Q4). 8GB iPad: 4GB budget (3-4B Q4). 4GB: 2GB budget (0.6-1.7B).",
+        "updating": "Add models to the array, app picks up on next launch. Repo must be on mlx-community HuggingFace."
     }
 }

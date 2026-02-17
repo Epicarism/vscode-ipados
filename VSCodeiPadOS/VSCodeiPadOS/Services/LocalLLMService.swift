@@ -154,10 +154,14 @@ class LocalLLMService: ObservableObject {
         let physical = ProcessInfo.processInfo.physicalMemory
         let gib: UInt64 = 1024 * 1024 * 1024
         
-        // For 8GB devices: allow up to 4GB for MLX cache
-        // For 4GB devices: allow up to 2GB for MLX cache
+        // Memory budget tiers:
+        // 16GB devices (iPad Pro M4): 8GB for model - can run 7B Q8 or 13B Q4
+        // 8GB devices: 4GB for model - can run 3-7B Q4
+        // 4GB devices: 2GB for model - small models only
         let budgetBytes: UInt64
-        if physical >= 8 * gib {
+        if physical >= 16 * gib {
+            budgetBytes = 8 * gib
+        } else if physical >= 8 * gib {
             budgetBytes = 4 * gib
         } else if physical >= 4 * gib {
             budgetBytes = 2 * gib
