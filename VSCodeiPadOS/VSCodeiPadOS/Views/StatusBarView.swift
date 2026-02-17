@@ -7,7 +7,17 @@ struct StatusBarView: View {
 
     @State private var showGitSheet = false
     @State private var showNotificationCenter = false
+    @State private var showIndentationPicker = false
+    @State private var showEncodingPicker = false
+    @State private var showEOLPicker = false
+    @State private var showLanguagePicker = false
     @ObservedObject private var notifications = NotificationManager.shared
+    
+    // Editor settings (persisted)
+    @AppStorage("editor.tabSize") private var tabSize: Int = 4
+    @AppStorage("editor.insertSpaces") private var insertSpaces: Bool = true
+    @AppStorage("editor.encoding") private var encoding: String = "UTF-8"
+    @AppStorage("editor.eol") private var eolSetting: String = "LF"
 
     var theme: Theme { themeManager.currentTheme }
 
@@ -67,24 +77,57 @@ struct StatusBarView: View {
                 }
 
                 // Indentation
-                StatusBarItem(text: "Spaces: 4", theme: theme) {
-                    // Future: Change indentation
+                Menu {
+                    Section("Indent Using") {
+                        Button(insertSpaces ? "✓ Spaces" : "  Spaces") { insertSpaces = true }
+                        Button(!insertSpaces ? "✓ Tabs" : "  Tabs") { insertSpaces = false }
+                    }
+                    Section("Tab Size") {
+                        ForEach([2, 4, 6, 8], id: \.self) { size in
+                            Button(tabSize == size ? "✓ \(size)" : "  \(size)") { tabSize = size }
+                        }
+                    }
+                } label: {
+                    StatusBarLabel(text: "\(insertSpaces ? "Spaces" : "Tab Size"): \(tabSize)", theme: theme)
                 }
 
                 // Encoding
-                StatusBarItem(text: "UTF-8", theme: theme) {
-                    // Future: Change encoding
+                Menu {
+                    ForEach(["UTF-8", "UTF-16", "ASCII", "ISO-8859-1", "Windows-1252", "Shift_JIS", "EUC-KR", "GB2312"], id: \.self) { enc in
+                        Button(encoding == enc ? "✓ \(enc)" : "  \(enc)") { encoding = enc }
+                    }
+                } label: {
+                    StatusBarLabel(text: encoding, theme: theme)
                 }
 
                 // EOL
-                StatusBarItem(text: "LF", theme: theme) {
-                    // Future: Change EOL
+                Menu {
+                    Button(eolSetting == "LF" ? "✓ LF (Unix)" : "  LF (Unix)") { eolSetting = "LF" }
+                    Button(eolSetting == "CRLF" ? "✓ CRLF (Windows)" : "  CRLF (Windows)") { eolSetting = "CRLF" }
+                    Button(eolSetting == "CR" ? "✓ CR (Classic Mac)" : "  CR (Classic Mac)") { eolSetting = "CR" }
+                } label: {
+                    StatusBarLabel(text: eolSetting, theme: theme)
                 }
 
                 // Language
                 if let tab = editorCore.activeTab {
-                    StatusBarItem(text: tab.language.displayName, theme: theme) {
-                        // Future: Change Language Mode
+                    Menu {
+                        Section("Select Language Mode") {
+                            ForEach(CodeLanguage.allCases, id: \.self) { lang in
+                                Button(action: {
+                                    editorCore.changeLanguage(to: lang)
+                                }) {
+                                    HStack {
+                                        Text(lang.displayName)
+                                        if tab.language == lang {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        StatusBarLabel(text: tab.language.displayName, theme: theme)
                     }
 
                     // Notification bell with unread badge
@@ -149,5 +192,31 @@ struct StatusBarItem: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+/// Non-interactive label for use as Menu label in status bar
+struct StatusBarLabel: View {
+    var text: String
+    var icon: String? = nil
+    var theme: Theme
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            if let icon = icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+            }
+            if !text.isEmpty {
+                Text(text)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(maxHeight: .infinity)
+        .background(isHovering ? Color.white.opacity(0.12) : Color.clear)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
     }
 }

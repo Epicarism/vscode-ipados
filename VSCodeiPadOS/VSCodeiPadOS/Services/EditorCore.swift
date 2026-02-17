@@ -800,6 +800,11 @@ mod tests {
         }
     }
 
+    func changeLanguage(to language: CodeLanguage) {
+        guard let index = activeTabIndex else { return }
+        tabs[index].language = language
+    }
+
     func closeAllTabs() {
         // Release security-scoped access held by any open tabs.
         for tab in tabs {
