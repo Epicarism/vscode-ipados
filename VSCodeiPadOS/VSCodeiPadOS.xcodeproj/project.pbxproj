@@ -124,6 +124,7 @@
 		8013 /* ExtensionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8012 /* ExtensionsView.swift */; };
 		8015 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8014 /* NotificationManager.swift */; };
 		8017 /* NotificationToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8016 /* NotificationToastView.swift */; };
+		8019 /* KeyboardShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8018 /* KeyboardShortcutsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -245,6 +246,7 @@
 		8012 /* ExtensionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionsView.swift; sourceTree = "<group>"; };
 		8014 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		8016 /* NotificationToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToastView.swift; sourceTree = "<group>"; };
+		8018 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -443,6 +445,7 @@
 				2153 /* RunnerWarningView.swift */,
 				8012 /* ExtensionsView.swift */,
 				8016 /* NotificationToastView.swift */,
+				8018 /* KeyboardShortcutsView.swift */,
 			);
 			path = Panels;
 			sourceTree = "<group>";
@@ -713,6 +716,7 @@
 				8013 /* ExtensionsView.swift in Sources */,
 				8015 /* NotificationManager.swift in Sources */,
 				8017 /* NotificationToastView.swift in Sources */,
+				8019 /* KeyboardShortcutsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

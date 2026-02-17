@@ -109,6 +109,7 @@ class EditorCore: ObservableObject {
     // UI Panel state
     @Published var showPanel = false
     @Published var showRenameSymbol = false
+    @Published var showKeyboardShortcuts = false
     @Published var focusedSidebarTab = 0
 
     // Terminal state

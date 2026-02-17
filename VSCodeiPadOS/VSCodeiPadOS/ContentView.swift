@@ -191,6 +191,12 @@ struct ContentView: View {
                 pendingTrustURL = nil
             })
         }
+        
+        // Keyboard Shortcuts sheet
+        EmptyView()
+            .sheet(isPresented: $editorCore.showKeyboardShortcuts) {
+                KeyboardShortcutsView()
+            }
     }
     
     private func finishOpeningWorkspace(_ url: URL) {

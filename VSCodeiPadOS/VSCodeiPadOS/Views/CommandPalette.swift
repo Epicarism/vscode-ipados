@@ -378,6 +378,7 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Keyboard Shortcuts", shortcut: "⌘K ⌘S", icon: "keyboard", category: .preferences) {
+                editorCore.showKeyboardShortcuts = true
                 dismiss()
             },
             Command(name: "Color Theme", shortcut: nil, icon: "paintpalette", category: .preferences) {
