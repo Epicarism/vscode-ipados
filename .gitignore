@@ -1,4 +1,14 @@
 .garbage/
+.patch-backups/
+.claudefluff/
+.claude/
+logs/
+*.log
+test-results/
+agent-notes/
+node_modules/
+screenshot.png
+
 .DS_Store
 *.xcuserstate
 DerivedData/

@@ -1103,6 +1103,20 @@ Use the EXACT filename shown in the file list. Examples:
     
     // MARK: - Local MLX (On-Device)
     
+    private func isOutOfMemoryError(_ error: Error) -> Bool {
+        let ns = error as NSError
+        let haystack = "\(ns.domain) \(ns.code) \(ns.localizedDescription)".lowercased()
+        
+        // Heuristics for common OOM / allocation failures coming from Metal / MLX / libc.
+        return haystack.contains("out of memory")
+            || haystack.contains("not enough memory")
+            || haystack.contains("oom")
+            || haystack.contains("allocation failed")
+            || haystack.contains("malloc")
+            || haystack.contains("metal")
+            || haystack.contains("resource exhausted")
+    }
+    
     @MainActor
     private func callLocalMLX(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let localLLM = LocalLLMService.shared
@@ -1123,8 +1137,17 @@ Use the EXACT filename shown in the file list. Examples:
             chatMessages.append((role: msg.role.rawValue, content: msg.content))
         }
         
-        let response = try await localLLM.chat(messages: chatMessages, systemPrompt: systemPrompt)
-        return response
+        do {
+            let response = try await localLLM.chat(messages: chatMessages, systemPrompt: systemPrompt)
+            return response
+        } catch {
+            if isOutOfMemoryError(error) {
+                // Free memory for next attempt.
+                localLLM.unloadModel()
+                return "Model ran out of memory. Try a smaller model or close other apps."
+            }
+            throw error
+        }
     }
     
     // MARK: - Local MLX Streaming
@@ -1149,16 +1172,17 @@ Use the EXACT filename shown in the file list. Examples:
             chatMessages.append((role: msg.role.rawValue, content: msg.content))
         }
         
-        // Use streaming chat
-        let stream = localLLM.chatStream(messages: chatMessages, systemPrompt: systemPrompt)
-        
-        var fullResponse = ""
-        // Incremental think-tag stripping state
-        var insideThinkBlock = false
-        var pendingBuffer = ""  // Buffer for potential partial tags
-        
-        for try await chunk in stream {
-            fullResponse += chunk
+        do {
+            // Use streaming chat
+            let stream = localLLM.chatStream(messages: chatMessages, systemPrompt: systemPrompt)
+            
+            var fullResponse = ""
+            // Incremental think-tag stripping state
+            var insideThinkBlock = false
+            var pendingBuffer = ""  // Buffer for potential partial tags
+            
+            for try await chunk in stream {
+                fullResponse += chunk
             
             // Incremental think-tag stripping
             pendingBuffer += chunk
@@ -1222,9 +1246,19 @@ Use the EXACT filename shown in the file list. Examples:
             }
         }
         
-        // Return the clean display text (what was streamed to the UI)
-        let finalResponse = streamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
-        return finalResponse.isEmpty ? fullResponse.trimmingCharacters(in: .whitespacesAndNewlines) : finalResponse
+            // Return the clean display text (what was streamed to the UI)
+            let finalResponse = streamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
+            return finalResponse.isEmpty ? fullResponse.trimmingCharacters(in: .whitespacesAndNewlines) : finalResponse
+        } catch {
+            if isOutOfMemoryError(error) {
+                // Free memory for next attempt.
+                localLLM.unloadModel()
+                let message = "Model ran out of memory. Try a smaller model or close other apps."
+                streamingResponse = message
+                return message
+            }
+            throw error
+        }
     }
     
     // MARK: - Helpers

@@ -53,6 +53,26 @@ struct ContentView: View {
             .onAppear {
                 editorCore.fileNavigator = fileNavigator
                 updateWindowTitle()
+                
+                // Restore last workspace on launch
+                if editorCore.restoredWorkspace, let url = editorCore.restoreWorkspaceURL() {
+                    let accessing = url.startAccessingSecurityScopedResource()
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        finishOpeningWorkspace(url)
+                        editorCore.restoreOpenTabs(workspaceURL: url)
+                    } else {
+                        // Folder no longer exists - clear state and show examples
+                        editorCore.clearWorkspaceState()
+                        let exampleTabs = EditorCore.createExampleTabs()
+                        editorCore.tabs.append(contentsOf: exampleTabs)
+                        editorCore.activeTabId = exampleTabs.first?.id
+                    }
+                    if accessing { url.stopAccessingSecurityScopedResource() }
+                }
+            }
+            .onChange(of: editorCore.tabs.map { $0.id }) { _ in
+                // Persist open tabs when they change
+                editorCore.saveOpenTabPaths()
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowCommandPalette"))) { _ in editorCore.showCommandPalette = true }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTerminal"))) { _ in showTerminal.toggle() }
@@ -209,6 +229,8 @@ struct ContentView: View {
             LaunchManager.shared.setWorkspaceRoot(url)
             GitManager.shared.setWorkingDirectory(url)
         }
+        // Persist workspace for restore after crash
+        editorCore.saveWorkspaceBookmark(url)
     }
     
     private func updateWindowTitle() {

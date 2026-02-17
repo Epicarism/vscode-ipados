@@ -151,11 +151,30 @@ class EditorCore: ObservableObject {
         tabs.firstIndex { $0.id == activeTabId }
     }
 
+    // MARK: - Workspace Persistence Keys
+    private static let lastWorkspaceBookmarkKey = "lastWorkspaceBookmark"
+    private static let lastOpenTabPathsKey = "lastOpenTabPaths"
+    private static let lastActiveTabPathKey = "lastActiveTabPath"
+    
+    /// Whether a saved workspace was restored (skip example tabs)
+    private(set) var restoredWorkspace = false
+    
     init() {
-        // Create example tabs for all supported languages
-        let exampleTabs = Self.createExampleTabs()
-        tabs.append(contentsOf: exampleTabs)
-        activeTabId = exampleTabs.first?.id ?? UUID()
+        // Check for saved workspace - if found, skip example tabs
+        if let bookmarkData = UserDefaults.standard.data(forKey: Self.lastWorkspaceBookmarkKey) {
+            var isStale = false
+            if let _ = try? URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale) {
+                // We have a saved workspace - don't create example tabs
+                // ContentView will restore the actual folder on appear
+                restoredWorkspace = true
+            }
+        }
+        
+        if !restoredWorkspace {
+            let exampleTabs = Self.createExampleTabs()
+            tabs.append(contentsOf: exampleTabs)
+            activeTabId = exampleTabs.first?.id ?? UUID()
+        }
 
         // Connect AutoSaveManager
         AutoSaveManager.shared.connect(to: self)
@@ -181,7 +200,7 @@ class EditorCore: ObservableObject {
     }
     
     /// Creates example tabs demonstrating syntax highlighting for all supported languages
-    private static func createExampleTabs() -> [Tab] {
+    static func createExampleTabs() -> [Tab] {
         var examples: [Tab] = []
         
         // Swift example
@@ -1424,6 +1443,107 @@ mod tests {
             object: nil,
             userInfo: ["tabId": tabs[index].id]
         )
+    }
+}
+
+// MARK: - Workspace Persistence
+
+extension EditorCore {
+    /// Save workspace bookmark so it can be restored after crash/relaunch
+    func saveWorkspaceBookmark(_ url: URL) {
+        do {
+            let bookmarkData = try url.bookmarkData(
+                options: .minimalBookmark,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            UserDefaults.standard.set(bookmarkData, forKey: Self.lastWorkspaceBookmarkKey)
+        } catch {
+            print("[EditorCore] Failed to save workspace bookmark: \(error)")
+        }
+    }
+    
+    /// Restore saved workspace URL from bookmark
+    func restoreWorkspaceURL() -> URL? {
+        guard let bookmarkData = UserDefaults.standard.data(forKey: Self.lastWorkspaceBookmarkKey) else {
+            return nil
+        }
+        var isStale = false
+        do {
+            let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
+            if isStale {
+                // Re-save fresh bookmark
+                saveWorkspaceBookmark(url)
+            }
+            return url
+        } catch {
+            print("[EditorCore] Failed to restore workspace bookmark: \(error)")
+            UserDefaults.standard.removeObject(forKey: Self.lastWorkspaceBookmarkKey)
+            return nil
+        }
+    }
+    
+    /// Save current open tab paths for restoration
+    func saveOpenTabPaths() {
+        let paths = tabs.compactMap { $0.url?.lastPathComponent }
+        UserDefaults.standard.set(paths, forKey: Self.lastOpenTabPathsKey)
+        if let activeTab = activeTab {
+            UserDefaults.standard.set(activeTab.url?.lastPathComponent, forKey: Self.lastActiveTabPathKey)
+        }
+    }
+    
+    /// Restore tabs from saved paths relative to workspace root
+    func restoreOpenTabs(workspaceURL: URL) {
+        guard let savedPaths = UserDefaults.standard.stringArray(forKey: Self.lastOpenTabPathsKey),
+              !savedPaths.isEmpty else { return }
+        
+        let activeTabPath = UserDefaults.standard.string(forKey: Self.lastActiveTabPathKey)
+        
+        // Find files in workspace matching saved names
+        let fileManager = FileManager.default
+        guard let enumerator = fileManager.enumerator(
+            at: workspaceURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return }
+        
+        var fileMap: [String: URL] = [:]
+        while let fileURL = enumerator.nextObject() as? URL {
+            let name = fileURL.lastPathComponent
+            if savedPaths.contains(name) {
+                fileMap[name] = fileURL
+            }
+        }
+        
+        // Open matched files
+        for path in savedPaths {
+            if let url = fileMap[path] {
+                if let content = try? String(contentsOf: url, encoding: .utf8) {
+                    let tab = Tab(
+                        fileName: url.lastPathComponent,
+                        content: content,
+                        url: url
+                    )
+                    tabs.append(tab)
+                    if url.lastPathComponent == activeTabPath {
+                        activeTabId = tab.id
+                    }
+                }
+            }
+        }
+        
+        // Set first tab active if no match
+        if activeTabId == nil, let first = tabs.first {
+            activeTabId = first.id
+        }
+    }
+    
+    /// Clear saved workspace state
+    func clearWorkspaceState() {
+        UserDefaults.standard.removeObject(forKey: Self.lastWorkspaceBookmarkKey)
+        UserDefaults.standard.removeObject(forKey: Self.lastOpenTabPathsKey)
+        UserDefaults.standard.removeObject(forKey: Self.lastActiveTabPathKey)
+        restoredWorkspace = false
     }
 }
 

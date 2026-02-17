@@ -8,6 +8,8 @@
 
 import Foundation
 import SwiftUI
+import UIKit
+import os
 import MLXLMCommon
 import MLX
 import Hub
@@ -38,6 +40,12 @@ typealias MLXChatSession = MLXLMCommon.ChatSession
 @MainActor
 class LocalLLMService: ObservableObject {
     static let shared = LocalLLMService()
+    
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "VSCodeiPadOS",
+        category: "LocalLLM"
+    )
+    private var memoryWarningObserver: NSObjectProtocol?
     
     // Published state
     @Published var isModelLoaded = false
@@ -71,7 +79,38 @@ class LocalLLMService: ObservableObject {
     // MARK: - Initialization
     
     init() {
+        // Observe iOS memory warnings to reduce the chance of OOM termination.
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            
+            self.logger.warning(
+                "Received memory warning. isModelLoaded=\(self.isModelLoaded, privacy: .public) isGenerating=\(self.isGenerating, privacy: .public)"
+            )
+            
+            // If we're actively generating, don't kill inference mid-flight.
+            // If we're idle, unload to free memory.
+            guard self.isModelLoaded else { return }
+            
+            if self.isGenerating {
+                self.logger.warning("Memory warning during inference; keeping model loaded.")
+            } else {
+                self.logger.warning("Model idle during memory warning; unloading model to reclaim memory.")
+                self.unloadModel()
+                self.statusMessage = "Model unloaded due to low memory"
+            }
+        }
+        
         loadModelsConfig()
+    }
+    
+    deinit {
+        if let memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memoryWarningObserver)
+        }
     }
     
     // MARK: - Config Loading
@@ -107,6 +146,40 @@ class LocalLLMService: ObservableObject {
     
     // MARK: - Model Management
     
+    /// Configure MLX's GPU cache limit based on device RAM.
+    ///
+    /// Note: this controls MLX's *cache* memory, not total process memory, but it can reduce
+    /// peak memory pressure and help prevent iOS terminating the app.
+    private func configureMemoryLimits() {
+        let physical = ProcessInfo.processInfo.physicalMemory
+        let gib: UInt64 = 1024 * 1024 * 1024
+        
+        // For 8GB devices: allow up to 4GB for MLX cache
+        // For 4GB devices: allow up to 2GB for MLX cache
+        let budgetBytes: UInt64
+        if physical >= 8 * gib {
+            budgetBytes = 4 * gib
+        } else if physical >= 4 * gib {
+            budgetBytes = 2 * gib
+        } else {
+            budgetBytes = min(physical / 2, 2 * gib)
+        }
+        
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .memory
+        
+        let physicalStr = formatter.string(fromByteCount: Int64(physical))
+        let budgetStr = formatter.string(fromByteCount: Int64(budgetBytes))
+        
+        let previous = MLX.GPU.cacheLimit
+        MLX.GPU.set(cacheLimit: Int(budgetBytes))
+        
+        let previousStr = formatter.string(fromByteCount: Int64(previous))
+        logger.info(
+            "Configured MLX.GPU cacheLimit. physical=\(physicalStr, privacy: .public) previous=\(previousStr, privacy: .public) new=\(budgetStr, privacy: .public)"
+        )
+    }
+    
     func loadModel(modelId: String? = nil) async {
         let targetId = modelId ?? currentModelId
         
@@ -124,6 +197,10 @@ class LocalLLMService: ObservableObject {
         
         modelConfig = config
         currentModelId = targetId
+        
+        // Apply memory-related tuning before any heavy allocations occur.
+        configureMemoryLimits()
+        
         isDownloading = true
         statusMessage = "Downloading \(config.name)..."
         downloadProgress = 0
