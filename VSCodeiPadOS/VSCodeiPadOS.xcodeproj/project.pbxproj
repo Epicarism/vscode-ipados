@@ -46,6 +46,7 @@
 		1062 /* RecentFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* RecentFileManager.swift */; };
 		1063 /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* SearchManager.swift */; };
 		1064 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* SettingsManager.swift */; };
+		8020 /* AutoSaveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8021 /* AutoSaveManager.swift */; };
 		1065 /* SnippetsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* SnippetsManager.swift */; };
 		1066 /* TasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* TasksManager.swift */; };
 		1067 /* WorkspaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2067 /* WorkspaceManager.swift */; };
@@ -167,6 +168,7 @@
 		2062 /* RecentFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFileManager.swift; sourceTree = "<group>"; };
 		2063 /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
 		2064 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		8021 /* AutoSaveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveManager.swift; sourceTree = "<group>"; };
 		2065 /* SnippetsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsManager.swift; sourceTree = "<group>"; };
 		2066 /* TasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksManager.swift; sourceTree = "<group>"; };
 		2067 /* WorkspaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceManager.swift; sourceTree = "<group>"; };
@@ -346,6 +348,7 @@
 				2062 /* RecentFileManager.swift */,
 				2063 /* SearchManager.swift */,
 				2064 /* SettingsManager.swift */,
+				8021 /* AutoSaveManager.swift */,
 				2065 /* SnippetsManager.swift */,
 				2066 /* TasksManager.swift */,
 				2067 /* WorkspaceManager.swift */,
@@ -687,6 +690,7 @@
 				1062 /* RecentFileManager.swift in Sources */,
 				1063 /* SearchManager.swift in Sources */,
 				1064 /* SettingsManager.swift in Sources */,
+				8020 /* AutoSaveManager.swift in Sources */,
 				1065 /* SnippetsManager.swift in Sources */,
 				1066 /* TasksManager.swift in Sources */,
 				1067 /* WorkspaceManager.swift in Sources */,

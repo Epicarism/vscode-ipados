@@ -262,6 +262,7 @@ struct SettingsDetailView: View {
     @AppStorage("tabSize") private var tabSize: Int = 4
     @AppStorage("wordWrap") private var wordWrap: Bool = true
     @AppStorage("autoSave") private var autoSave: String = "off"
+    @AppStorage("autoSaveDelay") private var autoSaveDelay: Int = 1000
     @AppStorage("minimapEnabled") private var minimapEnabled: Bool = true
     @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
@@ -370,6 +371,21 @@ struct SettingsDetailView: View {
                             Text("After Delay").tag("afterDelay")
                             Text("On Focus Change").tag("onFocusChange")
                             Text("On Window Change").tag("onWindowChange")
+                        }
+                        
+                        if autoSave == "afterDelay" {
+                            HStack {
+                                Text("Auto Save Delay")
+                                Spacer()
+                                Text("\(autoSaveDelay)ms")
+                                    .foregroundColor(.secondary)
+                            }
+                            Slider(value: Binding(
+                                get: { Double(autoSaveDelay) },
+                                set: { autoSaveDelay = Int($0) }
+                            ), in: 500...5000, step: 100) {
+                                Text("Delay")
+                            }
                         }
                     }
                 }

@@ -154,6 +154,9 @@ class EditorCore: ObservableObject {
         tabs.append(contentsOf: exampleTabs)
         activeTabId = exampleTabs.first?.id ?? UUID()
 
+        // Connect AutoSaveManager
+        AutoSaveManager.shared.connect(to: self)
+
         // Observe UserDefaults changes from Settings slider
         fontSizeObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
@@ -862,6 +865,9 @@ mod tests {
 
         // Mark dirty for both saved and unsaved-new files.
         tabs[index].isUnsaved = true
+        
+        // Trigger auto-save if enabled
+        AutoSaveManager.shared.contentDidChange(tabId: tabs[index].id)
     }
 
     func saveActiveTab() {
