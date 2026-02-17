@@ -792,20 +792,173 @@ struct AutocompletePopup: View {
 
 struct IDEWelcomeView: View {
     @ObservedObject var editorCore: EditorCore
+    @ObservedObject var recentFiles: RecentFileManager = .shared
     @Binding var showFolderPicker: Bool
     let theme: Theme
     
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "chevron.left.forwardslash.chevron.right").font(.system(size: 80)).foregroundColor(theme.editorForeground.opacity(0.3))
-            Text("VS Code for iPadOS").font(.largeTitle).fontWeight(.bold).foregroundColor(theme.editorForeground)
-            VStack(alignment: .leading, spacing: 12) {
-                WelcomeBtn(icon: "doc.badge.plus", title: "New File", shortcut: "⌘N", theme: theme) { editorCore.addTab() }
-                WelcomeBtn(icon: "folder", title: "Open Folder", shortcut: "⌘⇧O", theme: theme) { showFolderPicker = true }
-                WelcomeBtn(icon: "doc", title: "Open File", shortcut: "⌘O", theme: theme) { editorCore.showFilePicker = true }
-                WelcomeBtn(icon: "terminal", title: "Command Palette", shortcut: "⌘⇧P", theme: theme) { editorCore.showCommandPalette = true }
+        ScrollView {
+            VStack(spacing: 0) {
+                Spacer().frame(height: 60)
+                
+                // Logo & Title
+                VStack(spacing: 12) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        .font(.system(size: 64, weight: .thin))
+                        .foregroundColor(.accentColor.opacity(0.7))
+                    Text("VS Code for iPadOS")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(theme.editorForeground)
+                    Text("Code anywhere. Build anything.")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.editorForeground.opacity(0.5))
+                }
+                .padding(.bottom, 40)
+                
+                // Main content in columns
+                HStack(alignment: .top, spacing: 48) {
+                    // Left: Start actions
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Start")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.editorForeground.opacity(0.5))
+                            .textCase(.uppercase)
+                        
+                        WelcomeLink(icon: "doc.badge.plus", title: "New File", shortcut: "\u{2318}N", theme: theme) { editorCore.addTab() }
+                        WelcomeLink(icon: "folder", title: "Open Folder...", shortcut: "\u{2318}\u{21E7}O", theme: theme) { showFolderPicker = true }
+                        WelcomeLink(icon: "doc", title: "Open File...", shortcut: "\u{2318}O", theme: theme) { editorCore.showFilePicker = true }
+                        WelcomeLink(icon: "arrow.triangle.branch", title: "Clone Repository...", shortcut: nil, theme: theme) { }
+                        WelcomeLink(icon: "network", title: "Connect to SSH Host...", shortcut: nil, theme: theme) { }
+                    }
+                    .frame(width: 260)
+                    
+                    // Center: Recent
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Recent")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.editorForeground.opacity(0.5))
+                            .textCase(.uppercase)
+                        
+                        if recentFiles.recentFiles.isEmpty {
+                            Text("No recent files")
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.editorForeground.opacity(0.3))
+                                .padding(.vertical, 8)
+                        } else {
+                            ForEach(recentFiles.recentFiles.prefix(8), id: \.absoluteString) { url in
+                                Button(action: {
+                                    editorCore.addTab(fileName: url.lastPathComponent, content: "", url: url)
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: url.hasDirectoryPath ? "folder.fill" : "doc.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.accentColor)
+                                            .frame(width: 16)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(url.lastPathComponent)
+                                                .font(.system(size: 13))
+                                                .foregroundColor(.accentColor)
+                                                .lineLimit(1)
+                                            Text(url.deletingLastPathComponent().path)
+                                                .font(.system(size: 10))
+                                                .foregroundColor(theme.editorForeground.opacity(0.4))
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .frame(width: 280)
+                    
+                    // Right: Help & Tips
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Help")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.editorForeground.opacity(0.5))
+                            .textCase(.uppercase)
+                        
+                        WelcomeLink(icon: "terminal", title: "Command Palette", shortcut: "\u{2318}\u{21E7}P", theme: theme) { editorCore.showCommandPalette = true }
+                        WelcomeLink(icon: "keyboard", title: "Keyboard Shortcuts", shortcut: nil, theme: theme) { editorCore.showKeyboardShortcuts = true }
+                        WelcomeLink(icon: "gear", title: "Settings", shortcut: "\u{2318},", theme: theme) {
+                            NotificationCenter.default.post(name: .init("ShowSettings"), object: nil)
+                        }
+                        
+                        Divider().padding(.vertical, 4)
+                        
+                        Text("Tips")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.editorForeground.opacity(0.5))
+                            .textCase(.uppercase)
+                        
+                        WelcomeTip(icon: "sparkles", text: "Use \u{2318}\u{21E7}A to open the AI assistant", theme: theme)
+                        WelcomeTip(icon: "sidebar.left", text: "\u{2318}B toggles the sidebar", theme: theme)
+                        WelcomeTip(icon: "magnifyingglass", text: "\u{2318}\u{21E7}F searches across all files", theme: theme)
+                        WelcomeTip(icon: "arrow.triangle.branch", text: "Built-in Git with native Swift implementation", theme: theme)
+                    }
+                    .frame(width: 280)
+                }
+                .padding(.horizontal, 40)
+                
+                Spacer().frame(height: 60)
             }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.editorBackground)
+            .frame(maxWidth: .infinity)
+        }
+        .background(theme.editorBackground)
+    }
+}
+
+struct WelcomeLink: View {
+    let icon: String
+    let title: String
+    let shortcut: String?
+    let theme: Theme
+    let action: () -> Void
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 20)
+                Text(title)
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentColor)
+                if let shortcut = shortcut {
+                    Spacer()
+                    Text(shortcut)
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundColor(theme.editorForeground.opacity(0.35))
+                }
+            }
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .opacity(isHovering ? 0.8 : 1.0)
+    }
+}
+
+struct WelcomeTip: View {
+    let icon: String
+    let text: String
+    let theme: Theme
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundColor(theme.editorForeground.opacity(0.4))
+                .frame(width: 16)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(theme.editorForeground.opacity(0.5))
+        }
     }
 }
 
