@@ -314,6 +314,7 @@ class LocalLLMService: ObservableObject {
         // Nanbeige: ALWAYS replace chat_template to ensure English output
         // The MLX community versions have various Chinese templates that cause Chinese responses
         let isNanbeige = url.path.lowercased().contains("nanbeige")
+        print("[LocalLLM] patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
         
         if isNanbeige {
             // Full Nanbeige template with English defaults
@@ -336,11 +337,13 @@ class LocalLLMService: ObservableObject {
 {%- endif -%}
 """
             let existingTemplate = json["chat_template"] as? String
-            if existingTemplate != nanbeigeTemplate {
-                json["chat_template"] = nanbeigeTemplate
-                print("[LocalLLM] Set Nanbeige chat_template to English version")
-                needsWrite = true
-            }
+            let existingPreview = (existingTemplate ?? "nil").prefix(100)
+            print("[LocalLLM] Nanbeige existing template preview: \(existingPreview)")
+            
+            // ALWAYS overwrite - don't check if equal, just set it
+            json["chat_template"] = nanbeigeTemplate
+            print("[LocalLLM] FORCED Nanbeige chat_template to English version")
+            needsWrite = true
         }
         
         if needsWrite {
