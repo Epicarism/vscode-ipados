@@ -48,13 +48,13 @@
             "description": "Tiny - instant responses, basic tasks only"
         },
         {
-            "id": "nanbeige-3b-4bit",
-            "name": "Nanbeige 4.1 3B (Q4)",
-            "repo": "mlx-community/Nanbeige4.1-3B-heretic-4bit",
+            "id": "nanbeige-3b-8bit",
+            "name": "Nanbeige 4.1 3B (Q8)",
+            "repo": "andrevp/Nanbeige4.1-3B-MLX-8bit",
             "contextLength": 32768,
-            "estimatedMemoryMB": 1800,
+            "estimatedMemoryMB": 3500,
             "chatTemplate": "chatml",
-            "description": "Good multilingual coding model"
+            "description": "Strong reasoning 3B model - 8bit stable version"
         }
     ],
     "_notes": {
