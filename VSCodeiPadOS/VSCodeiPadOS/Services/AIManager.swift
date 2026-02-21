@@ -68,11 +68,12 @@ enum AIProvider: String, CaseIterable, Identifiable {
             ]
         case .localMLX:
             return [
-                AIModel(id: "nanbeige-3b-4bit", name: "Nanbeige 4.1 3B (Q4)", provider: .localMLX),
+                AIModel(id: "qwen3-8b-4bit", name: "Qwen3 8B (Q4) ⭐", provider: .localMLX),
+                AIModel(id: "qwen3-14b-4bit", name: "Qwen3 14B (Q4) 🔥", provider: .localMLX),
+                AIModel(id: "qwen3-4b-4bit", name: "Qwen3 4B (Q4)", provider: .localMLX),
                 AIModel(id: "qwen3-1.7b-4bit", name: "Qwen3 1.7B (Q4)", provider: .localMLX),
                 AIModel(id: "qwen3-0.6b-4bit", name: "Qwen3 0.6B (Q4)", provider: .localMLX),
-                AIModel(id: "qwen3-4b-4bit", name: "Qwen3 4B (Q4)", provider: .localMLX),
-                AIModel(id: "nanbeige-1b-4bit", name: "Nanbeige 4.1 1B (Q4)", provider: .localMLX)
+                AIModel(id: "nanbeige-3b-4bit", name: "Nanbeige 4.1 3B (Q4)", provider: .localMLX)
             ]
         case .groq:
             return [
@@ -1121,9 +1122,9 @@ Use the EXACT filename shown in the file list. Examples:
     private func callLocalMLX(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let localLLM = LocalLLMService.shared
         
-        // Auto-load model if not loaded
-        if !localLLM.isModelLoaded {
-            await localLLM.loadModel()
+        // Auto-load model if not loaded (pass selected model ID from UI)
+        if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
+            await localLLM.loadModel(modelId: selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
@@ -1156,9 +1157,9 @@ Use the EXACT filename shown in the file list. Examples:
     private func callLocalMLXStreaming(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
         let localLLM = LocalLLMService.shared
         
-        // Auto-load model if not loaded
-        if !localLLM.isModelLoaded {
-            await localLLM.loadModel()
+        // Auto-load model if not loaded (pass selected model ID from UI)
+        if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
+            await localLLM.loadModel(modelId: selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {

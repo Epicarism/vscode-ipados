@@ -50,20 +50,11 @@
         {
             "id": "nanbeige-3b-4bit",
             "name": "Nanbeige 4.1 3B (Q4)",
-            "repo": "mlx-community/Nanbeige2-8B-Chat-4bit",
+            "repo": "mlx-community/Nanbeige4.1-3B-heretic-4bit",
             "contextLength": 32768,
             "estimatedMemoryMB": 1800,
             "chatTemplate": "chatml",
             "description": "Good multilingual coding model"
-        },
-        {
-            "id": "nanbeige-1b-4bit",
-            "name": "Nanbeige 4.1 1B (Q4)",
-            "repo": "mlx-community/Nanbeige2-1B-Chat-4bit",
-            "contextLength": 32768,
-            "estimatedMemoryMB": 800,
-            "chatTemplate": "chatml",
-            "description": "Small Nanbeige, fast responses"
         }
     ],
     "_notes": {

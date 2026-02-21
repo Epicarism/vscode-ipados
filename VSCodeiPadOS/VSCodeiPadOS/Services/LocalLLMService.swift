@@ -311,12 +311,12 @@ class LocalLLMService: ObservableObject {
             needsWrite = true
         }
         
-        // Nanbeige MLX version is MISSING chat_template entirely - must add full template
-        let existingTemplate = json["chat_template"] as? String
+        // Nanbeige: ALWAYS replace chat_template to ensure English output
+        // The MLX community versions have various Chinese templates that cause Chinese responses
         let isNanbeige = url.path.lowercased().contains("nanbeige")
         
-        if isNanbeige && (existingTemplate == nil || existingTemplate?.isEmpty == true) {
-            // Full Nanbeige template with English defaults (from official repo)
+        if isNanbeige {
+            // Full Nanbeige template with English defaults
             // Uses special tokens: ␂system, ␃, ␂user, ␂assistant, etc.
             let nanbeigeTemplate = """
 {%- if messages[0]['role'] == 'system' -%}
@@ -335,23 +335,12 @@ class LocalLLMService: ObservableObject {
 {{- '\u{0002}assistant\n' -}}
 {%- endif -%}
 """
-            json["chat_template"] = nanbeigeTemplate
-            print("[LocalLLM] Added Nanbeige chat_template (was missing in MLX version)")
-            needsWrite = true
-        } else if let template = existingTemplate, template.contains("你是南北阁") {
-            // Official version has template but with Chinese - replace with English
-            var patched = template
-            patched = patched.replacingOccurrences(
-                of: "你是南北阁，一款由BOSS直聘自主研发并训练的专业大语言模型。",
-                with: "You are a helpful coding assistant. Always respond in English."
-            )
-            patched = patched.replacingOccurrences(
-                of: "你是一位工具函数调用专家，你会得到一个问题和一组可能的工具函数。根据问题，你需要进行一个或多个函数/工具调用以实现目的，请尽量尝试探索通过工具解决问题。\n如果没有一个函数可以使用，请直接使用自然语言回复用户。\n如果给定的问题缺少函数所需的参数，请使用自然语言进行提问，向用户询问必要信息。\n如果调用结果已经足够回答用户问题，请对历史结果进行总结，使用自然语言回复用户。",
-                with: "You are a tool function expert. Based on the question, make function calls to achieve the goal. Always respond in English."
-            )
-            json["chat_template"] = patched
-            print("[LocalLLM] Patched Nanbeige: replaced Chinese defaults with English")
-            needsWrite = true
+            let existingTemplate = json["chat_template"] as? String
+            if existingTemplate != nanbeigeTemplate {
+                json["chat_template"] = nanbeigeTemplate
+                print("[LocalLLM] Set Nanbeige chat_template to English version")
+                needsWrite = true
+            }
         }
         
         if needsWrite {
@@ -395,21 +384,7 @@ class LocalLLMService: ObservableObject {
     }
     
     // MARK: - Chat Interface (non-streaming)
-    //
-    // IMPORTANT: MLXChatSession.respond(to:) OVERWRITES the internal messages array
-    // with just [.user(prompt)], losing any system instructions set during init.
-    // The system prompt set via `instructions:` only survives through KV cache on
-    // subsequent calls within the SAME session, but on a fresh session it's lost
-    // entirely because respond() replaces messages BEFORE the first generate() call.
-    //
-    // FIX: We embed the system prompt directly into the user message text so it
-    // always reaches the model regardless of how ChatSession handles messages.
-    // This works reliably with all chat templates (ChatML, Nanbeige STX/ETX, etc.)
-    // because the instructions appear as user content.
-    //
-    // For conversation history, we also embed prior messages since ChatSession
-    // only processes the last user message.
-    
+
     func chat(messages: [(role: String, content: String)], systemPrompt: String? = nil) async throws -> String {
         guard isModelLoaded, let container = modelContainer else {
             throw LocalLLMError.modelNotLoaded
@@ -423,54 +398,16 @@ class LocalLLMService: ObservableObject {
         defer { isGenerating = false }
         
         let system = systemPrompt ?? defaultSystemPrompt
+        let session = MLXChatSession(container, instructions: system, generateParameters: generateParams)
         
-        // Build a comprehensive prompt that includes system instructions + conversation history.
-        // We embed everything into the user message because MLXChatSession.respond()
-        // overwrites the messages array, losing system instructions.
-        let augmentedPrompt = buildAugmentedPrompt(system: system, messages: messages)
+        // Get last user message only
+        let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
         
-        // Create a fresh session for each call (no stale KV cache issues)
-        let session = MLXChatSession(container, generateParameters: generateParams)
-        let response = try await session.respond(to: augmentedPrompt)
+        let response = try await session.respond(to: lastUserMessage)
         
         // Strip thinking tags
         let cleaned = stripThinkingTags(response)
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
-    /// Build a single prompt string that includes system instructions and conversation history.
-    /// Uses Nanbeige's native format: \u{0002}role\n{content}\u{0003}\n
-    /// This ensures the model sees everything regardless of ChatSession's message handling.
-    private func buildAugmentedPrompt(system: String, messages: [(role: String, content: String)]) -> String {
-        // Nanbeige uses STX (\u{0002}) and ETX (\u{0003}) control characters
-        let STX = "\u{0002}"  // Start of Text
-        let ETX = "\u{0003}"  // End of Text
-        
-        var prompt = ""
-        
-        // System instructions first
-        prompt += "\(STX)system\n\(system)\(ETX)\n"
-        
-        // Conversation history
-        for msg in messages {
-            switch msg.role.lowercased() {
-            case "user":
-                prompt += "\(STX)user\n\(msg.content)\(ETX)\n"
-            case "assistant":
-                prompt += "\(STX)assistant\n\(msg.content)\(ETX)\n"
-            case "system":
-                // Already handled above, skip duplicate system messages
-                continue
-            default:
-                // Treat unknown as user
-                prompt += "\(STX)user\n\(msg.content)\(ETX)\n"
-            }
-        }
-        
-        // Add generation prompt - tells model to start assistant response
-        prompt += "\(STX)assistant\n"
-        
-        return prompt
     }
     
     // MARK: - Streaming Chat (for UI)
@@ -493,13 +430,13 @@ class LocalLLMService: ObservableObject {
                 
                 do {
                     let system = systemPrompt ?? self.defaultSystemPrompt
-                    let augmentedPrompt = self.buildAugmentedPrompt(system: system, messages: messages)
+                    let session = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
                     
-                    // Fresh session — no stale KV cache, system prompt embedded in user text
-                    let session = MLXChatSession(container, generateParameters: self.generateParams)
+                    // Get last user message only
+                    let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
                     
                     // Stream response
-                    for try await chunk in session.streamResponse(to: augmentedPrompt) {
+                    for try await chunk in session.streamResponse(to: lastUserMessage) {
                         if !chunk.isEmpty {
                             self.currentResponse += chunk
                             continuation.yield(chunk)
