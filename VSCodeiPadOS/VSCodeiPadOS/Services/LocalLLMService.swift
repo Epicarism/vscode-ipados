@@ -316,13 +316,22 @@ class LocalLLMService: ObservableObject {
         print("[LocalLLM] patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
         
         if isNanbeige {
-            // REMOVE any existing template - let swift-transformers use its DEFAULT
-            // The STX/ETX template was causing gibberish output
-            if json["chat_template"] != nil {
-                json.removeValue(forKey: "chat_template")
-                print("[LocalLLM] REMOVED Nanbeige chat_template - using swift-transformers default")
-                needsWrite = true
-            }
+            // Use standard ChatML format - proven to work with swift-jinja
+            // Nanbeige's STX/ETX format causes gibberish, ChatML is universal
+            let chatmlTemplate = """
+{% for message in messages %}{% if loop.first and message['role'] != 'system' %}<|im_start|>system
+You are a helpful coding assistant. Always respond in English.<|im_end|>
+{% endif %}<|im_start|>{{ message['role'] }}
+{{ message['content'] }}<|im_end|>
+{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant
+{% endif %}
+"""
+            let existingTemplate = json["chat_template"] as? String
+            print("[LocalLLM] Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
+            
+            json["chat_template"] = chatmlTemplate
+            print("[LocalLLM] Set Nanbeige to ChatML format")
+            needsWrite = true
         }
         
         if needsWrite {
