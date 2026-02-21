@@ -389,6 +389,8 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         defer { isGenerating = false }
         
         let system = systemPrompt ?? defaultSystemPrompt
+        print("[LocalLLM] chat() systemPrompt length: \(system.count) chars")
+        print("[LocalLLM] chat() systemPrompt preview: \(system.prefix(200))...")
         let session = MLXChatSession(container, instructions: system, generateParameters: generateParams)
         
         // Get last user message only
