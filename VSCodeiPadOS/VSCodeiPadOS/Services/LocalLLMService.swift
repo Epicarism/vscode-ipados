@@ -57,6 +57,9 @@ class LocalLLMService: ObservableObject {
     @Published var currentModelId: String = ""
     @Published var isGenerating = false
     
+    // HuggingFace token for gated models (stored in UserDefaults)
+    @AppStorage("hfToken") var hfToken: String = ""
+    
     // Model container
     private var modelContainer: ModelContainer?
     private var modelConfig: LocalModelConfig?
@@ -212,8 +215,11 @@ class LocalLLMService: ObservableObject {
         downloadProgress = 0
         
         do {
-            // Step 1: Download model files via HubApi
-            let hub = HubApi(downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first)
+            // Step 1: Download model files via HubApi (with optional HF token for gated models)
+            let hub = HubApi(
+                downloadBase: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+                hfToken: hfToken.isEmpty ? nil : hfToken
+            )
             let repo = Hub.Repo(id: config.repo)
             
             statusMessage = "Downloading \(config.name)..."

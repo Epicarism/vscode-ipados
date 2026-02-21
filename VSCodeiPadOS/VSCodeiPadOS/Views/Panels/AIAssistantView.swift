@@ -751,6 +751,24 @@ struct AISettingsView: View {
                 
                 // Local AI Settings
                 Section(header: Text("Local AI (On-Device)")) {
+                    // HuggingFace Token for gated models
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("HuggingFace Token")
+                            .font(.subheadline)
+                        SecureField("hf_...", text: Binding(
+                            get: { UserDefaults.standard.string(forKey: "hfToken") ?? "" },
+                            set: { UserDefaults.standard.set($0, forKey: "hfToken") }
+                        ))
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        Text("Required for some gated models like Nanbeige2")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Link("Get token from huggingface.co/settings/tokens", destination: URL(string: "https://huggingface.co/settings/tokens")!)
+                            .font(.caption)
+                    }
+                    
                     HStack {
                         VStack(alignment: .leading) {
                             Text("Model Cache")
