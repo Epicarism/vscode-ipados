@@ -316,30 +316,13 @@ class LocalLLMService: ObservableObject {
         print("[LocalLLM] patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
         
         if isNanbeige {
-            // EXACT working template from commit 3e12e6b - DO NOT MODIFY
-            let nanbeigeTemplate = """
-{%- if messages[0]['role'] == 'system' -%}
-{{- '\u{0002}system\n' + messages[0]['content'] + '\u{0003}\n' -}}
-{%- else -%}
-{{- '\u{0002}system\nYou are a helpful coding assistant. Always respond in English.\u{0003}\n' -}}
-{%- endif -%}
-{%- for message in messages -%}
-{%- if message['role'] == 'user' -%}
-{{- '\u{0002}user\n' + message['content'] + '\u{0003}\n' -}}
-{%- elif message['role'] == 'assistant' -%}
-{{- '\u{0002}assistant\n' + message['content'] + '\u{0003}\n' -}}
-{%- endif -%}
-{%- endfor -%}
-{%- if add_generation_prompt -%}
-{{- '\u{0002}assistant\n' -}}
-{%- endif -%}
-"""
-            let existingTemplate = json["chat_template"] as? String
-            print("[LocalLLM] Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
-            
-            json["chat_template"] = nanbeigeTemplate
-            print("[LocalLLM] Set EXACT working Nanbeige template from 3e12e6b")
-            needsWrite = true
+            // REMOVE any existing template - let swift-transformers use its DEFAULT
+            // The STX/ETX template was causing gibberish output
+            if json["chat_template"] != nil {
+                json.removeValue(forKey: "chat_template")
+                print("[LocalLLM] REMOVED Nanbeige chat_template - using swift-transformers default")
+                needsWrite = true
+            }
         }
         
         if needsWrite {
