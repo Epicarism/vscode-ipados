@@ -316,31 +316,29 @@ class LocalLLMService: ObservableObject {
         print("[LocalLLM] patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
         
         if isNanbeige {
-            // Use EXACT Qwen-style template structure that works in swift-jinja
-            // Nanbeige uses STX (\u0002) and ETX (\u0003) instead of <|im_start|> and <|im_end|>
+            // EXACT working template from commit 3e12e6b - DO NOT MODIFY
             let nanbeigeTemplate = """
 {%- if messages[0]['role'] == 'system' -%}
-\u{0002}system
-{{ messages[0]['content'] }}\u{0003}
+{{- '\u{0002}system\n' + messages[0]['content'] + '\u{0003}\n' -}}
 {%- else -%}
-\u{0002}system
-You are a helpful coding assistant. Always respond in English.\u{0003}
+{{- '\u{0002}system\nYou are a helpful coding assistant. Always respond in English.\u{0003}\n' -}}
 {%- endif -%}
 {%- for message in messages -%}
-{%- if (message.role == "user") or (message.role == "system" and not loop.first) or (message.role == "assistant") -%}
-\u{0002}{{ message.role }}
-{{ message.content }}\u{0003}
+{%- if message['role'] == 'user' -%}
+{{- '\u{0002}user\n' + message['content'] + '\u{0003}\n' -}}
+{%- elif message['role'] == 'assistant' -%}
+{{- '\u{0002}assistant\n' + message['content'] + '\u{0003}\n' -}}
 {%- endif -%}
 {%- endfor -%}
 {%- if add_generation_prompt -%}
-\u{0002}assistant
+{{- '\u{0002}assistant\n' -}}
 {%- endif -%}
 """
             let existingTemplate = json["chat_template"] as? String
             print("[LocalLLM] Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
             
             json["chat_template"] = nanbeigeTemplate
-            print("[LocalLLM] Set Nanbeige template (Qwen-style structure)")
+            print("[LocalLLM] Set EXACT working Nanbeige template from 3e12e6b")
             needsWrite = true
         }
         
