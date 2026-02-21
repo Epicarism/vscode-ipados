@@ -311,113 +311,20 @@ class LocalLLMService: ObservableObject {
             needsWrite = true
         }
         
-        // Nanbeige: Use the EXACT official template format but with English defaults
-        // Copied from https://huggingface.co/Nanbeige/Nanbeige4.1-3B/raw/main/tokenizer_config.json
-        // Only changed Chinese system prompts to English
+        // Nanbeige: SIMPLE template - MLX Swift can't handle complex Jinja (namespace, slicing, etc)
         let isNanbeige = url.path.lowercased().contains("nanbeige")
         print("[LocalLLM] patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
         
         if isNanbeige {
-            // EXACT official Nanbeige template - only Chinese replaced with English
-            let nanbeigeTemplate = """
-{%- if tools %}
-    {{- '\u{0002}system\n' }}
-    {%- if messages[0].role == 'system' %}
-        {{- messages[0].content + '\n\n' }}
-    {%- else %}
-        {{- 'You are a tool function expert. Based on the question, make function calls to achieve the goal. If no function applies, reply naturally. If parameters are missing, ask the user. Always respond in English.' }}
-    {%- endif %}
-    {{- "# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>" }}
-    {%- for tool in tools %}
-        {{- "\n" }}
-        {{- tool | tojson }}
-    {%- endfor %}
-    {{- "\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\\"name\\": <function-name>, \\"arguments\\": <args-json-object>}\n</tool_call>\n" }}
-{%- else %}
-    {%- if messages[0].role == 'system' %}
-        {{- '\u{0002}system\n' + messages[0].content + '\u{0003}\n' }}
-    {%- else %}
-        {{- '\u{0002}system\nYou are a helpful coding assistant. Always respond in English.\u{0003}\n' }}
-    {%- endif %}
-{%- endif %}
-{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
-{%- for message in messages[::-1] %}
-    {%- set index = (messages|length - 1) - loop.index0 %}
-    {%- if ns.multi_step_tool and message.role == "user" and message.content is string and not(message.content.startswith('<tool_response>') and message.content.endswith('</tool_response>')) %}
-        {%- set ns.multi_step_tool = false %}
-        {%- set ns.last_query_index = index %}
-    {%- endif %}
-{%- endfor %}
-{%- for message in messages %}
-    {%- if message.content is string %}
-        {%- set content = message.content %}
-    {%- else %}
-        {%- set content = '' %}
-    {%- endif %}
-    {%- if (message.role == "user") or (message.role == "system" and not loop.first) %}
-        {{- '\u{0002}' + message.role + '\n' + content + '\u{0003}' + '\n' }}
-    {%- elif message.role == "assistant" %}
-        {%- set reasoning_content = '' %}
-        {%- if message.reasoning_content is string %}
-            {%- set reasoning_content = message.reasoning_content %}
-        {%- else %}
-            {%- if '<think>' in content %}
-                {%- set reasoning_content = content.split('</think>')[0].rstrip('\n').split('<think>')[-1].lstrip('\n') %}
-                {%- set content = content.split('</think>')[-1].lstrip('\n') %}
-            {%- endif %}
-        {%- endif %}
-        {%- if loop.index0 > ns.last_query_index or keep_all_think or (extra_body is defined and extra_body.keep_all_think) %}
-            {%- if loop.last or (not loop.last and reasoning_content) %}
-                {{- '\u{0002}' + message.role + '\n<think>\n' + reasoning_content.strip('\n') + '\n</think>\n\n' + content.lstrip('\n') }}
-            {%- else %}
-                {{- '\u{0002}' + message.role + '\n' + content }}
-            {%- endif %}
-        {%- else %}
-            {{- '\u{0002}' + message.role + '\n' + content }}
-        {%- endif %}
-        {%- if message.tool_calls %}
-            {%- for tool_call in message.tool_calls %}
-                {%- if (loop.first and content) or (not loop.first) %}
-                    {{- '\n' }}
-                {%- endif %}
-                {%- if tool_call.function %}
-                    {%- set tool_call = tool_call.function %}
-                {%- endif %}
-                {{- '<tool_call>\n{"name": "' }}
-                {{- tool_call.name }}
-                {{- '", "arguments": ' }}
-                {%- if tool_call.arguments is string %}
-                    {{- tool_call.arguments }}
-                {%- else %}
-                    {{- tool_call.arguments | tojson }}
-                {%- endif %}
-                {{- '}\n</tool_call>' }}
-            {%- endfor %}
-        {%- endif %}
-        {{- '\u{0003}\n' }}
-    {%- elif message.role == "tool" %}
-        {%- if loop.first or (messages[loop.index0 - 1].role != "tool") %}
-            {{- '\u{0002}user' }}
-        {%- endif %}
-        {{- '\n<tool_response>\n' }}
-        {{- content }}
-        {{- '\n</tool_response>' }}
-        {%- if loop.last or (messages[loop.index0 + 1].role != "tool") %}
-            {{- '\u{0003}\n' }}
-        {%- endif %}
-    {%- endif %}
-{%- endfor %}
-{%- if add_generation_prompt %}
-    {{- '\u{0002}assistant\n' }}
-{%- endif %}
-"""
-            let existingTemplate = json["chat_template"] as? String
-            let existingPreview = (existingTemplate ?? "nil").prefix(100)
-            print("[LocalLLM] Nanbeige existing template preview: \(existingPreview)")
+            // Template with HARDCODED English default - ensures English output even if instructions fail
+            // Format: Check first message for system, else inject English default, then loop through messages
+            let nanbeigeTemplate = "{% if messages[0]['role'] == 'system' %}\u{0002}system\n{{ messages[0]['content'] }}\u{0003}\n{% else %}\u{0002}system\nYou are a helpful coding assistant. Always respond in English.\u{0003}\n{% endif %}{% for message in messages %}{% if message['role'] == 'user' %}\u{0002}user\n{{ message['content'] }}\u{0003}\n{% elif message['role'] == 'assistant' %}\u{0002}assistant\n{{ message['content'] }}\u{0003}\n{% endif %}{% endfor %}{% if add_generation_prompt %}\u{0002}assistant\n{% endif %}"
             
-            // ALWAYS overwrite with correct official template (English version)
+            let existingTemplate = json["chat_template"] as? String
+            print("[LocalLLM] Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
+            
             json["chat_template"] = nanbeigeTemplate
-            print("[LocalLLM] FORCED Nanbeige chat_template to OFFICIAL format (English)")
+            print("[LocalLLM] Set Nanbeige template with HARDCODED English default")
             needsWrite = true
         }
         
