@@ -48,13 +48,13 @@
             "description": "Tiny - instant responses, basic tasks only"
         },
         {
-            "id": "nanbeige-3b-4bit",
-            "name": "Nanbeige 8B Chat (Q4)",
-            "repo": "mlx-community/Nanbeige2-8B-Chat-4bit",
+            "id": "nanbeige-3b-8bit",
+            "name": "Nanbeige 4.1 3B (Q8)",
+            "repo": "mlx-community/Nanbeige4.1-3B-8bit",
             "contextLength": 32768,
-            "estimatedMemoryMB": 4500,
+            "estimatedMemoryMB": 3500,
             "chatTemplate": "chatml",
-            "description": "WORKING - Best quality for coding tasks"
+            "description": "Strong reasoning 3B - official 8bit version"
         }
     ],
     "_notes": {
