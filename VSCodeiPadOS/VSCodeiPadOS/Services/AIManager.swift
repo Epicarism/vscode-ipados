@@ -70,10 +70,12 @@ enum AIProvider: String, CaseIterable, Identifiable {
             return [
                 AIModel(id: "qwen3-8b-4bit", name: "Qwen3 8B (Q4) ⭐", provider: .localMLX),
                 AIModel(id: "qwen3-14b-4bit", name: "Qwen3 14B (Q4) 🔥", provider: .localMLX),
+                AIModel(id: "nanbeige-8b-4bit", name: "Nanbeige2 8B Chat (Q4) 🔥", provider: .localMLX),
                 AIModel(id: "qwen3-4b-4bit", name: "Qwen3 4B (Q4)", provider: .localMLX),
                 AIModel(id: "qwen3-1.7b-4bit", name: "Qwen3 1.7B (Q4)", provider: .localMLX),
                 AIModel(id: "qwen3-0.6b-4bit", name: "Qwen3 0.6B (Q4)", provider: .localMLX),
-                AIModel(id: "nanbeige-3b-4bit", name: "Nanbeige 4.1 3B (Q4)", provider: .localMLX)
+                AIModel(id: "nanbeige-3b-4bit", name: "Nanbeige 4.1 3B (Q4) ⚡", provider: .localMLX),
+                AIModel(id: "nanbeige-3b-8bit", name: "Nanbeige 4.1 3B (Q8)", provider: .localMLX)
             ]
         case .groq:
             return [
@@ -372,13 +374,54 @@ class AIManager: ObservableObject {
         
         do {
             let response: String
+            
+            // Skip tools for small local models (they can't handle the complex prompt)
+            let isSmallLocalModel = selectedProvider == .localMLX && 
+                (selectedModel.id.contains("0.6b") || selectedModel.id.contains("1.7b") || selectedModel.id.contains("3b") || selectedModel.id.contains("4b"))
+            
             if let executor = toolExecutor {
-                response = try await makeToolAwareRequest(messages: currentSession.messages, context: context, toolExecutor: executor)
+                print("[AIManager] sendMessage: attempting tool-aware request")
+                do {
+                    response = try await makeToolAwareRequest(messages: currentSession.messages, context: context, toolExecutor: executor)
+                    print("[AIManager] sendMessage: tool-aware response length=\(response.count)")
+                } catch {
+                    // Small local models are now allowed to use tools, but they can still fail.
+                    // Fall back to plain local streaming instead of hard failing the request.
+                    if selectedProvider == .localMLX && isSmallLocalModel {
+                        print("[AIManager] sendMessage: small local model tool path failed, falling back to no-tools streaming: \(error)")
+                        let localSystemOverride = buildSmallLocalNoToolsSystemPrompt(context: context)
+                        response = try await callLocalMLXStreaming(
+                            messages: currentSession.messages,
+                            context: context,
+                            agentMode: false,
+                            systemOverride: localSystemOverride
+                        )
+                    } else {
+                        throw error
+                    }
+                }
             } else if selectedProvider == .localMLX {
-                response = try await callLocalMLXStreaming(messages: currentSession.messages, context: context, agentMode: false)
+                if isSmallLocalModel {
+                    print("[AIManager] sendMessage: small model detected, skipping tools")
+                }
+                print("[AIManager] sendMessage: using LocalMLX streaming")
+                let localSystemOverride: String?
+                if isSmallLocalModel && toolExecutor != nil {
+                    print("[AIManager] sendMessage: small local model has tools disabled for stability; using explicit no-tools prompt")
+                    localSystemOverride = buildSmallLocalNoToolsSystemPrompt(context: context)
+                } else {
+                    localSystemOverride = nil
+                }
+                response = try await callLocalMLXStreaming(
+                    messages: currentSession.messages,
+                    context: context,
+                    agentMode: false,
+                    systemOverride: localSystemOverride
+                )
             } else {
                 response = try await makeAPIRequest(messages: currentSession.messages, context: context, agentMode: false)
             }
+            print("[AIManager] sendMessage: final response length=\(response.count), preview='\(response.prefix(100))'")
             let assistantMessage = ChatMessage(role: .assistant, content: response, codeBlocks: extractCodeBlocks(from: response))
             currentSession.messages.append(assistantMessage)
             updateSession()
@@ -664,15 +707,22 @@ class AIManager: ObservableObject {
         let systemPrompt = buildTextToolSystemPrompt(context: context)
         
         var conversationMessages = messages
+        let isLocalMLXTextTools = selectedProvider == .localMLX
+        let originalUserRequest = messages.last(where: { $0.role == .user })?.content ?? ""
         
         for _ in 0..<maxToolRounds {
+            print("[AIManager] callWithTextBasedTools: calling makeAPIRequest round...")
             let response = try await makeAPIRequest(messages: conversationMessages, context: nil, agentMode: false, systemOverride: systemPrompt)
+            print("[AIManager] callWithTextBasedTools: got response length=\(response.count)")
+            print("[AIManager] callWithTextBasedTools: response preview='\(response.prefix(200))'...")
             
             // Parse tool calls using the universal parser
             let parsedTools = ToolCallParser.parse(response)
+            print("[AIManager] callWithTextBasedTools: parsed \(parsedTools.count) tool calls")
             
             if parsedTools.isEmpty {
                 // No tool calls found — return the response as-is
+                print("[AIManager] callWithTextBasedTools: no tools, returning response")
                 return response
             }
             
@@ -687,6 +737,23 @@ class AIManager: ObservableObject {
                 } else {
                     toolResults.append("<tool_result name=\"\(tool.rawValue)\" error=\"true\">\n\(result.error ?? "Unknown error")\n</tool_result>")
                 }
+            }
+            
+            // Local MLX models are much less reliable in multi-round text-tool loops.
+            // Force a single tool execution round, then ask for a direct answer without tools.
+            if isLocalMLXTextTools {
+                let toolResultsPrompt = buildLocalToolResultsPrompt(
+                    originalRequest: originalUserRequest,
+                    assistantToolResponse: response,
+                    toolResults: toolResults
+                )
+                print("[AIManager] callWithTextBasedTools: local MLX finalization prompt length=\(toolResultsPrompt.count)")
+                return try await makeAPIRequest(
+                    messages: [ChatMessage(role: .user, content: toolResultsPrompt)],
+                    context: nil,
+                    agentMode: false,
+                    systemOverride: buildSystemPrompt(context: context)
+                )
             }
             
             // Add assistant response and tool results to conversation
@@ -1124,11 +1191,15 @@ Use the EXACT filename shown in the file list. Examples:
         
         // Auto-load model if not loaded (pass selected model ID from UI)
         if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
+            print("[AIManager] Loading local model: \(selectedModel.id)")
+            print("[AIManager] Available models: \(localLLM.availableModels.map { $0.id })")
             await localLLM.loadModel(modelId: selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
-            throw AIError.apiError("Failed to load local model")
+            let errorMsg = "Failed to load local model '\(selectedModel.id)'. Status: \(localLLM.statusMessage)"
+            print("[AIManager] \(errorMsg)")
+            throw AIError.apiError(errorMsg)
         }
         
         let systemPrompt = systemOverride ?? (agentMode ? buildTextToolSystemPrompt(context: context) : buildSystemPrompt(context: context))
@@ -1139,7 +1210,15 @@ Use the EXACT filename shown in the file list. Examples:
         }
         
         do {
+            print("[AIManager] callLocalMLX: calling localLLM.chat()...")
             let response = try await localLLM.chat(messages: chatMessages, systemPrompt: systemPrompt)
+            print("[AIManager] callLocalMLX: got response length=\(response.count)")
+            print("[AIManager] callLocalMLX: response='\(response.prefix(300))'...")
+            
+            // Update streamingResponse so UI shows something (even though not truly streaming)
+            await MainActor.run {
+                self.streamingResponse = response
+            }
             return response
         } catch {
             if isOutOfMemoryError(error) {
@@ -1159,11 +1238,15 @@ Use the EXACT filename shown in the file list. Examples:
         
         // Auto-load model if not loaded (pass selected model ID from UI)
         if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
+            print("[AIManager] Loading local model (streaming): \(selectedModel.id)")
+            print("[AIManager] Available models: \(localLLM.availableModels.map { $0.id })")
             await localLLM.loadModel(modelId: selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
-            throw AIError.apiError("Failed to load local model")
+            let errorMsg = "Failed to load local model '\(selectedModel.id)'. Status: \(localLLM.statusMessage)"
+            print("[AIManager] \(errorMsg)")
+            throw AIError.apiError(errorMsg)
         }
         
         let systemPrompt = systemOverride ?? (agentMode ? buildTextToolSystemPrompt(context: context) : buildSystemPrompt(context: context))
@@ -1175,82 +1258,92 @@ Use the EXACT filename shown in the file list. Examples:
         
         do {
             // Use streaming chat
+            print("[AIManager] Creating chatStream for Local MLX...")
             let stream = localLLM.chatStream(messages: chatMessages, systemPrompt: systemPrompt)
+            print("[AIManager] chatStream created, starting iteration...")
             
             var fullResponse = ""
             // Incremental think-tag stripping state
             var insideThinkBlock = false
             var pendingBuffer = ""  // Buffer for potential partial tags
+            var chunkCount = 0
             
             for try await chunk in stream {
+                chunkCount += 1
+                if chunkCount <= 3 {
+                    print("[AIManager] Received chunk \(chunkCount): '\(chunk.prefix(30))'")
+                }
                 fullResponse += chunk
             
-            // Incremental think-tag stripping
-            pendingBuffer += chunk
-            
-            // Process buffer for think tags
-            while true {
-                if insideThinkBlock {
-                    // Look for closing </think> tag
-                    if let closeRange = pendingBuffer.range(of: "</think>") {
-                        // Discard everything up to and including </think>
-                        pendingBuffer = String(pendingBuffer[closeRange.upperBound...])
-                        insideThinkBlock = false
-                    } else if pendingBuffer.count > 20 {
-                        // Keep only last few chars in case </think> is split across chunks
-                        let keepCount = min(pendingBuffer.count, 8)
-                        pendingBuffer = String(pendingBuffer.suffix(keepCount))
-                        break
+                // Incremental think-tag stripping
+                pendingBuffer += chunk
+                
+                // Process buffer for think tags
+                while true {
+                    if insideThinkBlock {
+                        // Look for closing </think> tag
+                        if let closeRange = pendingBuffer.range(of: "</think>") {
+                            // Discard everything up to and including </think>
+                            pendingBuffer = String(pendingBuffer[closeRange.upperBound...])
+                            insideThinkBlock = false
+                        } else if pendingBuffer.count > 20 {
+                            // Keep only last few chars in case </think> is split across chunks
+                            let keepCount = min(pendingBuffer.count, 8)
+                            pendingBuffer = String(pendingBuffer.suffix(keepCount))
+                            break
+                        } else {
+                            break
+                        }
                     } else {
-                        break
-                    }
-                } else {
-                    // Look for opening <think> tag
-                    if let openRange = pendingBuffer.range(of: "<think>") {
-                        // Emit text before <think>
-                        let before = String(pendingBuffer[pendingBuffer.startIndex..<openRange.lowerBound])
-                        if !before.isEmpty {
-                            streamingResponse += before
-                        }
-                        pendingBuffer = String(pendingBuffer[openRange.upperBound...])
-                        insideThinkBlock = true
-                    } else {
-                        // No <think> found — check for partial tag at end
-                        // e.g. buffer ends with "<thi" which could be start of "<think>"
-                        let tagPrefix = "<think>"
-                        var safeEnd = pendingBuffer.count
-                        for i in 1..<tagPrefix.count {
-                            if pendingBuffer.hasSuffix(String(tagPrefix.prefix(i))) {
-                                safeEnd = pendingBuffer.count - i
-                                break
+                        // Look for opening <think> tag
+                        if let openRange = pendingBuffer.range(of: "<think>") {
+                            // Emit text before <think>
+                            let before = String(pendingBuffer[pendingBuffer.startIndex..<openRange.lowerBound])
+                            if !before.isEmpty {
+                                streamingResponse += before
                             }
-                        }
-                        if safeEnd > 0 {
-                            let safeText = String(pendingBuffer.prefix(safeEnd))
-                            if !safeText.isEmpty {
-                                streamingResponse += safeText
+                            pendingBuffer = String(pendingBuffer[openRange.upperBound...])
+                            insideThinkBlock = true
+                        } else {
+                            // No <think> found — check for partial tag at end
+                            // e.g. buffer ends with "<thi" which could be start of "<think>"
+                            let tagPrefix = "<think>"
+                            var safeEnd = pendingBuffer.count
+                            for i in 1..<tagPrefix.count {
+                                if pendingBuffer.hasSuffix(String(tagPrefix.prefix(i))) {
+                                    safeEnd = pendingBuffer.count - i
+                                    break
+                                }
                             }
-                            pendingBuffer = String(pendingBuffer.suffix(pendingBuffer.count - safeEnd))
+                            if safeEnd > 0 {
+                                let safeText = String(pendingBuffer.prefix(safeEnd))
+                                if !safeText.isEmpty {
+                                    streamingResponse += safeText
+                                }
+                                pendingBuffer = String(pendingBuffer.suffix(pendingBuffer.count - safeEnd))
+                            }
+                            break
                         }
-                        break
                     }
                 }
             }
-        }
-        
-        // Flush remaining buffer (if not inside a think block)
-        if !insideThinkBlock && !pendingBuffer.isEmpty {
-            // Final check: strip any stray </think> tags
-            let cleaned = pendingBuffer.replacingOccurrences(of: "</think>", with: "")
-            if !cleaned.isEmpty {
-                streamingResponse += cleaned
+            
+            // Flush remaining buffer (if not inside a think block)
+            if !insideThinkBlock && !pendingBuffer.isEmpty {
+                // Final check: strip any stray </think> tags
+                let cleaned = pendingBuffer.replacingOccurrences(of: "</think>", with: "")
+                if !cleaned.isEmpty {
+                    streamingResponse += cleaned
+                }
             }
-        }
-        
+            
+            print("[AIManager] ✅ Stream complete: \(chunkCount) chunks, fullResponse=\(fullResponse.count) chars")
             // Return the clean display text (what was streamed to the UI)
-            let finalResponse = streamingResponse.trimmingCharacters(in: .whitespacesAndNewlines)
-            return finalResponse.isEmpty ? fullResponse.trimmingCharacters(in: .whitespacesAndNewlines) : finalResponse
+            let finalResponse = sanitizeLocalModelText(streamingResponse, fallbackRaw: fullResponse)
+            print("[AIManager] Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(streamingResponse.count) chars")
+            return finalResponse
         } catch {
+            print("[AIManager] ❌ LocalMLX streaming error: \(error)")
             if isOutOfMemoryError(error) {
                 // Free memory for next attempt.
                 localLLM.unloadModel()
@@ -1283,6 +1376,81 @@ Guidelines:
         }
         
         return prompt
+    }
+    
+    /// Used for small on-device models where tool execution is disabled for stability.
+    private func buildSmallLocalNoToolsSystemPrompt(context: String?) -> String {
+        var prompt = buildSystemPrompt(context: context)
+        prompt += """
+
+Runtime limitation (important):
+- Tool use is disabled for this small on-device model in this app for stability reasons.
+- If the user asks you to use tools (list files, read files, edit files, etc.), say tools are unavailable on this model and ask them to switch to a larger local model (for example Qwen3 8B / 14B or Nanbeige 8B) to use tools.
+- Do not pretend you executed tools.
+"""
+        return prompt
+    }
+    
+    private func buildLocalToolResultsPrompt(originalRequest: String, assistantToolResponse: String, toolResults: [String]) -> String {
+        let limitedToolResults = toolResults.map { limitLength($0, max: 6000) }
+        let joinedResults = limitLength(limitedToolResults.joined(separator: "\n\n"), max: 12000)
+        let limitedToolCall = limitLength(assistantToolResponse, max: 2000)
+        
+        return """
+You previously asked to use tools. The tool call has already been executed.
+
+Original user request:
+\(originalRequest)
+
+Assistant tool call response (for reference):
+\(limitedToolCall)
+
+Tool results:
+\(joinedResults)
+
+Now answer the user's request directly in plain English.
+Do NOT call tools again.
+Do NOT repeat XML or JSON tool-call syntax.
+"""
+    }
+    
+    private func limitLength(_ text: String, max: Int) -> String {
+        guard text.count > max else { return text }
+        let end = text.index(text.startIndex, offsetBy: max)
+        return String(text[..<end]) + "\n...[truncated]..."
+    }
+    
+    /// Prefer streamed display text, but recover when the model put everything inside <think> tags.
+    private func sanitizeLocalModelText(_ displayText: String, fallbackRaw rawText: String) -> String {
+        let trimmedDisplay = displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedDisplay.isEmpty {
+            return trimmedDisplay
+        }
+        
+        var result = rawText
+        let thinkPattern = #"<think>[\s\S]*?</think>"#
+        if let regex = try? NSRegularExpression(pattern: thinkPattern) {
+            let stripped = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: ""
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            if !stripped.isEmpty {
+                result = stripped
+            } else {
+                let extractPattern = #"<think>([\s\S]*?)</think>"#
+                if let extractRegex = try? NSRegularExpression(pattern: extractPattern),
+                   let match = extractRegex.firstMatch(in: rawText, range: NSRange(rawText.startIndex..., in: rawText)),
+                   let contentRange = Range(match.range(at: 1), in: rawText) {
+                    result = String(rawText[contentRange])
+                }
+            }
+        }
+        
+        result = result.replacingOccurrences(of: "<think>", with: "")
+        result = result.replacingOccurrences(of: "</think>", with: "")
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func extractCodeBlocks(from text: String) -> [CodeBlock] {
