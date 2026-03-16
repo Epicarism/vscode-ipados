@@ -522,7 +522,8 @@ public final class WASMRunner: NSObject {
                 if let error = error {
                     continuation.resume(throwing: WASMError.executionFailed(reason: error.localizedDescription))
                 } else {
-                    continuation.resume(returning: result ?? NSNull())
+                    nonisolated(unsafe) let safeResult = result ?? NSNull()
+                    continuation.resume(returning: safeResult)
                 }
             }
         }

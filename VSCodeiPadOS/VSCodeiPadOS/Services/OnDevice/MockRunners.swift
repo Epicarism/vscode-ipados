@@ -89,8 +89,9 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
         
         // Simulate delay
         if delay > 0 {
-            currentTask = Task {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            let capturedDelay = delay
+            currentTask = Task { @Sendable in
+                try? await Task.sleep(nanoseconds: UInt64(capturedDelay * 1_000_000_000))
             }
             await currentTask?.value
         }
@@ -214,8 +215,9 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
         
         // Simulate delay
         if delay > 0 {
-            currentTask = Task {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            let capturedDelay = delay
+            currentTask = Task { @Sendable in
+                try? await Task.sleep(nanoseconds: UInt64(capturedDelay * 1_000_000_000))
             }
             await currentTask?.value
         }
@@ -358,8 +360,9 @@ public final class MockWASMRunner: CodeRunner, MockConfigurable {
         
         // Simulate delay
         if delay > 0 {
-            currentTask = Task {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            let capturedDelay = delay
+            currentTask = Task { @Sendable in
+                try? await Task.sleep(nanoseconds: UInt64(capturedDelay * 1_000_000_000))
             }
             await currentTask?.value
         }

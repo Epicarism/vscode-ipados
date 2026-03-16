@@ -83,7 +83,8 @@ final class CodeExecutionService {
             let startTime = Date()
             
             do {
-                let result = try await jsRunner?.execute(code: code)
+                nonisolated(unsafe) let runner = self.jsRunner
+                let result = try await runner?.execute(code: code)
                 let duration = Date().timeIntervalSince(startTime)
                 
                 // Show result if it's not undefined
