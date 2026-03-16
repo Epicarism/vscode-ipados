@@ -410,7 +410,15 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         
         let system = systemPrompt ?? defaultSystemPrompt
         logger.debug("chat() systemPrompt length: \(system.count, privacy: .public)")
-        let session = MLXChatSession(container, instructions: system, generateParameters: generateParams)
+        
+        // Reuse existing chat session for conversation continuity
+        // Only create new session if none exists
+        if chatSession == nil {
+            chatSession = MLXChatSession(container, instructions: system, generateParameters: generateParams)
+        }
+        guard let session = chatSession else {
+            throw LocalLLMError.modelNotLoaded
+        }
         
         // Get last user message only
         let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
@@ -447,8 +455,15 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                     let system = systemPrompt ?? self.defaultSystemPrompt
                     self.logger.debug("chatStream starting with systemPrompt length: \(system.count, privacy: .public)")
                     
-                    let session = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
-                    self.logger.debug("MLXChatSession created")
+                    // Reuse existing chat session for conversation continuity
+                    if self.chatSession == nil {
+                        self.chatSession = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
+                    }
+                    guard let session = self.chatSession else {
+                        continuation.finish(throwing: LocalLLMError.modelNotLoaded)
+                        return
+                    }
+                    self.logger.debug("Using existing MLXChatSession")
                     
                     // Get last user message only
                     let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""

@@ -872,61 +872,6 @@ struct VSCodeWebView: UIViewRepresentable {
         // Only reload if URL changed significantly
     }
 }
-
-// MARK: - VS Code Tunnel View (Connected Mode)
-
-struct VSCodeTunnelView: View {
-    @ObservedObject var tunnelManager = TunnelManager.shared
-    @EnvironmentObject var themeManager: ThemeManager
-    
-    @State private var showingAddTunnel = false
-    
-    var body: some View {
-        Group {
-            if let config = tunnelManager.activeConfig, tunnelManager.isConnected {
-                // Full WKWebView with JS debugging
-                VSCodeWebView(
-                    url: URL(string: config.url) ?? URL(string: "https://vscode.dev")!,
-                    onDismiss: { tunnelManager.disconnect() }
-                )
-                .ignoresSafeArea()
-            } else {
-                disconnectedView
-            }
-        }
-    }
-    
-    // WKWebView with JS console/error capture for debugging
-    
-    private var disconnectedView: some View {
-        VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Connected Mode").font(.title2).fontWeight(.semibold)
-                    Text("Connect to VS Code Server for full IDE features").font(.subheadline).foregroundColor(.secondary)
-                }
-                Spacer()
-                Button(action: { showingAddTunnel = true }) {
-                    Image(systemName: "plus.circle.fill").font(.title2)
-                }
-                .accessibilityLabel("Add Server")
-                .accessibilityHint("Open the add server sheet")
-                }
-            }
-            .padding()
-            .background(themeManager.currentTheme.sidebarBackground)
-            
-            Divider()
-            
-            if tunnelManager.configs.isEmpty {
-                emptyStateView
-            } else {
-                serverListView
-            }
-        }
-        .background(themeManager.currentTheme.editorBackground)
-        .sheet(isPresented: $showingAddTunnel) { AddTunnelSheet() }
-    }
     
     private var emptyStateView: some View {
         VStack(spacing: 20) {

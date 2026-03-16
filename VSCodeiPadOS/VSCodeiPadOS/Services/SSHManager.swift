@@ -180,7 +180,8 @@ class SSHManager {
 
 // MARK: - SSH Connection Store (Persistence)
 
-class SSHConnectionStore: ObservableObject {
+@MainActor
+final class SSHConnectionStore: ObservableObject {
     static let shared = SSHConnectionStore()
     
     @Published var savedConnections: [SSHConnectionConfig] = []

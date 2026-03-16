@@ -1,7 +1,8 @@
 import SwiftUI
 import Combine
 
-class ThemeManager: ObservableObject {
+@MainActor
+final class ThemeManager: ObservableObject {
     @AppStorage("selectedThemeId") var selectedThemeId: String = "dark_plus"
     @Published var currentTheme: Theme
     

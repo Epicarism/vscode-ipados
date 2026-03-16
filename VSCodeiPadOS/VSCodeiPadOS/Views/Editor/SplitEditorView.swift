@@ -808,5 +808,5 @@ struct SplitEditorButtons: View {
     let core = EditorCore()
     manager.initializeWithTabs(core.tabs, activeTabId: core.activeTabId)
     
-    return SplitEditorView(splitManager: manager, editorCore: core)
+    SplitEditorView(splitManager: manager, editorCore: core)
 }
