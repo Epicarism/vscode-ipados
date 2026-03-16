@@ -216,7 +216,8 @@ struct ChatSession: Identifiable, Codable {
 
 // MARK: - AI Manager
 
-class AIManager: ObservableObject {
+@MainActor
+final class AIManager: ObservableObject {
     // API Keys stored securely in Keychain (migrated from UserDefaults on first launch)
     // @Published so SwiftUI bindings ($aiManager.openAIKey) work correctly.
     // didSet syncs each change to Keychain immediately.
