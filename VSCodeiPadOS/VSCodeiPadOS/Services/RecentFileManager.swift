@@ -99,7 +99,7 @@ final class RecentFileManager: ObservableObject {
     private func createBookmark(for url: URL) -> Data? {
         do {
             let data = try url.bookmarkData(
-                options: .withSecurityScope,
+                options: [],
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
@@ -117,7 +117,7 @@ final class RecentFileManager: ObservableObject {
             var isStale = false
             let url = try URL(
                 resolvingBookmarkData: data,
-                options: .withSecurityScope,
+                options: [],
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )
