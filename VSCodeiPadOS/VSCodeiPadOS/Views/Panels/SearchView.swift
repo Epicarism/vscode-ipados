@@ -296,7 +296,7 @@ struct SearchView: View {
         }
         .background(Color(UIColor.systemBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear(perform: onAppear)
+        .onAppear { focusSearchField() }
         .onDisappear(perform: onDisappear)
         .onChange(of: searchText) { _, newValue in
             if newValue.count >= 2 {

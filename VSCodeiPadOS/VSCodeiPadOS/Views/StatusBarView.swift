@@ -81,7 +81,6 @@ struct StatusBarView: View {
 
             // SSH Connection Status
             SSHStatusIndicator(theme: theme) {
-                editorCore.focusedView = .explorer
                 editorCore.focusedSidebarTab = 4
                 withAnimation { editorCore.showSidebar = true }
             }
@@ -96,7 +95,6 @@ struct StatusBarView: View {
                     icon: "checkmark.circle.fill",
                     theme: theme
                 ) {
-                    editorCore.focusedView = .explorer
                     editorCore.focusedSidebarTab = 0
                     withAnimation { editorCore.showSidebar = true }
                 }
@@ -110,7 +108,6 @@ struct StatusBarView: View {
                         icon: "xmark.circle.fill",
                         theme: theme
                     ) {
-                        editorCore.focusedView = .explorer
                         editorCore.focusedSidebarTab = 0
                         withAnimation { editorCore.showSidebar = true }
                     }
@@ -125,7 +122,6 @@ struct StatusBarView: View {
                         icon: "exclamationmark.triangle.fill",
                         theme: theme
                     ) {
-                        editorCore.focusedView = .explorer
                         editorCore.focusedSidebarTab = 0
                         withAnimation { editorCore.showSidebar = true }
                     }

@@ -255,7 +255,7 @@ struct ContentView: View {
                 }
                 
                 VStack(spacing: 0) {
-                    IDETabBar(editorCore: editorCore, theme: theme)
+                    TabBarView(tabs: $editorCore.tabs, activeTabId: $editorCore.activeTabId, editorCore: editorCore, themeManager: ThemeManager.shared)
                     
                     if let tab = editorCore.activeTab {
                         IDEEditorView(editorCore: editorCore, tab: tab, theme: theme, isTerminalFocused: Binding(get: { isTerminalFocused }, set: { isTerminalFocused = $0 }))
@@ -551,57 +551,6 @@ struct DemoFileRow: View {
                 editorCore.selectTab(id: tab.id)
             }
         }
-    }
-}
-
-// MARK: - Tab Bar
-
-struct IDETabBar: View {
-    @ObservedObject var editorCore: EditorCore
-    let theme: Theme
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(editorCore.tabs) { tab in
-                    IDETabItem(tab: tab, isSelected: editorCore.activeTabId == tab.id, editorCore: editorCore, theme: theme)
-                }
-                Button(action: { editorCore.addTab() }) {
-                    Image(systemName: "plus").font(.caption).foregroundColor(theme.tabInactiveForeground).padding(8)
-                }
-                .accessibilityLabel("New tab")
-                .accessibilityHint("Double tap to open a new editor tab")
-            }.padding(.horizontal, 4)
-        }.frame(height: 36).background(theme.tabBarBackground)
-    }
-}
-
-struct IDETabItem: View {
-    let tab: Tab
-    let isSelected: Bool
-    @ObservedObject var editorCore: EditorCore
-    let theme: Theme
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: fileIcon(for: tab.fileName)).font(.caption).foregroundColor(fileColor(for: tab.fileName))
-            Text(tab.fileName).font(.system(size: 12)).lineLimit(1)
-                .foregroundColor(isSelected ? theme.tabActiveForeground : theme.tabInactiveForeground)
-            if tab.isUnsaved { Circle().fill(Color.orange).frame(width: 6, height: 6) }
-            Button(action: { editorCore.closeTab(id: tab.id) }) {
-                Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isSelected ? theme.tabActiveForeground.opacity(0.6) : theme.tabInactiveForeground)
-                    .accessibilityLabel("Close tab")
-                    .accessibilityHint("Double tap to close \(tab.fileName)")
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? theme.tabActiveBackground : theme.tabInactiveBackground))
-        .onTapGesture { editorCore.selectTab(id: tab.id) }
-        .accessibilityLabel("Tab: \(tab.fileName)\(tab.isUnsaved ? ", unsaved changes" : "")")
-        .accessibilityHint("Double tap to switch to this tab")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityElement(children: .contain)
     }
 }
 

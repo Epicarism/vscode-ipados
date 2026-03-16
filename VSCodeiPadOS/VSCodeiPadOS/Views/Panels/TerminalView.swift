@@ -1269,9 +1269,9 @@ struct ANSIText: View {
             if segment.underline {
                 part = part.underline()
             }
-            if let bgColor = segment.backgroundColor {
-                part = part.background(bgColor)
-            }
+            // Note: Text.background() returns some View, not Text,
+            // so background colors cannot be applied in Text concatenation.
+            // Background colors are handled at the line level instead.
             result = result + part
         }
         return result

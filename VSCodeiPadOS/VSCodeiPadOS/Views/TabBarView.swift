@@ -10,6 +10,7 @@ import SwiftUI
 struct TabBarView: View {
     @Binding var tabs: [Tab]
     @Binding var activeTabId: UUID?
+    @ObservedObject var editorCore: EditorCore
     @ObservedObject var themeManager: ThemeManager
 
     // Drag and drop support
@@ -37,6 +38,14 @@ struct TabBarView: View {
                         })
                         .onDrop(of: [.text], delegate: TabDropDelegate(item: tab, tabs: $tabs, draggedItem: $draggedTab))
                     }
+                    Button(action: { editorCore.addTab() }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12))
+                            .foregroundColor(themeManager.currentTheme.tabInactiveForeground)
+                            .padding(8)
+                    }
+                    .accessibilityLabel("New tab")
+                    .accessibilityHint("Double tap to open a new editor tab")
                 }
                 .padding(.leading, 1)
                 .onChange(of: activeTabId) { newId in
@@ -55,24 +64,11 @@ struct TabBarView: View {
     }
 
     private func closeTab(_ tab: Tab) {
-        if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
-            tabs.remove(at: index)
-
-            // If we closed the active tab, activate another one
-            if activeTabId == tab.id {
-                if tabs.isEmpty {
-                    activeTabId = nil
-                } else {
-                    // Try to activate the tab to the right, or the last one if we closed the last one
-                    let newIndex = min(index, tabs.count - 1)
-                    activeTabId = tabs[newIndex].id
-                }
-            }
-        }
+        editorCore.closeTab(id: tab.id)
     }
 
     private func activateTab(_ tab: Tab) {
-        activeTabId = tab.id
+        editorCore.selectTab(id: tab.id)
     }
 
     private func togglePin(_ tab: Tab) {
@@ -83,18 +79,21 @@ struct TabBarView: View {
     }
 
     private func closeOthers(except tab: Tab) {
-        tabs = tabs.filter { $0.id == tab.id || $0.isPinned }
+        let idsToClose = tabs.filter { $0.id != tab.id && !$0.isPinned }.map { $0.id }
+        for id in idsToClose {
+            editorCore.closeTab(id: id)
+        }
         if activeTabId != tab.id {
-            activeTabId = tab.id
+            editorCore.selectTab(id: tab.id)
         }
     }
 
     private func closeTabsToRight(of tab: Tab) {
         if let index = tabs.firstIndex(where: { $0.id == tab.id }) {
-            // Keep tabs up to index, plus pinned tabs that might be to the right (though pinned tabs should be on left)
-            let tabsToKeep = tabs.prefix(through: index)
-            let remainingTabs = tabs.suffix(from: index + 1).filter { $0.isPinned }
-            tabs = Array(tabsToKeep) + Array(remainingTabs)
+            let idsToClose = tabs.suffix(from: index + 1).filter { !$0.isPinned }.map { $0.id }
+            for id in idsToClose {
+                editorCore.closeTab(id: id)
+            }
         }
     }
 }

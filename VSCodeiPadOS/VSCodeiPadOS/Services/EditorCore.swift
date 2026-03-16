@@ -8,24 +8,6 @@ struct NavigationLocation {
     let column: Int
 }
 
-// MARK: - Sidebar Panel (renamed from SidebarView to avoid conflict with SidebarView struct in Views)
-enum SidebarPanel {
-    case explorer
-    case git
-    case search
-    case extensions
-    case remote
-    
-    var iconName: String {
-        switch self {
-        case .explorer: return "folder"
-        case .git: return "arrow.triangle.branch"
-        case .search: return "magnifyingglass"
-        case .extensions: return "puzzlepiece.extension"
-        case .remote: return "globe"
-        }
-    }
-}
 
 // MARK: - Debug Breakpoint
 struct DebugBreakpoint: Identifiable, Equatable {
@@ -259,9 +241,6 @@ class EditorCore: ObservableObject {
 
     // Debug state
     @Published var breakpoints: [DebugBreakpoint] = []
-
-    // Focused sidebar panel
-    @Published var focusedView: SidebarPanel = .explorer
 
     // Reference to file navigator for workspace search
     weak var fileNavigator: FileSystemNavigator?
@@ -1385,7 +1364,6 @@ mod tests {
     }
 
     func focusExplorer() {
-        focusedView = .explorer
         focusedSidebarTab = 0
         withAnimation {
             showSidebar = true
@@ -1393,7 +1371,6 @@ mod tests {
     }
 
     func focusGit() {
-        focusedView = .git
         focusedSidebarTab = 1
         withAnimation {
             showSidebar = true

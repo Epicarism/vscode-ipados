@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftUI
 import Foundation
 
 // MARK: - Models
@@ -92,14 +91,43 @@ struct DiffBuilder {
         let n = old.count
         let m = new.count
 
+        // Optimization (a): Early exit for identical files
+        if old == new { return old.map { .equal($0) } }
+
         if n == 0 { return new.map { .insert($0) } }
         if m == 0 { return old.map { .delete($0) } }
 
+        // Optimization (b): Size limit guard — fall back for very large files
+        if n * m > 2_500_000 {
+            return old.map { _DiffEdit.delete($0) } + new.map { _DiffEdit.insert($0) }
+        }
+
+        // Optimization (c): Common prefix/suffix trimming
+        var prefixCount = 0
+        while prefixCount < n && prefixCount < m && old[prefixCount] == new[prefixCount] {
+            prefixCount += 1
+        }
+        var suffixCount = 0
+        while suffixCount < (n - prefixCount) && suffixCount < (m - prefixCount)
+                && old[n - 1 - suffixCount] == new[m - 1 - suffixCount] {
+            suffixCount += 1
+        }
+
+        let trimmedOld = Array(old[prefixCount..<(n - suffixCount)])
+        let trimmedNew = Array(new[prefixCount..<(m - suffixCount)])
+
+        // If trimming consumed everything, just return equals
+        if trimmedOld.isEmpty && trimmedNew.isEmpty {
+            return old.map { .equal($0) }
+        }
+
         // LCS DP (simple + deterministic). Replace with Myers later if needed.
-        var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
-        for i in 1...n {
-            for j in 1...m {
-                if old[i - 1] == new[j - 1] {
+        let tn = trimmedOld.count
+        let tm = trimmedNew.count
+        var dp = Array(repeating: Array(repeating: 0, count: tm + 1), count: tn + 1)
+        for i in 1...tn {
+            for j in 1...tm {
+                if trimmedOld[i - 1] == trimmedNew[j - 1] {
                     dp[i][j] = dp[i - 1][j - 1] + 1
                 } else {
                     dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
@@ -108,25 +136,38 @@ struct DiffBuilder {
         }
 
         var edits: [_DiffEdit] = []
-        edits.reserveCapacity(n + m)
+        edits.reserveCapacity(tn + tm)
 
-        var i = n
-        var j = m
+        var i = tn
+        var j = tm
         while i > 0 || j > 0 {
-            if i > 0, j > 0, old[i - 1] == new[j - 1] {
-                edits.append(.equal(old[i - 1]))
+            if i > 0, j > 0, trimmedOld[i - 1] == trimmedNew[j - 1] {
+                edits.append(.equal(trimmedOld[i - 1]))
                 i -= 1
                 j -= 1
             } else if j > 0, i == 0 || dp[i][j - 1] >= dp[i - 1][j] {
-                edits.append(.insert(new[j - 1]))
+                edits.append(.insert(trimmedNew[j - 1]))
                 j -= 1
             } else if i > 0 {
-                edits.append(.delete(old[i - 1]))
+                edits.append(.delete(trimmedOld[i - 1]))
                 i -= 1
             }
         }
 
-        return edits.reversed()
+        let middleEdits = edits.reversed()
+
+        // Reassemble: prefix (equal) + middle edits + suffix (equal)
+        var result: [_DiffEdit] = []
+        result.reserveCapacity(prefixCount + middleEdits.count + suffixCount)
+        for idx in 0..<prefixCount {
+            result.append(.equal(old[idx]))
+        }
+        result.append(contentsOf: middleEdits)
+        for idx in 0..<suffixCount {
+            result.append(.equal(old[n - suffixCount + idx]))
+        }
+
+        return result
     }
 }
 
