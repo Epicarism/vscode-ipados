@@ -433,12 +433,7 @@ enum ExtensionError: Identifiable, LocalizedError {
     }
 }
 
-// MARK: - Notification Names
 
-extension Notification.Name {
-    static let extensionInstalled = Notification.Name("extensionInstalled")
-    static let extensionUninstalled = Notification.Name("extensionUninstalled")
-}
 
 // MARK: - Download Count Formatting
 

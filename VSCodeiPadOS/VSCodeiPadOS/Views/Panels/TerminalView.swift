@@ -767,10 +767,16 @@ extension TerminalTab: Equatable {}
             appendOutput(currentDirectory.path, type: .output)
             
         case "ls":
-            let targetPath: URL
-            if parts.count > 1 {
-                let arg = String(parts[1])
-                if arg.hasPrefix("/") {
+            // Parse flags and path argument
+            var showHidden = false
+            var showLong = false
+            var targetPath = currentDirectory
+            for part in parts.dropFirst() {
+                let arg = String(part)
+                if arg.hasPrefix("-") {
+                    if arg.contains("a") { showHidden = true }
+                    if arg.contains("l") { showLong = true }
+                } else if arg.hasPrefix("/") {
                     targetPath = URL(fileURLWithPath: arg)
                 } else if arg == ".." {
                     targetPath = currentDirectory.deletingLastPathComponent()
@@ -779,20 +785,29 @@ extension TerminalTab: Equatable {}
                 } else {
                     targetPath = currentDirectory.appendingPathComponent(arg)
                 }
-            } else {
-                targetPath = currentDirectory
             }
             do {
-                let items = try FileManager.default.contentsOfDirectory(at: targetPath, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey], options: [.skipsHiddenFiles])
+                var options: FileManager.DirectoryEnumerationOptions = []
+                if !showHidden { options.insert(.skipsHiddenFiles) }
+                let items = try FileManager.default.contentsOfDirectory(at: targetPath, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey], options: options)
                 if items.isEmpty {
                     appendOutput("(empty directory)", type: .output)
                 } else {
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "MMM dd HH:mm"
                     for item in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
                         let isDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-                        let size = (try? item.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
                         let name = item.lastPathComponent + (isDir ? "/" : "")
-                        let sizeStr = isDir ? "-" : ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
-                        appendOutput("  \(sizeStr.padding(toLength: 10, withPad: " ", startingAt: 0)) \(name)", type: .output)
+                        if showLong {
+                            let size = (try? item.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                            let modDate = (try? item.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+                            let sizeStr = isDir ? "-" : ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+                            let dateStr = dateFormatter.string(from: modDate)
+                            let typeChar = isDir ? "d" : "-"
+                            appendOutput("\(typeChar)rwxr-xr-x  \(sizeStr.padding(toLength: 10, withPad: " ", startingAt: 0)) \(dateStr)  \(name)", type: .output)
+                        } else {
+                            appendOutput("  \(name)", type: .output)
+                        }
                     }
                 }
             } catch {
@@ -975,6 +990,53 @@ extension TerminalTab: Equatable {}
                 }
             }
             
+        case "grep":
+            // grep pattern [file] - search for pattern in file or stdin-like
+            guard parts.count > 1 else {
+                appendOutput("grep: missing pattern", type: .error)
+                return
+            }
+            let pattern = String(parts[1])
+            var caseInsensitive = false
+            var lineNumbers = false
+            var searchPattern = pattern
+            // Parse flags
+            if pattern.hasPrefix("-") {
+                if pattern.contains("i") { caseInsensitive = true }
+                if pattern.contains("n") { lineNumbers = true }
+                guard parts.count > 2 else {
+                    appendOutput("grep: missing pattern after flags", type: .error)
+                    return
+                }
+                searchPattern = String(parts[2])
+            }
+            // Determine file to search
+            let grepFileArg = pattern.hasPrefix("-") ? (parts.count > 3 ? String(parts[3]) : nil) : (parts.count > 2 ? String(parts[2]) : nil)
+            guard let grepFile = grepFileArg else {
+                appendOutput("grep: missing file argument", type: .error)
+                return
+            }
+            let grepPath = grepFile.hasPrefix("/") ? URL(fileURLWithPath: grepFile) : currentDirectory.appendingPathComponent(grepFile)
+            do {
+                let content = try String(contentsOf: grepPath, encoding: .utf8)
+                let lines = content.components(separatedBy: .newlines)
+                var matchCount = 0
+                for (idx, line) in lines.enumerated() {
+                    let matches = caseInsensitive ? line.lowercased().contains(searchPattern.lowercased()) : line.contains(searchPattern)
+                    if matches {
+                        let prefix = lineNumbers ? "\(idx + 1):" : ""
+                        appendOutput("\(prefix)\(line)", type: .output)
+                        matchCount += 1
+                        if matchCount >= 500 { appendOutput("... (truncated at 500 matches)", type: .system); break }
+                    }
+                }
+                if matchCount == 0 {
+                    appendOutput("(no matches)", type: .output)
+                }
+            } catch {
+                appendOutput("grep: \(error.localizedDescription)", type: .error)
+            }
+
         case "env":
             appendOutput("""
             PLATFORM: iPadOS \(UIDevice.current.systemVersion)

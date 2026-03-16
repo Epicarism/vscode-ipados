@@ -312,7 +312,7 @@ final class OutputPanelManager: ObservableObject {
             logLevel: effectiveLogLevel,
             streamType: streamType,
             timestamp: Date(),
-            isAnsiFormatted: isAnsiFormatted && !ansiAttributes.isEmpty,
+            isAnsiFormatted: isAnsiFormatted && !(ansiAttributes?.isEmpty ?? true),
             ansiAttributes: ansiAttributes
         )
 
