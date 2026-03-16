@@ -41,7 +41,7 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
 // MARK: - Tunnel Manager
 
 class TunnelManager: ObservableObject, @unchecked Sendable {
-    nonisolated(unsafe) static let shared = TunnelManager()
+    static let shared = TunnelManager()
     
     @Published var configs: [TunnelConfig] = []
     @Published var activeConfig: TunnelConfig?

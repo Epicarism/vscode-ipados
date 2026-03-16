@@ -382,7 +382,7 @@ final class SwiftRunner {
     func parseCompilerErrors(_ output: String) -> SwiftCompilerError? {
         let lines = output.components(separatedBy: .newlines)
         var errors: [CompilerDiagnostic] = []
-        var notes: [String] = []
+        var _ = [String]()
         var contextLines: [String] = []
         
         // Swift error format: "file.swift:10:5: error: message"
@@ -526,7 +526,7 @@ final class SwiftRunner {
     private func determineExecutionMode(for file: String) -> SwiftExecutionMode {
         // Check if file is in a directory with Package.swift
         let dir = (file as NSString).deletingLastPathComponent
-        let checkCommand = "test -f \(escapePath(dir))/Package.swift && echo 'spm' || echo 'single'"
+        let _ = "test -f \(escapePath(dir))/Package.swift && echo 'spm' || echo 'single'"
         
         // In real implementation, this would be async - for now return configured mode
         // or default to direct execution for single files

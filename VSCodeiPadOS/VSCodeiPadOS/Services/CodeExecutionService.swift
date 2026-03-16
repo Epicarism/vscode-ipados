@@ -89,7 +89,7 @@ final class CodeExecutionService {
                 
                 // Show result if it's not undefined
                 if let result = result, !result.isUndefined {
-                    let resultString = formatJSValue(result) ?? "\(result)"
+                    let resultString = formatJSValue(result)
                     outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
                     outputManager.append("⮐ Result: \(resultString)", to: OutputChannel.javascript)
                 }

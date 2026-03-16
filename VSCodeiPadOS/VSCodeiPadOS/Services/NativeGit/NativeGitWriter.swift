@@ -506,11 +506,11 @@ final class NativeGitWriter {
         data.append(contentsOf: "DIRC".utf8)
         
         // Version 2 (4 bytes, big endian)
-        var version: UInt32 = 2
+        let version: UInt32 = 2
         data.append(contentsOf: withUnsafeBytes(of: version.bigEndian) { Array($0) })
         
         // Entry count (4 bytes, big endian)
-        var entryCount = UInt32(entries.count)
+        let entryCount = UInt32(entries.count)
         data.append(contentsOf: withUnsafeBytes(of: entryCount.bigEndian) { Array($0) })
         
         // Write each entry
@@ -518,45 +518,45 @@ final class NativeGitWriter {
             let entryStart = data.count
             
             // ctime seconds (4 bytes)
-            var ctimeSec = UInt32(entry.ctime.timeIntervalSince1970)
+            let ctimeSec = UInt32(entry.ctime.timeIntervalSince1970)
             data.append(contentsOf: withUnsafeBytes(of: ctimeSec.bigEndian) { Array($0) })
             
             // ctime nanoseconds (4 bytes)
             let ctimeNano = UInt32((entry.ctime.timeIntervalSince1970 - Double(ctimeSec)) * 1_000_000_000)
-            var ctimeNanoVal = ctimeNano
+            let ctimeNanoVal = ctimeNano
             data.append(contentsOf: withUnsafeBytes(of: ctimeNanoVal.bigEndian) { Array($0) })
             
             // mtime seconds (4 bytes)
-            var mtimeSec = UInt32(entry.mtime.timeIntervalSince1970)
+            let mtimeSec = UInt32(entry.mtime.timeIntervalSince1970)
             data.append(contentsOf: withUnsafeBytes(of: mtimeSec.bigEndian) { Array($0) })
             
             // mtime nanoseconds (4 bytes)
             let mtimeNano = UInt32((entry.mtime.timeIntervalSince1970 - Double(mtimeSec)) * 1_000_000_000)
-            var mtimeNanoVal = mtimeNano
+            let mtimeNanoVal = mtimeNano
             data.append(contentsOf: withUnsafeBytes(of: mtimeNanoVal.bigEndian) { Array($0) })
             
             // dev (4 bytes)
-            var dev = entry.dev
+            let dev = entry.dev
             data.append(contentsOf: withUnsafeBytes(of: dev.bigEndian) { Array($0) })
             
             // ino (4 bytes)
-            var ino = entry.ino
+            let ino = entry.ino
             data.append(contentsOf: withUnsafeBytes(of: ino.bigEndian) { Array($0) })
             
             // mode (4 bytes)
-            var mode = entry.mode
+            let mode = entry.mode
             data.append(contentsOf: withUnsafeBytes(of: mode.bigEndian) { Array($0) })
             
             // uid (4 bytes)
-            var uid = entry.uid
+            let uid = entry.uid
             data.append(contentsOf: withUnsafeBytes(of: uid.bigEndian) { Array($0) })
             
             // gid (4 bytes)
-            var gid = entry.gid
+            let gid = entry.gid
             data.append(contentsOf: withUnsafeBytes(of: gid.bigEndian) { Array($0) })
             
             // size (4 bytes)
-            var size = UInt32(entry.size)
+            let size = UInt32(entry.size)
             data.append(contentsOf: withUnsafeBytes(of: size.bigEndian) { Array($0) })
             
             // SHA (20 bytes)
@@ -565,7 +565,7 @@ final class NativeGitWriter {
             
             // Flags (2 bytes) - name length in lower 12 bits
             let nameLen = min(entry.path.utf8.count, 0xFFF)
-            var flags = UInt16(nameLen)
+            let flags = UInt16(nameLen)
             data.append(contentsOf: withUnsafeBytes(of: flags.bigEndian) { Array($0) })
             
             // Path (variable length, null terminated)

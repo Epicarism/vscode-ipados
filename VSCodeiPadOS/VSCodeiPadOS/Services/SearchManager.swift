@@ -435,7 +435,7 @@ public final class SearchManager: ObservableObject {
 
         // Use NSString for UTF16 indexing.
         let nsHay = haystack as NSString
-        let nsOrig = text as NSString
+        let _ = text as NSString
 
         let lineIndex = LineIndex(text)
 

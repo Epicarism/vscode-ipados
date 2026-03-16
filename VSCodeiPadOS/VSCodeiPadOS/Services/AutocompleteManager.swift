@@ -258,7 +258,7 @@ final class AutocompleteManager: ObservableObject {
                 isMember = true
 
                 // Parse identifier before '.'
-                var baseEnd = dotIndex
+                let baseEnd = dotIndex
                 var baseStart = baseEnd
                 while baseStart > text.startIndex {
                     let prev = text.index(before: baseStart)

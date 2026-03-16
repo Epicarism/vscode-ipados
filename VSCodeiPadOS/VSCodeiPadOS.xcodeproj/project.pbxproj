@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C014100783893AFEE050E4 /* SFTPManager.swift */; };
 
-		D266803E574063F6130F2DF6 /* PortsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172DE17EC07EE0929C937717 /* PortsView.swift */; };
-
 		1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */; };
 
 		88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */; };
@@ -161,8 +159,6 @@
 
 /* Begin PBXFileReference section */
 		67C014100783893AFEE050E4 /* SFTPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SFTPManager.swift"; path = "VSCodeiPadOS/Services/SFTPManager.swift"; sourceTree = "<group>"; };
-
-		172DE17EC07EE0929C937717 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "PortsView.swift"; path = "VSCodeiPadOS/Views/Panels/PortsView.swift"; sourceTree = "<group>"; };
 
 		EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "RemoteFileSystemProvider.swift"; path = "VSCodeiPadOS/Services/RemoteFileSystemProvider.swift"; sourceTree = "<group>"; };
 
@@ -697,7 +693,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */,
-				D266803E574063F6130F2DF6 /* PortsView.swift in Sources */,
 				1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */,
 				88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */,
 				9003 /* Notification+Names.swift in Sources */,

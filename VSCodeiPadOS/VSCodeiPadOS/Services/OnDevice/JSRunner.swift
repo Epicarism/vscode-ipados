@@ -231,7 +231,7 @@ class JSRunner: @unchecked Sendable {
         block: @escaping ([JSValue]) -> JSValue
     ) {
         let jsFunction: @convention(block) () -> JSValue = { [weak self] in
-            guard let self = self else {
+            guard self != nil else {
                 return JSValue(undefinedIn: nil)
             }
             

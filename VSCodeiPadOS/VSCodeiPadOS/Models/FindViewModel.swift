@@ -177,7 +177,7 @@ struct SearchResult: Identifiable {
     /// Replaces all occurrences in the chosen scope.
     /// For workspace scope, shows confirmation first.
     func replaceAll() {
-        guard isReplaceMode, let core = editorCore, let regex = buildRegex()
+        guard isReplaceMode, let _ = editorCore, let _ = buildRegex()
         else { return }
 
         guard searchScope == .workspace else {
