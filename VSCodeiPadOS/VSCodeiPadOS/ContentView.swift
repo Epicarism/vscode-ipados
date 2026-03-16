@@ -122,7 +122,7 @@ struct ContentView: View {
 
         func body(content: Content) -> some View {
             content
-                .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
+                .onChange(of: editorCore.showFilePicker) { _, show in showingDocumentPicker = show }
                 .onChange(of: editorCore.activeTab?.fileName) { _ in updateTitle() }
                 .onChange(of: editorCore.tabs.count) { _ in updateTitle() }
                 .onChange(of: editorCore.activeTabId) { _ in updateTitle() }
@@ -702,14 +702,14 @@ struct IDEEditorView: View {
                                 )
                             }
                         }
-                        .onChange(of: text) { newValue in
+                        .onChange(of: text) { _, newValue in
                             editorCore.updateActiveTabContent(newValue)
                             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
                             // Folding removed - using VS Code tunnel for real folding
                         }
-                        .onChange(of: cursorIndex) { newCursor in
+                        .onChange(of: cursorIndex) { _, newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
                             showAutocomplete = autocomplete.showSuggestions
                         }
@@ -788,17 +788,17 @@ struct IDEEditorView: View {
             text = tab.content
             // Folding detection removed
         }
-        .onChange(of: currentLineNumber) { line in
+        .onChange(of: currentLineNumber) { _, line in
             editorCore.cursorPosition = CursorPosition(line: line, column: currentColumn)
         }
-        .onChange(of: currentColumn) { col in
+        .onChange(of: currentColumn) { _, col in
             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: col)
         }
-        .onChange(of: editorCore.editorFontSize) { newSize in
+        .onChange(of: editorCore.editorFontSize) { _, newSize in
             // Update lineHeight to match Runestone's line height (~1.4x font size)
             lineHeight = ceil(newSize * 1.4)
         }
-        .onChange(of: editorCore.requestedGoToLine) { line in
+        .onChange(of: editorCore.requestedGoToLine) { _, line in
             if let line = line {
                 requestedLineSelection = line - 1  // Convert 1-indexed to 0-indexed
                 editorCore.requestedGoToLine = nil  // Clear the request

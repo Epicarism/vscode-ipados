@@ -231,8 +231,12 @@ class EditorCore: ObservableObject {
         ) { [weak self] _ in
             guard let self else { return }
             let stored = UserDefaults.standard.double(forKey: "fontSize")
-            if stored > 0, CGFloat(stored) != self.editorFontSize {
-                self.editorFontSize = CGFloat(stored)
+            if stored > 0 {
+                Task { @MainActor in
+                    if CGFloat(stored) != self.editorFontSize {
+                        self.editorFontSize = CGFloat(stored)
+                    }
+                }
             }
         }
 

@@ -509,16 +509,16 @@ struct FindReplaceView: View {
         .onAppear {
             searchFieldFocused = true
         }
-        .onChange(of: viewModel.searchQuery) { _ in
+        .onChange(of: viewModel.searchQuery) {
             viewModel.performSearch()
         }
-        .onChange(of: viewModel.isCaseSensitive) { _ in
+        .onChange(of: viewModel.isCaseSensitive) {
             viewModel.performSearch()
         }
-        .onChange(of: viewModel.isWholeWord) { _ in
+        .onChange(of: viewModel.isWholeWord) {
             viewModel.performSearch()
         }
-        .onChange(of: viewModel.useRegex) { _ in
+        .onChange(of: viewModel.useRegex) {
             viewModel.performSearch()
         }
         .alert("Replace All?", isPresented: $viewModel.showReplaceAllConfirmation) {
