@@ -3,7 +3,7 @@ import Security
 
 /// A lightweight wrapper around the iOS Keychain for securely storing API keys.
 /// Replaces `@AppStorage` (UserDefaults) which stores keys in plaintext.
-final class KeychainHelper {
+final class KeychainHelper: @unchecked Sendable {
     static let shared = KeychainHelper()
     
     private let service = "com.vscode-ipados.api-keys"

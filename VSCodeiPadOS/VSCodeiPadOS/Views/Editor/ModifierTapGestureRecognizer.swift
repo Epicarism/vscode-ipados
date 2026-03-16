@@ -4,7 +4,7 @@ import UIKit
 ///
 /// UIKit doesn't expose the UIEvent in the selector callback, so we store it from touchesBegan.
 final class ModifierTapGestureRecognizer: UITapGestureRecognizer {
-    private(set) var lastModifierFlags: UIEvent.ModifierFlags = []
+    private(set) var lastModifierFlags: UIKeyModifierFlags = []
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         lastModifierFlags = event.modifierFlags

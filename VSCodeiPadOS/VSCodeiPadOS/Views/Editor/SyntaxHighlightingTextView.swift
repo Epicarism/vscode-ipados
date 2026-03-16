@@ -1635,7 +1635,7 @@ struct VSCodeSyntaxHighlighter {
     private let baseFontSize: CGFloat
     let theme: Theme
     
-    init(theme: Theme = ThemeManager.shared.currentTheme, fontSize: CGFloat = 14) {
+    init(theme: Theme, fontSize: CGFloat = 14) {
         self.theme = theme
         self.baseFontSize = fontSize
     }

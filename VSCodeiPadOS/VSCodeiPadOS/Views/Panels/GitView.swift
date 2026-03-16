@@ -149,20 +149,28 @@ struct GitView: View {
                         }
                     }
                     
-                    // No changes
+                    // No changes - show polished empty state
                     if gitManager.stagedChanges.isEmpty &&
                         gitManager.unstagedChanges.isEmpty &&
                         gitManager.untrackedFiles.isEmpty {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 12) {
+                            Spacer()
                             Image(systemName: "checkmark.circle")
-                                .font(.system(size: 24))
-                                .foregroundColor(.green)
+                                .font(.system(size: 32))
+                                .foregroundColor(.green.opacity(0.7))
+                                .accessibilityHidden(true)
                             Text("No changes")
-                                .font(.system(size: 12))
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
+                            Text("All changes have been committed")
+                                .font(.caption)
+                                .foregroundColor(.secondary.opacity(0.7))
+                            Spacer()
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("No changes. All changes have been committed.")
                     }
                     
                     // Recent commits

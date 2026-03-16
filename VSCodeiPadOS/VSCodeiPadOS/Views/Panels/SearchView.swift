@@ -654,7 +654,9 @@ struct SearchView: View {
     
     @ViewBuilder
     private var resultsSection: some View {
-        if processedResults.isEmpty && !searchText.isEmpty && !searchManager.isSearching {
+        if searchText.isEmpty && !searchManager.isSearching {
+            initialSearchState
+        } else if processedResults.isEmpty && !searchText.isEmpty && !searchManager.isSearching {
             noResultsView
         } else {
             resultsListSection
@@ -662,11 +664,51 @@ struct SearchView: View {
     }
     
     @ViewBuilder
+    private var initialSearchState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.5))
+                .accessibilityHidden(true)
+            Text("Search across files")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Text("Type to find text in your workspace")
+                .font(.caption)
+                .foregroundColor(.secondary.opacity(0.7))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Search across files. Type to find text in your workspace.")
+    }
+    
+    @ViewBuilder
     private var noResultsView: some View {
-        Text(searchText.count < 2 ? "Type at least 2 characters to search" : "No results found")
-            .font(.caption)
-            .foregroundColor(.secondary)
-            .padding(.top, 20)
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundColor(.secondary.opacity(0.5))
+                .accessibilityHidden(true)
+            if searchText.count < 2 {
+                Text("Type at least 2 characters to search")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("No results found")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Text("Try different keywords or check your filters")
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.7))
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(searchText.count < 2 ? "Type at least 2 characters to search" : "No results found for \(searchText)")
     }
     
     @ViewBuilder

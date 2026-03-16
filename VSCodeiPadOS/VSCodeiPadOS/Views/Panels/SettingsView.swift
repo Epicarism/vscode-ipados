@@ -40,8 +40,8 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
 
 // MARK: - Tunnel Manager
 
-class TunnelManager: ObservableObject {
-    static let shared = TunnelManager()
+class TunnelManager: ObservableObject, @unchecked Sendable {
+    nonisolated(unsafe) static let shared = TunnelManager()
     
     @Published var configs: [TunnelConfig] = []
     @Published var activeConfig: TunnelConfig?
@@ -721,10 +721,10 @@ struct ConnectedModeSettingsSection: View {
 
 // WebKit already imported at top of file
 
-class VSCodeWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
-    var parent: VSCodeWebView
+class SettingsWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    var parent: SettingsWebView
     
-    init(_ parent: VSCodeWebView) {
+    init(_ parent: SettingsWebView) {
         self.parent = parent
     }
     
@@ -793,12 +793,12 @@ class VSCodeWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     }
 }
 
-struct VSCodeWebView: UIViewRepresentable {
+struct SettingsWebView: UIViewRepresentable {
     let url: URL
     let onDismiss: () -> Void
     
-    func makeCoordinator() -> VSCodeWebViewCoordinator {
-        VSCodeWebViewCoordinator(self)
+    func makeCoordinator() -> SettingsWebViewCoordinator {
+        SettingsWebViewCoordinator(self)
     }
     
     func makeUIView(context: Context) -> WKWebView {
@@ -871,7 +871,7 @@ struct VSCodeWebView: UIViewRepresentable {
         // Only reload if URL changed significantly
     }
     
-    static func dismantleUIView(_ webView: WKWebView, coordinator: VSCodeWebViewCoordinator) {
+    static func dismantleUIView(_ webView: WKWebView, coordinator: SettingsWebViewCoordinator) {
         // Remove script message handlers to break the retain cycle
         // WKUserContentController retains the handler strongly
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleLog")

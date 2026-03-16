@@ -438,7 +438,7 @@ struct TerminalTab: Identifiable, Equatable {
     }
 }
 
-class TerminalWorkspace: ObservableObject {
+final class TerminalWorkspace: ObservableObject, @unchecked Sendable {
     static let shared = TerminalWorkspace()
 
     @Published var tabs: [TerminalTab] = []

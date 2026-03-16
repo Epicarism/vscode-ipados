@@ -48,10 +48,10 @@ final class InlineSuggestionManager: ObservableObject {
     private let typingSubject = PassthroughSubject<TextChangeEvent, Never>()
     
     /// The Combine pipeline subscription.
-    private var pipelineCancellable: AnyCancellable?
+    nonisolated(unsafe) private var pipelineCancellable: AnyCancellable?
     
     /// Set to store all subscriptions.
-    private var cancellables = Set<AnyCancellable>()
+    nonisolated(unsafe) private var cancellables = Set<AnyCancellable>()
     
     /// Current async task handle for fetching suggestions.
     /// Used to cancel in-flight requests.
