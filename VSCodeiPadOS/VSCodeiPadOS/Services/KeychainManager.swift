@@ -36,7 +36,7 @@ enum KeychainKey: String {
 }
 
 // MARK: - Keychain Manager
-class KeychainManager {
+class KeychainManager: @unchecked Sendable {
     
     // MARK: - Properties
     static let shared = KeychainManager()

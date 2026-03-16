@@ -20,7 +20,7 @@ struct Snippet: Identifiable, Codable, Equatable {
 
 // MARK: - Snippets Manager
 
-final class SnippetsManager: ObservableObject {
+final class SnippetsManager: ObservableObject, @unchecked Sendable {
     static let shared = SnippetsManager()
 
     @Published private(set) var customSnippets: [Snippet] = []

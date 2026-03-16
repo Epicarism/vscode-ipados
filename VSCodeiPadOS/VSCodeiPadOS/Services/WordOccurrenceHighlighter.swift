@@ -4,7 +4,7 @@ import UIKit
 /// Highlights all occurrences of the currently selected word in the editor.
 /// This is a key VSCode feature - when you select/double-click a word, all other
 /// instances get a subtle background highlight.
-final class WordOccurrenceHighlighter {
+final class WordOccurrenceHighlighter: @unchecked Sendable {
     static let shared = WordOccurrenceHighlighter()
     private init() {}
     

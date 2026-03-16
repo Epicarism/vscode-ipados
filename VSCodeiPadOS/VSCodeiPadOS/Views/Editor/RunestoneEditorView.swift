@@ -595,7 +595,7 @@ class RunestoneEditorTheme: Runestone.Theme {
         let highlightName = rawHighlightName.lowercased()
         
         // Debug: Log ALL highlight names to console (ENABLED FOR DEBUGGING)
-        AppLogger.editor.debug("HIGHLIGHT: '\(rawHighlightName)' -> ", terminator: "")
+        AppLogger.editor.debug("HIGHLIGHT: '\(rawHighlightName, privacy: .public)'")
         
         // Keywords
         if highlightName.contains("keyword") {
