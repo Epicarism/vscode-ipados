@@ -641,6 +641,124 @@ final class GitManager: ObservableObject {
     }
     
 
+    // MARK: - Git Config
+    
+    /// Read a git config value by key (e.g., "user.name", "user.email")
+    func getConfig(key: String) async throws -> String? {
+        // Try reading from .git/config first
+        guard let gitDir = workingDirectory else { return nil }
+        let configPath = gitDir.appendingPathComponent(".git/config")
+        
+        guard FileManager.default.fileExists(atPath: configPath.path) else { return nil }
+        let content = try String(contentsOf: configPath, encoding: .utf8)
+        
+        // Parse INI-style config
+        let parts = key.split(separator: ".")
+        guard parts.count == 2 else { return nil }
+        let section = String(parts[0])  // e.g., "user"
+        let keyName = String(parts[1])  // e.g., "name"
+        
+        var inSection = false
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") {
+                inSection = trimmed.lowercased().hasPrefix("[\(section)]")
+                    || trimmed.lowercased().hasPrefix("[\(section) ")
+                continue
+            }
+            if inSection {
+                let kv = trimmed.split(separator: "=", maxSplits: 1)
+                if kv.count == 2 {
+                    let k = kv[0].trimmingCharacters(in: .whitespaces).lowercased()
+                    let v = kv[1].trimmingCharacters(in: .whitespaces)
+                    if k == keyName.lowercased() {
+                        return v
+                    }
+                }
+            }
+        }
+        
+        // Fallback: try SSH if connected
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd '\(dir)' && git config \(key)", timeout: 10)
+            if result.exitCode == 0 {
+                let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : value
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Set a git config value by key
+    func setConfig(key: String, value: String) async throws {
+        // Try SSH first for real git config
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd '\(dir)' && git config \(key) '\(value)'", timeout: 10)
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(args: "config \(key)", exitCode: result.exitCode, message: result.stderr)
+            }
+            return
+        }
+        
+        // Fallback: write to .git/config directly
+        guard let gitDir = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        let configPath = gitDir.appendingPathComponent(".git/config")
+        
+        let parts = key.split(separator: ".")
+        guard parts.count == 2 else { return }
+        let section = String(parts[0])
+        let keyName = String(parts[1])
+        
+        var content = (try? String(contentsOf: configPath, encoding: .utf8)) ?? ""
+        
+        // Check if section exists
+        let sectionHeader = "[\(section)]"
+        if content.contains(sectionHeader) {
+            // Find and replace or append within section
+            var lines = content.components(separatedBy: .newlines)
+            var inSection = false
+            var replaced = false
+            for i in lines.indices {
+                let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("[") {
+                    if inSection && !replaced {
+                        // Insert before next section
+                        lines.insert("\t\(keyName) = \(value)", at: i)
+                        replaced = true
+                        break
+                    }
+                    inSection = trimmed.lowercased() == sectionHeader.lowercased()
+                    continue
+                }
+                if inSection {
+                    let kv = trimmed.split(separator: "=", maxSplits: 1)
+                    if kv.count >= 1 && kv[0].trimmingCharacters(in: .whitespaces).lowercased() == keyName.lowercased() {
+                        lines[i] = "\t\(keyName) = \(value)"
+                        replaced = true
+                        break
+                    }
+                }
+            }
+            if !replaced {
+                // Append at end of section or file
+                if let sectionIdx = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).lowercased() == sectionHeader.lowercased() }) {
+                    lines.insert("\t\(keyName) = \(value)", at: sectionIdx + 1)
+                }
+            }
+            content = lines.joined(separator: "\n")
+        } else {
+            // Add new section
+            content += "\n\(sectionHeader)\n\t\(keyName) = \(value)\n"
+        }
+        
+        try content.write(to: configPath, atomically: true, encoding: .utf8)
+    }
+    
     /// Alias for lastError for compatibility
     var error: String? {
         return lastError

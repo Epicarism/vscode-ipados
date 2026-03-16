@@ -6,6 +6,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
     case terminal = "Terminal"
     case debugConsole = "Debug Console"
     case ports = "Ports"
+    case timeline = "Timeline"
     
     var id: String { rawValue }
     
@@ -16,6 +17,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
         case .terminal: return "terminal"
         case .debugConsole: return "ant.circle"
         case .ports: return "network"
+        case .timeline: return "clock.arrow.circlepath"
         }
     }
 }
@@ -108,6 +110,8 @@ struct PanelView: View {
                     DebugConsoleView()
                 case .ports:
                     PortsView()
+                case .timeline:
+                    TimelineView()
                 }
             }
             .frame(height: isMaximized ? UIScreen.main.bounds.height - 140 : height - 36)
@@ -127,6 +131,9 @@ struct PanelView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToProblemsPanel)) { _ in
             selectedTab = .problems
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToTimelinePanel)) { _ in
+            selectedTab = .timeline
         }
         .onReceive(NotificationCenter.default.publisher(for: .diagnosticsUpdated)) { notification in
             if let items = notification.userInfo?["items"] as? [[String: Any]] {
@@ -164,7 +171,10 @@ struct PanelTabButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 10))
+                
                 Text(tab.rawValue.uppercased())
                     .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
                 

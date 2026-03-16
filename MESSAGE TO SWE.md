@@ -1,58 +1,73 @@
-# SWE Communication Log
+# 📋 SWE Communication Log
 
-## Status Update - March 16, 2026 5:25 PM
+## Last Updated: March 16, 2026 - 10:15 PM GMT+1
 
-### ✅ Build Status: CLEAN BUILD - Zero errors
+---
 
-### Latest Commit: a2936f4
-**23 files changed, 1141 insertions, 198 deletions**
+## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
 
-### Recent Fixes Applied (This Session):
-1. **Fixed ALL remaining deprecated onChange(of:)** - 17 occurrences across 15 files migrated to iOS 17+ two-param form
-2. **GitManager improvements** - fetch() now uses SSH when connected, checkout() updates working tree via SSH, ahead/behind count walks commit chain
-3. **SFTPManager improvements** - downloadFile() and uploadFile() now implemented via SSH cat/base64, all file operations use executeCommand() instead of fire-and-forget send()
-4. **DiagnosticsService created** - Real-time code analysis on save (Swift force unwraps, JS var/==, Python bare except, TODOs, line length)
-5. **Debug Console enhanced** - JS evaluation works in all states (stopped/running/paused), added help/clear/bp commands
-6. **DebugView polished** - Better toolbar icons, breakpoint count in section header, improved empty states
-7. **CodeExecutionService fixed** - Removed double separator bug, cleaned up error handling
-8. **SidebarView commit errors** - No longer silently swallowed, shown in alert dialog
+### Latest Commits:
+- `49f1dc6` - fix: resolve all build errors - OutputView/TimelineView/TasksView brace fixes, GitView error handling, terminal keyboard, editor save race condition
+- `40aa6e7` - fix: SSHManager private init, DebugView breakpoints, RemoteDebuggerEvent Sendable, SearchView debounceCancellable, RunestoneThemeAdapter
 
-### Current Working Features:
-- ✅ Editor with syntax highlighting (Runestone + legacy)
-- ✅ File system navigation & workspace management
-- ✅ Tab management with state restoration
-- ✅ Terminal panel (local commands + SSH via SwiftNIO)
-- ✅ Git integration (read ops + SSH write ops)
-- ✅ Debug console (JavaScript REPL with JSRunner)
-- ✅ Command palette, Quick Open, Go To Symbol/Line
-- ✅ Find/Replace
-- ✅ SSH connections (SwiftNIO)
-- ✅ SFTP file operations (via SSH)
-- ✅ ANSI color rendering in terminal
-- ✅ Workspace trust management
-- ✅ AI Assistant panel (11 providers)
-- ✅ Code execution (JS, with TypeScript/Python via SSH)
-- ✅ Extensions panel
-- ✅ Settings with theme management (19 themes)
-- ✅ VS Code tunnel mode
-- ✅ Diagnostics/Problems panel (real-time analysis)
-- ✅ Output panel with channel management
-- ✅ Ports panel
-- ✅ Breakpoint management
+---
 
-### Areas Still Needing Work:
-- Terminal interactive PTY mode (currently line-at-a-time for SSH)
-- ANSI background colors & 256-color support
-- Port forwarding actual SSH tunnel implementation
-- Extension system deeper integration
-- iCloud sync
-- Performance testing with large files
+## ✅ What I (SWE-2) Fixed This Session:
 
-### For Other SWE:
-- Build is clean on `iPad Pro 13-inch (M4)` simulator
-- Swift 6 strict concurrency enabled
-- If you add new files, use iOS 17+ onChange form: `.onChange(of: X) { _, newValue in ... }`
-- All UIKit delegate coordinators should be `@MainActor`
-- API keys in Keychain via `KeychainHelper`
+### Build Errors Resolved:
+1. **SSHManager private init** - `RemoteDebugger.swift` and `TerminalView.swift` were calling `SSHManager()` directly instead of `.shared`
+2. **DebugView get-only breakpoints** - was calling `.removeAll()` on computed `breakpoints` property; now uses `removeAllBreakpoints()` and `toggleAllBreakpoints()`
+3. **RemoteDebuggerEvent Sendable** - `OutputType` enum missing `Sendable` conformance for Swift 6
+4. **SearchView undeclared debounceCancellable** - removed references to non-existent Combine property
+5. **RunestoneThemeAdapter MainActor** - replaced `UIScreen.main.scale` with safe default for nonisolated context
+6. **TimelineView missing closing brace** - `Source` enum was never closed, causing `DiffSummary` struct to be nested inside it
+
+### Critical Bug Fixes:
+7. **GitView error handling** - ALL git operations now have proper do/catch with user-visible error alerts (was silently swallowing errors with `try?`)
+8. **GitManager untracked duplicates** - untracked files no longer appear in both `unstagedChanges` AND `untrackedFiles` arrays
+9. **Terminal keyboard focus** - removed `resignFirstResponder` that was dismissing keyboard on tap; now properly focuses the input field
+10. **Terminal command history** - fixed off-by-one error in `previousCommand()`/`nextCommand()` navigation
+11. **Editor save race condition** - added `forceEditorSync` notification so `saveActiveTab()` forces RunestoneEditorView to sync text before writing to disk
+12. **Line count optimization** - replaced O(n) character-by-character counting with NSString range-based search
+
+### Theme Consistency:
+13. **OutputView** - replaced hardcoded `.red`/`.orange` with theme properties, cached DateFormatter
+14. **TimelineView** - replaced hardcoded `.blue`/`.orange` and system colors with theme properties
+15. **TasksView** - replaced system colors with theme properties, added accessibility labels
+
+---
+
+## 🎯 My Focus Areas (SWE-2):
+- **Build stability** - zero errors, zero warnings
+- **Editor reliability** - save/sync, tab switching, text fidelity
+- **Git operations** - proper error handling, no silent failures
+- **Terminal** - keyboard input, command history, ANSI rendering
+- **Theme consistency** - all panels use ThemeManager
+- **SSH/SFTP** - connection flow, port forwarding stubs
+
+## 🔴 Known Issues Still Open:
+- [ ] SSH private key authentication is broken (falls back to password)
+- [ ] SFTP upload limited to 100KB (base64 encoding over SSH)
+- [ ] Port forwarding is UI-only (no actual data tunneling)
+- [ ] No undo/redo integration in Runestone editor
+- [ ] Host key validation disabled (accepts all - MITM risk)
+- [ ] Diff algorithm is O(n*m) - may crash on large files
+- [ ] No merge conflict handling in pull
+- [ ] SidebarView.swift is 429 lines of completely dead code
+- [ ] Dual tab bar implementations (TabBarView vs IDETabBar in ContentView)
+- [ ] Dual sidebar state tracking (focusedSidebarTab Int vs focusedView enum)
+
+## 📝 Notes for Other SWE:
+- Build target: `iPad Pro 13-inch (M5)` simulator
+- Build command: `cd VSCodeiPadOS && xcodebuild build -project VSCodeiPadOS.xcodeproj -scheme VSCodeiPadOS -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5)'`
+- AppLogger has NO `.shared` - use `AppLogger.editor`, `AppLogger.git`, etc.
+- SSHManager uses singleton `SSHManager.shared` with `private init()`
+- DebugManager.breakpoints is a computed GET-ONLY property - use methods like `removeAllBreakpoints()`, `toggleAllBreakpoints()`
+- Please update this doc when you start/finish work on a feature
 - Commit frequently with descriptive messages
-- DiagnosticsService runs on every file save - add rules for new languages as needed
+
+---
+
+## 💬 Messages:
+
+**[SWE-2 | 10:15 PM]** Build is clean (0 errors, 0 warnings). Fixed 15 issues including critical save race condition, GitView silent failures, terminal keyboard, and theme consistency. Moving on to more feature polish and remaining open issues.

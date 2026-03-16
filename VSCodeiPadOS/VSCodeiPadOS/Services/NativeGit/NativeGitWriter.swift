@@ -27,7 +27,12 @@ final class NativeGitWriter {
 
     /// Create a real local commit from the current index.
     /// - Returns: New commit SHA
-    func commit(message: String, authorName: String = "VSCodeiPadOS", authorEmail: String = "vscode@localhost") throws -> String {
+    func commit(message: String, authorName: String? = nil, authorEmail: String? = nil) throws -> String {
+        // Read git config for user info, fall back to defaults
+        let config = readGitConfig()
+        let name = authorName ?? config.name ?? "VSCodeiPadOS"
+        let email = authorEmail ?? config.email ?? "vscode@localhost"
+        
         // Build tree from stage-0 index entries
         let index = try readIndex()
         let entries = index.entries.filter { entry in
@@ -56,8 +61,8 @@ final class NativeGitWriter {
         if let parentSha {
             commitText += "parent \(parentSha)\n"
         }
-        commitText += "author \(authorName) <\(authorEmail)> \(timestamp) \(tz)\n"
-        commitText += "committer \(authorName) <\(authorEmail)> \(timestamp) \(tz)\n"
+        commitText += "author \(name) <\(email)> \(timestamp) \(tz)\n"
+        commitText += "committer \(name) <\(email)> \(timestamp) \(tz)\n"
         commitText += "\n"
         commitText += message
         if !message.hasSuffix("\n") {
@@ -68,6 +73,48 @@ final class NativeGitWriter {
         try updateHEAD(to: commitSha)
         return commitSha
     }
+    
+    /// Read git config file and parse [user] section for name and email
+    /// - Returns: Tuple with optional name and email from config
+    private func readGitConfig() -> (name: String?, email: String?) {
+        let configFile = gitDir.appendingPathComponent("config")
+        guard let content = try? String(contentsOf: configFile, encoding: .utf8) else {
+            return (nil, nil)
+        }
+        
+        var name: String?
+        var email: String?
+        var inUserSection = false
+        
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Check for section headers
+            if trimmed.hasPrefix("[") {
+                // Check if we're entering the [user] section
+                inUserSection = trimmed.hasPrefix("[user]") || trimmed.hasPrefix("[user \t")
+                continue
+            }
+            
+            // Parse key = value within [user] section
+            if inUserSection {
+                let parts = trimmed.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count == 2 {
+                    let key = parts[0].lowercased()
+                    let value = parts[1]
+                    
+                    if key == "name" {
+                        name = value
+                    } else if key == "email" {
+                        email = value
+                    }
+                }
+            }
+        }
+        
+        return (name, email)
+    }
+
 
     // MARK: - Index
 

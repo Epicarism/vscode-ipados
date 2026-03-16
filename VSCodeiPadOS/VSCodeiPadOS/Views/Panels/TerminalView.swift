@@ -7,7 +7,7 @@ import Foundation
 
 struct TerminalView: View {
     @StateObject private var workspace = TerminalWorkspace.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @FocusState.Binding var terminalFocused: Bool
     @State private var showConnectionSheet = false
 
@@ -205,7 +205,7 @@ struct TerminalTabButtonView: View {
     var onRename: () -> Void
     var onSplit: () -> Void
 
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @State private var showRenameAlert = false
 
     var body: some View {
@@ -275,7 +275,7 @@ struct SingleTerminalView: View {
     var onKill: () -> Void
     @FocusState.Binding var terminalFocused: Bool
 
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
@@ -412,7 +412,7 @@ struct SingleTerminalView: View {
 
 struct TerminalLineView: View {
     let line: TerminalLine
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         if line.isANSI {
@@ -1030,7 +1030,7 @@ struct SSHConnectionView: View {
     @ObservedObject var terminal: TerminalManager
     @Binding var isPresented: Bool
     @ObservedObject private var connectionStore = SSHConnectionStore.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     
     @State private var connectionName = ""
     @State private var host = ""
@@ -1236,7 +1236,7 @@ enum LineType {
 
 struct ANSIText: View {
     let text: String
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     
     private static let ansiRegex = try! NSRegularExpression(pattern: "\u{1B}\\[([0-9;]*)([a-zA-Z])")
     
@@ -1269,6 +1269,9 @@ struct ANSIText: View {
             if segment.underline {
                 part = part.underline()
             }
+            if let bgColor = segment.backgroundColor {
+                part = part.background(bgColor)
+            }
             result = result + part
         }
         return result
@@ -1277,6 +1280,7 @@ struct ANSIText: View {
     private struct ANSISegment {
         let text: String
         let color: Color?
+        let backgroundColor: Color?
         let bold: Bool
         let italic: Bool
         let underline: Bool
@@ -1285,6 +1289,7 @@ struct ANSIText: View {
     private func parseANSI(_ input: String) -> [ANSISegment] {
         var segments: [ANSISegment] = []
         var currentColor: Color? = nil
+        var currentBackgroundColor: Color? = nil
         var bold = false
         var italic = false
         var underline = false
@@ -1303,7 +1308,7 @@ struct ANSIText: View {
                 let textRange = NSRange(location: lastEnd, length: matchRange.location - lastEnd)
                 let text = nsInput.substring(with: textRange)
                 if !text.isEmpty {
-                    segments.append(ANSISegment(text: text, color: currentColor, bold: bold, italic: italic, underline: underline))
+                    segments.append(ANSISegment(text: text, color: currentColor, backgroundColor: currentBackgroundColor, bold: bold, italic: italic, underline: underline))
                 }
             }
             
@@ -1313,35 +1318,90 @@ struct ANSIText: View {
             
             if command == "m" {
                 let parts = codes.split(separator: ";").compactMap { Int($0) }
-                for code in (parts.isEmpty ? [0] : parts) {
+                var i = 0
+                while i < (parts.isEmpty ? 1 : parts.count) {
+                    let code = parts.isEmpty ? 0 : parts[i]
                     switch code {
                     case 0:  // Reset
-                        currentColor = nil; bold = false; italic = false; underline = false
+                        currentColor = nil; currentBackgroundColor = nil; bold = false; italic = false; underline = false
                     case 1: bold = true
                     case 3: italic = true
                     case 4: underline = true
                     case 22: bold = false
                     case 23: italic = false
                     case 24: underline = false
-                    case 30: currentColor = Color(.sRGB, red: 0.3, green: 0.3, blue: 0.3)
-                    case 31: currentColor = .red
-                    case 32: currentColor = .green
-                    case 33: currentColor = .yellow
-                    case 34: currentColor = .blue
-                    case 35: currentColor = .purple
-                    case 36: currentColor = .cyan
-                    case 37: currentColor = .white
+                    // Standard foreground colors (30-37)
+                    case 30: currentColor = colorForANSI(0, bold: bold)
+                    case 31: currentColor = colorForANSI(1, bold: bold)
+                    case 32: currentColor = colorForANSI(2, bold: bold)
+                    case 33: currentColor = colorForANSI(3, bold: bold)
+                    case 34: currentColor = colorForANSI(4, bold: bold)
+                    case 35: currentColor = colorForANSI(5, bold: bold)
+                    case 36: currentColor = colorForANSI(6, bold: bold)
+                    case 37: currentColor = colorForANSI(7, bold: bold)
                     case 39: currentColor = nil  // Default foreground
-                    case 90: currentColor = .gray
-                    case 91: currentColor = Color(.sRGB, red: 1, green: 0.33, blue: 0.33)
-                    case 92: currentColor = Color(.sRGB, red: 0.33, green: 1, blue: 0.33)
-                    case 93: currentColor = Color(.sRGB, red: 1, green: 1, blue: 0.33)
-                    case 94: currentColor = Color(.sRGB, red: 0.33, green: 0.33, blue: 1)
-                    case 95: currentColor = Color(.sRGB, red: 1, green: 0.33, blue: 1)
-                    case 96: currentColor = Color(.sRGB, red: 0.33, green: 1, blue: 1)
-                    case 97: currentColor = .white
+                    // Standard background colors (40-47)
+                    case 40: currentBackgroundColor = colorForANSI(0, bold: false)
+                    case 41: currentBackgroundColor = colorForANSI(1, bold: false)
+                    case 42: currentBackgroundColor = colorForANSI(2, bold: false)
+                    case 43: currentBackgroundColor = colorForANSI(3, bold: false)
+                    case 44: currentBackgroundColor = colorForANSI(4, bold: false)
+                    case 45: currentBackgroundColor = colorForANSI(5, bold: false)
+                    case 46: currentBackgroundColor = colorForANSI(6, bold: false)
+                    case 47: currentBackgroundColor = colorForANSI(7, bold: false)
+                    case 49: currentBackgroundColor = nil  // Default background
+                    // Bright foreground colors (90-97)
+                    case 90: currentColor = colorForANSI(8, bold: bold)
+                    case 91: currentColor = colorForANSI(9, bold: bold)
+                    case 92: currentColor = colorForANSI(10, bold: bold)
+                    case 93: currentColor = colorForANSI(11, bold: bold)
+                    case 94: currentColor = colorForANSI(12, bold: bold)
+                    case 95: currentColor = colorForANSI(13, bold: bold)
+                    case 96: currentColor = colorForANSI(14, bold: bold)
+                    case 97: currentColor = colorForANSI(15, bold: bold)
+                    // Bright background colors (100-107)
+                    case 100: currentBackgroundColor = colorForANSI(8, bold: false)
+                    case 101: currentBackgroundColor = colorForANSI(9, bold: false)
+                    case 102: currentBackgroundColor = colorForANSI(10, bold: false)
+                    case 103: currentBackgroundColor = colorForANSI(11, bold: false)
+                    case 104: currentBackgroundColor = colorForANSI(12, bold: false)
+                    case 105: currentBackgroundColor = colorForANSI(13, bold: false)
+                    case 106: currentBackgroundColor = colorForANSI(14, bold: false)
+                    case 107: currentBackgroundColor = colorForANSI(15, bold: false)
+                    // Extended color modes
+                    case 38, 48:
+                        // Handle 256-color and 24-bit true color
+                        // Format: 38;5;N (256-color foreground) or 38;2;R;G;B (true color foreground)
+                        // Format: 48;5;N (256-color background) or 48;2;R;G;B (true color background)
+                        if i + 2 < parts.count {
+                            let mode = parts[i + 1]
+                            if mode == 5 && i + 2 < parts.count {
+                                // 256-color mode
+                                let colorIndex = parts[i + 2]
+                                let color = color256(colorIndex)
+                                if code == 38 {
+                                    currentColor = color
+                                } else {
+                                    currentBackgroundColor = color
+                                }
+                                i += 2
+                            } else if mode == 2 && i + 4 < parts.count {
+                                // 24-bit true color (RGB)
+                                let r = Double(parts[i + 2]) / 255.0
+                                let g = Double(parts[i + 3]) / 255.0
+                                let b = Double(parts[i + 4]) / 255.0
+                                let color = Color(.sRGB, red: r, green: g, blue: b)
+                                if code == 38 {
+                                    currentColor = color
+                                } else {
+                                    currentBackgroundColor = color
+                                }
+                                i += 4
+                            }
+                        }
                     default: break
                     }
+                    i += 1
                 }
             }
             
@@ -1352,15 +1412,77 @@ struct ANSIText: View {
         if lastEnd < nsInput.length {
             let text = nsInput.substring(from: lastEnd)
             if !text.isEmpty {
-                segments.append(ANSISegment(text: text, color: currentColor, bold: bold, italic: italic, underline: underline))
+                segments.append(ANSISegment(text: text, color: currentColor, backgroundColor: currentBackgroundColor, bold: bold, italic: italic, underline: underline))
             }
         }
         
         if segments.isEmpty {
-            segments.append(ANSISegment(text: input, color: nil, bold: false, italic: false, underline: false))
+            segments.append(ANSISegment(text: input, color: nil, backgroundColor: nil, bold: false, italic: false, underline: false))
         }
         
         return segments
+    }
+    
+    /// Returns the standard 16 ANSI colors (0-15)
+    /// Index 0-7: standard colors, 8-15: bright variants
+    private func colorForANSI(_ index: Int, bold: Bool) -> Color {
+        let standardColors: [Color] = [
+            Color(.sRGB, red: 0.0, green: 0.0, blue: 0.0),       // 0: Black
+            Color(.sRGB, red: 0.8, green: 0.0, blue: 0.0),       // 1: Red
+            Color(.sRGB, red: 0.0, green: 0.8, blue: 0.0),       // 2: Green
+            Color(.sRGB, red: 0.8, green: 0.8, blue: 0.0),       // 3: Yellow
+            Color(.sRGB, red: 0.0, green: 0.0, blue: 0.8),       // 4: Blue
+            Color(.sRGB, red: 0.8, green: 0.0, blue: 0.8),       // 5: Magenta
+            Color(.sRGB, red: 0.0, green: 0.8, blue: 0.8),       // 6: Cyan
+            Color(.sRGB, red: 0.8, green: 0.8, blue: 0.8),       // 7: White
+        ]
+        
+        let brightColors: [Color] = [
+            Color(.sRGB, red: 0.4, green: 0.4, blue: 0.4),       // 8: Bright Black (Gray)
+            Color(.sRGB, red: 1.0, green: 0.0, blue: 0.0),       // 9: Bright Red
+            Color(.sRGB, red: 0.0, green: 1.0, blue: 0.0),       // 10: Bright Green
+            Color(.sRGB, red: 1.0, green: 1.0, blue: 0.0),       // 11: Bright Yellow
+            Color(.sRGB, red: 0.0, green: 0.0, blue: 1.0),       // 12: Bright Blue
+            Color(.sRGB, red: 1.0, green: 0.0, blue: 1.0),       // 13: Bright Magenta
+            Color(.sRGB, red: 0.0, green: 1.0, blue: 1.0),       // 14: Bright Cyan
+            Color(.sRGB, red: 1.0, green: 1.0, blue: 1.0),       // 15: Bright White
+        ]
+        
+        if index < 8 {
+            return bold ? brightColors[index] : standardColors[index]
+        } else {
+            return brightColors[index - 8]
+        }
+    }
+    
+    /// Returns a color from the 256-color palette
+    /// - Parameter index: Color index (0-255)
+    /// - Returns: The corresponding Color
+    private func color256(_ index: Int) -> Color {
+        guard index >= 0 && index < 256 else { return .white }
+        
+        // 0-15: Standard ANSI colors (same as colorForANSI)
+        if index < 16 {
+            return colorForANSI(index, bold: false)
+        }
+        
+        // 16-231: 216-color cube (6x6x6 RGB)
+        if index < 232 {
+            let i = index - 16
+            let r = (i / 36) % 6
+            let g = (i / 6) % 6
+            let b = i % 6
+            
+            let red = r == 0 ? 0.0 : (Double(r) * 40.0 + 55.0) / 255.0
+            let green = g == 0 ? 0.0 : (Double(g) * 40.0 + 55.0) / 255.0
+            let blue = b == 0 ? 0.0 : (Double(b) * 40.0 + 55.0) / 255.0
+            
+            return Color(.sRGB, red: red, green: green, blue: blue)
+        }
+        
+        // 232-255: Grayscale (24 shades)
+        let gray = (Double(index - 232) * 10.0 + 8.0) / 255.0
+        return Color(.sRGB, red: gray, green: gray, blue: gray)
     }
 }
 

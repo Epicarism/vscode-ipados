@@ -112,6 +112,8 @@ extension Notification.Name {
     static let switchToProblemsPanel = Notification.Name("SwitchToProblemsPanel")
     /// Switch to the ports panel.
     static let switchToPortsPanel = Notification.Name("SwitchToPortsPanel")
+    /// Switch to the timeline panel.
+    static let switchToTimelinePanel = Notification.Name("SwitchToTimelinePanel")
     /// Show the settings view.
     static let showSettings = Notification.Name("ShowSettings")
     /// Show the keyboard shortcuts view.

@@ -132,9 +132,7 @@ struct SearchView: View {
     @State private var searchHistory: [String] = []
     @State private var showHistory: Bool = false
     
-    // MARK: - Error State
-    @State private var regexError: String? = nil
-    
+
     // MARK: - Computed Properties
     
     /// Returns the filtered, sorted, and limited results
@@ -145,7 +143,7 @@ struct SearchView: View {
         if excludeBinaryFiles {
             filtered = filtered.filter { result in
                 let ext = (result.fileName as NSString).pathExtension.lowercased()
-                return !binaryExtensions.contains(where: { $0.lowercased().hasSuffix(ext) })
+                return !binaryExtensions.contains(where: { $0.lowercased() == ext })
             }
         }
         
@@ -310,6 +308,15 @@ struct SearchView: View {
         .onChange(of: processedResults) { _, _ in
             navigationItems = buildNavigationItems()
         }
+        .onChange(of: matchCase) { _, _ in
+            if searchText.count >= 2 { debouncedSearch() }
+        }
+        .onChange(of: matchWholeWord) { _, _ in
+            if searchText.count >= 2 { debouncedSearch() }
+        }
+        .onChange(of: useRegex) { _, _ in
+            if searchText.count >= 2 { debouncedSearch() }
+        }
     }
     
     // MARK: - Search Header Section
@@ -412,8 +419,9 @@ struct SearchView: View {
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     TextField("Search", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
+                        .textFieldStyle(.plain)
                         .focused($focusedField, equals: .search)
+
                         .padding(6)
                         .onSubmit {
                             debouncedSearch(immediate: true)
@@ -525,8 +533,9 @@ struct SearchView: View {
             Spacer().frame(width: 20)
             ZStack(alignment: .trailing) {
                 TextField("Replace", text: $replaceText)
-                    .textFieldStyle(PlainTextFieldStyle())
+                    .textFieldStyle(.plain)
                     .focused($focusedField, equals: .replace)
+
                     .padding(6)
                     .padding(.trailing, 24)
                     .background(Color(UIColor.secondarySystemBackground))
@@ -619,8 +628,9 @@ struct SearchView: View {
     private var filesToIncludeExcludeInputs: some View {
         VStack(spacing: 8) {
             TextField("files to include", text: $filesToInclude)
-                .textFieldStyle(PlainTextFieldStyle())
+                .textFieldStyle(.plain)
                 .padding(6)
+
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(4)
                 .overlay(
@@ -629,8 +639,9 @@ struct SearchView: View {
                 )
             
             TextField("files to exclude", text: $filesToExclude)
-                .textFieldStyle(PlainTextFieldStyle())
+                .textFieldStyle(.plain)
                 .padding(6)
+
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(4)
                 .overlay(
@@ -769,12 +780,8 @@ struct SearchView: View {
         }
     }
     
-    // MARK: - Lifecycle
-    
-    private func setupDebouncedSearch() {
-        // No-op: debounce is handled via Task in debouncedSearch()
-    }
-    
+    // MARK: - Debounced Search
+
     // MARK: - Debounced Search
     
     private func debouncedSearch(immediate: Bool = false) {
@@ -840,10 +847,7 @@ struct SearchView: View {
         NotificationCenter.default.post(name: .expandAllSearchResults, object: nil)
     }
     
-    private func performSearch() {
-        debouncedSearch(immediate: true)
-    }
-    
+
     private func performReplace() {
         guard !searchText.isEmpty && !replaceText.isEmpty else { return }
         
@@ -880,13 +884,10 @@ struct SearchView: View {
         }
     }
     
-    private func onAppear() {
-        setupDebouncedSearch()
-    }
-    
     private func onDisappear() {
         searchTask?.cancel()
     }
+
     
     // Convert SearchManager results to view model
     private var convertedResults: [FileSearchResult] {

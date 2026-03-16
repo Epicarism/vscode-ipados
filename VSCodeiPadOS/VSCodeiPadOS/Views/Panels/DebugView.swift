@@ -11,8 +11,8 @@ struct DebugVariable: Identifiable {
 
 // MARK: - Debug View
 struct DebugView: View {
-    @ObservedObject private var debugManager = DebugManager.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var debugManager = DebugManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     
     private var variables: [DebugVariable] {
         debugManager.variables.map { convertToDebugVariable($0) }
@@ -32,6 +32,8 @@ struct DebugView: View {
     @State private var debuggerProgramPath: String = ""
     @State private var debuggerHost: String = ""
     @State private var selectedDebuggerType: DebuggerType = .lldb
+    @State private var catchExceptions: Bool = false
+    @State private var uncaughtExceptions: Bool = true
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -170,11 +172,11 @@ struct DebugView: View {
                 
                 Divider()
                 
-                Toggle(isOn: .constant(false)) {
+                Toggle(isOn: $catchExceptions) {
                     Label("Caught Exceptions", systemImage: "exclamationmark.triangle")
                 }
                 
-                Toggle(isOn: .constant(true)) {
+                Toggle(isOn: $uncaughtExceptions) {
                     Label("Uncaught Exceptions", systemImage: "exclamationmark.triangle.fill")
                 }
             } label: {
@@ -355,7 +357,7 @@ struct DebugView: View {
                             }
                             isAddingWatch = false
                         })
-                        .textFieldStyle(PlainTextFieldStyle())
+                        .textFieldStyle(.plain)
                         .font(.system(size: 12, design: .monospaced))
                         .padding(4)
                         .background(theme.selection)
@@ -519,14 +521,14 @@ struct DebugView: View {
                 Section(header: Text("Program")) {
                     TextField("Program path on remote", text: $debuggerProgramPath)
                         .font(.system(size: 14, design: .monospaced))
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
                 
                 Section(header: Text("Optional")) {
                     TextField("Remote debug server (host:port)", text: $debuggerHost)
                         .font(.system(size: 14, design: .monospaced))
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .textContentType(.URL)
                 }
@@ -722,7 +724,7 @@ struct BreakpointRow: View {
     let breakpoint: DebugManager.Breakpoint
     let theme: Theme
     
-    @ObservedObject private var debugManager = DebugManager.shared
+    @StateObject private var debugManager = DebugManager.shared
     
     var body: some View {
         HStack(spacing: 6) {

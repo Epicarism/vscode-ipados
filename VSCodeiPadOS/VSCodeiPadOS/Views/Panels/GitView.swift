@@ -9,9 +9,13 @@ struct GitView: View {
     @State private var selectedEntry: GitStatusEntry?
     @State private var showingDiffEntry: GitStatusEntry?
     @State private var showBranchPicker = false
+    @State private var showGitConfig = false
+    @State private var gitConfigName = ""
+    @State private var gitConfigEmail = ""
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var isOperationInProgress = false
+
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,6 +37,12 @@ struct GitView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(gitManager.isLoading)
+                
+                Button(action: { loadGitConfig(); showGitConfig = true }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -257,6 +267,9 @@ struct GitView: View {
         .sheet(isPresented: $showBranchPicker) {
             BranchPickerSheet(gitManager: gitManager)
         }
+        .sheet(isPresented: $showGitConfig) {
+            GitConfigSheet(gitManager: gitManager, name: $gitConfigName, email: $gitConfigEmail)
+        }
         .fullScreenCover(item: $showingDiffEntry) { entry in
             GitDiffSheet(entry: entry)
         }
@@ -459,6 +472,21 @@ struct GitView: View {
             print("[GitView] Git operation failed: \(error.localizedDescription)")
         }
     }
+    
+    private func loadGitConfig() {
+        Task {
+            do {
+                let name = try await gitManager.getConfig(key: "user.name") ?? ""
+                let email = try await gitManager.getConfig(key: "user.email") ?? ""
+                await MainActor.run {
+                    gitConfigName = name
+                    gitConfigEmail = email
+                }
+            } catch {
+                print("[GitView] Failed to load git config: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 // MARK: - Branch Picker Sheet
@@ -566,6 +594,102 @@ struct BranchPickerSheet: View {
                 newBranchName = ""
                 showCreateBranch = false
                 dismiss()
+            }
+        }
+    }
+}
+
+
+// MARK: - Git Config Sheet
+
+struct GitConfigSheet: View {
+    @ObservedObject var gitManager: GitManager
+    @Binding var name: String
+    @Binding var email: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var editingName = ""
+    @State private var editingEmail = ""
+    @State private var isSaving = false
+    @State private var saveError: String?
+    @State private var showSaveError = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Commit Author Identity") {
+                    HStack {
+                        Image(systemName: "person")
+                            .foregroundColor(.secondary)
+                            .frame(width: 20)
+                        TextField("Name", text: $editingName)
+                            .textContentType(.name)
+                    }
+                    
+                    HStack {
+                        Image(systemName: "envelope")
+                            .foregroundColor(.secondary)
+                            .frame(width: 20)
+                        TextField("Email", text: $editingEmail)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                            .autocorrectionDisabled()
+                    }
+                }
+                
+                Section {
+                    Text("This identity will be used for your commits in this repository.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Git Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveConfig()
+                    }
+                    .disabled(editingName.isEmpty || editingEmail.isEmpty || isSaving)
+                    .bold(true)
+                }
+            }
+            .alert("Save Error", isPresented: $showSaveError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(saveError ?? "An unknown error occurred")
+            }
+        }
+        .onAppear {
+            editingName = name
+            editingEmail = email
+        }
+    }
+    
+    private func saveConfig() {
+        guard !editingName.isEmpty, !editingEmail.isEmpty else { return }
+        isSaving = true
+        Task {
+            do {
+                try await gitManager.setConfig(key: "user.name", value: editingName)
+                try await gitManager.setConfig(key: "user.email", value: editingEmail)
+                await MainActor.run {
+                    name = editingName
+                    email = editingEmail
+                    isSaving = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    saveError = error.localizedDescription
+                    showSaveError = true
+                    isSaving = false
+                }
             }
         }
     }
