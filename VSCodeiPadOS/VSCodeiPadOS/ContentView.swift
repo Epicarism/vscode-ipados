@@ -18,7 +18,7 @@ struct ContentView: View {
     @State private var showTerminal = false
     @State private var terminalHeight: CGFloat = 200
     @State private var aiPanelWidth: CGFloat = 400
-    @State private var selectedSidebarTab = 0
+    // sidebar tab now synced via editorCore.focusedSidebarTab (not local @State)
     @State private var pendingTrustURL: URL?
     @State private var windowTitle: String = "CodePad"
     
@@ -150,7 +150,7 @@ struct ContentView: View {
     private var mainLayout: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                IDEActivityBar(editorCore: editorCore, selectedTab: $selectedSidebarTab, showSettings: $showSettings, showTerminal: $showTerminal)
+                IDEActivityBar(editorCore: editorCore, selectedTab: $editorCore.focusedSidebarTab, showSettings: $showSettings, showTerminal: $showTerminal)
                 
                 if editorCore.showSidebar {
                     sidebarContent.frame(width: editorCore.sidebarWidth)
@@ -293,7 +293,7 @@ struct ContentView: View {
     
     @ViewBuilder
     private var sidebarContent: some View {
-        switch selectedSidebarTab {
+        switch editorCore.focusedSidebarTab {
         case 0:
             IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
         case 1:
@@ -301,7 +301,7 @@ struct ContentView: View {
                 SearchView(
                     onResultSelected: { filePath, lineNumber in
                         // Open file and go to line
-                        if let url = URL(string: "file://" + filePath) {
+                        if let url = URL(fileURLWithPath: filePath) as URL? {
                             editorCore.openFile(from: url)
                             editorCore.requestedGoToLine = lineNumber
                         }
@@ -934,7 +934,7 @@ struct IDEWelcomeView: View {
                         WelcomeLink(icon: "terminal", title: "Command Palette", shortcut: "\u{2318}\u{21E7}P", theme: theme) { editorCore.showCommandPalette = true }
                         WelcomeLink(icon: "keyboard", title: "Keyboard Shortcuts", shortcut: nil, theme: theme) { editorCore.showKeyboardShortcuts = true }
                         WelcomeLink(icon: "gear", title: "Settings", shortcut: "\u{2318},", theme: theme) {
-                            NotificationCenter.default.post(name: .init("ShowSettings"), object: nil)
+                            NotificationCenter.default.post(name: .showSettings, object: nil)
                         }
                         
                         Divider().padding(.vertical, 4)

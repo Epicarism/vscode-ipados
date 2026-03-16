@@ -976,17 +976,125 @@ struct ANSIText: View {
     }
     
     var body: some View {
-        Text(stripANSI(text))
+        textWithColors
             .font(.system(.body, design: .monospaced))
-            .foregroundColor(themeManager.currentTheme.editorForeground)
             .textSelection(.enabled)
     }
     
-    private func stripANSI(_ text: String) -> String {
-        let pattern = "\u{1B}\\[[0-9;]*[a-zA-Z]"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
-        let range = NSRange(text.startIndex..., in: text)
-        return regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+    private var textWithColors: Text {
+        let segments = parseANSI(text)
+        var result = Text("")
+        for segment in segments {
+            var part = Text(segment.text)
+            if let color = segment.color {
+                part = part.foregroundColor(color)
+            } else {
+                part = part.foregroundColor(themeManager.currentTheme.editorForeground)
+            }
+            if segment.bold {
+                part = part.bold()
+            }
+            if segment.italic {
+                part = part.italic()
+            }
+            if segment.underline {
+                part = part.underline()
+            }
+            result = result + part
+        }
+        return result
+    }
+    
+    private struct ANSISegment {
+        let text: String
+        let color: Color?
+        let bold: Bool
+        let italic: Bool
+        let underline: Bool
+    }
+    
+    private func parseANSI(_ input: String) -> [ANSISegment] {
+        var segments: [ANSISegment] = []
+        var currentColor: Color? = nil
+        var bold = false
+        var italic = false
+        var underline = false
+        
+        let pattern = "\u{1B}\\[([0-9;]*)([a-zA-Z])"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return [ANSISegment(text: input, color: nil, bold: false, italic: false, underline: false)]
+        }
+        
+        let nsInput = input as NSString
+        var lastEnd = 0
+        let matches = regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length))
+        
+        for match in matches {
+            let matchRange = match.range
+            
+            // Text before this escape
+            if matchRange.location > lastEnd {
+                let textRange = NSRange(location: lastEnd, length: matchRange.location - lastEnd)
+                let text = nsInput.substring(with: textRange)
+                if !text.isEmpty {
+                    segments.append(ANSISegment(text: text, color: currentColor, bold: bold, italic: italic, underline: underline))
+                }
+            }
+            
+            // Parse the escape code
+            let codes = nsInput.substring(with: match.range(at: 1))
+            let command = nsInput.substring(with: match.range(at: 2))
+            
+            if command == "m" {
+                let parts = codes.split(separator: ";").compactMap { Int($0) }
+                for code in (parts.isEmpty ? [0] : parts) {
+                    switch code {
+                    case 0:  // Reset
+                        currentColor = nil; bold = false; italic = false; underline = false
+                    case 1: bold = true
+                    case 3: italic = true
+                    case 4: underline = true
+                    case 22: bold = false
+                    case 23: italic = false
+                    case 24: underline = false
+                    case 30: currentColor = Color(.sRGB, red: 0, green: 0, blue: 0)
+                    case 31: currentColor = .red
+                    case 32: currentColor = .green
+                    case 33: currentColor = .yellow
+                    case 34: currentColor = .blue
+                    case 35: currentColor = .purple
+                    case 36: currentColor = .cyan
+                    case 37: currentColor = .white
+                    case 39: currentColor = nil  // Default foreground
+                    case 90: currentColor = .gray
+                    case 91: currentColor = Color(.sRGB, red: 1, green: 0.33, blue: 0.33)
+                    case 92: currentColor = Color(.sRGB, red: 0.33, green: 1, blue: 0.33)
+                    case 93: currentColor = Color(.sRGB, red: 1, green: 1, blue: 0.33)
+                    case 94: currentColor = Color(.sRGB, red: 0.33, green: 0.33, blue: 1)
+                    case 95: currentColor = Color(.sRGB, red: 1, green: 0.33, blue: 1)
+                    case 96: currentColor = Color(.sRGB, red: 0.33, green: 1, blue: 1)
+                    case 97: currentColor = .white
+                    default: break
+                    }
+                }
+            }
+            
+            lastEnd = matchRange.location + matchRange.length
+        }
+        
+        // Remaining text after last escape
+        if lastEnd < nsInput.length {
+            let text = nsInput.substring(from: lastEnd)
+            if !text.isEmpty {
+                segments.append(ANSISegment(text: text, color: currentColor, bold: bold, italic: italic, underline: underline))
+            }
+        }
+        
+        if segments.isEmpty {
+            segments.append(ANSISegment(text: input, color: nil, bold: false, italic: false, underline: false))
+        }
+        
+        return segments
     }
 }
 
