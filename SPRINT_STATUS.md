@@ -61,6 +61,11 @@
 | 48 | Eliminated 10 crash points (URL force-unwraps, dict force-unwraps, array bounds) | `AIManager.swift`, `OutputView.swift`, `TasksManager.swift`, `NavigationManager.swift`, `CodeAnalyzer.swift` |
 | 49 | LocalLLMService: conversation history fix (reuse MLXChatSession) + HF token to Keychain | `LocalLLMService.swift` |
 | 50 | SettingsView: search filter fix, duplicate import cleanup | `SettingsView.swift` |
+| 51 | App display name changed from "VS Code" to "CodePad" (trademark compliance) | `Info.plist`, `ContentView.swift`, `SceneDelegate.swift`, `VSCodeiPadOSApp.swift` |
+| 52 | NSAllowsLocalNetworking ATS exception for Ollama/code-server | `Info.plist` |
+| 53 | 14 new file type UTIs for broader document support | `Info.plist` |
+| 54 | Memory leak fixes: weak delegate, dismantleUIView, [weak self] closures | `RunnerSelector.swift`, `SettingsView.swift`, `FileSystemNavigator.swift` |
+| 55 | Polished empty states for SearchView and GitView | `SearchView.swift`, `GitView.swift` |
 
 ---
 
