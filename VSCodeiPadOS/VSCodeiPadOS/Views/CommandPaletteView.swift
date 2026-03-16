@@ -4,14 +4,14 @@ struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var editorCore: EditorCore
     @State private var searchText = ""
-    @State private var commandCategories: [CommandCategory] = []
+    @State private var commandCategories: [PaletteCommandCategory] = []
     
-    var filteredCommands: [CommandCategory] {
+    var filteredCommands: [PaletteCommandCategory] {
         if searchText.isEmpty {
             return commandCategories
         }
         return commandCategories.map { category in
-            CommandCategory(
+            PaletteCommandCategory(
                 name: category.name,
                 commands: category.commands.filter { command in
                     command.title.localizedCaseInsensitiveContains(searchText) ||
@@ -72,7 +72,7 @@ struct CommandPaletteView: View {
     
     private func loadCommands() {
         commandCategories = [
-            CommandCategory(name: "Editor", commands: [
+            PaletteCommandCategory(name: "Editor", commands: [
                 CommandItem(
                     title: "Collapse All",
                     icon: "arrow.turn.down.right",
@@ -110,7 +110,7 @@ struct CommandPaletteView: View {
                 ),
             ]),
             
-            CommandCategory(name: "View", commands: [
+            PaletteCommandCategory(name: "View", commands: [
                 CommandItem(
                     title: "Zoom In",
                     icon: "plus.magnifyingglass",
@@ -127,7 +127,7 @@ struct CommandPaletteView: View {
                 ),
             ]),
             
-            CommandCategory(name: "Navigation", commands: [
+            PaletteCommandCategory(name: "Navigation", commands: [
                 CommandItem(
                     title: "Focus Explorer",
                     icon: "folder",
@@ -144,7 +144,7 @@ struct CommandPaletteView: View {
                 ),
             ]),
             
-            CommandCategory(name: "Tabs", commands: [
+            PaletteCommandCategory(name: "Tabs", commands: [
                 CommandItem(
                     title: "Next Tab",
                     icon: "chevron.right",
@@ -175,7 +175,7 @@ struct CommandPaletteView: View {
     }
 }
 
-struct CommandCategory {
+struct PaletteCommandCategory {
     let name: String
     let commands: [CommandItem]
 }

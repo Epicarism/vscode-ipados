@@ -584,14 +584,6 @@ final class SwiftRunner {
 
 // MARK: - Supporting Types (if not defined elsewhere)
 
-struct ExecutionResult {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int
-    let error: RunnerError?
-    
-    var isSuccess: Bool { exitCode == 0 && error == nil }
-}
 
 enum RunnerError: Error, LocalizedError {
     case executionFailed(String)

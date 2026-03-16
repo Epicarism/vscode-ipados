@@ -1499,30 +1499,4 @@ extension SSHClientError {
 
 // MARK: - Command Output Types
 
-enum SSHCommandOutput {
-    case stdout(String)
-    case stderr(String)
-    case exit(Int)
-    case error(Error)
-    case timeout
-}
 
-struct SSHCommandResult {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int
-    let isTimedOut: Bool
-    
-    var isSuccess: Bool {
-        exitCode == 0 && !isTimedOut
-    }
-    
-    var combinedOutput: String {
-        if stderr.isEmpty {
-            return stdout
-        } else if stdout.isEmpty {
-            return stderr
-        }
-        return stdout + "\n" + stderr
-    }
-}

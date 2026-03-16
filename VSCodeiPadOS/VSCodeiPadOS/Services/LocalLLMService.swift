@@ -57,8 +57,10 @@ final class LocalLLMService: ObservableObject {
     @Published var currentModelId: String = ""
     @Published var isGenerating = false
     
-    // HuggingFace token for gated models (stored in UserDefaults)
-    @AppStorage("hfToken") var hfToken: String = ""
+    // HuggingFace token for gated models (stored in Keychain)
+    @Published var hfToken: String = "" {
+        didSet { KeychainHelper.shared.set(newValue, forKey: KeychainHelper.hfToken) }
+    }
     
     // Model container
     private var modelContainer: ModelContainer?
@@ -82,6 +84,9 @@ final class LocalLLMService: ObservableObject {
     // MARK: - Initialization
     
     init() {
+        // Load HuggingFace token from Keychain
+        hfToken = KeychainHelper.shared.get(KeychainHelper.hfToken) ?? ""
+
         // Observe iOS memory warnings to reduce the chance of OOM termination.
         memoryWarningObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,

@@ -278,7 +278,7 @@ struct SettingsDetailView: View {
     var body: some View {
         Form {
             if shouldShow(category: .editor) {
-                Section(header: Text("Editor")) {
+                Section(header: Text("Editor").accessibilityAddTraits(.isHeader)) {
                     if matchesSearch("Font Size") {
                         VStack(alignment: .leading) {
                             Text("Font Size: \(Int(fontSize))")
@@ -289,6 +289,8 @@ struct SettingsDetailView: View {
                             } maximumValueLabel: {
                                 Text("32")
                             }
+                            .accessibilityLabel("Font Size: \(Int(fontSize))")
+                            .accessibilityHint("Adjust the editor font size between 8 and 32")
                         }
                     }
                     
@@ -300,18 +302,22 @@ struct SettingsDetailView: View {
                             Text("Fira Code").tag("Fira Code")
                             Text("JetBrains Mono").tag("JetBrains Mono")
                         }
+                        .accessibilityHint("Select the editor font family")
                     }
                     
                     if matchesSearch("Tab Size") {
                         Stepper("Tab Size: \(tabSize)", value: $tabSize, in: 1...8)
+                            .accessibilityHint("Adjust the number of spaces per tab, from 1 to 8")
                     }
                     
                     if matchesSearch("Word Wrap") {
                         Toggle("Word Wrap", isOn: $wordWrap)
+                            .accessibilityHint("Toggle word wrap in the editor")
                     }
                     
                     if matchesSearch("Minimap") {
                         Toggle("Minimap", isOn: $minimapEnabled)
+                            .accessibilityHint("Toggle the minimap sidebar in the editor")
                     }
                     
                     if matchesSearch("Line Numbers") {
@@ -321,6 +327,7 @@ struct SettingsDetailView: View {
                             Text("Relative").tag("relative")
                             Text("Interval").tag("interval")
                         }
+                        .accessibilityHint("Choose how line numbers are displayed")
                         // Sync with boolean for backward compatibility
                         .onChange(of: lineNumbersStyle) { newValue in
                             showLineNumbers = (newValue != "off")
@@ -329,16 +336,18 @@ struct SettingsDetailView: View {
                     
                     if matchesSearch("Trim Whitespace") {
                         Toggle("Trim Trailing Whitespace", isOn: $trimTrailingWhitespace)
+                            .accessibilityHint("Remove trailing whitespace on save")
                     }
                     
                     if matchesSearch("Final Newline") {
                         Toggle("Insert Final Newline", isOn: $insertFinalNewline)
+                            .accessibilityHint("Insert a newline at end of file on save")
                     }
                 }
             }
             
             if shouldShow(category: .workbench) {
-                Section(header: Text("Workbench")) {
+                Section(header: Text("Workbench").accessibilityAddTraits(.isHeader)) {
                     if matchesSearch("Theme") {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Color Theme").font(.headline)
@@ -367,6 +376,7 @@ struct SettingsDetailView: View {
                             
                             // Theme Preview
                             ThemePreviewView(theme: themeManager.currentTheme)
+                                .accessibilityLabel("Theme preview for \(themeManager.currentTheme.name)")
                                 .frame(height: 120)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .overlay(
@@ -380,7 +390,7 @@ struct SettingsDetailView: View {
             }
             
             if shouldShow(category: .features) {
-                Section(header: Text("Features")) {
+                Section(header: Text("Features").accessibilityAddTraits(.isHeader)) {
                     if matchesSearch("Auto Save") {
                         Picker("Auto Save", selection: $autoSave) {
                             Text("Off").tag("off")
@@ -388,6 +398,7 @@ struct SettingsDetailView: View {
                             Text("On Focus Change").tag("onFocusChange")
                             Text("On Window Change").tag("onWindowChange")
                         }
+                        .accessibilityHint("Choose when files are automatically saved")
                         
                         if autoSave == "afterDelay" {
                             HStack {
@@ -402,20 +413,22 @@ struct SettingsDetailView: View {
                             ), in: 500...5000, step: 100) {
                                 Text("Delay")
                             }
+                            .accessibilityLabel("Auto Save Delay: \(autoSaveDelay) milliseconds")
+                            .accessibilityHint("Adjust the delay before auto-saving, from 500 to 5000 milliseconds")
                         }
                     }
                 }
             }
 
             if shouldShow(category: .connectedMode) {
-                Section(header: Text("Connected Mode")) {
+                Section(header: Text("Connected Mode").accessibilityAddTraits(.isHeader)) {
                     if matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected") {
                         ConnectedModeSettingsSection()
                     }
                 }
             }
             if shouldShow(category: .accounts) {
-                Section(header: Text("GitHub Account")) {
+                Section(header: Text("GitHub Account").accessibilityAddTraits(.isHeader)) {
                     if matchesSearch("GitHub") || matchesSearch("Account") || matchesSearch("Login") {
                         GitHubLoginView()
                     }
@@ -423,9 +436,10 @@ struct SettingsDetailView: View {
             }
 
             if shouldShow(category: .extensions) {
-                Section(header: Text("Extensions")) {
+                Section(header: Text("Extensions").accessibilityAddTraits(.isHeader)) {
                     if matchesSearch("AI Assistant") {
                         Button("AI Assistant Settings…") { showAISettings = true }
+                            .accessibilityHint("Open AI assistant configuration and API key settings")
                     }
                 }
             }
@@ -492,6 +506,8 @@ struct ThemeRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(theme.name) theme\(isSelected ? ", currently selected" : "")")
+        .accessibilityHint("Double tap to apply this theme")
     }
 }
 
@@ -659,11 +675,14 @@ struct ConnectedModeSettingsSection: View {
                 Button(action: { showingAddTunnel = true }) {
                     Label("Add Server", systemImage: "plus.circle")
                 }
+                .accessibilityHint("Add a new server connection")
+                }
             } else {
                 ForEach(tunnelManager.configs) { config in
                     HStack {
                         Image(systemName: config.type.icon)
                             .foregroundColor(.accentColor)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading) {
                             Text(config.name)
                                 .font(.subheadline)
@@ -676,9 +695,13 @@ struct ConnectedModeSettingsSection: View {
                         Button("Connect") {
                             tunnelManager.connect(to: config)
                         }
+                        .accessibilityLabel("Connect to \(config.name)")
+                        .accessibilityHint("Connect to \(config.type.rawValue) at \(config.url)")
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("\(config.name), \(config.type.rawValue)")
                     .padding(.vertical, 4)
                 }
                 
@@ -686,6 +709,7 @@ struct ConnectedModeSettingsSection: View {
                     Label("Add Another Server", systemImage: "plus")
                 }
                 .font(.caption)
+                .accessibilityHint("Add another server connection")
             }
         }
         .sheet(isPresented: $showingAddTunnel) {
@@ -885,6 +909,9 @@ struct VSCodeTunnelView: View {
                 Button(action: { showingAddTunnel = true }) {
                     Image(systemName: "plus.circle.fill").font(.title2)
                 }
+                .accessibilityLabel("Add Server")
+                .accessibilityHint("Open the add server sheet")
+                }
             }
             .padding()
             .background(themeManager.currentTheme.sidebarBackground)
@@ -911,6 +938,7 @@ struct VSCodeTunnelView: View {
             Button(action: { showingAddTunnel = true }) {
                 Label("Add Server", systemImage: "plus")
             }.buttonStyle(.borderedProminent)
+            .accessibilityHint("Add a new server connection")
             Spacer()
             
             VStack(alignment: .leading, spacing: 12) {
@@ -928,10 +956,13 @@ struct VSCodeTunnelView: View {
     private func helpItem(icon: String, title: String, description: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.title3).foregroundColor(.accentColor).frame(width: 24)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline).fontWeight(.medium)
                 Text(description).font(.caption).foregroundColor(.secondary)
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("\(title). \(description)")
         }
     }
     
@@ -940,7 +971,9 @@ struct VSCodeTunnelView: View {
             ForEach(tunnelManager.configs) { config in
                 Button(action: { tunnelManager.connect(to: config) }) {
                     HStack(spacing: 12) {
+                    HStack(spacing: 12) {
                         Image(systemName: config.type.icon).font(.title2).foregroundColor(.accentColor).frame(width: 32)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(config.name).font(.headline).foregroundColor(.primary)
                             Text(config.url).font(.caption).foregroundColor(.secondary).lineLimit(1)
@@ -951,10 +984,11 @@ struct VSCodeTunnelView: View {
                         }
                         Spacer()
                         Image(systemName: "chevron.right").foregroundColor(.secondary)
+                            .accessibilityHidden(true)
                     }
                     .padding(.vertical, 4)
-                }
-                .buttonStyle(.plain)
+                    .accessibilityLabel("\(config.name), \(config.type.rawValue)")
+                    .accessibilityHint("Connect to \(config.url)")
             }
             .onDelete { indexSet in
                 for index in indexSet { tunnelManager.removeConfig(tunnelManager.configs[index]) }

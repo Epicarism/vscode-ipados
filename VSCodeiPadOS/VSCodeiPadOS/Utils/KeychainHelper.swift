@@ -116,4 +116,5 @@ extension KeychainHelper {
     static let groqKey = "groq_api_key"
     static let deepseekKey = "deepseek_api_key"
     static let mistralKey = "mistral_api_key"
+    static let hfToken = "hfToken"
 }
