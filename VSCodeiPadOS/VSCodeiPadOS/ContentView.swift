@@ -463,6 +463,7 @@ struct IDETabItem: View {
         .accessibilityHint("Double tap to switch to this tab")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityElement(children: .contain)
+    }
 }
 
 // MARK: - Editor with Syntax Highlighting + Autocomplete + Folding
