@@ -73,13 +73,13 @@ class PythonRunner: Runner {
         return command
     }
     
-    func execute(file: String, args: [String]) async throws -> ExecutionResult {
+    func execute(file: String, args: [String]) async throws -> SwiftExecutionResult {
         let command = buildCommand(for: file, args: args)
         let output = try await ssh.execute(command: command)
         
         // Check if output contains a Python traceback
         if let pythonError = parseTraceback(output.stderr) {
-            return ExecutionResult(
+            return SwiftExecutionResult(
                 stdout: output.stdout,
                 stderr: pythonError.fullTraceback,
                 exitCode: 1,
@@ -87,7 +87,7 @@ class PythonRunner: Runner {
             )
         }
         
-        return ExecutionResult(
+        return SwiftExecutionResult(
             stdout: output.stdout,
             stderr: output.stderr,
             exitCode: output.exitCode,
