@@ -17,6 +17,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         
+        // Migrate API keys from UserDefaults to Keychain (one-time)
+        KeychainHelper.migrateFromUserDefaults()
+        
         // Configure for Stage Manager optimization
         configureStageManager()
         

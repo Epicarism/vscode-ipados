@@ -11,6 +11,7 @@ struct GitStash: Identifiable, Equatable {
 /// NOTE: This project does not yet have a real git backend (libgit2 / shell).
 /// This service exists to wire FEAT-076/077 UI and provide a single shared state
 /// for StatusBar + quick actions sheet.
+@MainActor
 final class GitService: ObservableObject {
     static let shared = GitService()
 

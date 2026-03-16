@@ -170,7 +170,7 @@ public final class WASMRunner: NSObject {
         webConfiguration.userContentController = userContentController
         
         // Enable WASM support
-        webConfiguration.preferences.javaScriptEnabled = true
+        webConfiguration.defaultWebpagePreferences.allowsContentJavaScript = true
         if #available(iOS 15.0, *) {
             webConfiguration.preferences.isTextInteractionEnabled = true
         }

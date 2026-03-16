@@ -13,6 +13,7 @@ struct HoverInfo: Equatable, Identifiable {
 }
 
 /// Manages the state and data fetching for hover documentation
+@MainActor
 class HoverInfoManager: ObservableObject {
     @Published var currentInfo: HoverInfo? = nil
     @Published var isVisible: Bool = false

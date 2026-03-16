@@ -9,6 +9,7 @@ struct ColorPickerState {
     var position: CGPoint = .zero
 }
 
+@MainActor
 class ColorPickerManager: ObservableObject {
     static let shared = ColorPickerManager()
     

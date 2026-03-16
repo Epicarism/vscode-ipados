@@ -217,15 +217,17 @@ struct ChatSession: Identifiable, Codable {
 // MARK: - AI Manager
 
 class AIManager: ObservableObject {
-    // API Keys stored in UserDefaults (consider Keychain for production)
-    @AppStorage("openai_api_key") var openAIKey: String = ""
-    @AppStorage("anthropic_api_key") var anthropicKey: String = ""
-    @AppStorage("google_api_key") var googleKey: String = ""
-    @AppStorage("kimi_api_key") var kimiKey: String = ""
-    @AppStorage("glm_api_key") var glmKey: String = ""
-    @AppStorage("groq_api_key") var groqKey: String = ""
-    @AppStorage("deepseek_api_key") var deepseekKey: String = ""
-    @AppStorage("mistral_api_key") var mistralKey: String = ""
+    // API Keys stored securely in Keychain (migrated from UserDefaults on first launch)
+    // @Published so SwiftUI bindings ($aiManager.openAIKey) work correctly.
+    // didSet syncs each change to Keychain immediately.
+    @Published var openAIKey: String = "" { didSet { KeychainHelper.shared.set(openAIKey, forKey: KeychainHelper.openAIKey) } }
+    @Published var anthropicKey: String = "" { didSet { KeychainHelper.shared.set(anthropicKey, forKey: KeychainHelper.anthropicKey) } }
+    @Published var googleKey: String = "" { didSet { KeychainHelper.shared.set(googleKey, forKey: KeychainHelper.googleKey) } }
+    @Published var kimiKey: String = "" { didSet { KeychainHelper.shared.set(kimiKey, forKey: KeychainHelper.kimiKey) } }
+    @Published var glmKey: String = "" { didSet { KeychainHelper.shared.set(glmKey, forKey: KeychainHelper.glmKey) } }
+    @Published var groqKey: String = "" { didSet { KeychainHelper.shared.set(groqKey, forKey: KeychainHelper.groqKey) } }
+    @Published var deepseekKey: String = "" { didSet { KeychainHelper.shared.set(deepseekKey, forKey: KeychainHelper.deepseekKey) } }
+    @Published var mistralKey: String = "" { didSet { KeychainHelper.shared.set(mistralKey, forKey: KeychainHelper.mistralKey) } }
     @AppStorage("ollama_host") var ollamaHost: String = "http://localhost:11434"
     
     @AppStorage("selected_provider") private var selectedProviderRaw: String = AIProvider.openai.rawValue
@@ -256,6 +258,17 @@ class AIManager: ObservableObject {
     }
     
     init() {
+        // Load API keys from Keychain into @Published properties
+        let kc = KeychainHelper.shared
+        openAIKey = kc.get(KeychainHelper.openAIKey) ?? ""
+        anthropicKey = kc.get(KeychainHelper.anthropicKey) ?? ""
+        googleKey = kc.get(KeychainHelper.googleKey) ?? ""
+        kimiKey = kc.get(KeychainHelper.kimiKey) ?? ""
+        glmKey = kc.get(KeychainHelper.glmKey) ?? ""
+        groqKey = kc.get(KeychainHelper.groqKey) ?? ""
+        deepseekKey = kc.get(KeychainHelper.deepseekKey) ?? ""
+        mistralKey = kc.get(KeychainHelper.mistralKey) ?? ""
+        
         loadSessions()
         if sessions.isEmpty {
             createNewSession()
@@ -1214,14 +1227,14 @@ Use the EXACT filename shown in the file list. Examples:
         let localLLM = LocalLLMService.shared
         
         // Auto-load model if not loaded (pass selected model ID from UI)
-        if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
-            AppLogger.ai.debug("Loading local model: \(selectedModel.id)")
+        if !localLLM.isModelLoaded || localLLM.currentModelId != self.selectedModel.id {
+            AppLogger.ai.debug("Loading local model: \(self.selectedModel.id)")
             AppLogger.ai.debug("Available models: \(localLLM.availableModels.map { $0.id })")
-            await localLLM.loadModel(modelId: selectedModel.id)
+            await localLLM.loadModel(modelId: self.selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
-            let errorMsg = "Failed to load local model '\(selectedModel.id)'. Status: \(localLLM.statusMessage)"
+            let errorMsg = "Failed to load local model '\(self.selectedModel.id)'. Status: \(localLLM.statusMessage)"
             AppLogger.ai.error("\(errorMsg)")
             throw AIError.apiError(errorMsg)
         }
@@ -1261,14 +1274,14 @@ Use the EXACT filename shown in the file list. Examples:
         let localLLM = LocalLLMService.shared
         
         // Auto-load model if not loaded (pass selected model ID from UI)
-        if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
-            AppLogger.ai.debug("Loading local model (streaming): \(selectedModel.id)")
+        if !localLLM.isModelLoaded || localLLM.currentModelId != self.selectedModel.id {
+            AppLogger.ai.debug("Loading local model (streaming): \(self.selectedModel.id)")
             AppLogger.ai.debug("Available models: \(localLLM.availableModels.map { $0.id })")
-            await localLLM.loadModel(modelId: selectedModel.id)
+            await localLLM.loadModel(modelId: self.selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
-            let errorMsg = "Failed to load local model '\(selectedModel.id)'. Status: \(localLLM.statusMessage)"
+            let errorMsg = "Failed to load local model '\(self.selectedModel.id)'. Status: \(localLLM.statusMessage)"
             AppLogger.ai.error("\(errorMsg)")
             throw AIError.apiError(errorMsg)
         }
@@ -1324,7 +1337,7 @@ Use the EXACT filename shown in the file list. Examples:
                             // Emit text before <think>
                             let before = String(pendingBuffer[pendingBuffer.startIndex..<openRange.lowerBound])
                             if !before.isEmpty {
-                                streamingResponse += before
+                                self.streamingResponse += before
                             }
                             pendingBuffer = String(pendingBuffer[openRange.upperBound...])
                             insideThinkBlock = true
@@ -1342,7 +1355,7 @@ Use the EXACT filename shown in the file list. Examples:
                             if safeEnd > 0 {
                                 let safeText = String(pendingBuffer.prefix(safeEnd))
                                 if !safeText.isEmpty {
-                                    streamingResponse += safeText
+                                    self.streamingResponse += safeText
                                 }
                                 pendingBuffer = String(pendingBuffer.suffix(pendingBuffer.count - safeEnd))
                             }
@@ -1357,14 +1370,14 @@ Use the EXACT filename shown in the file list. Examples:
                 // Final check: strip any stray </think> tags
                 let cleaned = pendingBuffer.replacingOccurrences(of: "</think>", with: "")
                 if !cleaned.isEmpty {
-                    streamingResponse += cleaned
+                    self.streamingResponse += cleaned
                 }
             }
             
             AppLogger.ai.debug("✅ Stream complete: \(chunkCount) chunks, fullResponse=\(fullResponse.count) chars")
             // Return the clean display text (what was streamed to the UI)
-            let finalResponse = sanitizeLocalModelText(streamingResponse, fallbackRaw: fullResponse)
-            AppLogger.ai.debug("Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(streamingResponse.count) chars")
+            let finalResponse = sanitizeLocalModelText(self.streamingResponse, fallbackRaw: fullResponse)
+            AppLogger.ai.debug("Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(self.streamingResponse.count) chars)"
             return finalResponse
         } catch {
             AppLogger.ai.error("❌ LocalMLX streaming error: \(error)")
@@ -1372,7 +1385,7 @@ Use the EXACT filename shown in the file list. Examples:
                 // Free memory for next attempt.
                 localLLM.unloadModel()
                 let message = "Model ran out of memory. Try a smaller model or close other apps."
-                streamingResponse = message
+                self.streamingResponse = message
                 return message
             }
             throw error
