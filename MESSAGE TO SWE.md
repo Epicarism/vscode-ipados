@@ -1,69 +1,87 @@
-# SWE Communication Log
+# 📋 SWE Communication Log
 
-## Status Update - March 16, 2026 10:30 PM
+## Last Updated: March 16, 2026 - 11:45 PM GMT+1
 
-### ✅ Build Status: CLEAN BUILD - Zero errors, zero warnings
+---
+
+## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
 
 ### Latest Commits:
-- `c9128dc` feat: Timeline panel tab, tab icons, @StateObject fixes, SearchView bug fixes, GitManager config API fix
-- `49f1dc6` fix: resolve all build errors - OutputView/TimelineView/TasksView brace mismatches
+- `cb42508` fix: ANSI background colors now render via AttributedString
+- `492dc99` fix: GitView operation guards + branch error alerts + cmd+enter, ContentView remove 90 lines dead code
+- `b9f7ce1` fix: EditorCore save race condition, saveAllTabs forceEditorSync + diagnostics
+- `dd98f1e` fix: TimelineView broken save notifications, SearchView perf cache, PortsView honest status
+- `3137b2e` refactor: remove 283 lines of dead code from SidebarView, add depth limits to DebugView recursion
+- `5780633` fix: DebugView contextMenu, remove force unwraps in TerminalView
+- `c707d68` fix: @ObservedObject → @StateObject for all self-initialized singletons across 24 view files
 
-### Recent Fixes Applied (This Session):
-1. **OutputView.swift** - Fixed 5 missing closing braces in Button labels (accessibility modifiers were nesting inside buttons)
-2. **TimelineView.swift** - Fixed missing closing brace for `loading` computed property
-3. **TasksView.swift** - Fixed missing closing brace for `TasksView` struct before `TaskRow`
-4. **GitView.swift** - Restored missing `commitChanges()` and `commitAndPush()` functions, replaced nonexistent `AppLogger.shared` with `print()`, changed `@ObservedObject` → `@StateObject`
-5. **GitManager.swift** - Fixed `SSHCommandResult.output` → `.stdout`, fixed `GitManagerError.notARepository` → `.noRepository`, fixed `commandFailed` argument labels
-6. **PanelView.swift** - Added Timeline tab with icon, added icons to ALL panel tab buttons
-7. **TerminalView.swift** - Changed all 6 `@ObservedObject` for ThemeManager → `@StateObject`, fixed `Text.background()` type error in ANSI renderer
-8. **DebugView.swift** - `@StateObject` for singletons, functional exception toggles (were hardcoded `.constant`)
-9. **SearchView.swift** - Fixed binary extension filter bug (`.hasSuffix` → `==`), added `.onChange` handlers so toggling matchCase/matchWholeWord/useRegex re-triggers search, fixed missing `onAppear` function reference
-10. **Notification+Names.swift** - Added `switchToTimelinePanel`
+---
 
-### Current Working Features:
-- ✅ Editor with syntax highlighting (Runestone + legacy)
-- ✅ File system navigation & workspace management
-- ✅ Tab management with state restoration
-- ✅ Terminal panel (local commands + SSH via SwiftNIO)
-- ✅ Git integration (read ops + SSH write ops + config UI)
-- ✅ Debug console (JavaScript REPL with JSRunner)
-- ✅ Command palette, Quick Open, Go To Symbol/Line
-- ✅ Find/Replace
-- ✅ SSH connections (SwiftNIO)
-- ✅ SFTP file operations (via SSH)
-- ✅ ANSI color rendering in terminal (256-color support)
-- ✅ Workspace trust management
-- ✅ AI Assistant panel (11 providers)
-- ✅ Code execution (JS, with TypeScript/Python via SSH)
-- ✅ Extensions panel
-- ✅ Settings with theme management (19 themes)
-- ✅ VS Code tunnel mode
-- ✅ Diagnostics/Problems panel (real-time analysis)
-- ✅ Output panel with channel management
-- ✅ Ports panel
-- ✅ **Timeline panel** (NEW - git history + local save tracking)
-- ✅ Breakpoint management
-- ✅ Tasks panel (.vscode/tasks.json)
+## ✅ What I (SWE-2) Fixed This Session:
 
-### Areas Still Needing Work:
-- Terminal interactive PTY mode (currently line-at-a-time for SSH)
-- Port forwarding actual SSH tunnel implementation
-- Extension system deeper integration
-- iCloud sync
-- Performance testing with large files
-- DebugView: watch expression swipeActions need List context (currently VStack)
-- DebugView: VariableRow recursive rendering needs depth limit
-- SearchView: processedResults computed property called too many times (needs caching)
+### Critical Bug Fixes:
+1. **EditorCore save race condition** - `saveActiveTab()` could save wrong file if user switched tabs during async dispatch. Now captures tab ID before dispatch.
+2. **TimelineView broken notifications** - Local save tracking was completely dead (listening for `"com.codepad.fileSaved"` which was never posted). Now listens for `.saveFile` and `.autoSaved`.
+3. **ANSI background colors** - Were parsed but never rendered (Text.background() returns View, not Text). Rewrote using AttributedString which natively supports bg colors.
+4. **EditorCore saveAllTabs()** - Was missing `.forceEditorSync` notification and diagnostics analysis after save.
+5. **RunConfigView force unwrap** - `remoteRunner!` could crash under concurrency. Changed to safe `guard let runner = remoteRunner`.
 
-### For Other SWE:
-- Build is clean on `iPad Pro 13-inch (M5)` simulator
-- Swift 6 strict concurrency enabled
-- If you add new files, use iOS 17+ onChange form: `.onChange(of: X) { _, newValue in ... }`
-- All UIKit delegate coordinators should be `@MainActor`
-- API keys in Keychain via `KeychainHelper`
-- Commit frequently with descriptive messages
+### UI/UX Fixes:
+6. **GitView operation guards** - Pull/Push/Fetch/Commit buttons now disabled during operations (was allowing double-taps).
+7. **GitView ⌘Enter commit** - Placeholder said "press ⌘Enter to commit" but no handler existed. Added `.keyboardShortcut(.return, modifiers: .command)`.
+8. **GitView branch picker errors** - Checkout/create branch failures were silently swallowed. Now shows alert.
+9. **PortsView honest status** - Auto-detected ports now show orange dot + "Detected on remote" instead of misleading green "Active" status.
+10. **SearchView performance** - `processedResults` computed property was recalculated ~8x per render. Converted to cached `@State` with explicit recompute on input changes.
+11. **DebugView depth limits** - `VariableRow` recursive rendering now has max depth of 10, preventing infinite recursion/stack overflow.
+
+### Dead Code Removal (470+ lines removed):
+12. **SidebarView.swift** - Removed dead `SidebarView` struct (242 lines) and `ResizeHandle` (38 lines). File went from 429→146 lines.
+13. **ContentView.swift** - Removed dead `runSampleWASM()`/`runJavaScript()` extension (73 lines), dead `updateWindowTitle()` function, dead `windowTitle` state.
+14. **EditorCore.swift** - Removed dead comments about previously deleted properties.
+
+### Polish:
+15. **GitView** - Theme-aware commit button colors, deprecated `.autocapitalization` → `.textInputAutocapitalization`
+16. **@StateObject migration** - 24 view files fixed: `@ObservedObject private var x = X.shared` → `@StateObject`
+17. **Diff algorithm** - Added early exit for identical files, size limit guard (2.5M cells max), common prefix/suffix trimming
+
+---
+
+## 🎯 Focus Areas (SWE-2):
+- **Build stability** - zero errors, zero warnings
+- **Editor reliability** - save/sync, tab switching, text fidelity
+- **Git operations** - proper error handling, no silent failures
+- **Terminal** - keyboard input, command history, ANSI rendering (now with background colors!)
+- **Theme consistency** - all panels use ThemeManager
+- **Dead code removal** - 470+ lines cleaned up
+- **Performance** - SearchView caching, diff algorithm optimization
+
+## 🔴 Known Issues Still Open:
+- [ ] SSH private key authentication is broken (falls back to password)
+- [ ] SFTP upload limited to 100KB (base64 encoding over SSH)
+- [ ] Port forwarding is UI-only (no actual SSH tunneling) - now clearly labeled
+- [ ] No undo/redo integration in Runestone editor
+- [ ] Host key validation disabled (accepts all - MITM risk)
+- [ ] No merge conflict handling in pull
+- [ ] ContentView sidebar uses magic Int indices instead of enum
+- [ ] ContentView has zero accessibility labels on interactive elements
+- [ ] Terminal ANSI state doesn't carry across lines
+- [ ] Terminal only supports one SSH session at a time (SSHManager singleton)
+- [ ] TabBarView drag-and-drop reorder may need testing
+
+## 📝 Notes for Other SWE:
+- Build target: `iPad Pro 13-inch (M5)` simulator
+- AppLogger has NO `.shared` - use `AppLogger.editor`, `AppLogger.git`, etc.
+- SSHManager uses singleton `SSHManager.shared` with `private init()`
+- DebugManager.breakpoints is a computed GET-ONLY property - use methods like `removeAllBreakpoints()`, `toggleAllBreakpoints()`
 - `SSHCommandResult` uses `.stdout` and `.stderr` (not `.output`)
 - `GitManagerError.commandFailed` requires `(args:exitCode:message:)` params
 - Use `@StateObject` (not `@ObservedObject`) when initializing singletons with `= X.shared`
-- `AppLogger` exists in Utils/AppLogger.swift with `.editor`, `.network`, etc. categories
-- DiagnosticsService runs on every file save - add rules for new languages as needed
+- SearchView now uses `cachedResults` (not computed `processedResults`)
+- EditorCore `_performSave(tabId:index:)` now takes optional params for race-safe saves
+- Commit frequently with descriptive messages
+
+---
+
+## 💬 Messages:
+
+**[SWE-2 | 11:45 PM]** Major session complete. Fixed 17 issues including critical save race condition, broken timeline notifications, ANSI background rendering, and GitView operation safety. Removed 470+ lines of dead code. Build is clean. All panels functional.
