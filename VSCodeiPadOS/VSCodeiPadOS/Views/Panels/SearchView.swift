@@ -129,9 +129,7 @@ struct SearchView: View {
     // Binary file extensions to exclude
     private let binaryExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".avi", ".mov", ".exe", ".dll", ".so", ".dylib", ".app", ".ipa", ".dmg", ".pkg", ".deb", ".rpm", ".img", ".iso", ".bin", ".dat", ".db", ".sqlite", ".sqlite3", ".ttf", ".otf", ".woff", ".woff2", ".eot"]
     
-    @State private var searchHistory: [String] = []
-    @State private var showHistory: Bool = false
-    
+    @State private var cachedConvertedResults: [FileSearchResult] = []
     @State private var cachedResults: [FileSearchResult] = []
 
     // MARK: - Computed Properties
@@ -307,7 +305,8 @@ struct SearchView: View {
                 searchManager.clearResults()
             }
         }
-        .onChange(of: searchManager.results.count) { _, _ in
+        .onChange(of: searchManager.results) { _, _ in
+            recomputeConvertedResults()
             recomputeProcessedResults()
         }
         .onChange(of: searchManager.isSearching) { _, newValue in
@@ -600,8 +599,8 @@ struct SearchView: View {
             
             Spacer()
             
-            if !convertedResults.isEmpty && !searchManager.isSearching {
-                Text("\(convertedResults.count) files, \(convertedResults.map { $0.matches.count }.reduce(0, +)) matches")
+            if !cachedConvertedResults.isEmpty && !searchManager.isSearching {
+                Text("\(cachedConvertedResults.count) files, \(cachedConvertedResults.map { $0.matches.count }.reduce(0, +)) matches")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -630,6 +629,11 @@ struct SearchView: View {
                 Text("files to include/exclude")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if !filesToInclude.trimmingCharacters(in: .whitespaces).isEmpty || !filesToExclude.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                }
                 Spacer()
             }
             .onTapGesture {
@@ -801,8 +805,6 @@ struct SearchView: View {
     }
     
     // MARK: - Debounced Search
-
-    // MARK: - Debounced Search
     
     private func debouncedSearch(immediate: Bool = false) {
         searchTask?.cancel()
@@ -909,9 +911,9 @@ struct SearchView: View {
     }
 
     
-    // Convert SearchManager results to view model
-    private var convertedResults: [FileSearchResult] {
-        searchManager.results.map { fileMatch in
+    // Convert SearchManager results to cached view model
+    private func recomputeConvertedResults() {
+        cachedConvertedResults = searchManager.results.map { fileMatch in
             let fileName = URL(fileURLWithPath: fileMatch.filePath).lastPathComponent
             let matches = fileMatch.matches.map { match in
                 SearchResultLine(
@@ -930,7 +932,7 @@ struct SearchView: View {
     }
     
     private var rawResults: [FileSearchResult] {
-        convertedResults
+        cachedConvertedResults
     }
 }
 

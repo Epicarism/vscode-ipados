@@ -32,7 +32,9 @@ struct DebugView: View {
     @State private var debuggerProgramPath: String = ""
     @State private var debuggerHost: String = ""
     @State private var selectedDebuggerType: DebuggerType = .lldb
+    // TODO: Wire catchExceptions into debugManager when real debugger integration is added
     @State private var catchExceptions: Bool = false
+    // TODO: Wire uncaughtExceptions into debugManager when real debugger integration is added
     @State private var uncaughtExceptions: Bool = true
     
     private var theme: Theme { themeManager.currentTheme }
@@ -314,34 +316,39 @@ struct DebugView: View {
                         .padding(.leading, 12)
                 }
                 
-                ForEach(debugManager.watchExpressions) { watch in
-                    HStack {
-                        Image(systemName: "eye")
-                            .font(.caption2)
-                            .foregroundColor(theme.comment)
-                            .accessibilityHidden(true)
-                        Text(watch.expression)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(theme.editorForeground)
-                        Text(":")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(theme.comment)
-                        Spacer()
-                        Text(watch.value)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(theme.comment)
-                    }
-                    .padding(.vertical, 4)
-                    .padding(.leading, 12)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Watch: \(watch.expression), value: \(watch.value)")
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            debugManager.removeWatchExpression(id: watch.id)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                if !debugManager.watchExpressions.isEmpty {
+                    List {
+                        ForEach(debugManager.watchExpressions) { watch in
+                            HStack {
+                                Image(systemName: "eye")
+                                    .font(.caption2)
+                                    .foregroundColor(theme.comment)
+                                    .accessibilityHidden(true)
+                                Text(watch.expression)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(theme.editorForeground)
+                                Text(":")
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(theme.comment)
+                                Spacer()
+                                Text(watch.value)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(theme.comment)
+                            }
+                            .padding(.vertical, 4)
+                            .padding(.leading, 12)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Watch: \(watch.expression), value: \(watch.value)")
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    debugManager.removeWatchExpression(id: watch.id)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
+                    .listStyle(.plain)
                 }
                 
                 if isAddingWatch {
@@ -501,9 +508,15 @@ struct DebugView: View {
     
     private func convertToDebugVariable(_ variable: DebugManager.Variable, depth: Int = 0) -> DebugVariable {
         let childDepth = depth + 1
-        let convertedChildren: [DebugVariable]? = (variable.children.isEmpty || depth >= 10)
-            ? nil
-            : variable.children.map { convertToDebugVariable($0, depth: childDepth) }
+        let convertedChildren: [DebugVariable]?
+        if variable.children.isEmpty {
+            convertedChildren = nil
+        } else if depth >= 10 {
+            // Depth limit reached - add sentinel so user knows content was truncated
+            convertedChildren = [DebugVariable(name: "…", value: "depth limit reached", children: nil)]
+        } else {
+            convertedChildren = variable.children.map { convertToDebugVariable($0, depth: childDepth) }
+        }
         return DebugVariable(
             name: variable.name,
             value: variable.value,
@@ -637,6 +650,7 @@ struct VariableRow: View {
     let variable: DebugVariable
     let theme: Theme
     var depth: Int = 0
+    @State private var isExpanded: Bool = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -675,7 +689,7 @@ struct VariableRow: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("\(variable.name): \(variable.value)")
             
-            if isExpanded, let children = variable.children, depth < 10 {
+            if isExpanded, let children = variable.children, depth < 11 {
                 ForEach(children) { child in
                     VariableRow(variable: child, theme: theme, depth: depth + 1)
                         .padding(.leading, 16)

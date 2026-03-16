@@ -429,7 +429,11 @@ struct TerminalLineView: View {
         switch type {
         case .command: return themeManager.currentTheme.editorForeground
         case .output: return themeManager.currentTheme.editorForeground.opacity(0.9)
-        case .error: return Color.red // Could use theme error color if available
+        case .error:
+            // Theme has no dedicated errorColor property; use red adapted to theme brightness
+            return themeManager.currentTheme.isDark
+                ? Color(red: 0.96, green: 0.35, blue: 0.35)
+                : Color(red: 0.80, green: 0.19, blue: 0.19)
         case .system: return themeManager.currentTheme.comment
         case .prompt: return themeManager.currentTheme.type
         }
@@ -607,6 +611,7 @@ extension TerminalTab: Equatable {}
     }
     
     // Legacy connect method for backward compatibility
+    @available(*, deprecated, message: "Use SSHConnectionConfig instead")
     func connect(to connection: SSHConnection) {
         let authMethod: SSHConnectionConfig.SSHAuthMethod
         if let privateKey = connection.privateKey, !privateKey.isEmpty {
@@ -663,7 +668,9 @@ extension TerminalTab: Equatable {}
     }
     
     func sendEscape() {
-        sshManager?.sendEscape()
+        if isConnected {
+            sshManager?.sendEscape()
+        }
     }
     
     func previousCommand() -> String? {
@@ -980,7 +987,7 @@ extension TerminalTab: Equatable {}
             if !line.isEmpty || lines.count == 1 {
                 self.output.append(TerminalLine(text: line, type: type, isANSI: isANSI || line.contains("\u{1B}")))
                 if self.output.count > 10000 {
-                    self.output.removeFirst(self.output.count - 10000)
+                    self.output = Array(self.output.suffix(10000))
                 }
             }
         }
@@ -1211,6 +1218,7 @@ struct SSHConnectionView: View {
 
 // MARK: - Models & Helpers (Legacy support)
 
+@available(*, deprecated, message: "Use SSHConnectionConfig instead")
 struct SSHConnection {
     let host: String
     let port: Int

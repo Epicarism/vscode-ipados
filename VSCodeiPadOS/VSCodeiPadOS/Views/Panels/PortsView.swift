@@ -41,8 +41,14 @@ struct ForwardedPort: Identifiable, Equatable {
     var isActive: Bool
     
     var localURL: String {
-        let scheme = portProtocol == .https ? "https" : "http"
-        return "\(scheme)://localhost:\(port)"
+        switch portProtocol {
+        case .https:
+            return "https://localhost:\(port)"
+        case .http:
+            return "http://localhost:\(port)"
+        case .tcp:
+            return "tcp://localhost:\(port)"
+        }
     }
     
     static func == (lhs: ForwardedPort, rhs: ForwardedPort) -> Bool {
@@ -57,6 +63,7 @@ final class PortForwardingManager: ObservableObject {
     @Published var forwardedPorts: [ForwardedPort] = []
     @Published var isAutoForwardEnabled: Bool = true
     @Published var isScanning: Bool = false
+    @Published var scanError: String? = nil
     
     private nonisolated(unsafe) var sshConnectObserver: NSObjectProtocol?
     
@@ -162,8 +169,7 @@ final class PortForwardingManager: ObservableObject {
                 updatePortsWithScanResults(detectedPorts)
             }
         } catch {
-            // Silently fail - user can try again
-            print("Port scan failed: \(error.localizedDescription)")
+            scanError = "Port scan failed: \(error.localizedDescription)"
         }
         
         isScanning = false
