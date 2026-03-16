@@ -353,7 +353,7 @@ class AIToolExecutor {
             
             let contents = try FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
             
-            let items = try contents.map { url -> String in
+            let items = contents.map { url -> String in
                 let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 let icon = isDir ? "📁" : "📄"
                 return "\(icon) \(url.lastPathComponent)"

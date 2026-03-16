@@ -191,7 +191,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 }
                 let didStartAccessing = workspaceURL.startAccessingSecurityScopedResource()
                 if didStartAccessing {
-                    defer { workspaceURL.stopAccessingSecurityScopedResource() }
+                    workspaceURL.stopAccessingSecurityScopedResource()
                 }
                 NotificationCenter.default.post(
                     name: .sceneOpenWorkspace,
@@ -242,14 +242,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         var shouldRestore = false
         
         if let session = session,
-           let activity = session.stateRestorationActivity {
+           let _ = session.stateRestorationActivity {
             shouldRestore = true
         }
         
         // Or check connection options for user activity
         if !shouldRestore,
            let options = connectionOptions,
-           let activity = options.userActivities.first {
+           let _ = options.userActivities.first {
             shouldRestore = true
         }
         

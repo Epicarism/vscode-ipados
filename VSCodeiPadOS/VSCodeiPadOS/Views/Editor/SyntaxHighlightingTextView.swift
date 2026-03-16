@@ -478,7 +478,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             
             // Calculate visible range with buffer
             let visibleRect = textView.bounds
-            let textContainer = textView.textContainer
+            let _ = textView.textContainer
             let layoutManager = textView.layoutManager
             
             // Get the glyph range for the visible rect
@@ -931,7 +931,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 
         
         @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
-            guard let textView = gesture.view as? UITextView else { return }
+            guard gesture.view is UITextView else { return }
 
             switch gesture.state {
             case .began:

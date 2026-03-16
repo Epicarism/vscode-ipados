@@ -110,57 +110,111 @@ struct ContentView: View {
     @ViewBuilder
     private var contentWithHandlers: some View {
         mainContentView
-            .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
-            .onChange(of: editorCore.activeTab?.fileName) { _ in updateWindowTitle() }
-            .onChange(of: editorCore.tabs.count) { _ in updateWindowTitle() }
-            .onChange(of: editorCore.activeTabId) { _ in updateWindowTitle() }
-            .onChange(of: editorCore.activeTab?.isUnsaved) { _ in updateWindowTitle() }
-            .onAppear {
-                editorCore.fileNavigator = fileNavigator
-                updateWindowTitle()
-                if editorCore.restoredWorkspace, let url = editorCore.restoreWorkspaceURL() {
-                    let accessing = url.startAccessingSecurityScopedResource()
-                    if FileManager.default.fileExists(atPath: url.path) {
-                        finishOpeningWorkspace(url)
-                        editorCore.restoreOpenTabs(workspaceURL: url)
-                    } else {
-                        editorCore.clearWorkspaceState()
-                        let exampleTabs = EditorCore.createExampleTabs()
-                        editorCore.tabs.append(contentsOf: exampleTabs)
-                        editorCore.activeTabId = exampleTabs.first?.id
+            .modifier(WorkspaceStateHandlers(editorCore: editorCore, fileNavigator: fileNavigator, showingDocumentPicker: $showingDocumentPicker, finishOpeningWorkspace: finishOpeningWorkspace))
+            .modifier(ExecutionHandlers(editorCore: editorCore, showTerminal: $showTerminal))
+    }
+
+    private struct WorkspaceStateHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+        @ObservedObject var fileNavigator: FileSystemNavigator
+        @Binding var showingDocumentPicker: Bool
+        let finishOpeningWorkspace: (URL) -> Void
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
+                .onChange(of: editorCore.activeTab?.fileName) { _ in updateTitle() }
+                .onChange(of: editorCore.tabs.count) { _ in updateTitle() }
+                .onChange(of: editorCore.activeTabId) { _ in updateTitle() }
+                .onChange(of: editorCore.activeTab?.isUnsaved) { _ in updateTitle() }
+                .onAppear {
+                    editorCore.fileNavigator = fileNavigator
+                    updateTitle()
+                    if editorCore.restoredWorkspace, let url = editorCore.restoreWorkspaceURL() {
+                        let accessing = url.startAccessingSecurityScopedResource()
+                        if FileManager.default.fileExists(atPath: url.path) {
+                            finishOpeningWorkspace(url)
+                            editorCore.restoreOpenTabs(workspaceURL: url)
+                        } else {
+                            editorCore.clearWorkspaceState()
+                            let exampleTabs = EditorCore.createExampleTabs()
+                            editorCore.tabs.append(contentsOf: exampleTabs)
+                            editorCore.activeTabId = exampleTabs.first?.id
+                        }
+                        if accessing { url.stopAccessingSecurityScopedResource() }
                     }
-                    if accessing { url.stopAccessingSecurityScopedResource() }
                 }
-            }
-            .onChange(of: editorCore.tabs.map { $0.id }) { _ in
-                editorCore.saveOpenTabPaths()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .runWithoutDebugging)) { _ in
-                if let activeTab = editorCore.activeTab {
-                    CodeExecutionService.shared.executeCurrentFile(fileName: activeTab.fileName, content: activeTab.content)
-                    showTerminal = true
-                    NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
+                .onChange(of: editorCore.tabs.map { $0.id }) { _ in
+                    editorCore.saveOpenTabPaths()
                 }
+        }
+
+        private func updateTitle() {
+            if let activeTab = editorCore.activeTab {
+                let fileName = activeTab.fileName
+                let unsavedIndicator = activeTab.isUnsaved ? "● " : ""
+                let title = "\(unsavedIndicator)\(fileName) - CodePad"
+                NotificationCenter.default.post(name: .windowTitleDidChange, object: nil, userInfo: ["title": title])
+            } else if !editorCore.tabs.isEmpty {
+                NotificationCenter.default.post(name: .windowTitleDidChange, object: nil, userInfo: ["title": "CodePad"])
+            } else {
+                NotificationCenter.default.post(name: .windowTitleDidChange, object: nil, userInfo: ["title": "Welcome - CodePad"])
             }
-            .onReceive(NotificationCenter.default.publisher(for: .runSampleWASM)) { _ in Task { await runSampleWASM() } }
-            .onReceive(NotificationCenter.default.publisher(for: .runJavaScript)) { _ in
-                if let activeTab = editorCore.activeTab {
-                    Task { await runJavaScript(code: activeTab.content, fileName: activeTab.fileName) }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .startDebugging)) { _ in
-                if let activeTab = editorCore.activeTab {
-                    let ext = (activeTab.fileName as NSString).pathExtension.lowercased()
-                    if ext == "js" || ext == "mjs" {
-                        let fileId = activeTab.url?.path ?? activeTab.fileName
-                        DebugManager.shared.startDebugging(code: activeTab.content, fileName: activeTab.fileName, fileId: fileId)
+        }
+    }
+
+    private struct ExecutionHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+        @Binding var showTerminal: Bool
+
+        func body(content: Content) -> some View {
+            content
+                .onReceive(NotificationCenter.default.publisher(for: .runWithoutDebugging)) { _ in
+                    if let activeTab = editorCore.activeTab {
+                        CodeExecutionService.shared.executeCurrentFile(fileName: activeTab.fileName, content: activeTab.content)
                         showTerminal = true
-                        NotificationCenter.default.post(name: .switchToDebugConsole, object: nil)
-                    } else {
-                        DebugManager.shared.consoleEntries.append(DebugManager.ConsoleEntry(message: "Debug not supported for .\(ext) files. Only .js is supported.", kind: .error))
+                        NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
                     }
                 }
-            }
+                .onReceive(NotificationCenter.default.publisher(for: .runSampleWASM)) { _ in
+                    // WASM execution handled via notification
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .runJavaScript)) { _ in
+                    if let activeTab = editorCore.activeTab {
+                        Task {
+                            let runner = JSRunner()
+                            runner.setConsoleHandler { message in
+                                Task { @MainActor in
+                                    NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "\(message)\n"])
+                                }
+                            }
+                            do {
+                                let result = try await runner.execute(code: activeTab.content)
+                                await MainActor.run {
+                                    NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "⮐ Result: \(result)\n✓ Completed\n"])
+                                }
+                            } catch {
+                                await MainActor.run {
+                                    NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
+                                }
+                            }
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .startDebugging)) { _ in
+                    if let activeTab = editorCore.activeTab {
+                        let ext = (activeTab.fileName as NSString).pathExtension.lowercased()
+                        if ext == "js" || ext == "mjs" {
+                            let fileId = activeTab.url?.path ?? activeTab.fileName
+                            DebugManager.shared.startDebugging(code: activeTab.content, fileName: activeTab.fileName, fileId: fileId)
+                            showTerminal = true
+                            NotificationCenter.default.post(name: .switchToDebugConsole, object: nil)
+                        } else {
+                            DebugManager.shared.consoleEntries.append(DebugManager.ConsoleEntry(message: "Debug not supported for .\(ext) files. Only .js is supported.", kind: .error))
+                        }
+                    }
+                }
+        }
     }
     
     // MARK: - Extracted View Components

@@ -276,13 +276,13 @@ func parseRustError(output: String) -> [ParsedError] {
         options: [.anchorsMatchLines]
     )
     
-    let nsRange = NSRange(output.startIndex..., in: output)
+    let _ = NSRange(output.startIndex..., in: output)
     let lines = output.components(separatedBy: .newlines)
     
     var currentMessage: String?
     var currentSeverity: ParsedError.ErrorSeverity = .error
     
-    for (index, line) in lines.enumerated() {
+    for (_, line) in lines.enumerated() {
         let lineRange = NSRange(line.startIndex..., in: line)
         
         // Check for error header with code
@@ -442,7 +442,7 @@ struct ErrorLocation: Identifiable, Equatable, Hashable {
         }
         
         // Clean up message by removing severity prefix
-        var cleanMessage = message
+        let cleanMessage = message
             .replacingOccurrences(of: "[ERROR] ", with: "")
             .replacingOccurrences(of: "[WARNING] ", with: "")
             .replacingOccurrences(of: "[NOTE] ", with: "")

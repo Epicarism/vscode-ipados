@@ -293,7 +293,7 @@ final class RemoteDebugger: ObservableObject {
         // Send quit command if connected
         if state.isActive {
             let quitCmd = "quit"
-            try? await sendCommand(quitCmd)
+            _ = try? await sendCommand(quitCmd)
         }
         
         sshManager?.disconnect()

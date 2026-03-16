@@ -134,7 +134,7 @@ struct RemoteWorkspace: Identifiable, Codable {
         // Set initial path and load directory
         currentRemotePath = "~"
         workspaceRootPath = currentRemotePath
-        try await refreshCurrentDirectory()
+        await refreshCurrentDirectory()
     }
     
     /// Disconnect from the remote server
@@ -545,7 +545,7 @@ struct RemoteWorkspace: Identifiable, Codable {
             throw SFTPError.notConnected
         }
         
-        guard let manager = sftpManager else {
+        guard sftpManager != nil else {
             throw SFTPError.notConnected
         }
         

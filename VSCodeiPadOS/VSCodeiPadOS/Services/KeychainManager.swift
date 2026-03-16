@@ -162,15 +162,11 @@ class KeychainManager: @unchecked Sendable {
     ///   - service: The service identifier for the keychain item
     /// - Returns: Boolean indicating if the key exists
     func exists(key: String, service: String? = nil) -> Bool {
-        do {
-            let serviceID = service ?? serviceIdentifier
-            let query = buildQuery(key: key, service: serviceID, returnData: false)
-            
-            let status = SecItemCopyMatching(query as CFDictionary, nil)
-            return status == errSecSuccess
-        } catch {
-            return false
-        }
+        let serviceID = service ?? serviceIdentifier
+        let query = buildQuery(key: key, service: serviceID, returnData: false)
+        
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess
     }
     
     /// Delete all items for a given service

@@ -302,13 +302,13 @@ final class GitManager: ObservableObject {
     }
     
     func commit(message: String) async throws {
-        guard let dir = workingDirectory else {
+        guard workingDirectory != nil else {
             throw GitManagerError.noRepository
         }
         guard let writer = nativeWriter else {
             throw GitManagerError.invalidRepository
         }
-        let sha = try writer.commit(message: message)
+        let _ = try writer.commit(message: message)
         await refresh()
     }
     
