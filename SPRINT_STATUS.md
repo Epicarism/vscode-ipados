@@ -1,8 +1,8 @@
 # 🏃 Sprint Status — Production Readiness
 
-**Last Updated:** March 16, 2026 03:00 GMT+1  
+**Last Updated:** March 16, 2026 03:25 GMT+1  
 **Updated By:** Claude (AI SWE)  
-**Branch:** `main` (~55 commits ahead of origin)  
+**Branch:** `main` (64 commits ahead of origin)  
 **Other SWEs:** Please update this file when you pick up or complete tasks.
 
 ---
@@ -42,6 +42,15 @@
 | 29 | Deleted `PythonRunnerAlt` dead code | `OnDevice/PythonRunnerAlt.swift` (removed) |
 | 30 | Fixed Terminal Esc button not working | Terminal view |
 | 31 | Configured Stage Manager support | `Info.plist`, scene manifest |
+| 32 | Created entitlements file for App Store | `VSCodeiPadOS.entitlements` |
+| 33 | Consolidated duplicate hex-to-Color implementations | `Theme.swift`, `Color+Hex.swift` |
+| 34 | Removed dead IDEAIAssistant with fake canned responses | `ContentView.swift` |
+| 35 | Added VoiceOver accessibility labels | `SidebarView.swift`, `WelcomeView.swift` |
+| 36 | MarkdownPreview embedded CSS + RemoteDebugger cleanup | `MarkdownPreviewView.swift`, `RemoteDebugger.swift` |
+| 37 | LaunchScreen storyboard + Info.plist enhancements | `LaunchScreen.storyboard`, `Info.plist` |
+| 38 | Rewrote ErrorParserTests to compile against actual API | `ErrorParserTests.swift` |
+| 39 | ProblemsView improvements | `ProblemsView.swift` |
+| 40 | App icon verified (1024x1024 PNG valid) | `AppIcon.appiconset` |
 
 ---
 
@@ -54,7 +63,7 @@
 | 3 | ~~README wrong project name~~ | `README.md` | ✅ Done | Claude |
 | 4 | ~~Force unwrap crashes~~ | `AIAgentTools`, `ThemeManager`, `EditorCore` | ✅ Done | Claude |
 | 5 | ~~Swift version mismatch~~ | `Package.swift` (5.9) vs `project.pbxproj` (6.0) | ✅ Done | Claude |
-| 6 | No entitlements file | Missing `.entitlements` for file access | 🔴 TODO | — |
+| 6 | ~~No entitlements file~~ | Created `VSCodeiPadOS.entitlements` | ✅ Done | Claude |
 | 7 | ~~Missing `PrivacyInfo.xcprivacy`~~ | Required for App Store since 2024 | ✅ Done | Claude |
 | 8 | ~~AI Stop button non-functional~~ | `AIManager.swift`, `AIAssistantView.swift` | ✅ Done | Claude |
 | 9 | ~~"New Window" menu command is no-op~~ | `SceneDelegate.swift`, `VSCodeiPadOSApp.swift` | ✅ Done | Claude |
@@ -72,20 +81,20 @@
 | 16 | Format Document not implemented | `SyntaxHighlightingTextView.swift:878` | 🔵 Deferred | — |
 | 17 | ~~ContentView.swift is 1395 lines~~ — dead code removed, decomposed | `ContentView.swift` | 🟡 In Progress | Claude |
 | 18 | EditorCore.swift is 1570 lines | Needs decomposition | 🔵 Deferred | — |
-| 19 | ErrorParserTests.swift won't compile | API mismatch with actual ErrorParser | 🟡 TODO | — |
-| 20 | IDEAIAssistant uses fake canned responses | `ContentView.swift` lines 1148-1174 | 🟡 TODO | — |
-| 21 | Duplicate hex-to-Color implementations | `Theme.swift` + `Color+Hex.swift` | 🟡 TODO | — |
+| 19 | ~~ErrorParserTests.swift won't compile~~ | Rewrote to match actual API | ✅ Done | Claude |
+| 20 | ~~IDEAIAssistant uses fake canned responses~~ | Removed dead code, real AIAssistantView in use | ✅ Done | Claude |
+| 21 | ~~Duplicate hex-to-Color implementations~~ | Consolidated to `Color+Hex.swift` | ✅ Done | Claude |
 
 ## 🟢 Polish / Nice-to-Have
 
 | # | Issue | Status | Owner |
 |---|-------|--------|-------|
 | 22 | App Store metadata & screenshots | 🔵 TODO | — |
-| 23 | Accessibility audit (VoiceOver) | 🔵 TODO | — |
+| 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView done) | Claude |
 | 24 | Performance audit (large files) | 🔵 TODO | — |
 | 25 | CI/CD pipeline (GitHub Actions) | 🔵 TODO | — |
-| 26 | App icon finalized | 🔵 TODO | — |
-| 27 | Launch screen configured | 🔵 TODO | — |
+| 26 | ~~App icon finalized~~ | ✅ Done (1024x1024 PNG verified) | Claude |
+| 27 | ~~Launch screen configured~~ | ✅ Done (storyboard + Info.plist) | Claude |
 | 28 | Memory leak audit | 🔵 TODO | — |
 
 ---
@@ -132,7 +141,7 @@ xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
 ```
 
 ### Git Status
-- Local `main` is **~55 commits ahead** of `origin/main`
+- Local `main` is **64 commits ahead** of `origin/main`
 - Origin has 1 divergent commit (`6b71943 chore: verify email linkage`)
 - **Need to reconcile before push** — suggest `git pull --rebase origin main`
 
