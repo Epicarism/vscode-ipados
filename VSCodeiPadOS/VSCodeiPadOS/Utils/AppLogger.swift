@@ -23,7 +23,7 @@ struct AppLogger {
 // No third-party SDKs required.
 //
 
-final class CrashReporter: ObservableObject {
+final class CrashReporter: ObservableObject, @unchecked Sendable {
 
     // MARK: - Singleton
 

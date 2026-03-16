@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Represents a run configuration preset
 struct RunConfiguration: Identifiable, Codable, Equatable {
-    let id: UUID
+    var id: UUID
     var name: String
     var commandLineArgs: [String]
     var environmentVariables: [String: String]

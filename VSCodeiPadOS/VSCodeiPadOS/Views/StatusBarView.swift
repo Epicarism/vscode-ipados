@@ -219,11 +219,21 @@ struct StatusBarView: View {
             .popover(isPresented: $showNotificationCenter) {
                 NotificationCenterView(manager: notifications)
             }
+
+            // App version (subtle, far right)
+            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                Text("v\(version)")
+                    .font(.system(size: 9))
+                    .foregroundColor(theme.statusBarForeground.opacity(0.45))
+                    .padding(.horizontal, 6)
+                    .accessibilityLabel("Version \(version)")
+            }
         }
     }
 }
 
-// MARK: - Clickable Status Bar Item
+
+
 
 struct StatusBarItem: View {
     var text: String

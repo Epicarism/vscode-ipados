@@ -74,9 +74,9 @@ struct LoadingView: View {
                 Color.clear
 
             case .overlay:
-                theme.isDark
+                (theme.isDark
                     ? Color.black.opacity(0.5)
-                    : Color.white.opacity(0.5)
+                    : Color.white.opacity(0.5))
                     .ignoresSafeArea()
             }
 

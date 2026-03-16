@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - WelcomeView
 
-/// A polished, VS Code–style welcome screen shown on startup.
+/// A polished, CodePad-style welcome screen shown on startup.
 /// Integrates via `.environmentObject(themeManager)` and stores
 /// the "show on startup" preference in `@AppStorage`.
 struct WelcomeView: View {
@@ -83,9 +83,21 @@ struct WelcomeView: View {
                     .font(.system(size: 26, weight: .semibold, design: .default))
                     .foregroundColor(theme.sidebarForeground)
 
-                Text("Code editing. Redefined.")
-                    .font(.system(size: 13, weight: .regular, design: .default))
-                    .foregroundColor(theme.lineNumber)
+                HStack(spacing: 6) {
+                    Text("Code editing. Redefined.")
+                        .font(.system(size: 13, weight: .regular, design: .default))
+                        .foregroundColor(theme.lineNumber)
+
+                    Text("v1.0.0")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(theme.lineNumber)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(theme.sidebarSectionHeader)
+                        )
+                }
             }
         }
     }
@@ -175,7 +187,7 @@ struct WelcomeView: View {
                 subtitle: "Browse CodePad documentation",
                 actionKey: "docs"
             ) {
-                if let url = URL(string: "https://code.visualstudio.com/docs") {
+                if let url = URL(string: "https://codepad.dev/docs") {
                     UIApplication.shared.open(url)
                 }
             }

@@ -1444,11 +1444,15 @@ private class SSHOutputHandler: SSHManagerDelegate {
     }
     
     func sshManager(_ manager: SSHManager, didReceiveOutput text: String) {
-        debugger?.handleSSHOutput(text)
+        Task { @MainActor in
+            debugger?.handleSSHOutput(text)
+        }
     }
     
     func sshManager(_ manager: SSHManager, didReceiveError text: String) {
-        debugger?.handleSSHOutput(text)
+        Task { @MainActor in
+            debugger?.handleSSHOutput(text)
+        }
     }
 }
 
