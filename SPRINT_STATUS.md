@@ -143,6 +143,11 @@
 - **DO NOT REMOVE** Nanbeige template patching code — see `Docs/NANBEIGE_TEMPLATE_FIX.md`
 - Feature-flagged subsystems (SSH, iCloud, Remote, Debugger) are intentionally disabled
 - `EditorCore` is the central state manager (`@EnvironmentObject`) — all state flows through it
+- **App name is now "CodePad"** — changed from "VS Code" for trademark compliance (Mar 16)
+- **API keys stored in Keychain** — NOT UserDefaults. Use `KeychainHelper` for any new secrets
+- **CrashReporter** — `CrashReporter.shared.setup()` in AppDelegate captures uncaught exceptions
+- **Large file guard** — `EditorCore.isLargeFile` / `shouldLimitExpensiveFeatures` for files > 100K chars
+- **AI rate limiting** — 2-second minimum between API calls in AIManager
 
 ### Build Instructions
 ```bash
@@ -156,7 +161,7 @@ xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
 ```
 
 ### Git Status
-- Local `main` is **~88 commits ahead** of `origin/main`
+- Local `main` is **~144 commits ahead** of `origin/main`
 - Origin has 1 divergent commit (`6b71943 chore: verify email linkage`)
 - **Need to reconcile before push** — suggest `git pull --rebase origin main`
 
