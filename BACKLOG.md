@@ -1,6 +1,6 @@
 # VSCode iPadOS — Backlog
 
-> **Last updated:** March 16, 2026 03:44 GMT+1 by Claude Agent (Session 2)  
+> **Last updated:** March 16, 2026 03:50 GMT+1 by Claude Agent (Session 3)  
 > **Other SWEs:** Please update this file when you pick up or complete tasks.  
 > **Priority:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low
 
@@ -17,10 +17,10 @@
 
 ## 🟠 High Priority
 
-### BUG-009: Syntax Highlighter Ignores Themes
+### ~~BUG-009: Syntax Highlighter Ignores Themes~~
 - **File:** `Extensions/NSAttributedStringSyntaxHighlighter.swift`
-- **Issue:** Hardcoded UIColor. Ignores ThemeManager entirely.
-- **Status:** 🟡 IN PROGRESS
+- **Issue:** ~~Hardcoded UIColor. Ignores ThemeManager entirely.~~ Fixed — now reads from ThemeManager.
+- **Status:** ✅ DONE
 
 ---
 
@@ -104,3 +104,5 @@
 | Consolidated file icon logic (3 copies to 1) | Mar 16 | Claude Agent |
 | Truncate 135MB error log | Mar 16 | Claude Agent |
 | Create BACKLOG.md, PROGRESS.md, AGENTS.md | Mar 16 | Claude Agent |
+| BUG-009: Wired syntax highlighter to ThemeManager colors | Mar 16 | Claude Agent |
+| POLISH: VoiceOver labels on TerminalView (8 buttons) + SearchView (4 hints) | Mar 16 | Claude Agent |

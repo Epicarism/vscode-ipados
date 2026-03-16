@@ -94,7 +94,7 @@
 | 22 | App Store metadata & screenshots | 🔵 TODO | — |
 | 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView, TerminalView, SearchView, StatusBar, ContentView tabs done) | Claude |
 | 24 | Performance audit (large files) | 🔵 TODO | — |
-| 25 | CI/CD pipeline (GitHub Actions) | 🔵 TODO | — |
+| 25 | ~~CI/CD pipeline (GitHub Actions)~~ | ✅ Done (build + test + lint workflow) | Claude |
 | 26 | ~~App icon finalized~~ | ✅ Done (1024x1024 PNG verified) | Claude |
 | 27 | ~~Launch screen configured~~ | ✅ Done (storyboard + Info.plist) | Claude |
 | 28 | Memory leak audit | 🔵 TODO | — |
@@ -108,7 +108,7 @@
 | Runestone Editor | ✅ 95% | Active, feature-flagged on |
 | Theme System (19 themes) | ✅ 100% | Dark/light/custom |
 | Keyboard Shortcuts | ✅ 100% | Full UIKeyCommand + menu system |
-| Syntax Highlighting | ✅ 100% | 20+ languages via Tree-sitter |
+| Syntax Highlighting | ✅ 100% | 20+ languages via regex, now theme-aware |
 | Multi-Window / Stage Manager | ✅ 100% | Complete, configured |
 | Command Palette | ✅ 100% | Now with search filtering |
 | Quick Open | ✅ 100% | Now with search filtering |
