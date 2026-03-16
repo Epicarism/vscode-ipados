@@ -57,10 +57,7 @@
 | 44 | SwiftLint configuration | `VSCodeiPadOS/.swiftlint.yml` |
 | 45 | ProblemsView header with error/warning count badges | `ProblemsView.swift` |
 | 46 | VoiceOver: AIAssistantView (6 buttons + input), TestView (rescan + empty state) | `AIAssistantView.swift`, `TestView.swift` |
-| 43 | GitHub Actions CI/CD pipeline (build + test + lint) | `.github/workflows/build.yml` |
-| 44 | SwiftLint configuration | `VSCodeiPadOS/.swiftlint.yml` |
-| 45 | ProblemsView header with error/warning count badges | `ProblemsView.swift` |
-| 46 | VoiceOver: AIAssistantView (6 buttons + input), TestView (rescan + empty state) | `AIAssistantView.swift`, `TestView.swift` |
+| 47 | API keys migrated from UserDefaults to iOS Keychain | `KeychainHelper.swift`, `AIManager.swift`, `AppDelegate.swift` |
 
 ---
 
@@ -122,7 +119,7 @@
 | Quick Open | ✅ 100% | Now with search filtering |
 | On-Device LLM (MLX) | 🟡 80% | Nanbeige working, needs conversation history |
 | Native Git | 🟡 70% | Reader done, write ops stub |
-| AI Assistant (cloud) | 🟡 80% | 11 providers, cancel support added |
+| AI Assistant (cloud) | ✅ 90% | 11 providers, cancel, conversation history, Keychain API keys |
 | Extension System | 🟡 30% | Basic framework only |
 | SSH/SFTP | 🔴 5% | All stubs, feature-flagged off |
 | iCloud Sync | 🔴 0% | Feature-flagged off |
