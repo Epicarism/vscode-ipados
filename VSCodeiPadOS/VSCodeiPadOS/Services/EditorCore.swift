@@ -1,5 +1,5 @@
 import os
-import UniformTypeIdentifiers
+// import UniformTypeIdentifiers  // DEAD: unused - no UTType references in file
 import SwiftUI
 
 // MARK: - Navigation Location

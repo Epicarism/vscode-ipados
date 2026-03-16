@@ -72,7 +72,7 @@ struct ParsedError: Identifiable, Equatable, Hashable, Codable {
 /// Parse Swift compiler errors from output
 func parseSwiftError(output: String) -> [ParsedError] {
     var errors: [ParsedError] = []
-    let pattern = try! NSRegularExpression(
+    let pattern = ErrorParser.safeRegex(
         pattern: #"^([^:]+):(\d+):(\d+):\s*(error|warning|note):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
@@ -114,13 +114,13 @@ func parsePythonError(output: String) -> [ParsedError] {
     var errors: [ParsedError] = []
     
     // Python traceback pattern: File "path", line N
-    let filePattern = try! NSRegularExpression(
+    let filePattern = ErrorParser.safeRegex(
         pattern: #"File \"([^\"]+)\", line (\d+)(?:, in (.+))?"#,
         options: []
     )
     
     // Python exception pattern at the end of traceback
-    let exceptionPattern = try! NSRegularExpression(
+    let exceptionPattern = ErrorParser.safeRegex(
         pattern: #"^(\w+Error):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
@@ -170,13 +170,13 @@ func parseNodeError(output: String) -> [ParsedError] {
     var errors: [ParsedError] = []
     
     // Node.js/V8 stack trace pattern: at function (path:line:column)
-    let stackPattern = try! NSRegularExpression(
+    let stackPattern = ErrorParser.safeRegex(
         pattern: #"at\s+(?:.+?\s+)?\(?([^:]+):(\d+):(\d+)\)?"#,
         options: []
     )
     
     // Node.js error message pattern
-    let errorPattern = try! NSRegularExpression(
+    let errorPattern = ErrorParser.safeRegex(
         pattern: #"^(\w+Error):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
@@ -225,7 +225,7 @@ func parseGccError(output: String) -> [ParsedError] {
     var errors: [ParsedError] = []
     
     // GCC/Clang error pattern: path:line:column: error: message
-    let pattern = try! NSRegularExpression(
+    let pattern = ErrorParser.safeRegex(
         pattern: #"^([^:]+):(\d+):(\d+):\s*(error|warning|note):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
@@ -268,19 +268,19 @@ func parseRustError(output: String) -> [ParsedError] {
     
     // Rust error pattern: error[EXXXX]: message
     // followed by --> path:line:column
-    let errorHeaderPattern = try! NSRegularExpression(
+    let errorHeaderPattern = ErrorParser.safeRegex(
         pattern: #"^(error|warning)\[(E\d+)\]:\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     // Rust location pattern: --> path:line:column
-    let locationPattern = try! NSRegularExpression(
+    let locationPattern = ErrorParser.safeRegex(
         pattern: #"^\s*-->\s+([^:]+):(\d+):(\d+)"#,
         options: [.anchorsMatchLines]
     )
     
     // Alternative pattern without error code: error: message
-    let simpleErrorPattern = try! NSRegularExpression(
+    let simpleErrorPattern = ErrorParser.safeRegex(
         pattern: #"^(error|warning):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
@@ -348,7 +348,7 @@ func parseGeneric(output: String) -> [ParsedError] {
     var errors: [ParsedError] = []
     
     // Generic file:line:column pattern as fallback
-    let pattern = try! NSRegularExpression(
+    let pattern = ErrorParser.safeRegex(
         pattern: #"([^\s:]+):(\d+)(?::(\d+))?"#,
         options: []
     )
@@ -479,76 +479,87 @@ protocol ErrorNavigationDelegate: AnyObject {
 /// Parser for extracting error locations from various language outputs
 class ErrorParser {
     
+    // MARK: - Safe Regex Helper
+    
+    /// Creates an NSRegularExpression with a clear error message on failure instead of a bare `try!` crash.
+    static func safeRegex(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
+        do {
+            return try NSRegularExpression(pattern: pattern, options: options)
+        } catch {
+            preconditionFailure("Invalid regex pattern: \(pattern) — \(error)")
+        }
+    }
+    
     // MARK: - Regex Patterns
     
     /// Python traceback pattern: File "path", line N
-    private let pythonPattern = try! NSRegularExpression(
+    private let pythonPattern = ErrorParser.safeRegex(
         pattern: #"File \"([^\"]+)\", line (\d+)(?:, in (.+))?"#,
         options: []
     )
     
     /// Python exception pattern at the end of traceback
-    private let pythonExceptionPattern = try! NSRegularExpression(
+    private let pythonExceptionPattern = ErrorParser.safeRegex(
         pattern: #"^(\w+Error):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Node.js/V8 stack trace pattern: at function (path:line:column)
-    private let nodeJSPattern = try! NSRegularExpression(
+    private let nodeJSPattern = ErrorParser.safeRegex(
         pattern: #"at\s+(?:.+?\s+)?\(?([^:]+):(\d+):(\d+)\)?"#,
         options: []
     )
     
     /// Node.js error message pattern
-    private let nodeJSErrorPattern = try! NSRegularExpression(
+    private let nodeJSErrorPattern = ErrorParser.safeRegex(
         pattern: #"^(\w+Error):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Swift compiler error pattern: path:line:column: error: message
-    private let swiftPattern = try! NSRegularExpression(
+    private let swiftPattern = ErrorParser.safeRegex(
         pattern: #"^([^:]+):(\d+):(\d+):\s*(error|warning|note):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Go build error pattern: path:line:column: message OR path:line: message
-    private let goPattern = try! NSRegularExpression(
+    private let goPattern = ErrorParser.safeRegex(
         pattern: #"^([^:]+):(\d+)(?::(\d+))?:\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Ruby error pattern: path:line:in `method': message (ErrorClass)
-    private let rubyPattern = try! NSRegularExpression(
+    private let rubyPattern = ErrorParser.safeRegex(
         pattern: #"^([^:]+):(\d+):in\s+`([^']+)':\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Ruby traceback pattern: from path:line:in `method'
-    private let rubyTracePattern = try! NSRegularExpression(
+    private let rubyTracePattern = ErrorParser.safeRegex(
         pattern: #"from\s+([^:]+):(\d+):in\s+`([^']+)'"#,
         options: []
     )
     
     /// GCC/Clang error pattern: path:line:column: error: message
-    private let gccPattern = try! NSRegularExpression(
+    private let gccPattern = ErrorParser.safeRegex(
         pattern: #"^([^:]+):(\d+):(\d+):\s*(error|warning|note):\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Rust error header pattern: error[E####]: message
-    private let rustErrorPattern = try! NSRegularExpression(
+    private let rustErrorPattern = ErrorParser.safeRegex(
         pattern: #"^(error|warning)\[(E\d+)\]:\s*(.+)$"#,
         options: [.anchorsMatchLines]
     )
     
     /// Rust location pattern: --> path:line:column
-    private let rustLocationPattern = try! NSRegularExpression(
+    private let rustLocationPattern = ErrorParser.safeRegex(
         pattern: #"^\s*-->\s+([^:]+):(\d+):(\d+)"#,
         options: [.anchorsMatchLines]
     )
     
     /// Generic file:line pattern as fallback
-    private let genericPattern = try! NSRegularExpression(
+    private let genericPattern = ErrorParser.safeRegex(
         pattern: #"([^\s:]+):(\d+)(?::(\d+))?"#,
         options: []
     )

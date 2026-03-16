@@ -507,12 +507,6 @@ class CodeFoldingManager: ObservableObject {
         return line.contains("func ") || line.contains("init ")
     }
     
-    private func detectBlockEnd(_ line: String, leadingWhitespace: Int) -> Bool {
-        return (line.hasPrefix("}") || line.starts(with: "}")) && 
-               (line.trimmingCharacters(in: .whitespaces) == "}" || 
-                line.trimmingCharacters(in: .whitespaces).hasPrefix("}"))
-    }
-    
     // MARK: - Fold State Persistence
     
     /// Saves the current fold state to UserDefaults

@@ -538,31 +538,6 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
-    // MARK: - Message Conversion
-    
-    /// Convert tuple messages to Chat.Message history for ChatSession
-    private func convertToHistory(messages: [(role: String, content: String)]) -> [Chat.Message] {
-        var history: [Chat.Message] = []
-        
-        for msg in messages {
-            switch msg.role.lowercased() {
-            case "user":
-                history.append(.user(msg.content))
-            case "assistant":
-                history.append(.assistant(msg.content))
-            case "system":
-                // System is handled via instructions parameter, skip here
-                continue
-            default:
-                // Treat unknown roles as user
-                history.append(.user(msg.content))
-            }
-        }
-        
-        return history
-    }
-    
     // MARK: - Reset Chat Context
     
     func resetChat() {

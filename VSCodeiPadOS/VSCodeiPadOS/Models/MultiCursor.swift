@@ -221,11 +221,6 @@ class MultiCursorState: ObservableObject {
 
         removeDuplicateCursors()
     }
-    
-    private func adjustCursorPositions(afterInsertion length: Int) {
-        // Already handled in insertText
-    }
-    
     private func removeDuplicateCursors() {
         var seen = Set<Int>()
         cursors = cursors.filter { cursor in

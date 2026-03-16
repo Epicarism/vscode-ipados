@@ -1,6 +1,6 @@
 import Foundation
 import CoreSpotlight
-import MobileCoreServices
+// import MobileCoreServices  // DEAD: unused - only import line, no API usage
 import UniformTypeIdentifiers
 
 /// Manages CoreSpotlight indexing for opened files

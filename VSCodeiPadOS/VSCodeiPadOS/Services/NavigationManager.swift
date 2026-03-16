@@ -673,18 +673,6 @@ extension EditorCore {
         }
     }
 
-    /// Convert line/column to character position
-    private func getCharacterPosition(line: Int, column: Int, in text: String) -> Int {
-        let lines = text.components(separatedBy: .newlines)
-        var position = 0
-
-        for i in 0..<min(line - 1, lines.count) {
-            position += lines[i].count + 1 // +1 for newline
-        }
-
-        position += min(column - 1, lines.count > line - 1 ? lines[line - 1].count : 0)
-        return position
-    }
 }
 
 // MARK: - Go To Definition Picker View
