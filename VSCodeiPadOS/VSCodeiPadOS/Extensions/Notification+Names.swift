@@ -105,6 +105,18 @@ extension Notification.Name {
     static let showSettings = Notification.Name("ShowSettings")
     /// Show the keyboard shortcuts view.
     static let showKeyboardShortcuts = Notification.Name("ShowKeyboardShortcuts")
+    /// Show the About panel.
+    static let showAbout = Notification.Name("ShowAbout")
+
+    // MARK: - Search
+
+    /// Collapse all search results in the search panel.
+    static let collapseAllSearchResults = Notification.Name("collapseAllSearchResults")
+    /// Expand all search results in the search panel.
+    static let expandAllSearchResults = Notification.Name("expandAllSearchResults")
+
+    // MARK: - Edit
+
     /// Undo the last action.
     static let undo = Notification.Name("Undo")
     /// Redo the last undone action.

@@ -6,7 +6,30 @@
 
 ---
 
-## March 16, 2026 — Claude Agent
+## March 16, 2026 — Claude Agent (Session 2)
+
+### Cleanup Commit (438f08a)
+- Deleted `App/SceneDelegate.swift` (dead code — BUG-003 ✅)
+- Deleted `Services/OnDevice/PythonRunner.swift` (509 lines dead code)
+- Removed dead `RealFileTreeView` and `WelcomeBtn` from ContentView
+- Fixed duplicate `StatusBarItem(` line in StatusBarView
+- Added accessibility labels/hints to tabs and status bar items
+- Replaced `print()` with `AppLogger.editor.error()` in EditorCore (5 call sites)
+- Created `Extensions/Notification+Names.swift` (30+ centralized constants — FEAT-001 ✅)
+- Added `PrivacyInfo.xcprivacy` Apple privacy manifest
+
+### Deep Audit Findings (New Critical Issues)
+- **InlineSuggestionManager.swift:325,339** — Duplicate method `fetchSuggestion(for:)` (compile error risk)
+- **ErrorParser.swift** — 22 uses of `try! NSRegularExpression` (crash on invalid regex)
+- **ProblemsView.swift** — Uses hardcoded mock data (no real diagnostics)
+- **TestView.swift** — Test execution uses `Bool.random()` (fake results)
+- **NSAttributedStringSyntaxHighlighter** — Ignores theme colors (hardcoded UIColor)
+- **Triple-duplicated** file icon/color logic (FileItem, FileHelpers, FileIcons)
+- **ContentView.swift IDETabItem** — Missing closing brace (syntax error)
+
+---
+
+## March 16, 2026 — Claude Agent (Session 1)
 
 ### Codebase Audit & Planning
 - Full codebase audit of 157 Swift files (~62K lines)
@@ -22,7 +45,6 @@
 
 ### Cleanup (In Progress)
 - Removing dead backup files (.bak files)
-- Removing dead SceneDelegate code
 - Creating centralized notification name constants
 - Implementing Stage Manager configuration
 
@@ -67,7 +89,6 @@
 ### Known Issues (Pre-existing)
 - SSH Manager is entirely stub (13 TODOs)
 - Git pull/push via GitHub API not yet implemented
-- Python on-device execution (Pyodide) not implemented
 - Format document not implemented
 - Find references not implemented
 - Remote debugging is stub

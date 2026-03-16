@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import UniformTypeIdentifiers
 
 extension FileManager {
@@ -91,75 +92,15 @@ extension URL {
     
     var icon: String {
         if isDirectory {
-            return "folder.fill"
+            return FileIcons.icon(forDirectory: lastPathComponent)
         }
-        
-        switch pathExtension.lowercased() {
-        case "swift":
-            return "swift"
-        case "js", "javascript", "jsx":
-            return "doc.text.fill"
-        case "py", "python":
-            return "doc.text.fill"
-        case "html", "htm":
-            return "globe"
-        case "css", "scss", "sass":
-            return "paintbrush.fill"
-        case "json":
-            return "curlybraces"
-        case "xml":
-            return "chevron.left.forwardslash.chevron.right"
-        case "md", "markdown":
-            return "text.alignleft"
-        case "png", "jpg", "jpeg", "gif", "webp":
-            return "photo.fill"
-        case "mp4", "mov", "avi":
-            return "video.fill"
-        case "mp3", "wav", "aac":
-            return "music.note"
-        case "pdf":
-            return "doc.richtext.fill"
-        case "zip", "tar", "gz":
-            return "archivebox.fill"
-        default:
-            return "doc.text.fill"
-        }
+        return FileIcons.icon(for: lastPathComponent)
     }
     
-    var iconColor: String {
+    var iconColor: Color {
         if isDirectory {
-            return "blue"
+            return FileIcons.directoryColor
         }
-        
-        switch pathExtension.lowercased() {
-        case "swift":
-            return "orange"
-        case "js", "javascript", "jsx":
-            return "yellow"
-        case "py", "python":
-            return "blue"
-        case "html", "htm":
-            return "orange"
-        case "css", "scss", "sass":
-            return "purple"
-        case "json":
-            return "green"
-        case "xml":
-            return "orange"
-        case "md", "markdown":
-            return "gray"
-        case "png", "jpg", "jpeg", "gif", "webp":
-            return "green"
-        case "mp4", "mov", "avi":
-            return "purple"
-        case "mp3", "wav", "aac":
-            return "pink"
-        case "pdf":
-            return "red"
-        case "zip", "tar", "gz":
-            return "brown"
-        default:
-            return "gray"
-        }
+        return FileIcons.color(for: lastPathComponent)
     }
 }

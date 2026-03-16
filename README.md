@@ -1,69 +1,137 @@
 # VSCode for iPadOS
 
-🚀 **An audacious project to build a native VSCode experience for iPad**
+🚀 **A native VSCode experience for iPad** — built with Swift/SwiftUI
 
-Built by 300 AI agents working in parallel, 24/7.
+[![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+[![Platform](https://img.shields.io/badge/Platform-iPadOS%2017+-blue.svg)](https://developer.apple.com/ipados/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Vision
+---
 
-A **native Swift/SwiftUI** code editor that brings the full VSCode experience to iPadOS:
+## ✨ Features
 
-- 📝 Full-featured code editor with syntax highlighting
-- 🧠 Language Server Protocol (LSP) for autocomplete, errors, go-to-definition
-- 🔌 Extension system (compatible with VSCode extensions where possible)
-- 📁 File system: iCloud Drive, local files, SSH/SFTP, GitHub
-- 🖥️ Integrated terminal emulator
-- 🌳 Git integration (stage, commit, push, pull, branches)
-- ⌨️ Full keyboard shortcut support
-- 📱 iPad-native: Split View, Slide Over, Stage Manager
-- 🎨 Themes (dark/light, custom)
-- 🔍 Global search, find & replace with regex
+### Editor
+- **Runestone-powered editor** with O(log n) text storage and Tree-sitter syntax highlighting
+- **20+ languages** supported (Swift, Python, JavaScript, TypeScript, Rust, Go, C/C++, Java, Ruby, HTML, CSS, JSON, YAML, Markdown, and more)
+- **19 built-in themes** (Dark+, Light+, Monokai, Dracula, One Dark Pro, Nord, Solarized, GitHub, Ayu, and more)
+- Multi-cursor editing, code folding, bracket matching
+- Minimap, breadcrumbs, git gutter, inlay hints
+- Split editor (vertical, horizontal, grid)
+- Inline suggestions and hover info
 
-## Architecture
+### IDE Features
+- **Command Palette** (⌘⇧P) with fuzzy search
+- **Quick Open** (⌘P) with file filtering
+- **Go to Symbol** (⌘⇧O), **Go to Line** (⌘G)
+- **Find & Replace** with regex support, scope control (file/workspace)
+- **Full keyboard shortcut system** — 60+ shortcuts via UIKeyCommand + menu bar
+- Integrated terminal panel
+- File tree with drag & drop support
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      VSCode iPadOS                          │
-├─────────────────────────────────────────────────────────────┤
-│  UI Layer (SwiftUI)                                         │
-│  ├── EditorView (syntax highlighting, cursor, selection)    │
-│  ├── SidebarView (file tree, search, git, extensions)       │
-│  ├── TerminalView (PTY-based terminal)                      │
-│  ├── TabBarView (open files, split editors)                 │
-│  └── CommandPalette (Cmd+Shift+P)                           │
-├─────────────────────────────────────────────────────────────┤
-│  Core Layer (Swift)                                         │
-│  ├── DocumentManager (open, save, track changes)            │
-│  ├── LSPClient (JSON-RPC to language servers)               │
-│  ├── ExtensionHost (load & run extensions)                  │
-│  ├── GitManager (libgit2 bindings)                          │
-│  ├── FileSystemProvider (protocol for different backends)   │
-│  └── KeybindingManager (customizable shortcuts)             │
-├─────────────────────────────────────────────────────────────┤
-│  Platform Layer                                             │
-│  ├── iCloud integration                                     │
-│  ├── SSH/SFTP client                                        │
-│  ├── Terminal (local shell via ios_system or similar)       │
-│  └── Keyboard extension support                             │
-└─────────────────────────────────────────────────────────────┘
-```
+### AI Assistant
+- **11 AI providers**: OpenAI, Anthropic, Google, DeepSeek, Groq, Mistral, Kimi, GLM, Ollama, and more
+- **On-device LLM** via Apple MLX framework (Nanbeige, Qwen3 models)
+- AI-powered code suggestions and chat
 
-## Project Status
+### Git & Collaboration
+- Git status, staging, branching
+- GitHub OAuth authentication
+- Diff view components
 
-See [STATUS.md](./STATUS.md) for current project status.  
-See [BACKLOG.md](./BACKLOG.md) for task backlog.  
-See [PROGRESS.md](./PROGRESS.md) for completed work.
+### iPad-Native
+- Stage Manager / multi-window support
+- Split View and Slide Over
+- Workspace persistence across launches
+- Security-scoped file access
 
-## Building
+---
+
+## 📋 Requirements
+
+- **iPadOS 17.0+** (or iOS Simulator)
+- **Xcode 15.0+**
+- **Swift 5.9+**
+- Apple Silicon Mac recommended for on-device LLM features
+
+---
+
+## 🔨 Building
 
 ```bash
 # Open in Xcode
 open VSCodeiPadOS/VSCodeiPadOS.xcodeproj
 
 # Or build from command line
-xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj -scheme VSCodeiPadOS -destination 'platform=iOS Simulator,name=iPad Pro (12.9-inch)'
+xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
+  -scheme VSCodeiPadOS \
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
 ```
 
-## License
+---
 
-MIT
+## 🏗️ Architecture
+
+```
+VSCodeiPadOS/
+├── App/                    # App entry point, delegates, lifecycle
+├── Views/                  # SwiftUI views
+│   ├── Editor/             # Editor components (Runestone, syntax, minimap)
+│   └── Panels/             # Side/bottom panels (terminal, git, search, AI)
+├── Services/               # Core logic (50+ service files)
+│   ├── EditorCore.swift    # Central state manager (@EnvironmentObject)
+│   ├── AIManager.swift     # Multi-provider AI integration
+│   ├── GitManager.swift    # Git operations
+│   ├── LocalLLMService.swift # On-device MLX inference
+│   ├── NativeGit/          # Native git reader/writer
+│   ├── OnDevice/           # JS/WASM/Python runners
+│   └── Runners/            # Language-specific code runners
+├── Models/                 # Data models (Tab, Theme, FileItem, EditorState)
+├── Extensions/             # Swift extensions and utilities
+├── Commands/               # Menu bar commands
+└── Utils/                  # Feature flags, logging, helpers
+```
+
+**Key patterns:**
+- **Centralized state** via `EditorCore` (`ObservableObject` + `@EnvironmentObject`)
+- **Notification-based** command dispatch from menus/shortcuts
+- **Feature flags** gate experimental subsystems (SSH, iCloud, debugger)
+- **Singleton services** for theme, workspace trust, auto-save, window state
+
+---
+
+## 📊 Project Status
+
+See [SPRINT_STATUS.md](./SPRINT_STATUS.md) for current tasks and team coordination.  
+See [BACKLOG.md](./BACKLOG.md) for the full bug/feature backlog.  
+See [PROGRESS.md](./PROGRESS.md) for completed work log.
+
+| Feature | Status |
+|---------|--------|
+| Runestone Editor | ✅ 95% |
+| Theme System (19 themes) | ✅ 100% |
+| Keyboard Shortcuts | ✅ 100% |
+| Syntax Highlighting (20+ langs) | ✅ 100% |
+| Multi-Window / Stage Manager | ✅ 100% |
+| Command Palette & Quick Open | ✅ 100% |
+| On-Device LLM (MLX) | 🟡 80% |
+| Native Git | 🟡 70% |
+| AI Assistant (cloud) | 🟡 60% |
+| Extension System | 🟡 30% |
+| SSH/SFTP | 🔴 5% |
+
+---
+
+## 🤝 Contributing
+
+This project is built by AI agents working in parallel. If you're an SWE (human or AI):
+
+1. Check [SPRINT_STATUS.md](./SPRINT_STATUS.md) for available tasks
+2. Claim a task by updating the Owner column
+3. Follow the keyboard shortcuts architecture in `KEYBOARD_SHORTCUTS_SOURCE_OF_TRUTH.md`
+4. **Do NOT remove** Nanbeige template patching code (see `Docs/NANBEIGE_TEMPLATE_FIX.md`)
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © 2024-2026 VSCode iPadOS Contributors

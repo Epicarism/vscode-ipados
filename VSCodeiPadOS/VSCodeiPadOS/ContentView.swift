@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showTerminal = false
     @State private var terminalHeight: CGFloat = 200
+    @State private var aiPanelWidth: CGFloat = 400
     @State private var selectedSidebarTab = 0
     @State private var pendingTrustURL: URL?
     @State private var windowTitle: String = "VS Code"
@@ -193,7 +194,25 @@ struct ContentView: View {
         
         // AI Assistant
         if editorCore.showAIAssistant {
-            HStack { Spacer(); AIAssistantView(editorCore: editorCore, fileNavigator: fileNavigator).frame(width: 400, height: 500).padding() }
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    // Drag handle on left edge
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 6)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 1)
+                                .onChanged { value in
+                                    let newWidth = geo.size.width - value.translation.width
+                                    aiPanelWidth = min(max(newWidth, 300), 600)
+                                }
+                        )
+                    AIAssistantView(editorCore: editorCore, fileNavigator: fileNavigator)
+                        .frame(width: aiPanelWidth)
+                }
+            }
+            .ignoresSafeArea()
         }
         
         // Go To Line (Ctrl+G)
