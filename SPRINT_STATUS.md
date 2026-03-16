@@ -1,8 +1,8 @@
 # 🏃 Sprint Status — Production Readiness
 
-**Last Updated:** March 16, 2026 03:50 GMT+1  
+**Last Updated:** March 16, 2026 04:00 GMT+1  
 **Updated By:** Claude (AI SWE)  
-**Branch:** `main` (64 commits ahead of origin)  
+**Branch:** `main` (82 commits ahead of origin)  
 **Other SWEs:** Please update this file when you pick up or complete tasks.
 
 ---
@@ -53,6 +53,14 @@
 | 40 | App icon verified (1024x1024 PNG valid) | `AppIcon.appiconset` |
 | 41 | Wired syntax highlighter to theme colors (BUG-009) | `NSAttributedStringSyntaxHighlighter.swift` |
 | 42 | VoiceOver accessibility: TerminalView (8 buttons) + SearchView (4 hints) | `TerminalView.swift`, `SearchView.swift` |
+| 43 | GitHub Actions CI/CD pipeline (build + test + lint) | `.github/workflows/build.yml` |
+| 44 | SwiftLint configuration | `VSCodeiPadOS/.swiftlint.yml` |
+| 45 | ProblemsView header with error/warning count badges | `ProblemsView.swift` |
+| 46 | VoiceOver: AIAssistantView (6 buttons + input), TestView (rescan + empty state) | `AIAssistantView.swift`, `TestView.swift` |
+| 43 | GitHub Actions CI/CD pipeline (build + test + lint) | `.github/workflows/build.yml` |
+| 44 | SwiftLint configuration | `VSCodeiPadOS/.swiftlint.yml` |
+| 45 | ProblemsView header with error/warning count badges | `ProblemsView.swift` |
+| 46 | VoiceOver: AIAssistantView (6 buttons + input), TestView (rescan + empty state) | `AIAssistantView.swift`, `TestView.swift` |
 
 ---
 
