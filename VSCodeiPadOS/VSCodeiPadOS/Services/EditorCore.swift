@@ -92,21 +92,21 @@ class DiagnosticsService: ObservableObject {
             
             // Universal checks
             if line.count > 120 {
-                items.append(DiagnosticItem(file: filename, line: lineNum, column: 121, message: "Line exceeds 120 characters (\(line.count))", severity: .info))
+                items.append(DiagnosticItem(message: "Line exceeds 120 characters (\(line.count))", file: filename, line: lineNum, column: 121, severity: .info))
             }
             if line.hasSuffix(" ") || line.hasSuffix("\t") {
-                items.append(DiagnosticItem(file: filename, line: lineNum, column: line.count, message: "Trailing whitespace", severity: .info))
+                items.append(DiagnosticItem(message: "Trailing whitespace", file: filename, line: lineNum, column: line.count, severity: .info))
             }
             
             // TODO/FIXME/HACK
             if line.contains("TODO:") {
-                items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: String(line.trimmingCharacters(in: .whitespaces)), severity: .info))
+                items.append(DiagnosticItem(message: String(line.trimmingCharacters(in: .whitespaces)), file: filename, line: lineNum, column: 1, severity: .info))
             }
             if line.contains("FIXME:") {
-                items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: String(line.trimmingCharacters(in: .whitespaces)), severity: .warning))
+                items.append(DiagnosticItem(message: String(line.trimmingCharacters(in: .whitespaces)), file: filename, line: lineNum, column: 1, severity: .warning))
             }
             if line.contains("HACK:") || line.contains("XXX:") {
-                items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: String(line.trimmingCharacters(in: .whitespaces)), severity: .warning))
+                items.append(DiagnosticItem(message: String(line.trimmingCharacters(in: .whitespaces)), file: filename, line: lineNum, column: 1, severity: .warning))
             }
             
             // Swift-specific
@@ -116,14 +116,14 @@ class DiagnosticsService: ObservableObject {
                     if line.contains("!") && !line.contains("!=") && !line.contains("\"!") {
                         let pattern = try? NSRegularExpression(pattern: "\\w+!(?:\\.|\\s|$|\\))")
                         if let pattern = pattern, pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
-                            items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Force unwrap detected - consider using optional binding", severity: .warning))
+                            items.append(DiagnosticItem(message: "Force unwrap detected - consider using optional binding", file: filename, line: lineNum, column: 1, severity: .warning))
                         }
                     }
                     if trimmed.hasPrefix("print(") || trimmed.contains(" print(") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "print() statement - consider using a logger", severity: .info))
+                        items.append(DiagnosticItem(message: "print() statement - consider using a logger", file: filename, line: lineNum, column: 1, severity: .info))
                     }
                     if line.contains("try!") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Force try detected - consider using do/catch", severity: .warning))
+                        items.append(DiagnosticItem(message: "Force try detected - consider using do/catch", file: filename, line: lineNum, column: 1, severity: .warning))
                     }
                 }
             }
@@ -133,16 +133,16 @@ class DiagnosticsService: ObservableObject {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") {
                     if trimmed.hasPrefix("var ") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Use 'let' or 'const' instead of 'var'", severity: .warning))
+                        items.append(DiagnosticItem(message: "Use 'let' or 'const' instead of 'var'", file: filename, line: lineNum, column: 1, severity: .warning))
                     }
                     if trimmed.contains("console.log(") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "console.log() statement", severity: .info))
+                        items.append(DiagnosticItem(message: "console.log() statement", file: filename, line: lineNum, column: 1, severity: .info))
                     }
                     if line.contains("==") && !line.contains("===") && !line.contains("!=") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Use === instead of ==", severity: .warning))
+                        items.append(DiagnosticItem(message: "Use === instead of ==", file: filename, line: lineNum, column: 1, severity: .warning))
                     }
                     if trimmed.contains("eval(") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "eval() is dangerous - avoid using it", severity: .error))
+                        items.append(DiagnosticItem(message: "eval() is dangerous - avoid using it", file: filename, line: lineNum, column: 1, severity: .error))
                     }
                 }
             }
@@ -152,10 +152,10 @@ class DiagnosticsService: ObservableObject {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if !trimmed.hasPrefix("#") {
                     if trimmed.contains("import *") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Wildcard import - import specific names", severity: .warning))
+                        items.append(DiagnosticItem(message: "Wildcard import - import specific names", file: filename, line: lineNum, column: 1, severity: .warning))
                     }
                     if trimmed.hasPrefix("except:") && !trimmed.contains("except ") {
-                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Bare except - catch specific exceptions", severity: .warning))
+                        items.append(DiagnosticItem(message: "Bare except - catch specific exceptions", file: filename, line: lineNum, column: 1, severity: .warning))
                     }
                 }
             }

@@ -149,7 +149,7 @@ class SFTPManager: @unchecked Sendable {
         
         let command = "ls -la \(shellEscape(path))"
         
-        Task { @Sendable in
+        Task {
             do {
                 guard let result = try await sshManager?.executeCommand(command) else {
                     completion(.failure(SFTPError.notConnected))
@@ -241,7 +241,7 @@ class SFTPManager: @unchecked Sendable {
             fileName: fileName, bytesTransferred: 0, totalBytes: totalSize, isUpload: false
         ))
         
-        Task { @Sendable in
+        Task {
             do {
                 // Use base64 encoding to safely transfer binary files
                 guard let result = try await sshManager?.executeCommand("base64 \(shellEscape(remotePath))") else {
@@ -283,7 +283,7 @@ class SFTPManager: @unchecked Sendable {
             fileName: fileName, bytesTransferred: 0, totalBytes: 0, isUpload: true
         ))
         
-        Task { @Sendable in
+        Task {
             do {
                 let fileData = try Data(contentsOf: localURL)
                 
@@ -330,7 +330,7 @@ class SFTPManager: @unchecked Sendable {
             return
         }
         
-        Task { @Sendable in
+        Task {
             do {
                 guard let result = try await sshManager?.executeCommand("cat \(shellEscape(remotePath))") else {
                     completion(.failure(SFTPError.notConnected))
@@ -350,7 +350,7 @@ class SFTPManager: @unchecked Sendable {
             return
         }
         
-        Task { @Sendable in
+        Task {
             do {
                 guard let data = content.data(using: .utf8) else {
                     completion(.failure(SFTPError.transferFailed("Failed to encode content")))
@@ -378,7 +378,7 @@ class SFTPManager: @unchecked Sendable {
             return
         }
         
-        Task { @Sendable in
+        Task {
             do {
                 let cmdResult = try await sshManager?.executeCommand("mkdir -p \(shellEscape(remotePath))")
                 if cmdResult == nil {
@@ -401,7 +401,7 @@ class SFTPManager: @unchecked Sendable {
         
         let flag = recursive ? "-rf" : "-f"
         
-        Task { @Sendable in
+        Task {
             do {
                 let cmdResult = try await sshManager?.executeCommand("rm \(flag) \(shellEscape(remotePath))")
                 if cmdResult == nil {
@@ -422,7 +422,7 @@ class SFTPManager: @unchecked Sendable {
             return
         }
         
-        Task { @Sendable in
+        Task {
             do {
                 let cmdResult = try await sshManager?.executeCommand("mv \(shellEscape(oldPath)) \(shellEscape(newPath))")
                 if cmdResult == nil {
