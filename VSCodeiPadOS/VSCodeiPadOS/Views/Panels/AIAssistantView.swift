@@ -743,6 +743,48 @@ struct AISettingsView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                     }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: AIProvider.groq.iconName)
+                            Text("Groq API Key")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        
+                        SecureField("gsk_...", text: $aiManager.groqKey)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: AIProvider.deepseek.iconName)
+                            Text("DeepSeek API Key")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        
+                        SecureField("sk-...", text: $aiManager.deepseekKey)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: AIProvider.mistral.iconName)
+                            Text("Mistral API Key")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        
+                        SecureField("...", text: $aiManager.mistralKey)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
                 }
                 
                 // Ollama Settings

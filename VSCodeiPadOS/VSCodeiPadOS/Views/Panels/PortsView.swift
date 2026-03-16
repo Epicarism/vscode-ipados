@@ -114,6 +114,14 @@ final class PortForwardingManager: ObservableObject {
             NotificationCenter.default.post(name: .portStopped, object: nil, userInfo: ["port": port.port])
         }
     }
+    /// Removes all forwarded ports, sending per-port stop notifications for each.
+    func removeAllPorts() {
+        // Iterate over a snapshot of IDs so we can safely mutate the array.
+        let allIDs = forwardedPorts.map { $0.id }
+        for id in allIDs {
+            removePort(id: id)
+        }
+    }
     
     func toggleVisibility(id: UUID) {
         guard let index = forwardedPorts.firstIndex(where: { $0.id == id }) else { return }
@@ -125,11 +133,15 @@ final class PortForwardingManager: ObservableObject {
         forwardedPorts[index].portProtocol = proto
     }
     
+    // TODO: UI-only stub — needs real SSH tunnel implementation to actually stop port forwarding.
+    // Currently only toggles the local isActive flag; no actual SSH channel is torn down.
     func stopForwarding(id: UUID) {
         guard let index = forwardedPorts.firstIndex(where: { $0.id == id }) else { return }
         forwardedPorts[index].isActive = false
     }
     
+    // TODO: UI-only stub — needs real SSH tunnel implementation to actually start port forwarding.
+    // Currently only toggles the local isActive flag; no actual SSH tunnel is established.
     func startForwarding(id: UUID) {
         guard let index = forwardedPorts.firstIndex(where: { $0.id == id }) else { return }
         forwardedPorts[index].isActive = true
@@ -157,6 +169,7 @@ final class PortForwardingManager: ObservableObject {
             return
         }
         
+        scanError = nil
         isScanning = true
         
         do {
@@ -360,7 +373,7 @@ struct PortsView: View {
             }
             .frame(width: 24, height: 24)
             
-            Button(action: { portManager.forwardedPorts.removeAll() }) {
+            Button(action: { portManager.removeAllPorts() }) {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)
@@ -531,6 +544,24 @@ struct PortsView: View {
                     .accessibilityHint("Double tap to detect listening ports on the remote host")
                 }
             }
+            // Display scan error if present
+            if let scanError = portManager.scanError {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.yellow)
+                    Text(scanError)
+                        .font(.system(size: 11))
+                        .foregroundColor(.yellow)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 12)
+                Button("Dismiss") {
+                    portManager.scanError = nil
+                }
+                .font(.system(size: 11))
+                .foregroundColor(theme.comment)
+            }
             
             Spacer()
         }
@@ -540,7 +571,7 @@ struct PortsView: View {
     // MARK: - Actions
     
     private func addPort() {
-        guard let portNumber = Int(newPortText), portNumber > 0, portNumber <= 65535 else { return }
+        portManager.scanError = nil
         portManager.addPort(portNumber, label: newPortLabel, protocol: newPortProtocol)
         newPortText = ""
         newPortLabel = ""

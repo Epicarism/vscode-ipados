@@ -1,6 +1,5 @@
 import SwiftUI
 import os
-import SwiftUI
 import WebKit
 
 // MARK: - Tunnel Configuration
