@@ -28,42 +28,56 @@ struct TerminalView: View {
                         Image(systemName: "plus")
                     }
                     .help("New Terminal")
+                    .accessibilityLabel("New Terminal")
+                    .accessibilityHint("Double tap to create a new terminal tab")
 
                     Button(action: { workspace.toggleSplitActiveTab() }) {
                         Image(systemName: "square.split.2x1")
                     }
                     .disabled(workspace.tabs.isEmpty)
                     .help("Split Terminal")
+                    .accessibilityLabel("Split Terminal")
+                    .accessibilityHint("Double tap to split the active terminal")
 
                     Button(action: copyActiveTerminalToClipboard) {
                         Image(systemName: "doc.on.doc")
                     }
                     .disabled(workspace.activePane == nil)
                     .help("Copy Terminal Output")
+                    .accessibilityLabel("Copy Terminal Output")
+                    .accessibilityHint("Double tap to copy terminal output to clipboard")
 
                     Button(action: pasteClipboardToActiveTerminal) {
                         Image(systemName: "doc.on.clipboard")
                     }
                     .disabled(workspace.activePane == nil)
                     .help("Paste")
+                    .accessibilityLabel("Paste")
+                    .accessibilityHint("Double tap to paste clipboard into terminal")
 
                     Button(action: { workspace.activePane?.clear() }) {
                         Image(systemName: "trash")
                     }
                     .disabled(workspace.activePane == nil)
                     .help("Clear Terminal")
+                    .accessibilityLabel("Clear Terminal")
+                    .accessibilityHint("Double tap to clear the terminal screen")
 
                     Button(action: { workspace.killActive() }) {
                         Image(systemName: "xmark")
                     }
                     .disabled(workspace.activePane == nil)
                     .help("Kill Terminal")
+                    .accessibilityLabel("Kill Terminal")
+                    .accessibilityHint("Double tap to terminate the active terminal")
 
                     Button(action: { showConnectionSheet = true }) {
                         Image(systemName: "network")
                     }
                     .disabled(workspace.activePane == nil)
                     .help("SSH Connect")
+                    .accessibilityLabel("SSH Connect")
+                    .accessibilityHint("Double tap to open SSH connection dialog")
                 }
                 .font(.caption)
                 .foregroundColor(themeManager.currentTheme.editorForeground)
@@ -105,6 +119,8 @@ struct TerminalView: View {
                     }
                     .buttonStyle(.plain)
                     .help("New Terminal")
+                    .accessibilityLabel("New Terminal")
+                    .accessibilityHint("Double tap to create a new terminal tab")
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)

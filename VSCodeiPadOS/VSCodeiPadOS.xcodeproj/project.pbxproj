@@ -128,6 +128,7 @@
 		8017 /* NotificationToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8016 /* NotificationToastView.swift */; };
 		8019 /* KeyboardShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8018 /* KeyboardShortcutsView.swift */; };
 		9001 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002 /* AppLogger.swift */; };
+		9003 /* Notification+Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9004 /* Notification+Names.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -253,6 +254,7 @@
 		8016 /* NotificationToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToastView.swift; sourceTree = "<group>"; };
 		8018 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
 		9002 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
+		9004 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Notification+Names.swift"; path = "Extensions/Notification+Names.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -269,6 +271,7 @@
 		4001 /* VSCodeiPadOS */ = {
 			isa = PBXGroup;
 			children = (
+				9004 /* Notification+Names.swift */,
 				9002 /* AppLogger.swift */,
 				2001 /* ContentView.swift */,
 				2099 /* Assets.xcassets */,
@@ -611,6 +614,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9003 /* Notification+Names.swift in Sources */,
 				9001 /* AppLogger.swift in Sources */,
 				1001 /* ContentView.swift in Sources */,
 				1002 /* VSCodeiPadOSApp.swift in Sources */,
