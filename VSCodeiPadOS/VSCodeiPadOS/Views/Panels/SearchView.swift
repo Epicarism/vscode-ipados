@@ -642,7 +642,7 @@ struct SearchView: View {
                 }
                 Spacer()
             }
-            }
+
             .onTapGesture {
                 withAnimation {
                     showDetails.toggle()
@@ -950,6 +950,7 @@ struct SearchView: View {
     private var rawResults: [FileSearchResult] {
         cachedConvertedResults
     }
+}
 
 
 // MARK: - Supporting Views
