@@ -66,7 +66,7 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
     
     private var currentTask: Task<Void, Never>?
     private var currentStatus: ExecutionStatus = .idle
-    private let lock = NSLock()
+    private nonisolated(unsafe) nonisolated(unsafe) let lock = NSLock()
     
     public init(
         runnerId: String = "mock-js-runner",
@@ -79,9 +79,7 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
     }
     
     public func execute(code: String, timeout: TimeInterval?) async throws -> JSValue {
-        lock.lock()
-        currentStatus = .running
-        lock.unlock()
+        lock.withLock { currentStatus = .running }
         
         callCount += 1
         executedCodes.append(code)
@@ -99,22 +97,16 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
         
         // Check cancellation
         if Task.isCancelled || shouldSimulateTimeout {
-            lock.lock()
-            currentStatus = .cancelled
-            lock.unlock()
+            lock.withLock { currentStatus = .cancelled }
             throw MockRunnerError.executionTimeout
         }
         
         guard shouldSucceed else {
-            lock.lock()
-            currentStatus = .failed
-            lock.unlock()
+            lock.withLock { currentStatus = .failed }
             throw MockRunnerError.executionFailed("Mock execution failed")
         }
         
-        lock.lock()
-        currentStatus = .completed
-        lock.unlock()
+        lock.withLock { currentStatus = .completed }
         
         // Return predefined response or default success value
         return createJSValue(from: predefinedResponse ?? "mock-result")
@@ -124,14 +116,11 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
         currentTask?.cancel()
         onCancel?()
         
-        lock.lock()
-        currentStatus = .cancelled
-        lock.unlock()
+        lock.withLock { currentStatus = .cancelled }
     }
     
     public func getStatus() async -> ExecutionStatus {
-        lock.lock()
-        defer { lock.unlock() }
+        // Lock handled by withLock pattern
         return currentStatus
     }
     
@@ -197,7 +186,7 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
     
     private var currentTask: Task<Void, Never>?
     private var currentStatus: ExecutionStatus = .idle
-    private let lock = NSLock()
+    private nonisolated(unsafe) nonisolated(unsafe) let lock = NSLock()
     
     public init(
         runnerId: String = "mock-python-runner",
@@ -213,9 +202,7 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
             throw MockRunnerError.platformNotAvailable("Python not available on iOS")
         }
         
-        lock.lock()
-        currentStatus = .running
-        lock.unlock()
+        lock.withLock { currentStatus = .running }
         
         callCount += 1
         executedCodes.append(code)
@@ -234,16 +221,12 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
         }
         
         if Task.isCancelled || shouldSimulateTimeout {
-            lock.lock()
-            currentStatus = .cancelled
-            lock.unlock()
+            lock.withLock { currentStatus = .cancelled }
             throw MockRunnerError.executionTimeout
         }
         
         guard shouldSucceed else {
-            lock.lock()
-            currentStatus = .failed
-            lock.unlock()
+            lock.withLock { currentStatus = .failed }
             throw MockRunnerError.executionFailed("Python execution failed")
         }
         
@@ -251,23 +234,18 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
         outputHistory.append(output)
         onOutput?(output)
         
-        lock.lock()
-        currentStatus = .completed
-        lock.unlock()
+        lock.withLock { currentStatus = .completed }
         
         return output
     }
     
     public func cancel() async {
         currentTask?.cancel()
-        lock.lock()
-        currentStatus = .cancelled
-        lock.unlock()
+        lock.withLock { currentStatus = .cancelled }
     }
     
     public func getStatus() async -> ExecutionStatus {
-        lock.lock()
-        defer { lock.unlock() }
+        // Lock handled by withLock pattern
         return currentStatus
     }
     
@@ -342,7 +320,7 @@ public final class MockWASMRunner: CodeRunner, MockConfigurable {
     
     private var currentTask: Task<Void, Never>?
     private var currentStatus: ExecutionStatus = .idle
-    private let lock = NSLock()
+    private nonisolated(unsafe) nonisolated(unsafe) let lock = NSLock()
     
     public init(runnerId: String = "mock-wasm-runner") {
         self.runnerId = runnerId
@@ -372,9 +350,7 @@ public final class MockWASMRunner: CodeRunner, MockConfigurable {
     
     /// Mock execute WASM function
     public func execute(function: String, args: [Any]) async throws -> Any {
-        lock.lock()
-        currentStatus = .running
-        lock.unlock()
+        lock.withLock { currentStatus = .running }
         
         callCount += 1
         executedFunctions.append((function: function, args: args))
@@ -389,22 +365,16 @@ public final class MockWASMRunner: CodeRunner, MockConfigurable {
         }
         
         if Task.isCancelled || shouldSimulateTimeout {
-            lock.lock()
-            currentStatus = .cancelled
-            lock.unlock()
+            lock.withLock { currentStatus = .cancelled }
             throw MockRunnerError.executionTimeout
         }
         
         guard shouldSucceed else {
-            lock.lock()
-            currentStatus = .failed
-            lock.unlock()
+            lock.withLock { currentStatus = .failed }
             throw MockRunnerError.executionFailed("WASM execution failed")
         }
         
-        lock.lock()
-        currentStatus = .completed
-        lock.unlock()
+        lock.withLock { currentStatus = .completed }
         
         return predefinedResponse ?? ["mock-wasm-result", function, args]
     }
@@ -416,14 +386,11 @@ public final class MockWASMRunner: CodeRunner, MockConfigurable {
     
     public func cancel() async {
         currentTask?.cancel()
-        lock.lock()
-        currentStatus = .cancelled
-        lock.unlock()
+        lock.withLock { currentStatus = .cancelled }
     }
     
     public func getStatus() async -> ExecutionStatus {
-        lock.lock()
-        defer { lock.unlock() }
+        // Lock handled by withLock pattern
         return currentStatus
     }
     
