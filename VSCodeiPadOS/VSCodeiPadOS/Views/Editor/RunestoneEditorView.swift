@@ -621,12 +621,13 @@ class RunestoneEditorTheme: Runestone.Theme {
         // See: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#highlights
         let highlightName = rawHighlightName.lowercased()
         
-        // Debug: Log ALL highlight names to console (ENABLED FOR DEBUGGING)
+        #if DEBUG
         AppLogger.editor.debug("HIGHLIGHT: '\(rawHighlightName, privacy: .public)'")
+        #endif
         
         // Keywords
         if highlightName.contains("keyword") {
-            AppLogger.editor.debug("keyword (blue)")
+
             return _keywordColor
         }
         
@@ -636,20 +637,20 @@ class RunestoneEditorTheme: Runestone.Theme {
         if highlightName.hasPrefix("string.special") ||
            highlightName.contains("label") ||
            highlightName.contains("property.definition") {
-            AppLogger.editor.debug("key/label (light blue)")
+
             return _variableColor  // Light blue #9CDCFE for keys
         }
         
         // Strings - but NOT if it's JUST "string" (let specific matches win)
         // Only color strings that are clearly values, not potential keys
         if highlightName.contains("string") {
-            AppLogger.editor.debug("string (orange)")
+
             return _stringColor  // Orange #CE9178 for string values
         }
         
         // Numbers and constants
         if highlightName.contains("number") || highlightName == "constant.numeric" {
-            AppLogger.editor.debug("number (green)")
+
             return _numberColor
         }
         
@@ -712,7 +713,7 @@ class RunestoneEditorTheme: Runestone.Theme {
         }
         
         // Default: use standard text color
-        AppLogger.editor.debug("nil (default)")
+
         return nil
     }
     

@@ -57,6 +57,9 @@ struct SearchResult: Identifiable {
     @Published var pendingReplaceAllCount = 0
     @Published var pendingReplaceAllFileCount = 0
 
+    /// Error message when regex pattern is invalid
+    @Published var regexError: String?
+
     // Search scope
     @Published var searchScope: SearchScope = .currentFile
 
@@ -286,7 +289,11 @@ struct SearchResult: Identifiable {
                         withTemplate: replaceQuery
                     )
                     if replaced != content {
-                        try? replaced.write(to: url, atomically: true, encoding: .utf8)
+                        do {
+                            try replaced.write(to: url, atomically: true, encoding: .utf8)
+                        } catch {
+                            AppLogger.general.error("Failed to write replacement to \(url.lastPathComponent): \(error.localizedDescription)")
+                        }
                     }
                 }
             }
@@ -403,7 +410,18 @@ struct SearchResult: Identifiable {
         let finalPattern = isWholeWord ? "\\b\(pattern)\\b" : pattern
         let options: NSRegularExpression.Options = isCaseSensitive ? [] : [.caseInsensitive]
 
-        return try? NSRegularExpression(pattern: finalPattern, options: options)
+        do {
+            let regex = try NSRegularExpression(pattern: finalPattern, options: options)
+            regexError = nil
+            return regex
+        } catch {
+            if useRegex {
+                regexError = "Invalid regex: \(error.localizedDescription)"
+            } else {
+                regexError = nil
+            }
+            return nil
+        }
     }
 
     private func collectFileURLs(from node: FileTreeNode) -> [URL] {
