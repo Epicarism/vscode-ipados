@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - WelcomeView
 
-/// A polished, CodePad-style welcome screen shown on startup.
+/// A polished, VS Code-style welcome screen shown on startup.
 /// Integrates via `.environmentObject(themeManager)` and stores
 /// the "show on startup" preference in `@AppStorage`.
 struct WelcomeView: View {
@@ -17,9 +17,12 @@ struct WelcomeView: View {
     var onOpenFolder: (() -> Void)?
     var onOpenFile: (() -> Void)?
     var onNewFile: (() -> Void)?
+    var onOpenRecentFile: ((URL) -> Void)?
 
     // ── Local state ────────────────────────────────────────
     @State private var hoveredAction: String? = nil
+    @State private var hoveredRecentFile: String? = nil
+    @ObservedObject private var recentFileManager = RecentFileManager.shared
 
     private var theme: Theme { themeManager.currentTheme }
 
@@ -54,6 +57,14 @@ struct WelcomeView: View {
                     .background(theme.sidebarSectionHeader)
                 sectionHeader("Learn")
                 learnSection
+                    .padding(.bottom, 28)
+
+                Divider()
+                    .background(theme.sidebarSectionHeader)
+
+                // ── Keyboard Shortcuts Reference ──────────
+                sectionHeader("Keyboard Shortcuts")
+                shortcutsReference
                     .padding(.bottom, 28)
 
                 Divider()
@@ -122,27 +133,42 @@ struct WelcomeView: View {
                 icon: "folder",
                 title: "Open Folder…",
                 subtitle: "Open a folder to browse its contents",
+                shortcut: "⇧⌘O",
                 actionKey: "folder"
             ) {
-                onOpenFolder?()
+                if let onOpenFolder = onOpenFolder {
+                    onOpenFolder()
+                } else {
+                    NotificationCenter.default.post(name: .sceneOpenWorkspace, object: nil)
+                }
             }
 
             actionRow(
                 icon: "doc",
                 title: "Open File…",
                 subtitle: "Open a single file for editing",
+                shortcut: "⌘O",
                 actionKey: "file"
             ) {
-                onOpenFile?()
+                if let onOpenFile = onOpenFile {
+                    onOpenFile()
+                } else {
+                    NotificationCenter.default.post(name: .openFile, object: nil)
+                }
             }
 
             actionRow(
                 icon: "doc.badge.plus",
                 title: "New File",
                 subtitle: "Create a new untitled file",
+                shortcut: "⌘N",
                 actionKey: "newFile"
             ) {
-                onNewFile?()
+                if let onNewFile = onNewFile {
+                    onNewFile()
+                } else {
+                    NotificationCenter.default.post(name: .newFile, object: nil)
+                }
             }
         }
     }
@@ -150,22 +176,96 @@ struct WelcomeView: View {
     // MARK: - Recent Files Section
 
     private var recentFilesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock")
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.lineNumber)
+        VStack(alignment: .leading, spacing: 6) {
+            if recentFileManager.recentFiles.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.lineNumber)
 
-                Text("No recent files")
+                    Text("No recent files")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.lineNumber)
+                }
+                .padding(.vertical, 8)
+
+                Text("Files you open will appear here for quick access.")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.lineNumber)
+            } else {
+                ForEach(recentFileManager.recentFiles.prefix(8), id: \.absoluteString) { url in
+                    recentFileRow(url)
+                }
+
+                if recentFileManager.recentFiles.count > 8 {
+                    Button {
+                        // Open more – could expand or navigate to full list
+                    } label: {
+                        Text("Show More…")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(theme.activityBarForeground)
+                            .padding(.top, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: - Recent File Row
+
+    private func recentFileRow(_ url: URL) -> some View {
+        Button {
+            if let onOpenRecentFile = onOpenRecentFile {
+                onOpenRecentFile(url)
+            } else {
+                NotificationCenter.default.post(name: .openFile, object: url)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: fileIconName(for: url.pathExtension))
                     .font(.system(size: 14))
+                    .foregroundColor(theme.activityBarForeground)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(hoveredRecentFile == url.absoluteString
+                                  ? theme.sidebarSelection
+                                  : theme.sidebarSectionHeader)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(url.lastPathComponent)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(theme.sidebarForeground)
+                        .lineLimit(1)
+
+                    Text(url.deletingLastPathComponent().lastPathComponent)
+                        .font(.system(size: 11))
+                        .foregroundColor(theme.lineNumber)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.lineNumber)
             }
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
-
-            Text("Files you open will appear here for quick access.")
-                .font(.system(size: 12))
-                .foregroundColor(theme.lineNumber)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(hoveredRecentFile == url.absoluteString ? theme.sidebarSelection : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            hoveredRecentFile = hovering ? url.absoluteString : nil
+        }
+        .accessibilityLabel(url.lastPathComponent)
+        .accessibilityHint("Double tap to open this file")
     }
 
     // MARK: - Learn Section
@@ -176,6 +276,7 @@ struct WelcomeView: View {
                 icon: "keyboard",
                 title: "Keyboard Shortcuts",
                 subtitle: "View all available keyboard shortcuts",
+                shortcut: "⌘K ⌘S",
                 actionKey: "shortcuts"
             ) {
                 NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
@@ -191,7 +292,58 @@ struct WelcomeView: View {
                     UIApplication.shared.open(url)
                 }
             }
+
+            actionRow(
+                icon: "questionmark.circle",
+                title: "Release Notes",
+                subtitle: "See what's new in CodePad v1.0.0",
+                actionKey: "releaseNotes"
+            ) {
+                if let url = URL(string: "https://codepad.dev/docs/release-notes") {
+                    UIApplication.shared.open(url)
+                }
+            }
         }
+    }
+
+    // MARK: - Keyboard Shortcuts Reference
+
+    private var shortcutsReference: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            shortcutHintRow(key: "⌘N", description: "New File")
+            shortcutHintRow(key: "⌘O", description: "Open File")
+            shortcutHintRow(key: "⇧⌘O", description: "Open Folder")
+            shortcutHintRow(key: "⌘S", description: "Save")
+            shortcutHintRow(key: "⇧⌘S", description: "Save As")
+            shortcutHintRow(key: "⌘W", description: "Close Tab")
+            shortcutHintRow(key: "⌘P", description: "Quick Open")
+            shortcutHintRow(key: "⇧⌘P", description: "Command Palette")
+            shortcutHintRow(key: "⌘F", description: "Find")
+            shortcutHintRow(key: "⌥⌘F", description: "Find and Replace")
+            shortcutHintRow(key: "⌘G", description: "Go to Line")
+        }
+    }
+
+    // MARK: - Shortcut Hint Row
+
+    private func shortcutHintRow(key: String, description: String) -> some View {
+        HStack(spacing: 12) {
+            Text(key)
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(theme.sidebarForeground)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(theme.sidebarSectionHeader)
+                )
+                .frame(width: 72, alignment: .leading)
+
+            Text(description)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(theme.lineNumber)
+        }
+        .padding(.vertical, 2)
     }
 
     // MARK: - Toggle Section
@@ -220,6 +372,7 @@ struct WelcomeView: View {
         icon: String,
         title: String,
         subtitle: String,
+        shortcut: String? = nil,
         actionKey: String,
         action: @escaping () -> Void
     ) -> some View {
@@ -248,6 +401,18 @@ struct WelcomeView: View {
 
                 Spacer()
 
+                if let shortcut = shortcut {
+                    Text(shortcut)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(theme.lineNumber)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(theme.sidebarSectionHeader)
+                        )
+                }
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.lineNumber)
@@ -266,6 +431,45 @@ struct WelcomeView: View {
         }
         .accessibilityLabel(title)
         .accessibilityHint("Double tap to \(subtitle)")
+    }
+
+    // MARK: - File Icon Helper
+
+    private func fileIconName(for extension: String) -> String {
+        switch `extension`.lowercased() {
+        case "swift":
+            return "swift"
+        case "js", "mjs":
+            return "js"
+        case "ts", "tsx":
+            return "ts"
+        case "json":
+            return "doc.text"
+        case "md", "txt", "rtf":
+            return "doc.richtext"
+        case "html", "htm":
+            return "globe"
+        case "css", "scss", "sass", "less":
+            return "paintbrush"
+        case "py":
+            return "chevron.left.forwardslash.chevron.right"
+        case "png", "jpg", "jpeg", "gif", "svg", "webp":
+            return "photo"
+        case "mp4", "mov", "avi":
+            return "video"
+        case "mp3", "wav", "aac", "flac":
+            return "music.note"
+        case "zip", "tar", "gz", "bz2":
+            return "archivebox"
+        case "sh", "bash", "zsh":
+            return "terminal"
+        case "xml":
+            return "doc.text"
+        case "yml", "yaml":
+            return "doc.text"
+        default:
+            return "doc"
+        }
     }
 }
 

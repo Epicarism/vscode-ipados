@@ -150,7 +150,11 @@ final class GitManager: ObservableObject {
     @Published var lastError: String?
     @Published var aheadCount: Int = 0
     @Published var behindCount: Int = 0
-    
+
+    var totalChanges: Int {
+        stagedChanges.count + unstagedChanges.count + untrackedFiles.count
+    }
+
     private var workingDirectory: URL?
     private var nativeReader: NativeGitReader?
     private var nativeWriter: NativeGitWriter?
