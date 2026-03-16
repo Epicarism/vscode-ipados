@@ -481,7 +481,11 @@ public actor CodeAnalyzer {
     }
     
     private func getPatterns(for language: Language) -> LanguagePatterns {
-        return patterns[language] ?? patterns[.javascript]!
+        return patterns[language] ?? patterns[.javascript] ?? LanguagePatterns(
+            importPatterns: ["import", "require"],
+            functionPattern: "(?:function|def|func)\\s+(\\w+)",
+            unsafePatterns: [:]
+        )
     }
     
     private func getFunctionPattern(for language: Language?) -> String {

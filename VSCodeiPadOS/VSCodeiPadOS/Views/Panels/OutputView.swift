@@ -83,7 +83,9 @@ struct OutputLineView: View {
         
         for (range, attrs) in attributes {
             guard let swiftRange = Range(range, in: line.text) else { continue }
-            let attrRange = AttributedString.Index(swiftRange.lowerBound, within: result)!..<AttributedString.Index(swiftRange.upperBound, within: result)!
+            guard let lowerBound = AttributedString.Index(swiftRange.lowerBound, within: result),
+                  let upperBound = AttributedString.Index(swiftRange.upperBound, within: result) else { continue }
+            let attrRange = lowerBound..<upperBound
             
             var container = AttributeContainer()
             

@@ -520,7 +520,9 @@ final class AIManager: ObservableObject {
             return try await makeAPIRequest(messages: messages, context: context, agentMode: true)
         }
         
-        let url = URL(string: "\(baseURL)/chat/completions")!
+        guard let url = URL(string: "\(baseURL)/chat/completions") else {
+            throw AIError.invalidURL("\(baseURL)/chat/completions")
+        }
         let systemPrompt = buildAgentSystemPrompt(context: context)
         let tools = AITool.allCases.map { $0.openAIFunction }
         
@@ -627,7 +629,9 @@ final class AIManager: ObservableObject {
     // MARK: - Anthropic with Tools (proper tool loop)
     
     private func callAnthropicWithTools(messages: [ChatMessage], context: String?, toolExecutor: AIToolExecutor) async throws -> String {
-        let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages")!
+        guard let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages") else {
+            throw AIError.invalidURL("\(AIProvider.anthropic.baseURL)/messages")
+        }
         let systemPrompt = buildAgentSystemPrompt(context: context)
         let tools = AITool.allCases.map { $0.anthropicTool }
         
@@ -1005,7 +1009,9 @@ Use the EXACT filename shown in the file list. Examples:
     // MARK: - Unified OpenAI-Compatible Call
     
     private func callOpenAICompatible(provider: AIProvider, apiKey: String, messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
-        let url = URL(string: "\(provider.baseURL)/chat/completions")!
+        guard let url = URL(string: "\(provider.baseURL)/chat/completions") else {
+            throw AIError.invalidURL("\(provider.baseURL)/chat/completions")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -1058,7 +1064,9 @@ Use the EXACT filename shown in the file list. Examples:
     // MARK: - Anthropic API
     
     private func callAnthropic(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
-        let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages")!
+        guard let url = URL(string: "\(AIProvider.anthropic.baseURL)/messages") else {
+            throw AIError.invalidURL("\(AIProvider.anthropic.baseURL)/messages")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(anthropicKey, forHTTPHeaderField: "x-api-key")
@@ -1109,7 +1117,10 @@ Use the EXACT filename shown in the file list. Examples:
     // MARK: - Google API
     
     private func callGoogle(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
-        let url = URL(string: "\(AIProvider.google.baseURL)/models/\(selectedModel.id):generateContent?key=\(googleKey)")!
+        let encodedModelId = selectedModel.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? selectedModel.id
+        guard let url = URL(string: "\(AIProvider.google.baseURL)/models/\(encodedModelId):generateContent?key=\(googleKey)") else {
+            throw AIError.invalidURL("Google API URL with model: \(selectedModel.id)")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1167,7 +1178,9 @@ Use the EXACT filename shown in the file list. Examples:
     // MARK: - Ollama API
     
     private func callOllama(messages: [ChatMessage], context: String?, agentMode: Bool, systemOverride: String? = nil) async throws -> String {
-        let url = URL(string: "\(ollamaHost)/api/chat")!
+        guard let url = URL(string: "\(ollamaHost)/api/chat") else {
+            throw AIError.invalidURL("\(ollamaHost)/api/chat")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1523,6 +1536,7 @@ enum AIError: LocalizedError {
     case httpError(Int)
     case apiError(String)
     case noAPIKey
+    case invalidURL(String)
     
     var errorDescription: String? {
         switch self {
@@ -1530,6 +1544,7 @@ enum AIError: LocalizedError {
         case .httpError(let code): return "HTTP Error: \(code)"
         case .apiError(let message): return message
         case .noAPIKey: return "No API key configured"
+        case .invalidURL(let url): return "Invalid URL: \(url)"
         }
     }
 }

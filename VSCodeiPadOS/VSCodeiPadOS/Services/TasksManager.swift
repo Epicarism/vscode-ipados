@@ -111,8 +111,8 @@ struct ANSIColorParser {
         var lastEnd = text.startIndex
         
         for match in matches {
-            let matchRange = Range(match.range, in: text)!
-            let codeRange = Range(match.range(at: 1), in: text)!
+            guard let matchRange = Range(match.range, in: text),
+                  let codeRange = Range(match.range(at: 1), in: text) else { continue }
             let codes = text[codeRange].split(separator: ";").compactMap { Int($0) }
             
             // Append text before the escape code

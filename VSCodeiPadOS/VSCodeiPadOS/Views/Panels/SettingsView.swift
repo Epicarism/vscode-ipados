@@ -676,7 +676,6 @@ struct ConnectedModeSettingsSection: View {
                     Label("Add Server", systemImage: "plus.circle")
                 }
                 .accessibilityHint("Add a new server connection")
-                }
             } else {
                 ForEach(tunnelManager.configs) { config in
                     HStack {

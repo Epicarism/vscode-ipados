@@ -164,22 +164,28 @@ final class NavigationManager: ObservableObject {
     /// Register a symbol definition in the symbol table
     func registerSymbol(_ definition: SymbolDefinition) {
         // Add to symbol table
-        if symbolTable[definition.name] == nil {
-            symbolTable[definition.name] = []
-        }
-
-        // Avoid duplicates
-        if !symbolTable[definition.name]!.contains(where: { $0.location == definition.location }) {
-            symbolTable[definition.name]!.append(definition)
+        symbolTable[definition.name, default: []].append(definition)
+        
+        // Deduplicate by location
+        if let existing = symbolTable[definition.name] {
+            var seen = Set<String>()
+            symbolTable[definition.name] = existing.filter { sym in
+                let key = "\(sym.location.file):\(sym.location.line)"
+                return seen.insert(key).inserted
+            }
         }
 
         // Add to file index
         let filePath = definition.location.file
-        if fileSymbols[filePath] == nil {
-            fileSymbols[filePath] = []
-        }
-        if !fileSymbols[filePath]!.contains(where: { $0.location == definition.location }) {
-            fileSymbols[filePath]!.append(definition)
+        fileSymbols[filePath, default: []].append(definition)
+        
+        // Deduplicate
+        if let existing = fileSymbols[filePath] {
+            var seen = Set<String>()
+            fileSymbols[filePath] = existing.filter { sym in
+                let key = "\(sym.location.file):\(sym.location.line)"
+                return seen.insert(key).inserted
+            }
         }
     }
 
