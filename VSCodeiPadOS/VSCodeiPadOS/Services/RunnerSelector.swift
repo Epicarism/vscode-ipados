@@ -260,7 +260,7 @@ public final class RunnerSelector: Sendable {
     
     public var userPreferences: ExecutionPreferences
     public var configuration: RunnerConfiguration
-    public var delegate: RunnerSelectorDelegate?
+    public weak var delegate: RunnerSelectorDelegate?
     
     // MARK: - Initialization
     

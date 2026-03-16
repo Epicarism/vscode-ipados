@@ -168,14 +168,14 @@ public final class SearchManager: ObservableObject {
         persistHistory()
     }
 
-    nonisolated private func loadHistory() {
+    private func loadHistory() {
         guard let data = UserDefaults.standard.data(forKey: historyKey) else { return }
         if let decoded = try? JSONDecoder().decode([SearchQuery].self, from: data) {
             history = decoded
         }
     }
 
-    nonisolated private func persistHistory() {
+    private func persistHistory() {
         guard let data = try? JSONEncoder().encode(history) else { return }
         UserDefaults.standard.set(data, forKey: historyKey)
     }

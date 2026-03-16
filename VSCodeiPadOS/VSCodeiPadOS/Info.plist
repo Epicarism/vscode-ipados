@@ -18,6 +18,20 @@
 				<string>public.swift-source</string>
 				<string>public.python-script</string>
 				<string>com.netscape.javascript-source</string>
+				<string>public.json</string>
+				<string>public.yaml</string>
+				<string>public.xml</string>
+				<string>public.html</string>
+				<string>public.css</string>
+				<string>public.c-source</string>
+				<string>public.c-plus-plus-source</string>
+				<string>public.objective-c-source</string>
+				<string>public.shell-script</string>
+				<string>com.apple.property-list</string>
+				<string>public.ruby-script</string>
+				<string>public.perl-script</string>
+				<string>org.rust-lang.rust</string>
+				<string>public.data</string>
 			</array>
 		</dict>
 	</array>

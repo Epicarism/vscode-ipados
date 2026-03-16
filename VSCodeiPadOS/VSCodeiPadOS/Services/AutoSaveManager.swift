@@ -45,10 +45,8 @@ final class AutoSaveManager: ObservableObject {
     // MARK: - Public API
     
     /// Connect to EditorCore for save operations
-    nonisolated func connect(to editorCore: EditorCore) {
-        Task { @MainActor in
-            self.editorCore = editorCore
-        }
+    func connect(to editorCore: EditorCore) {
+        self.editorCore = editorCore
     }
     
     /// Call when text content changes in a tab

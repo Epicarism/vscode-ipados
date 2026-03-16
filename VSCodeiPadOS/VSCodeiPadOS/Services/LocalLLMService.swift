@@ -234,7 +234,7 @@ final class LocalLLMService: ObservableObject {
             let repo = Hub.Repo(id: config.repo)
             
             statusMessage = "Downloading \(config.name)..."
-            let modelDir = try await hub.snapshot(from: repo, matching: ["*.json", "*.safetensors", "*.jinja"]) { [weak self] progress in
+            let modelDir = try await hub.snapshot(from: repo, matching: ["*.json", "*.safetensors", "*.jinja"]) { @Sendable [weak self] progress in
                 Task { @MainActor in
                     self?.downloadProgress = progress.fractionCompleted
                     self?.statusMessage = "Downloading... \(Int(progress.fractionCompleted * 100))%"
@@ -451,12 +451,13 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         guard let session = chatSession else {
             throw LocalLLMError.modelNotLoaded
         }
+        nonisolated(unsafe) let safeSession = session
         
         // Get last user message only
         let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
         logger.debug("chat() user message: '\(String(lastUserMessage.prefix(100)), privacy: .public)'")
         
-        let response = try await session.respond(to: lastUserMessage)
+        let response = try await safeSession.respond(to: lastUserMessage)
         logger.debug("chat() raw response length: \(response.count, privacy: .public)")
         
         // Estimate tokens from this exchange (rough 4 chars per token)
@@ -502,6 +503,7 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                         continuation.finish(throwing: LocalLLMError.modelNotLoaded)
                         return
                     }
+                    nonisolated(unsafe) let safeSession = session
                     self.logger.debug("Using existing MLXChatSession")
                     
                     // Get last user message only
@@ -514,7 +516,7 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                     var chunkCount = 0
                     var totalChars = 0
                     self.logger.debug("Starting streamResponse...")
-                    for try await chunk in session.streamResponse(to: lastUserMessage) {
+                    for try await chunk in safeSession.streamResponse(to: lastUserMessage) {
                         chunkCount += 1
                         totalChars += chunk.count
                         if chunkCount <= 3 {

@@ -870,6 +870,14 @@ struct VSCodeWebView: UIViewRepresentable {
     func updateUIView(_ webView: WKWebView, context: Context) {
         // Only reload if URL changed significantly
     }
+    
+    static func dismantleUIView(_ webView: WKWebView, coordinator: VSCodeWebViewCoordinator) {
+        // Remove script message handlers to break the retain cycle
+        // WKUserContentController retains the handler strongly
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleLog")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleError")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "vsCodeError")
+    }
 }
     
 
