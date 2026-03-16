@@ -8,6 +8,14 @@
 import SwiftUI
 import Combine
 
+// MARK: - Shell Escaping
+
+private extension String {
+    /// Escapes single quotes for safe interpolation into shell commands.
+    var shellEscaped: String {
+        self.replacingOccurrences(of: "'", with: "'\\''")
+    }
+}
 
 // MARK: - Git Errors
 
@@ -83,7 +91,7 @@ enum GitChangeKind: String, Codable, Hashable {
 }
 
 struct GitBranch: Identifiable, Hashable {
-    let id = UUID()
+    var id: String { name }
     let name: String
     let isRemote: Bool
     let isCurrent: Bool
@@ -107,7 +115,7 @@ struct GitCommit: Identifiable, Hashable {
 }
 
 struct GitFileChange: Identifiable, Hashable {
-    let id = UUID()
+    var id: String { "\(staged ? "staged" : "unstaged")-\(path)" }
     let path: String
     let kind: GitChangeKind
     let staged: Bool
@@ -428,7 +436,7 @@ final class GitManager: ObservableObject {
         // Update the working tree via SSH if connected
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd \(dir) && git checkout \(branch)", timeout: 60)
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git checkout '\(branch.shellEscaped)'", timeout: 60)
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(
                     args: "checkout \(branch)",
@@ -483,7 +491,7 @@ final class GitManager: ObservableObject {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
             // Step 1: Fetch from remote
-            let fetchResult = try await ssh.executeCommand("cd \(dir) && git fetch", timeout: 60)
+            let fetchResult = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git fetch", timeout: 60)
             if fetchResult.exitCode != 0 {
                 throw GitManagerError.commandFailed(
                     args: "fetch",
@@ -497,7 +505,7 @@ final class GitManager: ObservableObject {
             guard !branch.isEmpty else {
                 throw GitManagerError.invalidRepository
             }
-            let mergeResult = try await ssh.executeCommand("cd \(dir) && git merge origin/\(branch)", timeout: 60)
+            let mergeResult = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git merge 'origin/\(branch.shellEscaped)'", timeout: 60)
             if mergeResult.exitCode != 0 {
                 throw GitManagerError.commandFailed(
                     args: "merge origin/\(branch)",
@@ -523,7 +531,7 @@ final class GitManager: ObservableObject {
                 throw GitManagerError.invalidRepository
             }
             // Push current branch to origin with explicit branch name
-            let result = try await ssh.executeCommand("cd \(dir) && git push origin \(branch)", timeout: 60)
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git push origin '\(branch.shellEscaped)'", timeout: 60)
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(
                     args: "push origin \(branch)",
@@ -543,7 +551,7 @@ final class GitManager: ObservableObject {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
             let msg = (message ?? "Stash from CodePad").replacingOccurrences(of: "'", with: "'\\''")
-            let result = try await ssh.executeCommand("cd \(dir) && git stash push -m '\(msg)'")
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git stash push -m '\(msg)'")
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "stash push", exitCode: result.exitCode, message: result.stderr)
             }
@@ -556,7 +564,7 @@ final class GitManager: ObservableObject {
     func stashPop(index: Int) async throws {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd \(dir) && git stash pop stash@{\(index)}")
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git stash pop stash@{\(index)}")
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "stash pop", exitCode: result.exitCode, message: result.stderr)
             }
@@ -569,7 +577,7 @@ final class GitManager: ObservableObject {
     func stashDrop(index: Int) async throws {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd \(dir) && git stash drop stash@{\(index)}")
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git stash drop stash@{\(index)}")
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "stash drop", exitCode: result.exitCode, message: result.stderr)
             }
@@ -624,7 +632,7 @@ final class GitManager: ObservableObject {
     func fetch() async throws {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd \(dir) && git fetch", timeout: 60)
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git fetch", timeout: 60)
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(
                     args: "fetch",
@@ -635,9 +643,8 @@ final class GitManager: ObservableObject {
             await refresh()
             return
         }
-        // No SSH connection — refresh local state only and warn
-        print("[GitManager] fetch: SSH not connected — refreshing local state only. Connect SSH for remote fetch.")
-        await refresh()
+        // No SSH connection — cannot fetch from remote
+        throw GitManagerError.sshNotConnected
     }
     
 

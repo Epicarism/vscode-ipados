@@ -175,7 +175,7 @@ final class WorkspaceManager: ObservableObject {
             var out = String(decoding: data, as: UTF8.self)
             if !out.hasSuffix("\n") { out += "\n" }
 
-            try out.data(using: .utf8)?.write(to: settingsURL, options: [.atomic])
+            try Data(out.utf8).write(to: settingsURL, options: [.atomic])
         } catch {
             lastErrorMessage = "Couldn’t save .vscode/settings.json"
         }

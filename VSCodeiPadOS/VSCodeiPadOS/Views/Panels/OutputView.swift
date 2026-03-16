@@ -89,14 +89,14 @@ struct OutputLineView: View {
             
             var container = AttributeContainer()
             
-            if let color = attrs[.foregroundColor] as? Color {
-                container.foregroundColor = color
+            if let uiColor = attrs[.foregroundColor] as? UIColor {
+                container.foregroundColor = Color(uiColor)
             }
-            if let bgColor = attrs[.backgroundColor] as? Color {
-                container.backgroundColor = bgColor
+            if let uiBgColor = attrs[.backgroundColor] as? UIColor {
+                container.backgroundColor = Color(uiBgColor)
             }
-            if let font = attrs[.font] as? Font {
-                container.font = font
+            if let uiFont = attrs[.font] as? UIFont {
+                container.font = Font(uiFont)
             }
             
             result[attrRange].setAttributes(container)
@@ -137,11 +137,13 @@ struct RemoteProgressView: View {
                                 .lineLimit(1)
                         }
                         
-                        if let startTime = outputManager.remoteExecutionStatus.startTime {
-                            Text("Running for \(Int(Date().timeIntervalSince(startTime)))s")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                                .monospacedDigit()
+                        TimelineView(.periodic(every: 1.0)) { context in
+                            if let startTime = outputManager.remoteExecutionStatus.startTime {
+                                Text("Running for \(Int(context.date.timeIntervalSince(startTime)))s")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .monospacedDigit()
+                            }
                         }
                     }
                     
@@ -194,6 +196,9 @@ struct OutputSearchBar: View {
                 .accessibilityLabel("Search output")
                 .onChange(of: localQuery) { _, newValue in
                     outputManager.setSearchQuery(newValue)
+                }
+                .onAppear {
+                    localQuery = outputManager.searchQuery
                 }
             
             if !localQuery.isEmpty {

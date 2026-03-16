@@ -579,6 +579,7 @@ struct BranchPickerSheet: View {
             } message: {
                 Text(branchError ?? "An unknown error occurred")
             }
+        }
     }
     
     private func checkout(_ branch: String) {
@@ -591,8 +592,10 @@ struct BranchPickerSheet: View {
                     branchError = error.localizedDescription
                     showBranchError = true
                 }
+            }
         }
     }
+
     
     private func createBranch() {
         guard !newBranchName.isEmpty else { return }
@@ -609,8 +612,10 @@ struct BranchPickerSheet: View {
                     branchError = error.localizedDescription
                     showBranchError = true
                 }
+            }
         }
     }
+
 }
 
 
