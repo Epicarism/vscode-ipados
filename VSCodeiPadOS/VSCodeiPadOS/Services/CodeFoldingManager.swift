@@ -70,7 +70,8 @@ extension Notification.Name {
 }
 
 // MARK: - Code Folding Manager
-class CodeFoldingManager: ObservableObject {
+@MainActor
+final class CodeFoldingManager: ObservableObject {
 
     static let shared = CodeFoldingManager()
     
