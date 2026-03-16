@@ -4,6 +4,7 @@ import SwiftUI
 
 struct GitView: View {
     @StateObject private var gitManager = GitManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @EnvironmentObject var editorCore: EditorCore
     @State private var commitMessage = ""
     @State private var selectedEntry: GitStatusEntry?
@@ -15,6 +16,8 @@ struct GitView: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var isOperationInProgress = false
+
+    private var theme: Theme { themeManager.currentTheme }
 
     
     var body: some View {

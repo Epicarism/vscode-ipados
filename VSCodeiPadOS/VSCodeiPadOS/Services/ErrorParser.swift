@@ -634,18 +634,18 @@ class ErrorParser {
     }
     
     /// Highlight all errors in an output view
-    func highlightErrors(in outputView: UIView, errors: [ErrorLocation]) {
+    @MainActor func highlightErrors(in outputView: UIView, errors: [ErrorLocation]) {
         errorHighlighter?.highlightErrors(in: outputView, errors: errors)
     }
     
     /// Highlight all parsed errors in an output view
-    func highlightParsedErrors(in outputView: UIView, errors: [ParsedError]) {
+    @MainActor func highlightParsedErrors(in outputView: UIView, errors: [ParsedError]) {
         let locations = errors.map { $0.toErrorLocation(fullOutput: "") }
         errorHighlighter?.highlightErrors(in: outputView, errors: locations)
     }
     
     /// Clear all error highlights from a view
-    func clearHighlights(from view: UIView) {
+    @MainActor func clearHighlights(from view: UIView) {
         errorHighlighter?.clearHighlights(from: view)
     }
     
@@ -767,6 +767,7 @@ class ErrorParser {
 
 // MARK: - Error Highlighter
 
+@MainActor
 /// Handles visual highlighting of errors in output views
 class ErrorHighlighter {
     

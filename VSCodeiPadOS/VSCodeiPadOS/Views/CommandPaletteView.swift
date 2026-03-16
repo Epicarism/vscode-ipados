@@ -254,7 +254,7 @@ struct CommandPaletteView: View {
         let containsMatches = allCommands.filter {
             !$0.name.lowercased().hasPrefix(query) &&
             ($0.name.lowercased().contains(query) ||
-             $0.shortcut.lowercased().contains(query) ||
+             ($0.shortcut?.lowercased().contains(query) ?? false) ||
              $0.category.rawValue.lowercased().contains(query))
         }
 

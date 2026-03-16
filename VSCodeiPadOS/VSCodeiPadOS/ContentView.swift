@@ -729,7 +729,7 @@ struct IDEEditorView: View {
                         }
                         showAutocomplete = false
                     }
-                    .offset(x: 70, y: CGFloat(currentLineNumber) * lineHeight)
+                    .offset(x: 70, y: CGFloat(currentLineNumber) * lineHeight - scrollOffset)
                 }
             }
         }
@@ -737,6 +737,9 @@ struct IDEEditorView: View {
         .onAppear {
             text = tab.content
             foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
+            findViewModel.editorCore = editorCore
+            // Set initial lineHeight based on font size
+            lineHeight = ceil(editorCore.editorFontSize * 1.4)
         }
         .onChange(of: tab.id) { _, _ in
             text = tab.content
@@ -757,11 +760,6 @@ struct IDEEditorView: View {
                 requestedLineSelection = line - 1  // Convert 1-indexed to 0-indexed
                 editorCore.requestedGoToLine = nil  // Clear the request
             }
-        }
-        .onAppear {
-            findViewModel.editorCore = editorCore
-            // Set initial lineHeight based on font size
-            lineHeight = ceil(editorCore.editorFontSize * 1.4)
         }
     }
     
@@ -1150,6 +1148,7 @@ struct WelcomeTip: View {
 
 struct IDEFolderPicker: UIViewControllerRepresentable {
     @ObservedObject var fileNavigator: FileSystemNavigator
+    var editorCore: EditorCore? = nil
     var onPick: ((URL) -> Void)?
     
     init(fileNavigator: FileSystemNavigator, onPick: ((URL) -> Void)? = nil) {
@@ -1178,6 +1177,7 @@ struct IDEFolderPicker: UIViewControllerRepresentable {
                 if didStart {
                     scopedURL = url
                 }
+                parent.editorCore?.retainSecurityScopedAccess(to: url)
                 if let onPick = parent.onPick {
                     onPick(url)
                 } else {
@@ -1188,12 +1188,6 @@ struct IDEFolderPicker: UIViewControllerRepresentable {
                         GitManager.shared.setWorkingDirectory(url)
                     }
                 }
-            }
-        }
-        
-        deinit {
-            if let url = scopedURL {
-                url.stopAccessingSecurityScopedResource()
             }
         }
     }

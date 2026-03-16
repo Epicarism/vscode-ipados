@@ -248,7 +248,7 @@ class EditorCore: ObservableObject {
 
     /// Track active security-scoped URL access while files are open in tabs.
     /// This avoids losing access after opening a document (common on iPadOS).
-    private nonisolated(unsafe) var securityScopedAccessCounts: [URL: Int] = [:]
+    private var securityScopedAccessCounts: [URL: Int] = [:]
 
     var activeTab: Tab? {
         tabs.first { $0.id == activeTabId }
@@ -359,13 +359,10 @@ class EditorCore: ObservableObject {
         if let diagObs = diagnosticsObserver {
             NotificationCenter.default.removeObserver(diagObs)
         }
-        // Release any remaining security-scoped resources
-        for (url, count) in securityScopedAccessCounts where count > 0 {
-            for _ in 0..<count {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        securityScopedAccessCounts.removeAll()
+        // Release any remaining security-scoped resources.
+        // deinit is nonisolated on @MainActor classes, so we use assumeIsolated
+        // to safely access the MainActor-isolated dictionary (requires iOS 17+).
+        MainActor.assumeIsolated { releaseAllSecurityScopedAccess() }
     }
     
     /// Creates example tabs demonstrating syntax highlighting for all supported languages
@@ -1203,7 +1200,7 @@ mod tests {
     /// Retain security scoped access for as long as a tab referencing the URL is open.
     /// - Returns: `true` if access was retained (either already retained or started successfully).
     @discardableResult
-    private func retainSecurityScopedAccess(to url: URL) -> Bool {
+    func retainSecurityScopedAccess(to url: URL) -> Bool {
         if let count = securityScopedAccessCounts[url] {
             securityScopedAccessCounts[url] = count + 1
             return true

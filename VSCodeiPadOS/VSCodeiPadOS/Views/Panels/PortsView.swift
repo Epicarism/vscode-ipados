@@ -571,6 +571,7 @@ struct PortsView: View {
     // MARK: - Actions
     
     private func addPort() {
+        guard let portNumber = Int(newPortText), portNumber > 0, portNumber <= 65535 else { return }
         portManager.scanError = nil
         portManager.addPort(portNumber, label: newPortLabel, protocol: newPortProtocol)
         newPortText = ""
