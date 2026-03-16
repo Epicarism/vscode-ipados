@@ -145,7 +145,6 @@
 		BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885F3C3B4438947AA7802BF5 /* Codicon.swift */; };
 		BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76695AA95638C9192E12E05E /* WindowStateManager.swift */; };
 		D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */; };
-		D0940CDBF3BE2C1681C37A94 /* SyntaxHighlightingTextView_Update.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */; };
 		D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301258073261580A471BF74C /* VSCodeTunnelView.swift */; };
 		D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBE91AB571E62605847001D /* RemoteDebugger.swift */; };
 		E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA35FC9065D549599858CE86 /* CommandPaletteView.swift */; };
@@ -290,7 +289,6 @@
 		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
 		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
 		9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionView.swift; path = Views/Editor/InlineSuggestionView.swift; sourceTree = "<group>"; };
-		9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightingTextView_Update.swift; path = Views/Editor/SyntaxHighlightingTextView_Update.swift; sourceTree = "<group>"; };
 		AEBE91AB571E62605847001D /* RemoteDebugger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteDebugger.swift; path = Services/RemoteDebugger.swift; sourceTree = "<group>"; };
 		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
 		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
@@ -349,7 +347,6 @@
 				AEBE91AB571E62605847001D /* RemoteDebugger.swift */,
 				FE15C63C875548573754E1A7 /* RunConfigView.swift */,
 				161CE6C43626812282CD4694 /* SuggestionCache.swift */,
-				9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */,
 				301258073261580A471BF74C /* VSCodeTunnelView.swift */,
 				4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */,
 				76695AA95638C9192E12E05E /* WindowStateManager.swift */,
@@ -809,7 +806,6 @@
 				D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */,
 				16AE4B084CAA297D994F0E3F /* RunConfigView.swift in Sources */,
 				8F09852A2FAFCCDE9BF57E1B /* SuggestionCache.swift in Sources */,
-				D0940CDBF3BE2C1681C37A94 /* SyntaxHighlightingTextView_Update.swift in Sources */,
 				D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */,
 				43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */,
 				BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */,

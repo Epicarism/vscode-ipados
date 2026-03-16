@@ -24,7 +24,7 @@ class MultiCursorTextView: UITextView {
     private var selectionLayers: [CALayer] = []
 
     /// Timer for cursor blink animation
-    private var blinkTimer: Timer?
+    nonisolated(unsafe) private var blinkTimer: Timer?
     private var cursorVisible = true
     
     /// PERF: Throttle cursor display updates during scroll

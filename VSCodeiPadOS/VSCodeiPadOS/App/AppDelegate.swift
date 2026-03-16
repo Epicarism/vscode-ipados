@@ -17,6 +17,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         
+        // Set up crash reporting (check for previous crash + install handler)
+        CrashReporter.shared.setup()
+        
         // Migrate API keys from UserDefaults to Keychain (one-time)
         KeychainHelper.migrateFromUserDefaults()
         

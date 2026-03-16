@@ -10,7 +10,7 @@ enum OutputStreamType {
 }
 
 /// A single line entry in the output panel with metadata
-struct TaskOutputLine: Identifiable, Equatable {
+struct TaskOutputLine: Identifiable, Equatable, @unchecked Sendable {
     let id: UUID
     let text: String
     let streamType: OutputStreamType

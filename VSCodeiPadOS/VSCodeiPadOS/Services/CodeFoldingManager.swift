@@ -76,7 +76,7 @@ final class CodeFoldingManager: ObservableObject {
     @Published var collapsedLines: Set<Int> = []
     
     // Dictionary to manage fold regions per file
-    private var foldRegionsByFile: [String: [FoldRegion]] = [:]
+    nonisolated(unsafe) private var foldRegionsByFile: [String: [FoldRegion]] = [:]
     
     private var currentFilePath: String?
     private var currentFileId: String?
@@ -723,7 +723,7 @@ final class CodeFoldingManager: ObservableObject {
     }
 
     /// Checks if a line should be hidden for a specific file (does not rely on `collapsedLines`)
-    func isLineFolded(fileId: String, line: Int) -> Bool {
+    nonisolated func isLineFolded(fileId: String, line: Int) -> Bool {
         guard let regions = foldRegionsByFile[fileId] else { return false }
         for region in regions where region.isFolded {
             if line > region.startLine && line <= region.endLine {

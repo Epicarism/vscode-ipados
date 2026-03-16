@@ -243,6 +243,11 @@ final class AIManager: ObservableObject {
     /// The currently running AI request task, used for cancellation.
     private var currentStreamingTask: Task<Void, Never>?
 
+    /// Tracks the last API call timestamp for rate limiting
+    private var lastAPICallTime: Date?
+    /// Minimum interval between API calls (2 seconds)
+    private let minimumAPICallInterval: TimeInterval = 2.0
+
     /// Maximum number of tool-call rounds before forcing a text response
     private let maxToolRounds = 5
     
@@ -396,6 +401,17 @@ final class AIManager: ObservableObject {
             error = "Please set your API key in settings"
             return
         }
+
+        // Rate limiting: prevent more than 1 API call per 2 seconds
+        if let lastCall = lastAPICallTime {
+            let elapsed = Date().timeIntervalSince(lastCall)
+            if elapsed < minimumAPICallInterval {
+                let remaining = minimumAPICallInterval - elapsed
+                error = "Slow down! Please wait \(Int(ceil(remaining)))s before sending another message."
+                return
+            }
+        }
+        lastAPICallTime = Date()
         
         let userMessage = ChatMessage(role: .user, content: content)
         currentSession.messages.append(userMessage)

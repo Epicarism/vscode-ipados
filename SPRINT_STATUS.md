@@ -105,8 +105,8 @@
 | # | Issue | Status | Owner |
 |---|-------|--------|-------|
 | 22 | App Store metadata & screenshots | 🔵 TODO | — |
-| 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView, TerminalView, SearchView, StatusBar, ContentView tabs done) | Claude |
-| 24 | Performance audit (large files) | 🔵 TODO | — |
+| 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView, TerminalView, SearchView, StatusBar, ContentView tabs, AIAssistant, TestView, GitView done) | Claude |
+| 24 | Performance audit (large files) | ✅ Done (100K threshold, visible-range highlighting, isLargeFile flag) | Claude |
 | 25 | ~~CI/CD pipeline (GitHub Actions)~~ | ✅ Done (build + test + lint workflow) | Claude |
 | 26 | ~~App icon finalized~~ | ✅ Done (1024x1024 PNG verified) | Claude |
 | 27 | ~~Launch screen configured~~ | ✅ Done (storyboard + Info.plist) | Claude |
