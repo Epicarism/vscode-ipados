@@ -492,8 +492,8 @@ struct PaneEditorView: View {
     let tab: Tab
     @ObservedObject var splitManager: SplitEditorManager
     @ObservedObject var editorCore: EditorCore
-    @ObservedObject private var debugManager = DebugManager.shared
-    @ObservedObject private var foldingManager = CodeFoldingManager.shared
+    @StateObject private var debugManager = DebugManager.shared
+    @StateObject private var foldingManager = CodeFoldingManager.shared
     @State private var text: String = ""
     @State private var scrollPosition: Int = 0
     @State private var scrollOffset: CGFloat = 0

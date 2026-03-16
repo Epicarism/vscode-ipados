@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// Note: This view edits *workspace overrides*. Global settings remain in the main Settings panels.
 struct WorkspaceSettingsView: View {
-    @ObservedObject private var workspaceManager = WorkspaceManager.shared
+    @StateObject private var workspaceManager = WorkspaceManager.shared
 
     @State private var draft: WorkspaceSettings = .empty
 

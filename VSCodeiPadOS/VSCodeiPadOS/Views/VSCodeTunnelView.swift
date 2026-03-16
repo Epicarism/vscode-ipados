@@ -83,7 +83,7 @@ struct VSCodeWebView: UIViewRepresentable {
 // MARK: - Main Connected Mode View
 
 struct VSCodeTunnelView: View {
-    @ObservedObject var tunnelManager = TunnelManager.shared
+    @StateObject var tunnelManager = TunnelManager.shared
     @EnvironmentObject var themeManager: ThemeManager
     
     @State private var isLoading = false

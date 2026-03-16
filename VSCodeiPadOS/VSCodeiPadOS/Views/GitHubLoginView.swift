@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct GitHubLoginView: View {
-    @ObservedObject var authManager = GitHubAuthManager.shared
+    @StateObject var authManager = GitHubAuthManager.shared
     
     var body: some View {
         VStack(spacing: 0) {

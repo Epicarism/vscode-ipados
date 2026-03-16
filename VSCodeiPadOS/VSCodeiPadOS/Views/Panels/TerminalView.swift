@@ -1029,7 +1029,7 @@ extension TerminalManager: SSHManagerDelegate {
 struct SSHConnectionView: View {
     @ObservedObject var terminal: TerminalManager
     @Binding var isPresented: Bool
-    @ObservedObject private var connectionStore = SSHConnectionStore.shared
+    @StateObject private var connectionStore = SSHConnectionStore.shared
     @StateObject private var themeManager = ThemeManager.shared
     
     @State private var connectionName = ""

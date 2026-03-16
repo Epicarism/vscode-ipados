@@ -232,7 +232,7 @@ struct GitDiffSheet: View {
     let entry: GitStatusEntry
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var gitManager = GitManager.shared
+    @StateObject private var gitManager = GitManager.shared
 
     @State private var isLoading = true
     @State private var diffFile: DiffFile?

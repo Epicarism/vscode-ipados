@@ -109,7 +109,7 @@ class TunnelManager: ObservableObject, @unchecked Sendable {
 
 struct AddTunnelSheet: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject var tunnelManager = TunnelManager.shared
+    @StateObject var tunnelManager = TunnelManager.shared
     
     @State private var name = ""
     @State private var url = ""
@@ -662,7 +662,7 @@ struct ThemePreviewView: View {
 // MARK: - Connected Mode Settings Section
 
 struct ConnectedModeSettingsSection: View {
-    @ObservedObject var tunnelManager = TunnelManager.shared
+    @StateObject var tunnelManager = TunnelManager.shared
     @State private var showingAddTunnel = false
     
     var body: some View {

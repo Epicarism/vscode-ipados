@@ -253,7 +253,7 @@ struct IDEActivityBar: View {
     @Binding var showSettings: Bool
     @Binding var showTerminal: Bool
     @State private var showGitHubLogin = false
-    @ObservedObject private var gitManager = GitManager.shared
+    @StateObject private var gitManager = GitManager.shared
     
     var body: some View {
         VStack(spacing: 0) {

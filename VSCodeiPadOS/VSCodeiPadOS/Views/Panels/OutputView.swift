@@ -111,7 +111,7 @@ struct OutputLineView: View {
 // MARK: - Progress Indicator View
 
 struct RemoteProgressView: View {
-    @ObservedObject var outputManager = OutputPanelManager.shared
+    @StateObject var outputManager = OutputPanelManager.shared
     
     var body: some View {
         if outputManager.remoteExecutionStatus.isRunning {
@@ -178,8 +178,8 @@ struct RemoteProgressView: View {
 // MARK: - Search Bar View
 
 struct OutputSearchBar: View {
-    @ObservedObject var outputManager = OutputPanelManager.shared
-    @ObservedObject var themeManager = ThemeManager.shared
+    @StateObject var outputManager = OutputPanelManager.shared
+    @StateObject var themeManager = ThemeManager.shared
     @State private var localQuery: String = ""
     var body: some View {
         HStack(spacing: 8) {
@@ -228,8 +228,8 @@ struct OutputSearchBar: View {
 // MARK: - Log Level Filter View
 
 struct LogLevelFilterView: View {
-    @ObservedObject var outputManager = OutputPanelManager.shared
-    @ObservedObject var themeManager = ThemeManager.shared
+    @StateObject var outputManager = OutputPanelManager.shared
+    @StateObject var themeManager = ThemeManager.shared
     var body: some View {
         HStack(spacing: 8) {
             Text("Filter:")
@@ -283,8 +283,8 @@ struct LogLevelFilterView: View {
 // MARK: - Main Output View
 
 struct OutputView: View {
-    @ObservedObject private var outputManager = OutputPanelManager.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var outputManager = OutputPanelManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @State private var showingSearchBar: Bool = false
     @State private var showingLogLevelFilter: Bool = false
 
