@@ -109,7 +109,10 @@ final class FileSystemNavigator: ObservableObject {
             let fileURL = folder.appendingPathComponent(name, isDirectory: false)
             let fileManager = FileManager.default
             if !fileManager.fileExists(atPath: fileURL.path) {
-                _ = fileManager.createFile(atPath: fileURL.path, contents: Data(), attributes: nil)
+                let success = fileManager.createFile(atPath: fileURL.path, contents: Data(), attributes: nil)
+                if !success {
+                    AppLogger.fileSystem.error("Failed to create file at \(fileURL.path)")
+                }
             }
 
             DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
@@ -310,7 +313,8 @@ final class FileSystemNavigator: ObservableObject {
         let ext = initial.pathExtension
 
         var counter = 1
-        while true {
+        let maxAttempts = 1000
+        while counter <= maxAttempts {
             let candidateName: String
             if ext.isEmpty {
                 candidateName = "\(baseName) \(counter)"
@@ -324,6 +328,9 @@ final class FileSystemNavigator: ObservableObject {
             }
             counter += 1
         }
+        // Fallback: return with counter suffix even if it exists
+        let fallbackName = ext.isEmpty ? "\(baseName) \(maxAttempts + 1)" : "\(baseName) \(maxAttempts + 1).\(ext)"
+        return folder.appendingPathComponent(fallbackName, isDirectory: isDirectory)
     }
 }
 

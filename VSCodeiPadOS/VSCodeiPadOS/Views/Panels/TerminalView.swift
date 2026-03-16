@@ -261,7 +261,7 @@ struct TerminalTabButtonView: View {
         }
         .alert("Rename Terminal", isPresented: $showRenameAlert) {
             TextField("Terminal Name", text: $terminal.title)
-            Button("OK", role: .cancel) { }
+            Button("OK") { }
         }
     }
 }
@@ -643,6 +643,7 @@ extension TerminalTab: Equatable {}
     
     func executeCommand(_ command: String) {
         commandHistory.append(command)
+        if commandHistory.count > 1000 { commandHistory.removeFirst(commandHistory.count - 1000) }
         historyIndex = commandHistory.count
         
         if isConnected {
@@ -932,7 +933,7 @@ extension TerminalTab: Equatable {}
             let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
             do {
                 let content = try String(contentsOf: filePath, encoding: .utf8)
-                let lineCount = content.components(separatedBy: .newlines).count
+                let lineCount = content.filter { $0 == "\n" }.count
                 let wordCount = content.split(whereSeparator: { $0.isWhitespace }).count
                 let charCount = content.count
                 appendOutput("  \(lineCount) lines  \(wordCount) words  \(charCount) chars  \(String(parts[1]))", type: .output)
@@ -986,10 +987,10 @@ extension TerminalTab: Equatable {}
         for line in lines {
             if !line.isEmpty || lines.count == 1 {
                 self.output.append(TerminalLine(text: line, type: type, isANSI: isANSI || line.contains("\u{1B}")))
-                if self.output.count > 10000 {
-                    self.output = Array(self.output.suffix(10000))
-                }
             }
+        }
+        if self.output.count > 10000 {
+            self.output = Array(self.output.suffix(10000))
         }
     }
 }

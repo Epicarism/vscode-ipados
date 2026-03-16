@@ -137,7 +137,7 @@ struct RemoteProgressView: View {
                                 .lineLimit(1)
                         }
                         
-                        TimelineView(.periodic(every: 1.0)) { context in
+                        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0)) { context in
                             if let startTime = outputManager.remoteExecutionStatus.startTime {
                                 Text("Running for \(Int(context.date.timeIntervalSince(startTime)))s")
                                     .font(.system(size: 10))

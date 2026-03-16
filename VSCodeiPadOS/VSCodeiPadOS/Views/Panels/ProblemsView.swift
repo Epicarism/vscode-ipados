@@ -439,6 +439,7 @@ struct ProblemsView: View {
         } else if let item = notification.userInfo as? [String: Any], item["message"] != nil {
             // Single diagnostic item passed directly
             if let diagnostic = DiagnosticItem(userInfo: item) {
+                guard !problems.contains(where: { $0.file == diagnostic.file && $0.line == diagnostic.line && $0.message == diagnostic.message }) else { return }
                 problems.append(diagnostic)
             }
         } else if let clear = notification.userInfo?["clear"] as? Bool, clear {

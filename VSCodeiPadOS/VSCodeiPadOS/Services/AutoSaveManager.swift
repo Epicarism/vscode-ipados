@@ -21,7 +21,7 @@ final class AutoSaveManager: ObservableObject {
     // MARK: - Properties
     
     private weak var editorCore: EditorCore?
-    private var autoSaveTask: Task<Void, Never>?
+    private var autoSaveTasks: [UUID: Task<Void, Never>] = [:]
     nonisolated(unsafe) private var focusObserver: NSObjectProtocol?
     
     /// Tracks pending saves per tab ID to avoid duplicate saves
@@ -121,13 +121,14 @@ final class AutoSaveManager: ObservableObject {
     }
     
     private func scheduleAutoSave(tabId: UUID) {
-        // Cancel any existing scheduled save
-        autoSaveTask?.cancel()
+        // Cancel any existing scheduled save for this specific tab
+        autoSaveTasks[tabId]?.cancel()
         
         let delay = autoSaveDelay
-        autoSaveTask = Task {
+        autoSaveTasks[tabId] = Task {
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
+            autoSaveTasks.removeValue(forKey: tabId)
             performAutoSave(tabId: tabId)
         }
     }
