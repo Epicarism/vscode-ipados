@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 // MARK: - VS Code Codicon Font Integration
@@ -437,17 +438,17 @@ struct CodiconFont {
         guard let fontURL = Bundle.main.url(forResource: "codicon", withExtension: "ttf"),
               let fontDataProvider = CGDataProvider(url: fontURL as CFURL),
               let font = CGFont(fontDataProvider) else {
-            print("⚠️ Failed to load codicon.ttf font")
+            AppLogger.editor.debug("⚠️ Failed to load codicon.ttf font")
             return
         }
         
         var error: Unmanaged<CFError>?
         if !CTFontManagerRegisterGraphicsFont(font, &error) {
             if let error = error?.takeRetainedValue() {
-                print("⚠️ Failed to register codicon font: \(error)")
+                AppLogger.editor.debug("⚠️ Failed to register codicon font: \(error)")
             }
         } else {
-            print("✅ Codicon font registered successfully")
+            AppLogger.editor.debug("✅ Codicon font registered successfully")
         }
     }
 }

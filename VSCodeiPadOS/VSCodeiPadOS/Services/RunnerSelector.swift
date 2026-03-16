@@ -1,3 +1,4 @@
+import os
 import Foundation
 import JavaScriptCore
 
@@ -782,7 +783,7 @@ public extension RunnerSelector {
      code: largeScript,
      language: .javascript
  )
- print("Estimated: \(estimate.estimatedTimeSeconds)s, \(estimate.estimatedMemoryMB)MB")
+ AppLogger.editor.debug("Estimated: \(estimate.estimatedTimeSeconds)s, \(estimate.estimatedMemoryMB)MB")
  
  // Example 7: With formatted explanation
  let (strategy, explanation) = selector.analyzeWithExplanation(

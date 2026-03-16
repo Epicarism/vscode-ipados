@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -163,7 +164,7 @@ struct FileTreeRowView: View {
                     do {
                         _ = try fileNavigator.renameItem(at: node.url, to: newName)
                     } catch {
-                        print("Failed to rename: \(error)")
+                        AppLogger.editor.debug("Failed to rename: \(error)")
                     }
                 }
             }

@@ -877,7 +877,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         func handleFormatDocument(in textView: UITextView) {
             // TODO: Implement format document functionality
             // This would typically call a formatter in EditorCore
-            print("Format Document: Not yet implemented")
+            AppLogger.editor.info("Format Document: Not yet implemented")
         }
         
         func handleToggleComment(in textView: UITextView) {

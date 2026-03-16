@@ -1,3 +1,4 @@
+import os
 import Foundation
 import Combine
 
@@ -368,7 +369,7 @@ final class InlineSuggestionManager: ObservableObject {
             return "swift"
         } else if content.contains("function") || content.contains("const ") || content.contains("let ") {
             return "javascript"
-        } else if content.contains("def ") || content.contains("import ") && content.contains("print(") {
+        } else if content.contains("def ") || content.contains("import ") && content.contains("AppLogger.editor.debug(") {
             return "python"
         }
         

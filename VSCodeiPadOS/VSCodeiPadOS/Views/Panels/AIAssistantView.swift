@@ -240,7 +240,7 @@ struct AIAssistantView: View {
             
             // Post notification for visual feedback
             NotificationCenter.default.post(name: .codeInserted, object: nil, userInfo: ["code": code])
-            print("[AI] Inserted \(code.count) chars at line \(cursorLine)")
+            AppLogger.editor.debug("[AI] Inserted \(code.count) chars at line \(cursorLine)")
         } else {
             // No active tab - create a new one with the code
             let ext = detectExtension(from: code)

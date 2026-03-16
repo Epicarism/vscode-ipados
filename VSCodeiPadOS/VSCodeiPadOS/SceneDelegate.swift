@@ -169,7 +169,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 let workspaceURL = URL(fileURLWithPath: workspacePath)
                 let fm = FileManager.default
                 guard fm.fileExists(atPath: workspacePath) else {
-                    print("SceneDelegate: workspace path does not exist: \(workspacePath)")
+                    AppLogger.editor.debug("SceneDelegate: workspace path does not exist: \(workspacePath)")
                     return
                 }
                 let didStartAccessing = workspaceURL.startAccessingSecurityScopedResource()

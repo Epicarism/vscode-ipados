@@ -1109,7 +1109,7 @@ final class NSAttributedStringSyntaxHighlighter {
 
             return applied
         } catch {
-            print("Regex error for pattern \(pattern): \(error)")
+            AppLogger.editor.error("Regex error for pattern \(pattern): \(error)")
             return []
         }
     }

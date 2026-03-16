@@ -157,7 +157,7 @@ final class AutoSaveManager: ObservableObject {
                 userInfo: ["fileName": url.lastPathComponent]
             )
         } catch {
-            print("Auto-save error: \(error)")
+            AppLogger.editor.error("Auto-save error: \(error)")
         }
     }
     

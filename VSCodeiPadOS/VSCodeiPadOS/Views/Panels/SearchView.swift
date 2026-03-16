@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import Combine
 
@@ -831,9 +832,9 @@ struct SearchView: View {
         Task {
             do {
                 let result = try await searchManager.replace(in: rootURL, query: query, replacement: replaceText)
-                print("Replace completed: \(result.replacements) replacements in \(result.filesTouched) files")
+                AppLogger.editor.debug("Replace completed: \(result.replacements) replacements in \(result.filesTouched) files")
             } catch {
-                print("Replace failed: \(error.localizedDescription)")
+                AppLogger.editor.debug("Replace failed: \(error.localizedDescription)")
             }
         }
     }
