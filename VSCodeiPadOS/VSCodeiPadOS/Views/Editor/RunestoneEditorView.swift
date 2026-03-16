@@ -161,7 +161,11 @@ struct RunestoneEditorView: UIViewRepresentable {
         let textChanged = currentText != text
         let isActivelyEditing = textView.isFirstResponder
         
+        // CRITICAL: Cancel any pending debounced updates before tab switch to prevent
+        // race condition where stale content overwrites new tab's content
         if isFileSwitching {
+            context.coordinator.cancelPendingTextSync()
+            
             // User switched to a different file - safe to call setState()
             context.coordinator.lastFilename = filename
             context.coordinator.hasBeenEdited = false
@@ -392,6 +396,13 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Immediate sync
             parent.text = textView.text
             parent.totalLines = parent.countLines(in: textView.text)
+        }
+        
+        /// Cancel pending text sync without syncing - used when switching tabs
+        /// to prevent stale content from overwriting new tab's content
+        func cancelPendingTextSync() {
+            textSyncWorkItem?.cancel()
+            textSyncWorkItem = nil
         }
         
         func textViewDidChangeSelection(_ textView: TextView) {

@@ -71,7 +71,7 @@ final class VSCodeRunestoneTheme: Runestone.Theme {
     }
     
     var pageGuideHairlineWidth: CGFloat {
-        1.0 / UIScreen.main.scale
+        1.0 / 2.0  // Default to 2x Retina scale (safe for nonisolated context)
     }
     
     var pageGuideBackgroundColor: UIColor {

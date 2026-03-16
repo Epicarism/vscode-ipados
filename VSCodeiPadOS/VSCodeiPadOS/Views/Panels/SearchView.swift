@@ -103,8 +103,7 @@ struct SearchView: View {
     
     // MARK: - Debounce & Search Task
     @State private var searchTask: Task<Void, Never>?
-    @State private var debounceCancellable: AnyCancellable?
-    private let debounceInterval: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(400)
+
     
     @State private var showReplace: Bool = false
     @State private var showDetails: Bool = false
@@ -128,7 +127,7 @@ struct SearchView: View {
     private let commonExtensions = [".swift", ".md", ".json", ".txt", ".js", ".ts", ".html", ".css", ".py", ".rb"]
     
     // Binary file extensions to exclude
-    private let binaryExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".avi", ".mov", ".exe", ".dll", ".so", ".dylib", ".app", ".ipa", ".ipa", ".dmg", ".pkg", ".deb", ".rpm", ".img", ".iso", ".bin", ".dat", ".db", ".sqlite", ".sqlite3", ".ttf", ".otf", ".woff", ".woff2", ".eot"]
+    private let binaryExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".avi", ".mov", ".exe", ".dll", ".so", ".dylib", ".app", ".ipa", ".dmg", ".pkg", ".deb", ".rpm", ".img", ".iso", ".bin", ".dat", ".db", ".sqlite", ".sqlite3", ".ttf", ".otf", ".woff", ".woff2", ".eot"]
     
     @State private var searchHistory: [String] = []
     @State private var showHistory: Bool = false
@@ -226,7 +225,6 @@ struct SearchView: View {
         searchText = ""
         replaceText = ""
         searchManager.clearResults()
-        debounceCancellable?.cancel()
         searchTask?.cancel()
         navigationItems = []
         selectedNavigationItem = nil
@@ -302,6 +300,13 @@ struct SearchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: onAppear)
         .onDisappear(perform: onDisappear)
+        .onChange(of: searchText) { _, newValue in
+            if newValue.count >= 2 {
+                debouncedSearch()
+            } else if newValue.isEmpty {
+                searchManager.clearResults()
+            }
+        }
         .onChange(of: processedResults) { _, _ in
             navigationItems = buildNavigationItems()
         }
@@ -325,7 +330,6 @@ struct SearchView: View {
             Button(action: {
                 searchText = ""
                 searchManager.clearResults()
-                debounceCancellable?.cancel()
                 searchTask?.cancel()
             }) {
                 Image(systemName: "arrow.counterclockwise")
@@ -393,62 +397,49 @@ struct SearchView: View {
     @ViewBuilder
     private var searchInputRow: some View {
         HStack(spacing: 0) {
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .rotationEffect(showReplace ? .degrees(90) : .zero)
-                .onTapGesture {
-                    withAnimation {
-                        showReplace.toggle()
+            Button(action: {
+                withAnimation {
+                    showReplace.toggle()
+                }
+            }) {
+                Image(systemName: showReplace ? "chevron.down" : "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 20)
+            }
+            .buttonStyle(.plain)
+            
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    TextField("Search", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .focused($focusedField, equals: .search)
+                        .padding(6)
+                        .onSubmit {
+                            debouncedSearch(immediate: true)
+                        }
+                        .accessibilityLabel("Search text field")
+                        .accessibilityHint("Type search query and press Enter to search.")
+                    
+                    // Toggle icons inside the field
+                    HStack(spacing: 2) {
+                        ToggleIcon(iconName: "textformat", isSelected: $matchCase, tooltip: "Match case")
+                        ToggleIcon(iconName: "text.word.spacing", isSelected: $matchWholeWord, tooltip: "Match whole word")
+                        ToggleIcon(iconName: useRegex ? "staroflife.fill" : "staroflife", isSelected: $useRegex, tooltip: "Use regular expressions")
                     }
                 }
-                .padding(.horizontal, 4)
-            
-            ZStack(alignment: .trailing) {
-                TextField("Search", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .focused($focusedField, equals: .search)
-                    .padding(6)
-                    .padding(.trailing, 60)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                    )
-                    .onSubmit {
-                        debouncedSearch(immediate: true)
-                    }
-                    .accessibilityLabel("Search text field")
-                    .accessibilityHint("Type search query and press Enter to search. Press Escape to clear.")
-                
-                searchToggleIcons
+                .padding(.trailing, 4)
+                .background(Color(UIColor.secondarySystemBackground))
+                .cornerRadius(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(focusedField == .search ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1)
+                )
             }
         }
     }
     
-    @ViewBuilder
-    private var searchToggleIcons: some View {
-        HStack(spacing: 2) {
-            ToggleIcon(iconName: "textformat", isSelected: $matchCase, tooltip: "Match case")
-            ToggleIcon(iconName: "underline", isSelected: $matchWholeWord, tooltip: "Match whole word")
-            ToggleIcon(iconName: useRegex ? "staroflife.fill" : "staroflife", isSelected: $useRegex, tooltip: "Use regular expressions")
-                .overlay(
-                    Button(action: {
-                        showRegexHelp.toggle()
-                    }) {
-                        Image(systemName: "questionmark.circle")
-                            .font(.caption2)
-                            .foregroundColor(useRegex ? .accentColor : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .offset(x: -8, y: -8)
-                    .opacity(useRegex ? 1.0 : 0.3),
-                    alignment: .topTrailing
-                )
-        }
-        .padding(.trailing, 4)
-    }
+    // MARK: - Regex Help View
     
     @ViewBuilder
     private var regexHelpView: some View {
@@ -781,18 +772,26 @@ struct SearchView: View {
     // MARK: - Lifecycle
     
     private func setupDebouncedSearch() {
-        // Note: Debounced search is handled via onChange modifier and debouncedSearch() function
+        // No-op: debounce is handled via Task in debouncedSearch()
     }
     
     // MARK: - Debounced Search
     
     private func debouncedSearch(immediate: Bool = false) {
-        debounceCancellable?.cancel()
+        searchTask?.cancel()
         
         if immediate {
             performDebouncedSearch(query: searchText)
         } else {
-            setupDebouncedSearch()
+            searchTask = Task {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    if searchText.count >= 2 {
+                        performDebouncedSearch(query: searchText)
+                    }
+                }
+            }
         }
     }
     
@@ -886,7 +885,6 @@ struct SearchView: View {
     }
     
     private func onDisappear() {
-        debounceCancellable?.cancel()
         searchTask?.cancel()
     }
     

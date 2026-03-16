@@ -231,6 +231,3 @@ private struct SnippetRowView: View {
         }
     }
 }
-
-// MARK: - Safe Array Access
-

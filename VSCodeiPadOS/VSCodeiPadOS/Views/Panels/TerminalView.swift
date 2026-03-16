@@ -599,7 +599,7 @@ extension TerminalTab: Equatable {}
         appendOutput("Connecting to \(config.username)@\(config.host):\(config.port)...", type: .system)
         appendOutput("Using SwiftNIO SSH (real SSH protocol)", type: .system)
         
-        sshManager = SSHManager()
+        sshManager = SSHManager.shared
         sshManager?.delegate = self
         sshManager?.connect(config: config) { [weak self] result in
             switch result {

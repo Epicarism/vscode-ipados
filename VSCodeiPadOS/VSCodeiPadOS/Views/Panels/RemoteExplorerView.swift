@@ -289,9 +289,12 @@ struct SavedConnectionRow: View {
                         )
                     }
                     
-                    if var updatedParent = parent {
-                        // Update children of expanded directory
-                        updatedParent.children = nodes
+                    if parent != nil {
+                        // Update children in the tree by finding the parent node by path
+                        if var root = self.rootNode {
+                            Self.updateNodeChildren(in: &root, path: path, children: nodes)
+                            self.rootNode = root
+                        }
                     } else {
                         // Set root node
                         let rootName = path == "~" ? "~" : (path as NSString).lastPathComponent
@@ -366,6 +369,17 @@ struct SavedConnectionRow: View {
         sftpManager?.disconnect()
         sftpManager = nil
         terminal = nil
+    }
+    
+    /// Recursively finds a node by path in the tree and updates its children
+    private static func updateNodeChildren(in node: inout RemoteFileNode, path: String, children: [RemoteFileNode]) {
+        if node.path == path {
+            node.children = children
+            return
+        }
+        for i in node.children.indices {
+            updateNodeChildren(in: &node.children[i], path: path, children: children)
+        }
     }
 }
 

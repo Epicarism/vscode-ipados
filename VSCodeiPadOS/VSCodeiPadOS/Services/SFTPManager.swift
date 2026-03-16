@@ -182,7 +182,7 @@ class SFTPManager: @unchecked Sendable {
             guard fields.count >= 9 else { continue }
             
             let permissions = fields[0]
-            let name = fields[8]
+            let name = fields[8...].joined(separator: " ")
             
             // Skip . and .. entries
             guard name != "." && name != ".." else { continue }

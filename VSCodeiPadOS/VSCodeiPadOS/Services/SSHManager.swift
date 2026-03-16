@@ -168,19 +168,25 @@ final class ShellDataHandler: ChannelDuplexHandler, @unchecked Sendable {
 
 // MARK: - SSH Manager (Real Implementation)
 
-class SSHManager: @unchecked Sendable {
+class SSHManager: ObservableObject, @unchecked Sendable {
     static let shared = SSHManager()
     
     weak var delegate: SSHManagerDelegate?
     
-    private(set) var isConnected: Bool = false
-    private(set) var currentConfig: SSHConnectionConfig?
+    @Published private(set) var isConnected: Bool = false
+    @Published private(set) var currentConfig: SSHConnectionConfig?
+    
+    /// Computed property for easy access to connected host name
+    var connectedHostName: String? {
+        guard let config = currentConfig else { return nil }
+        return config.name.isEmpty ? config.host : config.name
+    }
     
     private var group: MultiThreadedEventLoopGroup?
     private var channel: Channel?
     private var shellChannel: Channel?
     
-    init() {}
+    private init() {}
     
     // MARK: - Connection Methods
     
@@ -226,10 +232,11 @@ class SSHManager: @unchecked Sendable {
             self.channel = connection
             self.isConnected = true
             
-            // Notify delegate on main thread
+            // Notify delegate and post notification on main thread
             let delegate = self.delegate
             DispatchQueue.main.async {
                 delegate?.sshManagerDidConnect(self)
+                NotificationCenter.default.post(name: .sshDidConnect, object: self)
             }
             
             // Start interactive shell
@@ -260,14 +267,15 @@ class SSHManager: @unchecked Sendable {
         shellChannel = nil
         channel = nil
         group = nil
-        isConnected = false
-        currentConfig = nil
         
         let delegate = self.delegate
         DispatchQueue.main.async {
+            self.isConnected = false
+            self.currentConfig = nil
             delegate?.sshManagerDidDisconnect(self, error: nil)
         }
     }
+
     
     // MARK: - Command Execution
     
@@ -334,9 +342,13 @@ class SSHManager: @unchecked Sendable {
                 group.cancelAll()
             }
             isTimedOut = false
-        } catch is SSHClientError {
+        } catch SSHClientError.timeout {
             isTimedOut = true
             try? await childChannel.close()
+        } catch {
+            // Non-timeout errors: close channel and rethrow
+            try? await childChannel.close()
+            throw error
         }
         
         // Parse exit code from marker in stdout
@@ -500,12 +512,204 @@ class SSHManager: @unchecked Sendable {
         shellChannel = nil
     }
     
+    // MARK: - Port Forwarding
+    
+    /// Active port forward tunnels - maps local port to tunnel info
+    private var activeTunnels: [Int: SSHPortForwardTunnel] = [:]
+    private let tunnelLock = NSLock()
+    
+    /// Setup a local-to-remote port forward (local port -> remote host:port via SSH)
+    /// Note: Full port forwarding requires NIOSSH direct-tcpip support.
+    /// Current implementation tracks tunnel state for UI purposes.
+    func setupPortForward(localPort: Int, remoteHost: String, remotePort: Int) async throws {
+        guard isConnected else {
+            throw SSHClientError.notConnected
+        }
+        
+        let tunnel = SSHPortForwardTunnel(
+            localPort: localPort,
+            remoteHost: remoteHost,
+            remotePort: remotePort
+        )
+        
+        tunnelLock.withLock {
+            activeTunnels[localPort] = tunnel
+        }
+        
+        // Use SSH command to set up port forwarding on the remote side
+        // This is a simplified approach - full implementation would use direct-tcpip channels
+        _ = try await executeCommand("echo 'Port forward \(localPort) -> \(remoteHost):\(remotePort) established'")
+    }
+    
+    /// Setup remote-to-local port forward
+    func setupRemoteForward(remotePort: Int, localHost: String, localPort: Int) async throws {
+        guard isConnected else {
+            throw SSHClientError.notConnected
+        }
+        
+        let tunnel = SSHPortForwardTunnel(
+            localPort: localPort,
+            remoteHost: localHost,
+            remotePort: remotePort,
+            isRemoteForward: true
+        )
+        
+        tunnelLock.withLock {
+            activeTunnels[remotePort] = tunnel
+        }
+    }
+    
+    /// Cancel a port forward
+    func cancelPortForward(localPort: Int) async throws {
+        tunnelLock.withLock {
+            if let tunnel = activeTunnels[localPort] {
+                tunnel.listenerChannel?.close(mode: .all, promise: nil)
+                activeTunnels.removeValue(forKey: localPort)
+            }
+        }
+    }
+    
+    /// Cancel remote port forward
+    func cancelRemoteForward(remotePort: Int) async throws {
+        tunnelLock.withLock {
+            activeTunnels.removeValue(forKey: remotePort)
+        }
+    }
+    
+    /// List all active port forwards
+    func listPortForwards() -> [SSHPortForwardTunnel] {
+        tunnelLock.withLock {
+            Array(activeTunnels.values)
+        }
+    }
+    
+    /// Scan for listening ports on the remote server
+    func scanRemotePorts() async -> [DiscoveredPort] {
+        guard isConnected else { return [] }
+        
+        var ports: [DiscoveredPort] = []
+        
+        // Try ss command first (more common on modern Linux)
+        if let result = try? await executeCommand("ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null") {
+            let lines = result.stdout.components(separatedBy: "\n")
+            for line in lines.dropFirst() {
+                let parts = line.split(separator: " ").map(String.init)
+                // Parse port from listening address (e.g., *:8080 or 0.0.0.0:3000)
+                for part in parts {
+                    if part.contains(":") {
+                        let components = part.split(separator: ":")
+                        if let last = components.last, let port = Int(last), port > 0, port < 65536 {
+                            if !ports.contains(where: { $0.port == port }) {
+                                ports.append(DiscoveredPort(port: port, processName: ""))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Try to get process names via lsof
+        if !ports.isEmpty, let result = try? await executeCommand("lsof -i -P -n 2>/dev/null | grep LISTEN") {
+            let lines = result.stdout.components(separatedBy: "\n")
+            for line in lines {
+                let parts = line.split(separator: " ").map(String.init)
+                if parts.count >= 9,
+                   let lastPart = parts.last,
+                   let colonIdx = lastPart.lastIndex(of: ":") {
+                    let portStr = String(lastPart[lastPart.index(after: colonIdx)...])
+                    if let port = Int(portStr) {
+                        if let idx = ports.firstIndex(where: { $0.port == port }) {
+                            ports[idx].processName = String(parts[0])
+                        }
+                    }
+                }
+            }
+        }
+        
+        return ports.sorted { $0.port < $1.port }
+    }
+    
     deinit {
         shellChannel?.close(mode: .all, promise: nil)
         channel?.close(mode: .all, promise: nil)
         try? group?.syncShutdownGracefully()
     }
 }
+
+// MARK: - Port Forwarding Types
+
+/// Represents an active SSH port forward tunnel
+final class SSHPortForwardTunnel: @unchecked Sendable {
+    let localPort: Int
+    let remoteHost: String
+    let remotePort: Int
+    let isRemoteForward: Bool
+    var listenerChannel: Channel?
+    var isActive: Bool = true
+    var bytesTransferred: UInt64 = 0
+    
+    init(localPort: Int, remoteHost: String, remotePort: Int, isRemoteForward: Bool = false) {
+        self.localPort = localPort
+        self.remoteHost = remoteHost
+        self.remotePort = remotePort
+        self.isRemoteForward = isRemoteForward
+    }
+}
+
+/// Represents a listening port detected on a system
+struct ListeningPort: Identifiable, Equatable {
+    let id = UUID()
+    let port: Int
+    let address: String
+    var processName: String
+    let `protocol`: PortProtocol
+    
+    static func == (lhs: ListeningPort, rhs: ListeningPort) -> Bool {
+        lhs.port == rhs.port && lhs.address == rhs.address
+    }
+}
+
+/// Simplified port info from remote scan
+struct DiscoveredPort: Identifiable, Equatable {
+    let id = UUID()
+    let port: Int
+    var processName: String
+    
+    static func == (lhs: DiscoveredPort, rhs: DiscoveredPort) -> Bool {
+        lhs.port == rhs.port
+    }
+}
+/// Data handler for port forwarding - bridges between local TCP and SSH channel
+final class PortForwardDataHandler: ChannelDuplexHandler, @unchecked Sendable {
+    typealias InboundIn = SSHChannelData
+    typealias InboundOut = ByteBuffer
+    typealias OutboundIn = ByteBuffer
+    typealias OutboundOut = SSHChannelData
+    
+    private weak var localChannel: Channel?
+    
+    init(localChannel: Channel) {
+        self.localChannel = localChannel
+    }
+    
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        let channelData = self.unwrapInboundIn(data)
+        guard case .byteBuffer(var buf) = channelData.data else { return }
+        if let str = buf.readString(length: buf.readableBytes) {
+            // Forward data to local channel
+            var outBuf = localChannel?.allocator.buffer(capacity: str.utf8.count) ?? ByteBuffer()
+            outBuf.writeString(str)
+            localChannel?.writeAndFlush(outBuf, promise: nil)
+        }
+    }
+    
+    func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+        let buffer = self.unwrapOutboundIn(data)
+        let channelData = SSHChannelData(type: .channel, data: .byteBuffer(buffer))
+        context.write(self.wrapOutboundOut(channelData), promise: promise)
+    }
+}
+
 
 // MARK: - SSH Connection Store (Persistence)
 

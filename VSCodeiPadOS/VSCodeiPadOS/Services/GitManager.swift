@@ -3,11 +3,11 @@
 //  VSCodeiPadOS
 //
 //  Git Manager - hybrid local/SSH implementation
-//  TODO: Implement real git operations via SSH
 //
 
 import SwiftUI
 import Combine
+
 
 // MARK: - Git Errors
 
@@ -482,35 +482,51 @@ final class GitManager: ObservableObject {
         // Prefer SSH when available and a working directory is configured
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd \(dir) && git pull", timeout: 60)
-            if result.exitCode != 0 {
+            // Step 1: Fetch from remote
+            let fetchResult = try await ssh.executeCommand("cd \(dir) && git fetch", timeout: 60)
+            if fetchResult.exitCode != 0 {
                 throw GitManagerError.commandFailed(
-                    args: "pull",
-                    exitCode: result.exitCode,
-                    message: result.stderr
+                    args: "fetch",
+                    exitCode: fetchResult.exitCode,
+                    message: fetchResult.stderr
                 )
             }
+            
+            // Step 2: Merge the tracking branch into current branch
+            let branch = currentBranch
+            guard !branch.isEmpty else {
+                throw GitManagerError.invalidRepository
+            }
+            let mergeResult = try await ssh.executeCommand("cd \(dir) && git merge origin/\(branch)", timeout: 60)
+            if mergeResult.exitCode != 0 {
+                throw GitManagerError.commandFailed(
+                    args: "merge origin/\(branch)",
+                    exitCode: mergeResult.exitCode,
+                    message: mergeResult.stderr
+                )
+            }
+            
             await refresh()
             return
         }
-
-        // Fallback: requires GitHub token
-        guard KeychainManager.shared.getGitHubToken() != nil else {
-            throw GitManagerError.sshNotConnected
-        }
-
-        // TODO: Implement full pull via GitHub API when GitHubAPIClient is integrated
-        throw GitManagerError.notAvailableOnIOS
+        
+        // No SSH connection available
+        throw GitManagerError.sshNotConnected
     }
     
     func push() async throws {
         // Prefer SSH when available and a working directory is configured
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd \(dir) && git push", timeout: 60)
+            let branch = currentBranch
+            guard !branch.isEmpty else {
+                throw GitManagerError.invalidRepository
+            }
+            // Push current branch to origin with explicit branch name
+            let result = try await ssh.executeCommand("cd \(dir) && git push origin \(branch)", timeout: 60)
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(
-                    args: "push",
+                    args: "push origin \(branch)",
                     exitCode: result.exitCode,
                     message: result.stderr
                 )
@@ -518,20 +534,15 @@ final class GitManager: ObservableObject {
             await refresh()
             return
         }
-
-        // Fallback: requires GitHub token
-        guard KeychainManager.shared.getGitHubToken() != nil else {
-            throw GitManagerError.sshNotConnected
-        }
-
-        // TODO: Implement full push via GitHub API when GitHubAPIClient is integrated
-        throw GitManagerError.notAvailableOnIOS
+        
+        // No SSH connection available
+        throw GitManagerError.sshNotConnected
     }
     
     func stashPush(message: String?) async throws {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let msg = message ?? "Stash from CodePad"
+            let msg = (message ?? "Stash from CodePad").replacingOccurrences(of: "'", with: "'\\''")
             let result = try await ssh.executeCommand("cd \(dir) && git stash push -m '\(msg)'")
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "stash push", exitCode: result.exitCode, message: result.stderr)
@@ -629,6 +640,7 @@ final class GitManager: ObservableObject {
         await refresh()
     }
     
+
     /// Alias for lastError for compatibility
     var error: String? {
         return lastError

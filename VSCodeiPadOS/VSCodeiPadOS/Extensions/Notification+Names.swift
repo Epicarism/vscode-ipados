@@ -176,6 +176,13 @@ extension Notification.Name {
     static let portForwarded = Notification.Name("PortForwarded")
     /// A port was stopped.
     static let portStopped = Notification.Name("PortStopped")
+    
+    // MARK: - SSH
+    
+    /// SSH connection was established.
+    static let sshDidConnect = Notification.Name("SSHDidConnect")
+    /// SSH connection was disconnected.
+    static let sshDidDisconnect = Notification.Name("SSHDidDisconnect")
 
     // MARK: - System
 

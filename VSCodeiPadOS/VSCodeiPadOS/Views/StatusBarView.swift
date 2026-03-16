@@ -4,8 +4,10 @@ struct StatusBarView: View {
     @ObservedObject var editorCore: EditorCore
     @ObservedObject var themeManager = ThemeManager.shared
     @StateObject private var git = GitManager.shared
+    @ObservedObject private var sshManager = SSHManager.shared
 
     // Sheet / popover state
+
     @State private var showGitSheet = false
     @State private var showNotificationCenter = false
 
@@ -163,6 +165,23 @@ struct StatusBarView: View {
             .accessibilityLabel("Line \(editorCore.cursorPosition.line + 1), Column \(editorCore.cursorPosition.column + 1)")
             .accessibilityHint("Double tap to go to line")
             .accessibilityIdentifier("statusBar.cursorPosition")
+
+            // Selection count (shows when text is selected)
+            if !editorCore.currentSelection.isEmpty {
+                let selectionCount = editorCore.currentSelection.count
+                let lineCount = editorCore.currentSelection.components(separatedBy: "\n").count
+                StatusBarItem(
+                    text: selectionCount > 1 ? "\(selectionCount) selected" : "1 selected",
+                    icon: "text.selection",
+                    theme: theme
+                ) {
+                    // Click clears selection
+                    editorCore.currentSelection = ""
+                    editorCore.currentSelectionRange = nil
+                }
+                .accessibilityLabel("\(selectionCount) characters selected")
+                .accessibilityHint("Double tap to deselect")
+            }
 
             // Indentation (Spaces / Tab size)
             Menu {
@@ -333,31 +352,23 @@ struct SSHStatusIndicator: View {
     let theme: Theme
     let action: () -> Void
     
-    @ObservedObject private var connectionStore = SSHConnectionStore.shared
+    @ObservedObject private var sshManager = SSHManager.shared
     @State private var isHovering = false
     
-    private var activeConnection: SSHConnectionConfig? {
-        connectionStore.savedConnections.first { connection in
-            // In a real implementation, track active connections
-            // For now, show the most recently used
-            connection.lastUsed != nil
-        }
-    }
-    
     private var displayText: String {
-        if let connection = activeConnection {
-            return connection.name
+        if sshManager.isConnected, let config = sshManager.currentConfig {
+            return config.name.isEmpty ? config.host : config.name
         } else {
-            return "SSH: No Remote"
+            return "No Remote"
         }
     }
     
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                Image(systemName: activeConnection != nil ? "server.rack" : "circle")
+                Image(systemName: sshManager.isConnected ? "server.rack" : "circle")
                     .font(.system(size: 10))
-                    .foregroundColor(activeConnection != nil ? .green : theme.statusBarForeground.opacity(0.6))
+                    .foregroundColor(sshManager.isConnected ? .green : theme.statusBarForeground.opacity(0.5))
                 
                 Text(displayText)
                     .font(.system(size: 11))

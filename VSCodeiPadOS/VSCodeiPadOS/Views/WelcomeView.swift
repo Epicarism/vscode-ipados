@@ -22,6 +22,7 @@ struct WelcomeView: View {
     // ── Local state ────────────────────────────────────────
     @State private var hoveredAction: String? = nil
     @State private var hoveredRecentFile: String? = nil
+    @State private var showAllRecent = false
     @ObservedObject private var recentFileManager = RecentFileManager.shared
 
     private var theme: Theme { themeManager.currentTheme }
@@ -193,15 +194,18 @@ struct WelcomeView: View {
                     .font(.system(size: 12))
                     .foregroundColor(theme.lineNumber)
             } else {
-                ForEach(recentFileManager.recentFiles.prefix(8), id: \.absoluteString) { url in
+                let filesToShow = showAllRecent ? recentFileManager.recentFiles : Array(recentFileManager.recentFiles.prefix(8))
+                ForEach(filesToShow, id: \.absoluteString) { url in
                     recentFileRow(url)
                 }
 
                 if recentFileManager.recentFiles.count > 8 {
                     Button {
-                        // Open more – could expand or navigate to full list
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showAllRecent.toggle()
+                        }
                     } label: {
-                        Text("Show More…")
+                        Text(showAllRecent ? "Show Less…" : "Show More…")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.activityBarForeground)
                             .padding(.top, 4)

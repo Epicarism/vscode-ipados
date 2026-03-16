@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftUI
 
 struct TasksView: View {
     @ObservedObject private var tasksManager = TasksManager.shared

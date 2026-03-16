@@ -67,7 +67,7 @@ struct RemoteDebuggerConfig: Codable, Identifiable {
 
 // MARK: - Debugger State
 
-enum RemoteDebuggerState: Equatable {
+enum RemoteDebuggerState: Equatable, Sendable {
     case disconnected
     case connecting
     case connected
@@ -76,7 +76,7 @@ enum RemoteDebuggerState: Equatable {
     case stopped(reason: StopReason)
     case terminated
     
-    enum StopReason: Equatable {
+    enum StopReason: Equatable, Sendable {
         case breakpoint(id: Int)
         case step
         case signal(name: String)
@@ -105,7 +105,7 @@ enum RemoteDebuggerState: Equatable {
 
 // MARK: - Breakpoint Model
 
-struct RemoteBreakpoint: Identifiable, Equatable, Hashable {
+struct RemoteBreakpoint: Identifiable, Equatable, Hashable, Sendable {
     let id: Int  // Debugger-assigned ID
     var file: String
     var line: Int
@@ -127,7 +127,7 @@ struct RemoteBreakpoint: Identifiable, Equatable, Hashable {
 
 // MARK: - Stack Frame Model
 
-struct RemoteStackFrame: Identifiable, Equatable {
+struct RemoteStackFrame: Identifiable, Equatable, Sendable {
     let id: Int  // Frame index
     var function: String
     var file: String?
@@ -148,7 +148,7 @@ struct RemoteStackFrame: Identifiable, Equatable {
 
 // MARK: - Variable Model
 
-struct RemoteVariable: Identifiable, Equatable {
+struct RemoteVariable: Identifiable, Equatable, Sendable {
     let id: String
     var name: String
     var value: String
@@ -171,7 +171,7 @@ struct RemoteVariable: Identifiable, Equatable {
 
 // MARK: - Expression Result
 
-struct ExpressionResult: Equatable {
+struct ExpressionResult: Equatable, Sendable {
     var expression: String
     var value: String
     var type: String
@@ -182,7 +182,7 @@ struct ExpressionResult: Equatable {
 
 // MARK: - Debugger Events
 
-enum RemoteDebuggerEvent {
+enum RemoteDebuggerEvent: Sendable {
     case stateChanged(RemoteDebuggerState)
     case breakpointHit(RemoteBreakpoint, RemoteStackFrame)
     case breakpointAdded(RemoteBreakpoint)
@@ -194,7 +194,7 @@ enum RemoteDebuggerEvent {
     case error(String)
     case terminated(exitCode: Int?)
     
-    enum OutputType {
+    enum OutputType: Sendable {
         case stdout
         case stderr
         case debugger
@@ -262,7 +262,7 @@ final class RemoteDebugger: ObservableObject {
         emitEvent(.stateChanged(.connecting))
         
         // Create and configure SSH manager
-        let ssh = SSHManager()
+        let ssh = SSHManager.shared
         self.sshManager = ssh
         
         // Set up SSH delegate to receive output

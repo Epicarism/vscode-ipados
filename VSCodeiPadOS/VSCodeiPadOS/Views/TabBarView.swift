@@ -137,7 +137,9 @@ struct TabItemView: View {
                 Spacer()
 
                 ZStack {
-                    if tab.isUnsaved && !isHovering && !isActive {
+                    // Show modified dot for unsaved files when NOT hovering
+                    // (show for both active and inactive tabs when not hovering)
+                    if tab.isUnsaved && !isHovering {
                         Circle()
                             .fill(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
                             .frame(width: 8, height: 8)

@@ -68,3 +68,4 @@ screenshot.png
 *.orig
 *.swp
 *~
+*.py

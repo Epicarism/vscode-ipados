@@ -56,6 +56,35 @@ final class PortForwardingManager: ObservableObject {
     
     @Published var forwardedPorts: [ForwardedPort] = []
     @Published var isAutoForwardEnabled: Bool = true
+    @Published var isScanning: Bool = false
+    
+    private nonisolated(unsafe) var sshConnectObserver: NSObjectProtocol?
+    
+    init() {
+        setupSSHConnectListener()
+    }
+    
+    deinit {
+        if let observer = sshConnectObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    // MARK: - SSH Connect Listener
+    
+    private func setupSSHConnectListener() {
+        sshConnectObserver = NotificationCenter.default.addObserver(
+            forName: .sshDidConnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.scanRemotePorts()
+            }
+        }
+    }
+    
+    // MARK: - Port Management
     
     func addPort(_ port: Int, label: String = "", protocol proto: PortProtocol = .http, visibility: PortVisibility = .privatePort) {
         let newPort = ForwardedPort(
@@ -102,6 +131,145 @@ final class PortForwardingManager: ObservableObject {
     func copyLocalAddress(id: UUID) {
         guard let port = forwardedPorts.first(where: { $0.id == id }) else { return }
         UIPasteboard.general.string = port.localURL
+    }
+    
+    // MARK: - Remote Port Scanning
+    
+    /// Scans the remote host for listening ports via SSH and adds them as auto-detected ports
+    func scanRemotePorts() {
+        guard !isScanning else { return }
+        
+        Task { @MainActor in
+            await performPortScan()
+        }
+    }
+    
+    private func performPortScan() async {
+        guard SSHManager.shared.isConnected else {
+            // Not connected - nothing to scan
+            return
+        }
+        
+        isScanning = true
+        
+        do {
+            // Run ss or netstat to find listening ports
+            let command = "ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null"
+            let result = try await SSHManager.shared.executeCommand(command, timeout: 15)
+            
+            if result.isSuccess {
+                let detectedPorts = parsePortScanOutput(result.stdout)
+                updatePortsWithScanResults(detectedPorts)
+            }
+        } catch {
+            // Silently fail - user can try again
+            print("Port scan failed: \(error.localizedDescription)")
+        }
+        
+        isScanning = false
+    }
+    
+    /// Parses the output of ss -tlnp or netstat -tlnp
+    private func parsePortScanOutput(_ output: String) -> [(port: Int, process: String)] {
+        var ports: [(port: Int, process: String)] = []
+        let lines = output.components(separatedBy: "\n")
+        
+        for line in lines {
+            // Skip header lines
+            if line.contains("State") || line.contains("Proto") || line.isEmpty {
+                continue
+            }
+            
+            // Extract port from address patterns like:
+            // ss:    LISTEN  0  128  0.0.0.0:3000  0.0.0.0:*  users:(("node",pid=1234,fd=3))
+            // ss:    LISTEN  0  128  [::]:8080     [::]:*      users:(("nginx",pid=5678,fd=6))
+            // netstat: tcp  0  0 0.0.0.0:3000  0.0.0.0:*  LISTEN  1234/node
+            
+            var portNumber: Int?
+            var processName: String = "unknown"
+            
+            // Try to find port in format like "0.0.0.0:3000" or "[::]:8080" or "*:80"
+            // Regex to match :PORT pattern at word boundary
+            let portPattern = #"[:\[](\d{1,5})(?:\]|(?!\d))"#
+            if let portRange = line.range(of: portPattern, options: .regularExpression) {
+                let portStr = String(line[portRange])
+                    .replacingOccurrences(of: ":", with: "")
+                    .replacingOccurrences(of: "[", with: "")
+                    .replacingOccurrences(of: "]", with: "")
+                portNumber = Int(portStr)
+            }
+            
+            // Extract process name
+            // ss format: users:(("processname",pid=...
+            if let usersRange = line.range(of: #"users:\(\(\"([^\"]+)\""#, options: .regularExpression) {
+                let usersPart = String(line[usersRange])
+                if let nameStart = usersPart.range(of: #"\""#),
+                   let nameEnd = usersPart.range(of: #"\","#, range: nameStart.upperBound..<usersPart.endIndex) {
+                    processName = String(usersPart[nameStart.upperBound..<nameEnd.lowerBound])
+                }
+            }
+            // netstat format: PID/processname
+            else if let pidRange = line.range(of: #"\d+/([\w/-]+)"#, options: .regularExpression) {
+                let pidPart = String(line[pidRange])
+                if let slashIdx = pidPart.firstIndex(of: "/") {
+                    processName = String(pidPart[pidPart.index(after: slashIdx)...])
+                }
+            }
+            
+            if let port = portNumber, port > 0 && port <= 65535 {
+                // Avoid duplicates
+                if !ports.contains(where: { $0.port == port }) {
+                    ports.append((port: port, process: processName))
+                }
+            }
+        }
+        
+        return ports.sorted { $0.port < $1.port }
+    }
+    
+    /// Updates the forwardedPorts list with scan results
+    private func updatePortsWithScanResults(_ detectedPorts: [(port: Int, process: String)]) {
+        // Get existing user-added ports (preserve these)
+        let userPorts = forwardedPorts.filter { $0.origin == .user }
+        
+        // Get existing auto-detected ports for comparison
+        let existingAutoPorts = forwardedPorts.filter { $0.origin == .auto }
+        let existingAutoPortNumbers = Set(existingAutoPorts.map { $0.port })
+        
+        // Create new auto-detected ports
+        var newAutoPorts: [ForwardedPort] = []
+        for detected in detectedPorts {
+            // Don't add if user already added this port
+            if userPorts.contains(where: { $0.port == detected.port }) {
+                continue
+            }
+            
+            // Check if we already have this as an auto port
+            if let existing = existingAutoPorts.first(where: { $0.port == detected.port }) {
+                // Keep the existing one but update process name if we got a better one
+                var updatedPort = existing
+                if !detected.process.isEmpty && detected.process != "unknown" {
+                    updatedPort.runningProcess = detected.process
+                }
+                newAutoPorts.append(updatedPort)
+            } else {
+                // Create new auto-detected port
+                let newPort = ForwardedPort(
+                    port: detected.port,
+                    label: detected.process.isEmpty ? "Port \(detected.port)" : detected.process,
+                    portProtocol: .http, // Default to HTTP
+                    localAddress: "localhost:\(detected.port)",
+                    runningProcess: detected.process,
+                    origin: .auto,
+                    visibility: .privatePort,
+                    isActive: true
+                )
+                newAutoPorts.append(newPort)
+            }
+        }
+        
+        // Combine user ports with new auto-detected ports
+        forwardedPorts = userPorts + newAutoPorts
     }
 }
 
@@ -165,13 +333,26 @@ struct PortsView: View {
             .accessibilityLabel("Add port")
             .accessibilityHint("Double tap to add a new forwarded port")
             
-            Button(action: { portManager.objectWillChange.send() }) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.comment)
+            // Refresh button with tooltip and loading state
+            Group {
+                if portManager.isScanning {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .frame(width: 16, height: 16)
+                        .accessibilityLabel("Scanning ports")
+                } else {
+                    Button(action: { portManager.scanRemotePorts() }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12))
+                            .foregroundColor(SSHManager.shared.isConnected ? theme.comment : theme.comment.opacity(0.4))
+                    }
+                    .accessibilityLabel("Refresh ports")
+                    .accessibilityHint(SSHManager.shared.isConnected ? "Double tap to scan remote ports" : "Connect via SSH to scan remote ports")
+                    .help(SSHManager.shared.isConnected ? "Scan remote ports" : "Connect via SSH to scan remote ports")
+                    .disabled(!SSHManager.shared.isConnected)
+                }
             }
-            .accessibilityLabel("Refresh ports")
-            .accessibilityHint("Double tap to refresh the list of forwarded ports")
+            .frame(width: 24, height: 24)
             
             Button(action: { portManager.forwardedPorts.removeAll() }) {
                 Image(systemName: "trash")
@@ -289,36 +470,61 @@ struct PortsView: View {
         VStack(spacing: 16) {
             Spacer()
             
-            Image(systemName: "network")
-                .font(.system(size: 36))
-                .foregroundColor(theme.editorForeground.opacity(0.2))
-                .accessibilityHidden(true)
-            
-            VStack(spacing: 6) {
-                Text("No Forwarded Ports")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.editorForeground.opacity(0.7))
+            if portManager.isScanning {
+                // Show loading state when scanning
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .padding()
                 
-                Text("Forward a port to access a running process\nfrom your local machine.")
+                Text("Scanning remote ports...")
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)
-                    .multilineTextAlignment(.center)
-            }
-            
-            Button(action: { withAnimation { showAddPort = true } }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Forward a Port")
+            } else {
+                Image(systemName: "network")
+                    .font(.system(size: 36))
+                    .foregroundColor(theme.editorForeground.opacity(0.2))
+                    .accessibilityHidden(true)
+                
+                VStack(spacing: 6) {
+                    Text("No Forwarded Ports")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.editorForeground.opacity(0.7))
+                    
+                    Text("Forward a port to access a running process\nfrom your local machine.")
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.comment)
+                        .multilineTextAlignment(.center)
                 }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.accentColor)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.accentColor.opacity(0.1))
-                .cornerRadius(6)
+                
+                Button(action: { withAnimation { showAddPort = true } }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Forward a Port")
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .accessibilityLabel("Forward a port")
+                .accessibilityHint("Double tap to forward a new port")
+                
+                // Show scan button if SSH is connected
+                if SSHManager.shared.isConnected {
+                    Button(action: { portManager.scanRemotePorts() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Scan Remote Ports")
+                        }
+                        .font(.system(size: 12))
+                        .foregroundColor(theme.comment)
+                    }
+                    .accessibilityLabel("Scan remote ports")
+                    .accessibilityHint("Double tap to detect listening ports on the remote host")
+                }
             }
-            .accessibilityLabel("Forward a port")
-            .accessibilityHint("Double tap to forward a new port")
             
             Spacer()
         }
@@ -376,7 +582,7 @@ struct PortRowView: View {
             // Origin
             Text(port.origin.rawValue)
                 .font(.system(size: 10))
-                .foregroundColor(theme.comment)
+                .foregroundColor(port.origin == .auto ? theme.comment.opacity(0.7) : theme.comment)
                 .frame(width: 100, alignment: .leading)
             
             // Visibility
@@ -403,6 +609,15 @@ struct PortRowView: View {
             
             Button(action: { UIPasteboard.general.string = "\(port.port)" }) {
                 Label("Copy Port Number", systemImage: "number")
+            }
+            
+            // Show process name if available
+            if !port.runningProcess.isEmpty {
+                Divider()
+                
+                Text("Process: \(port.runningProcess)")
+                    .font(.system(size: 10))
+                    .foregroundColor(theme.comment)
             }
             
             Divider()

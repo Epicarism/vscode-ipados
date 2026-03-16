@@ -1,11 +1,19 @@
+//
+//  TimelineView.swift
+//  VSCodeiPadOS
+//
+//  Timeline panel showing Git history and local save tracking
+//
+
 import SwiftUI
 import Foundation
+import Combine
 
 // MARK: - Timeline Models
 
 /// Represents a single change in a file's history (Git commit, local save, etc.).
-struct TimelineEntry: Identifiable, Hashable {
-    enum Source: String, CaseIterable, Hashable {
+struct TimelineEntry: Identifiable, Hashable, Sendable {
+    enum Source: String, CaseIterable, Hashable, Sendable {
         case git = "Git"
         case local = "Local"
 
@@ -26,7 +34,7 @@ struct TimelineEntry: Identifiable, Hashable {
         }
     }
 
-    struct DiffSummary: Hashable {
+    struct DiffSummary: Hashable, Sendable {
         var added: Int
         var deleted: Int
 
@@ -49,6 +57,8 @@ struct TimelineEntry: Identifiable, Hashable {
     let message: String
     /// Optional diff summary if available.
     let diff: DiffSummary?
+    /// SHA for git commits (used for identification)
+    let commitSHA: String?
 
     init(
         id: UUID = UUID(),
@@ -56,7 +66,8 @@ struct TimelineEntry: Identifiable, Hashable {
         source: Source,
         author: String,
         message: String,
-        diff: DiffSummary? = nil
+        diff: DiffSummary? = nil,
+        commitSHA: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -64,60 +75,171 @@ struct TimelineEntry: Identifiable, Hashable {
         self.author = author
         self.message = message
         self.diff = diff
+        self.commitSHA = commitSHA
     }
 }
 
-// MARK: - Provider (structure for future Git integration)
+// MARK: - Provider (Git integration)
 
-/// Abstraction point for later wiring to real Git history / local save tracking.
+/// Abstraction point for Git history / local save tracking.
 protocol TimelineProviding: Sendable {
     /// - Parameter filePath: A workspace-relative file path (or identifier) to fetch history for.
-    func timelineEntries(for filePath: String?) async -> [TimelineEntry]
+    func timelineEntries(for filePath: String?, workingDirectory: String?) async -> [TimelineEntry]
 }
 
-/// Mock provider used for now.
-struct MockTimelineProvider: TimelineProviding {
-    func timelineEntries(for filePath: String?) async -> [TimelineEntry] {
-        let now = Date()
-        // NOTE: Mock data only. Replace with real Git + local-save sources later.
-        return [
-            TimelineEntry(
-                timestamp: now.addingTimeInterval(-60 * 5),
-                source: .local,
-                author: "This iPad",
-                message: "Saved",
-                diff: .init(added: 2, deleted: 0)
-            ),
-            TimelineEntry(
-                timestamp: now.addingTimeInterval(-60 * 22),
-                source: .local,
-                author: "This iPad",
-                message: "Auto Save",
-                diff: .init(added: 0, deleted: 1)
-            ),
-            TimelineEntry(
-                timestamp: now.addingTimeInterval(-60 * 60 * 3),
-                source: .git,
-                author: "alex",
-                message: "Fix layout for timeline rows",
-                diff: .init(added: 18, deleted: 6)
-            ),
-            TimelineEntry(
-                timestamp: now.addingTimeInterval(-60 * 60 * 8),
-                source: .git,
-                author: "alex",
-                message: "Add Timeline panel skeleton",
-                diff: .init(added: 124, deleted: 0)
-            ),
-            TimelineEntry(
-                timestamp: now.addingTimeInterval(-60 * 60 * 24),
-                source: .git,
-                author: "sam",
-                message: "Initial commit",
-                diff: .init(added: 980, deleted: 0)
-            )
-        ]
+/// Real Git provider that uses SSH to fetch git log with diff stats
+final class GitTimelineProvider: TimelineProviding, @unchecked Sendable {
+    
+    /// Escape single quotes in shell arguments to prevent injection
+    private func shellEscape(_ str: String) -> String {
+        str.replacingOccurrences(of: "'", with: "'\\''")
     }
+    
+    func timelineEntries(for filePath: String?, workingDirectory: String?) async -> [TimelineEntry] {
+        let ssh = SSHManager.shared
+        
+        // Must have SSH connection to fetch git history
+        guard ssh.isConnected else {
+            return []
+        }
+        
+        // Build the git log command with numstat for diff info
+        // Format: SHA|||author|||subject|||ISO8601 date
+        var command: String
+        if let dir = workingDirectory {
+            let escapedDir = shellEscape(dir)
+            if let path = filePath, !path.isEmpty {
+                let escapedPath = shellEscape(path)
+                command = "cd '\(escapedDir)' && git log --format='%H|||%an|||%s|||%aI' --numstat -30 -- '\(escapedPath)'"
+            } else {
+                command = "cd '\(escapedDir)' && git log --format='%H|||%an|||%s|||%aI' --numstat -30"
+            }
+        } else {
+            // No working directory - can't run git log
+            return []
+        }
+        
+        do {
+            let result = try await ssh.executeCommand(command, timeout: 30)
+            
+            guard result.isSuccess else {
+                return []
+            }
+            
+            return parseGitLogOutput(result.stdout)
+        } catch {
+            return []
+        }
+    }
+    
+    private func parseGitLogOutput(_ output: String) -> [TimelineEntry] {
+        var entries: [TimelineEntry] = []
+        
+        // Split by commit blocks (each commit starts with the format line)
+        // Output format:
+        // SHA|||author|||subject|||ISO8601
+        // added\tdeleted\tfilepath
+        // added\tdeleted\tfilepath
+        // (empty line)
+        // SHA|||author|||subject|||ISO8601
+        // ...
+        
+        let lines = output.components(separatedBy: "\n")
+        var currentEntry: (sha: String, author: String, message: String, date: Date, added: Int, deleted: Int)?
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Check if this is a commit header line (contains |||)
+            if trimmed.contains("|||") {
+                // Save previous entry if exists
+                if let entry = currentEntry {
+                    entries.append(TimelineEntry(
+                        timestamp: entry.date,
+                        source: .git,
+                        author: entry.author,
+                        message: entry.message,
+                        diff: TimelineEntry.DiffSummary(added: entry.added, deleted: entry.deleted),
+                        commitSHA: entry.sha
+                    ))
+                }
+                
+                // Parse new commit header
+                let parts = trimmed.components(separatedBy: "|||")
+                if parts.count >= 4 {
+                    let sha = parts[0].trimmingCharacters(in: .whitespaces)
+                    let author = parts[1].trimmingCharacters(in: .whitespaces)
+                    let message = parts[2].trimmingCharacters(in: .whitespaces)
+                    let dateStr = parts[3].trimmingCharacters(in: .whitespaces)
+                    
+                    // Parse ISO8601 date (try with fractional seconds first, then without)
+                    let formatter = ISO8601DateFormatter()
+                    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    let date = formatter.date(from: dateStr)
+                        ?? ISO8601DateFormatter().date(from: dateStr)
+                        ?? Date()
+                    
+                    currentEntry = (sha: sha, author: author, message: message, date: date, added: 0, deleted: 0)
+                } else {
+                    currentEntry = nil
+                }
+            } else if !trimmed.isEmpty, let _ = currentEntry {
+                // This might be a numstat line: added\tdeleted\tfilepath
+                let numstatParts = trimmed.components(separatedBy: "\t")
+                if numstatParts.count >= 2 {
+                    let added = Int(numstatParts[0]) ?? 0
+                    let deleted = Int(numstatParts[1]) ?? 0
+                    
+                    // Accumulate diff stats for this commit
+                    if let entry = currentEntry {
+                        currentEntry = (
+                            sha: entry.sha,
+                            author: entry.author,
+                            message: entry.message,
+                            date: entry.date,
+                            added: entry.added + added,
+                            deleted: entry.deleted + deleted
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Don't forget the last entry
+        if let entry = currentEntry {
+            entries.append(TimelineEntry(
+                timestamp: entry.date,
+                source: .git,
+                author: entry.author,
+                message: entry.message,
+                diff: TimelineEntry.DiffSummary(added: entry.added, deleted: entry.deleted),
+                commitSHA: entry.sha
+            ))
+        }
+        
+        return entries
+    }
+}
+
+// MARK: - Local Save Entry
+
+/// Represents a local save event tracked in the timeline
+struct LocalSaveEntry: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let timestamp: Date
+    let filePath: String
+    
+    init(id: UUID = UUID(), timestamp: Date = Date(), filePath: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.filePath = filePath
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let fileSaved = Notification.Name("com.codepad.fileSaved")
 }
 
 // MARK: - View Model
@@ -143,13 +265,48 @@ final class TimelineViewModel: ObservableObject {
     @Published var filter: SourceFilter = .all
     @Published private(set) var entries: [TimelineEntry] = []
     @Published private(set) var isLoading: Bool = false
+    @Published var localSaves: [LocalSaveEntry] = []
 
     private let provider: any TimelineProviding
     private let filePath: String?
+    private let workingDirectory: String?
+    private var cancellables = Set<AnyCancellable>()
 
-    init(filePath: String? = nil, provider: any TimelineProviding = MockTimelineProvider()) {
+    init(filePath: String? = nil, workingDirectory: String? = nil, provider: (any TimelineProviding)? = nil) {
         self.filePath = filePath
-        self.provider = provider
+        self.workingDirectory = workingDirectory
+        // Default to GitTimelineProvider for real git data
+        self.provider = provider ?? GitTimelineProvider()
+        
+        // Listen for file save notifications
+        NotificationCenter.default.publisher(for: .fileSaved)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self else { return }
+                if let savedPath = notification.userInfo?["filePath"] as? String {
+                    self.recordLocalSave(filePath: savedPath)
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Record a local save event
+    func recordLocalSave(filePath: String) {
+        let save = LocalSaveEntry(filePath: filePath)
+        localSaves.append(save)
+        
+        // Also add to entries if this is the file we're tracking
+        if self.filePath == filePath || self.filePath == nil {
+            let entry = TimelineEntry(
+                timestamp: save.timestamp,
+                source: .local,
+                author: "This iPad",
+                message: "Saved",
+                diff: nil,
+                commitSHA: nil
+            )
+            entries.insert(entry, at: 0)
+        }
     }
 
     var filteredEntries: [TimelineEntry] {
@@ -161,7 +318,45 @@ final class TimelineViewModel: ObservableObject {
     func load() async {
         isLoading = true
         defer { isLoading = false }
-        entries = await provider.timelineEntries(for: filePath)
+        
+        // Fetch git entries
+        var allEntries = await provider.timelineEntries(for: filePath, workingDirectory: workingDirectory)
+        
+        // Add local saves for this file
+        if let path = filePath {
+            let localEntries = localSaves
+                .filter { $0.filePath == path }
+                .map { save in
+                    TimelineEntry(
+                        timestamp: save.timestamp,
+                        source: .local,
+                        author: "This iPad",
+                        message: "Saved",
+                        diff: nil,
+                        commitSHA: nil
+                    )
+                }
+            allEntries.append(contentsOf: localEntries)
+        } else {
+            // No specific file - show all local saves
+            let localEntries = localSaves.map { save in
+                TimelineEntry(
+                    timestamp: save.timestamp,
+                    source: .local,
+                    author: "This iPad",
+                    message: "Saved \(save.filePath)",
+                    diff: nil,
+                    commitSHA: nil
+                )
+            }
+            allEntries.append(contentsOf: localEntries)
+        }
+        
+        entries = allEntries
+    }
+    
+    func refresh() async {
+        await load()
     }
 }
 
@@ -171,8 +366,8 @@ final class TimelineViewModel: ObservableObject {
 struct TimelineView: View {
     @StateObject private var viewModel: TimelineViewModel
 
-    init(filePath: String? = nil, provider: any TimelineProviding = MockTimelineProvider()) {
-        _viewModel = StateObject(wrappedValue: TimelineViewModel(filePath: filePath, provider: provider))
+    init(filePath: String? = nil, workingDirectory: String? = nil, provider: (any TimelineProviding)? = nil) {
+        _viewModel = StateObject(wrappedValue: TimelineViewModel(filePath: filePath, workingDirectory: workingDirectory, provider: provider))
     }
 
     var body: some View {
@@ -201,6 +396,19 @@ struct TimelineView: View {
                 .font(.headline)
 
             Spacer()
+            
+            // Refresh button
+            Button {
+                Task {
+                    await viewModel.refresh()
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Refresh timeline")
 
             Picker("Source", selection: $viewModel.filter) {
                 ForEach(TimelineViewModel.SourceFilter.allCases) { filter in
@@ -208,7 +416,7 @@ struct TimelineView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 320)
+            .frame(maxWidth: 200)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -273,6 +481,16 @@ private struct TimelineRow: View {
 
                     if let diff = entry.diff, !diff.isEmpty {
                         DiffBadge(diff: diff)
+                    }
+                    
+                    if let sha = entry.commitSHA {
+                        Text(String(sha.prefix(7)))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(Color(.tertiaryLabel))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(.quaternarySystemFill))
+                            .cornerRadius(4)
                     }
                 }
 
@@ -357,7 +575,65 @@ private struct DiffBadge: View {
 
 struct TimelineView_Previews: PreviewProvider {
     static var previews: some View {
+        VStack(spacing: 0) {
+            // Preview with mock data using a custom provider
+            TimelineView(filePath: "test.swift", workingDirectory: nil, provider: PreviewTimelineProvider())
+        }
+        .frame(width: 420, height: 600)
+        .previewDisplayName("With Preview Data")
+        
+        // Preview with real git (will show empty if no repo/SSH)
         TimelineView()
             .frame(width: 420, height: 600)
+            .previewDisplayName("With Git (Empty)")
+    }
+}
+
+// MARK: - Preview Provider
+
+/// Preview provider for SwiftUI previews only
+private struct PreviewTimelineProvider: TimelineProviding {
+    func timelineEntries(for filePath: String?, workingDirectory: String?) async -> [TimelineEntry] {
+        let now = Date()
+        return [
+            TimelineEntry(
+                timestamp: now.addingTimeInterval(-60 * 5),
+                source: .local,
+                author: "This iPad",
+                message: "Saved",
+                diff: .init(added: 2, deleted: 0)
+            ),
+            TimelineEntry(
+                timestamp: now.addingTimeInterval(-60 * 22),
+                source: .local,
+                author: "This iPad",
+                message: "Auto Save",
+                diff: .init(added: 0, deleted: 1)
+            ),
+            TimelineEntry(
+                timestamp: now.addingTimeInterval(-60 * 60 * 3),
+                source: .git,
+                author: "alex",
+                message: "Fix layout for timeline rows",
+                diff: .init(added: 18, deleted: 6),
+                commitSHA: "abc123def456"
+            ),
+            TimelineEntry(
+                timestamp: now.addingTimeInterval(-60 * 60 * 8),
+                source: .git,
+                author: "alex",
+                message: "Add Timeline panel skeleton",
+                diff: .init(added: 124, deleted: 0),
+                commitSHA: "def456abc789"
+            ),
+            TimelineEntry(
+                timestamp: now.addingTimeInterval(-60 * 60 * 24),
+                source: .git,
+                author: "sam",
+                message: "Initial commit",
+                diff: .init(added: 980, deleted: 0),
+                commitSHA: "123456789abc"
+            )
+        ]
     }
 }

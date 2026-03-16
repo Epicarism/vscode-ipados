@@ -9,10 +9,7 @@ struct DebugVariable: Identifiable {
     var children: [DebugVariable]?
 }
 
-
-
 // MARK: - Debug View
-
 struct DebugView: View {
     @ObservedObject private var debugManager = DebugManager.shared
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -29,6 +26,12 @@ struct DebugView: View {
     @State private var isWatchExpanded: Bool = true
     @State private var isCallStackExpanded: Bool = true
     @State private var isBreakpointsExpanded: Bool = true
+    
+    // Remote debugger connection sheet
+    @State private var showConnectDebuggerSheet: Bool = false
+    @State private var debuggerProgramPath: String = ""
+    @State private var debuggerHost: String = ""
+    @State private var selectedDebuggerType: DebuggerType = .lldb
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -77,10 +80,12 @@ struct DebugView: View {
         .background(theme.editorBackground)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Run and Debug panel")
+        .sheet(isPresented: $showConnectDebuggerSheet) {
+            connectDebuggerSheet
+        }
     }
     
     // MARK: - Header
-    
     private var header: some View {
         HStack {
             Text("RUN AND DEBUG")
@@ -114,26 +119,73 @@ struct DebugView: View {
             .accessibilityLabel("Start debugging")
             .accessibilityHint("Double tap to start or continue debugging")
             
+            // Connect Debugger button (show when SSH connected but debugger not)
+            if debugManager.isSSHConnected && !debugManager.isRemoteDebuggerConnected {
+                Button(action: { showConnectDebuggerSheet = true }) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(.system(size: 10))
+                        Text("Connect")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(.blue)
+                    .padding(4)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Connect remote debugger")
+                .accessibilityHint("Double tap to connect to LLDB/GDB over SSH")
+            }
+            
+            // Remote debugger status indicator
+            if debugManager.isRemoteDebuggerConnected {
+                HStack(spacing: 2) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 8))
+                        .foregroundColor(.green)
+                    Text("Remote")
+                        .font(.system(size: 8))
+                        .foregroundColor(theme.comment)
+                }
+            }
+            
+            // More debug options menu
             Menu {
-                Button(action: { debugManager.removeAllBreakpoints() }) {
+                Button(action: {
+                    debugManager.removeAllBreakpoints()
+                }) {
                     Label("Clear All Breakpoints", systemImage: "xmark.circle")
                 }
-                Button(action: { debugManager.toggleAllBreakpoints() }) {
-                    Label(debugManager.allBreakpointsEnabled ? "Disable All Breakpoints" : "Enable All Breakpoints", systemImage: debugManager.allBreakpointsEnabled ? "circle.slash" : "circle")
+                
+                Button(action: {
+                    debugManager.toggleAllBreakpoints()
+                }) {
+                    let allEnabled = debugManager.allBreakpointsEnabled
+                    Label(
+                        allEnabled ? "Disable All Breakpoints" : "Enable All Breakpoints",
+                        systemImage: allEnabled ? "circle" : "circle.fill"
+                    )
                 }
+                
                 Divider()
-                Button(action: { debugManager.play() }) {
-                    Label("Exception Breakpoints", systemImage: "bolt.trianglefilled")
+                
+                Toggle(isOn: .constant(false)) {
+                    Label("Caught Exceptions", systemImage: "exclamationmark.triangle")
+                }
+                
+                Toggle(isOn: .constant(true)) {
+                    Label("Uncaught Exceptions", systemImage: "exclamationmark.triangle.fill")
                 }
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "ellipsis.circle")
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)
+                    .padding(4)
             }
             .buttonStyle(.plain)
-            .padding(.leading, 8)
             .accessibilityLabel("More debug options")
-            .accessibilityHint("Double tap to open additional debug settings")
+            .accessibilityHint("Double tap to show breakpoint management options")
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -141,7 +193,6 @@ struct DebugView: View {
     }
     
     // MARK: - Debug Toolbar
-    
     private var debugToolbar: some View {
         HStack(spacing: 4) {
             Spacer()
@@ -224,7 +275,6 @@ struct DebugView: View {
     }
     
     // MARK: - Variables Section
-    
     private var variablesSection: some View {
         DisclosureGroup(isExpanded: $isVariablesExpanded) {
             VStack(alignment: .leading, spacing: 0) {
@@ -251,7 +301,6 @@ struct DebugView: View {
     }
     
     // MARK: - Watch Section
-    
     private var watchSection: some View {
         DisclosureGroup(isExpanded: $isWatchExpanded) {
             VStack(alignment: .leading, spacing: 0) {
@@ -353,7 +402,6 @@ struct DebugView: View {
     }
     
     // MARK: - Call Stack Section
-    
     private var callStackSection: some View {
         DisclosureGroup(isExpanded: $isCallStackExpanded) {
             VStack(alignment: .leading, spacing: 0) {
@@ -385,7 +433,6 @@ struct DebugView: View {
     }
     
     // MARK: - Breakpoints Section
-    
     private var breakpointsSection: some View {
         DisclosureGroup(isExpanded: $isBreakpointsExpanded) {
             VStack(alignment: .leading, spacing: 0) {
@@ -443,7 +490,6 @@ struct DebugView: View {
     }
     
     // MARK: - Helpers
-    
     private var sectionDivider: some View {
         Divider()
             .background(theme.editorForeground.opacity(0.1))
@@ -457,10 +503,85 @@ struct DebugView: View {
             children: variable.children.isEmpty ? nil : variable.children.map { convertToDebugVariable($0) }
         )
     }
+    
+    // MARK: - Connect Debugger Sheet
+    private var connectDebuggerSheet: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Debugger Type")) {
+                    Picker("Type", selection: $selectedDebuggerType) {
+                        Text("LLDB").tag(DebuggerType.lldb)
+                        Text("GDB").tag(DebuggerType.gdb)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                
+                Section(header: Text("Program")) {
+                    TextField("Program path on remote", text: $debuggerProgramPath)
+                        .font(.system(size: 14, design: .monospaced))
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                }
+                
+                Section(header: Text("Optional")) {
+                    TextField("Remote debug server (host:port)", text: $debuggerHost)
+                        .font(.system(size: 14, design: .monospaced))
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                        .textContentType(.URL)
+                }
+            }
+            .navigationTitle("Connect Debugger")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showConnectDebuggerSheet = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Connect") {
+                        Task {
+                            await connectRemoteDebugger()
+                        }
+                    }
+                    .disabled(debuggerProgramPath.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+    
+    private func connectRemoteDebugger() async {
+        guard let sshConfig = SSHManager.shared.currentConfig else {
+            debugManager.consoleEntries.append(DebugManager.ConsoleEntry(
+                message: "No SSH connection available.",
+                kind: .error
+            ))
+            return
+        }
+        
+        let config = RemoteDebuggerConfig(
+            name: "Remote \(selectedDebuggerType.displayName)",
+            sshConnectionId: sshConfig.id,
+            debuggerType: selectedDebuggerType,
+            programPath: debuggerProgramPath,
+            remoteTarget: debuggerHost.isEmpty ? nil : debuggerHost
+        )
+        
+        do {
+            try await debugManager.connectRemoteDebugger(config: config, sshConfig: sshConfig)
+            showConnectDebuggerSheet = false
+        } catch {
+            debugManager.consoleEntries.append(DebugManager.ConsoleEntry(
+                message: "Failed to connect: \(error.localizedDescription)",
+                kind: .error
+            ))
+        }
+    }
 }
 
 // MARK: - Section Header
-
 struct DebugSectionHeader: View {
     let title: String
     var count: Int? = nil
@@ -482,7 +603,6 @@ struct DebugSectionHeader: View {
 }
 
 // MARK: - Debug Toolbar Button
-
 struct DebugToolbarButton: View {
     let icon: String
     let color: Color
@@ -506,7 +626,6 @@ struct DebugToolbarButton: View {
 }
 
 // MARK: - Variable Row
-
 struct VariableRow: View {
     let variable: DebugVariable
     let theme: Theme
@@ -560,7 +679,6 @@ struct VariableRow: View {
 }
 
 // MARK: - Call Stack Row
-
 struct CallStackRow: View {
     let frame: DebugManager.StackFrame
     let isActive: Bool
@@ -600,7 +718,6 @@ struct CallStackRow: View {
 }
 
 // MARK: - Breakpoint Row
-
 struct BreakpointRow: View {
     let breakpoint: DebugManager.Breakpoint
     let theme: Theme
@@ -609,8 +726,7 @@ struct BreakpointRow: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            // Enable/disable toggle – correctly calls toggleBreakpoint(_ id: String)
-            // which parses "file::line" and calls toggleBreakpoint(file:line:)
+            // Enable/disable toggle
             Button(action: {
                 debugManager.toggleBreakpoint(breakpoint.id)
             }) {
@@ -663,7 +779,6 @@ struct BreakpointRow: View {
 }
 
 // MARK: - Preview
-
 #Preview {
     DebugView()
 }

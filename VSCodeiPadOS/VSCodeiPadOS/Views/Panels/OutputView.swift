@@ -7,9 +7,7 @@ struct OutputLineView: View {
     let line: OutputLine
     let showTimestamp: Bool
     let wordWrap: Bool
-    
-    @State private var attributedString: AttributedString?
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             // Log level indicator
@@ -189,7 +187,7 @@ struct OutputSearchBar: View {
                 .font(.system(size: 12))
                 .textFieldStyle(.plain)
                 .accessibilityLabel("Search output")
-                .onChange(of: localQuery) { newValue in
+                .onChange(of: localQuery) { _, newValue in
                     outputManager.setSearchQuery(newValue)
                 }
             
