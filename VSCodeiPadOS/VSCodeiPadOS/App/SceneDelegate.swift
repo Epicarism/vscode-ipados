@@ -60,7 +60,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         updateWindowTitle()
         
         // Register this window with the state manager
-        WindowStateManager.shared.registerWindow(id: windowId!)
+        if let windowId = windowId {
+            WindowStateManager.shared.registerWindow(id: windowId)
+        }
     }
     
     func sceneDidDisconnect(_ scene: UIScene) {

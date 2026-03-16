@@ -151,7 +151,9 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
     }
     
     private func createJSValue(from value: Any) -> JSValue {
-        let ctx = JSContext()!
+        guard let ctx = JSContext() else {
+            fatalError("MockJSRunner: Failed to create JSContext")
+        }
         return JSValue(object: value, in: ctx)
     }
 }

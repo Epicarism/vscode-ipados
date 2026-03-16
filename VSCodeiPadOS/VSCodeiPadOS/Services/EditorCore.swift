@@ -97,6 +97,11 @@ class EditorCore: ObservableObject {
     static let largeFileThreshold = 100_000 // ~100KB in characters
     @Published var isLargeFile = false
 
+    // MARK: - Diagnostics Counts
+    @Published var diagnosticErrorCount: Int = 0
+    @Published var diagnosticWarningCount: Int = 0
+    private var diagnosticsObserver: NSObjectProtocol?
+
     // Snippet picker support
     @Published var showSnippetPicker = false
     @Published var pendingSnippetInsertion: Snippet?
@@ -218,11 +223,42 @@ class EditorCore: ObservableObject {
                 self.editorFontSize = CGFloat(stored)
             }
         }
+
+        // Observe diagnostics updates from ProblemsView / ErrorParser
+        diagnosticsObserver = NotificationCenter.default.addObserver(
+            forName: .diagnosticsUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            if let clear = notification.userInfo?["clear"] as? Bool, clear {
+                self.diagnosticErrorCount = 0
+                self.diagnosticWarningCount = 0
+            } else if let items = notification.userInfo?["diagnostics"] as? [[String: Any]] {
+                let diagnostics = items.compactMap { DiagnosticItem(userInfo: $0) }
+                self.diagnosticErrorCount = diagnostics.filter { $0.severity == .error }.count
+                self.diagnosticWarningCount = diagnostics.filter { $0.severity == .warning }.count
+            } else if let item = notification.userInfo as? [String: Any], item["message"] != nil {
+                // Single diagnostic appended — recalculate would need full list,
+                // so just increment based on severity
+                if let severityRaw = item["severity"] as? String,
+                   let severity = DiagnosticSeverity(rawValue: severityRaw) {
+                    switch severity {
+                    case .error: self.diagnosticErrorCount += 1
+                    case .warning: self.diagnosticWarningCount += 1
+                    case .info: break
+                    }
+                }
+            }
+        }
     }
 
     deinit {
         if let fontSizeObserver {
             NotificationCenter.default.removeObserver(fontSizeObserver)
+        }
+        if let diagnosticsObserver {
+            NotificationCenter.default.removeObserver(diagnosticsObserver)
         }
         releaseAllSecurityScopedAccess()
     }

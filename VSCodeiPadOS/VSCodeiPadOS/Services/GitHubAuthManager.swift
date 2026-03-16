@@ -145,7 +145,9 @@ final class GitHubAuthManager: ObservableObject {
         
         defer { isLoading = false }
         
-        let url = URL(string: "https://github.com/login/device/code")!
+        guard let url = URL(string: "https://github.com/login/device/code") else {
+            throw GitHubAuthError.deviceFlowFailed("Invalid device code URL")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -264,7 +266,9 @@ final class GitHubAuthManager: ObservableObject {
     
     /// Single poll attempt to exchange device code for token
     private func pollForToken(deviceCode: String) async throws -> String {
-        let url = URL(string: "https://github.com/login/oauth/access_token")!
+        guard let url = URL(string: "https://github.com/login/oauth/access_token") else {
+            throw GitHubAuthError.deviceFlowFailed("Invalid token URL")
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -319,7 +323,9 @@ final class GitHubAuthManager: ObservableObject {
             throw GitHubAuthError.userFetchFailed("No token available")
         }
         
-        let url = URL(string: "https://api.github.com/user")!
+        guard let url = URL(string: "https://api.github.com/user") else {
+            throw GitHubAuthError.userFetchFailed("Invalid user URL")
+        }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")

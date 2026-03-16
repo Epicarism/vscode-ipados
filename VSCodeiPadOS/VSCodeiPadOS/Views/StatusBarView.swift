@@ -77,8 +77,8 @@ struct StatusBarView: View {
             }
 
             // Errors & Warnings (Problems)
-            let errorCount = 0  // TODO: Wire up from diagnostics provider
-            let warningCount = 0  // TODO: Wire up from diagnostics provider
+            let errorCount = editorCore.diagnosticErrorCount
+            let warningCount = editorCore.diagnosticWarningCount
 
             StatusBarItem(
                 text: "\(errorCount)",
