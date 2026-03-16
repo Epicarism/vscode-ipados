@@ -803,10 +803,7 @@ struct SplitEditorButtons: View {
 
 // MARK: - Preview
 
-#Preview {
-    let manager = SplitEditorManager()
-    let core = EditorCore()
-    manager.initializeWithTabs(core.tabs, activeTabId: core.activeTabId)
-    
-    SplitEditorView(splitManager: manager, editorCore: core)
-}
+// Preview disabled - requires full app context
+// #Preview {
+//     SplitEditorView(splitManager: SplitEditorManager(), editorCore: EditorCore())
+// }

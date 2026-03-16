@@ -192,13 +192,13 @@ final class SwiftRunner {
         return command
     }
     
-    func execute(file: String, args: [String]) async throws -> ExecutionResult {
+    func execute(file: String, args: [String]) async throws -> SwiftExecutionResult {
         let command = buildCommand(for: file, args: args)
         let output = try await ssh.execute(command: command)
         
         // Check for Swift compiler errors in stderr
         if let swiftError = parseCompilerErrors(output.stderr) {
-            return ExecutionResult(
+            return SwiftExecutionResult(
                 stdout: output.stdout,
                 stderr: output.stderr,
                 exitCode: 1,
@@ -206,7 +206,7 @@ final class SwiftRunner {
             )
         }
         
-        return ExecutionResult(
+        return SwiftExecutionResult(
             stdout: output.stdout,
             stderr: output.stderr,
             exitCode: output.exitCode,
@@ -250,7 +250,7 @@ final class SwiftRunner {
         in directory: String,
         target: String? = nil,
         args: [String] = []
-    ) async throws -> ExecutionResult {
+    ) async throws -> SwiftExecutionResult {
         let dirPath = escapePath(directory)
         
         // Check for Package.swift
@@ -274,7 +274,7 @@ final class SwiftRunner {
         
         // Check for build errors
         if let swiftError = parseCompilerErrors(output.stderr) {
-            return ExecutionResult(
+            return SwiftExecutionResult(
                 stdout: output.stdout,
                 stderr: output.stderr,
                 exitCode: 1,
@@ -282,7 +282,7 @@ final class SwiftRunner {
             )
         }
         
-        return ExecutionResult(
+        return SwiftExecutionResult(
             stdout: output.stdout,
             stderr: output.stderr,
             exitCode: output.exitCode,
@@ -291,7 +291,7 @@ final class SwiftRunner {
     }
     
     /// Build SPM package
-    func buildPackage(in directory: String, config: SwiftBuildConfig? = nil) async throws -> ExecutionResult {
+    func buildPackage(in directory: String, config: SwiftBuildConfig? = nil) async throws -> SwiftExecutionResult {
         let dirPath = escapePath(directory)
         let buildConfig = config ?? self.buildConfig
         
@@ -303,7 +303,7 @@ final class SwiftRunner {
         
         let output = try await ssh.execute(command: command)
         
-        return ExecutionResult(
+        return SwiftExecutionResult(
             stdout: output.stdout,
             stderr: output.stderr,
             exitCode: output.exitCode,
@@ -312,12 +312,12 @@ final class SwiftRunner {
     }
     
     /// Test SPM package
-    func testPackage(in directory: String) async throws -> ExecutionResult {
+    func testPackage(in directory: String) async throws -> SwiftExecutionResult {
         let dirPath = escapePath(directory)
         let command = "cd \(dirPath) && swift test"
         
         let output = try await ssh.execute(command: command)
-        return ExecutionResult(
+        return SwiftExecutionResult(
             stdout: output.stdout,
             stderr: output.stderr,
             exitCode: output.exitCode,
@@ -326,7 +326,7 @@ final class SwiftRunner {
     }
     
     /// Compile single file with swiftc and execute
-    func compileAndRun(file: String, args: [String] = []) async throws -> ExecutionResult {
+    func compileAndRun(file: String, args: [String] = []) async throws -> SwiftExecutionResult {
         let filePath = escapePath(file)
         let binaryName = "swift_\(UUID().uuidString.prefix(8))"
         let tempBinary = "/tmp/\(binaryName)"
@@ -342,14 +342,14 @@ final class SwiftRunner {
         
         if compileOutput.exitCode != 0 {
             if let error = parseCompilerErrors(compileOutput.stderr) {
-                return ExecutionResult(
+                return SwiftExecutionResult(
                     stdout: compileOutput.stdout,
                     stderr: compileOutput.stderr,
                     exitCode: 1,
                     error: RunnerError.executionFailed("Compilation error: \(error.message)")
                 )
             }
-            return ExecutionResult(
+            return SwiftExecutionResult(
                 stdout: compileOutput.stdout,
                 stderr: compileOutput.stderr,
                 exitCode: 1,
@@ -368,7 +368,7 @@ final class SwiftRunner {
         // Clean up
         _ = try? await ssh.execute(command: "rm \(tempBinary)")
         
-        return ExecutionResult(
+        return SwiftExecutionResult(
             stdout: runOutput.stdout,
             stderr: runOutput.stderr,
             exitCode: runOutput.exitCode,
@@ -641,7 +641,7 @@ protocol Runner {
     
     func canRun(file: String) -> Bool
     func buildCommand(for file: String, args: [String]) -> String
-    func execute(file: String, args: [String]) async throws -> ExecutionResult
+    func execute(file: String, args: [String]) async throws -> SwiftExecutionResult
 }
 
 // MARK: - SwiftRunner Conformance
@@ -693,4 +693,16 @@ extension SwiftRunner {
             hasExecutable: hasExecutable
         )
     }
+}
+
+
+// MARK: - Swift Runner Execution Result
+
+struct SwiftExecutionResult {
+    let stdout: String
+    let stderr: String
+    let exitCode: Int
+    let error: RunnerError?
+    
+    var isSuccess: Bool { exitCode == 0 && error == nil }
 }
