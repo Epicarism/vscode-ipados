@@ -815,7 +815,7 @@ final class AIManager: ObservableObject {
     /// System prompt for providers with native tool calling
     private func buildAgentSystemPrompt(context: String?) -> String {
         var prompt = """
-You are an expert AI coding assistant integrated into VS Code for iPadOS. You have access to tools that let you interact with the user's workspace.
+You are an expert AI coding assistant integrated into CodePad. You have access to tools that let you interact with the user's workspace.
 
 ## YOUR TOOLS
 You have the following tools available:
@@ -852,7 +852,7 @@ You have the following tools available:
     /// Uses XML format that most local models understand
     private func buildTextToolSystemPrompt(context: String?) -> String {
         var prompt = """
-You are an expert AI coding assistant in VS Code for iPadOS. You have tools to interact with files. Always respond in English.
+You are an expert AI coding assistant in CodePad. You have tools to interact with files. Always respond in English.
 
 ## TOOL CALLING FORMAT
 To call a tool, use this XML format:
