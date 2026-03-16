@@ -90,8 +90,6 @@ struct StatusBarView: View {
             .accessibilityHint("Double tap to view errors")
 
             StatusBarItem(
-
-            StatusBarItem(
                 text: "0",
                 icon: "exclamationmark.triangle.fill",
                 theme: theme
@@ -119,6 +117,8 @@ struct StatusBarView: View {
                 ) {
                     editorCore.escapeMultiCursor()
                 }
+                .accessibilityLabel("\(editorCore.multiCursorState.cursors.count) cursors active")
+                .accessibilityHint("Double tap to exit multi-cursor mode")
             }
 
             // Cursor position → click opens Go to Line
@@ -128,6 +128,8 @@ struct StatusBarView: View {
             ) {
                 editorCore.showGoToLine = true
             }
+            .accessibilityLabel("Line \(editorCore.cursorPosition.line + 1), Column \(editorCore.cursorPosition.column + 1)")
+            .accessibilityHint("Double tap to go to line")
 
             // Indentation (Spaces / Tab size)
             Menu {
@@ -143,6 +145,8 @@ struct StatusBarView: View {
             } label: {
                 StatusBarLabel(text: "\(insertSpaces ? "Spaces" : "Tab Size"): \(tabSize)", theme: theme)
             }
+            .accessibilityLabel("Indentation: \(insertSpaces ? "Spaces" : "Tabs"), size \(tabSize)")
+            .accessibilityHint("Double tap to change indentation settings")
 
             // Encoding
             Menu {
@@ -152,6 +156,8 @@ struct StatusBarView: View {
             } label: {
                 StatusBarLabel(text: encoding, theme: theme)
             }
+            .accessibilityLabel("File Encoding: \(encoding)")
+            .accessibilityHint("Double tap to change file encoding")
 
             // EOL
             Menu {
@@ -161,6 +167,8 @@ struct StatusBarView: View {
             } label: {
                 StatusBarLabel(text: eolSetting, theme: theme)
             }
+            .accessibilityLabel("End of Line: \(eolSetting)")
+            .accessibilityHint("Double tap to change end of line setting")
 
             // Language Mode
             if let tab = editorCore.activeTab {
@@ -182,6 +190,8 @@ struct StatusBarView: View {
                 } label: {
                     StatusBarLabel(text: tab.language.displayName, theme: theme)
                 }
+                .accessibilityLabel("Language Mode: \(tab.language.displayName)")
+                .accessibilityHint("Double tap to change language mode")
             }
 
             // Notification bell with unread badge

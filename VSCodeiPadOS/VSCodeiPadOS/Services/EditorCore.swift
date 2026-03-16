@@ -1,3 +1,4 @@
+import os
 import UniformTypeIdentifiers
 import SwiftUI
 
@@ -914,7 +915,7 @@ mod tests {
 
             tabs[index].isUnsaved = false
         } catch {
-            print("Error saving file: \(error)")
+            AppLogger.editor.error("Error saving file: \(error)")
         }
     }
     
@@ -970,7 +971,7 @@ mod tests {
 
                 tabs[index].isUnsaved = false
             } catch {
-                print("Error saving file: \(error)")
+                AppLogger.editor.error("Error saving file: \(error)")
             }
         }
     }
@@ -1041,7 +1042,7 @@ mod tests {
             // Index the file in Spotlight for search
             SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
         } catch {
-            print("Error opening file: \(error)")
+            AppLogger.editor.error("Error opening file: \(error)")
             if retained {
                 // We retained access but failed to open; release our retain.
                 releaseSecurityScopedAccess(to: url)
@@ -1473,7 +1474,7 @@ extension EditorCore {
             )
             UserDefaults.standard.set(bookmarkData, forKey: Self.lastWorkspaceBookmarkKey)
         } catch {
-            print("[EditorCore] Failed to save workspace bookmark: \(error)")
+            AppLogger.editor.error("Failed to save workspace bookmark: \(error)")
         }
     }
     
@@ -1491,7 +1492,7 @@ extension EditorCore {
             }
             return url
         } catch {
-            print("[EditorCore] Failed to restore workspace bookmark: \(error)")
+            AppLogger.editor.error("Failed to restore workspace bookmark: \(error)")
             UserDefaults.standard.removeObject(forKey: Self.lastWorkspaceBookmarkKey)
             return nil
         }

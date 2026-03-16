@@ -353,52 +353,6 @@ struct IDESidebarFiles: View {
     }
 }
 
-struct RealFileTreeView: View {
-    let node: FileTreeNode
-    let level: Int
-    @ObservedObject var fileNavigator: FileSystemNavigator
-    @ObservedObject var editorCore: EditorCore
-    let theme: Theme
-    
-    var isExpanded: Bool { fileNavigator.expandedPaths.contains(node.url.path) }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                if node.isDirectory {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2).frame(width: 12)
-                        .foregroundColor(theme.sidebarForeground.opacity(0.6))
-                        .onTapGesture { fileNavigator.toggleExpanded(path: node.url.path) }
-                } else {
-                    Spacer().frame(width: 12)
-                }
-                Image(systemName: node.isDirectory ? "folder.fill" : fileIcon(for: node.name))
-                    .font(.caption)
-                    .foregroundColor(node.isDirectory ? .yellow : fileColor(for: node.name))
-                Text(node.name).font(.system(.caption)).lineLimit(1)
-                    .foregroundColor(theme.sidebarForeground)
-                Spacer()
-            }
-            .padding(.leading, CGFloat(level * 16)).padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if node.isDirectory {
-                    fileNavigator.toggleExpanded(path: node.url.path)
-                } else {
-                    editorCore.openFile(from: node.url)
-                }
-            }
-            
-            if isExpanded && node.isDirectory {
-                ForEach(node.children) { child in
-                    RealFileTreeView(node: child, level: level + 1, fileNavigator: fileNavigator, editorCore: editorCore, theme: theme)
-                }
-            }
-        }
-    }
-}
-
 struct DemoFileTree: View {
     @ObservedObject var editorCore: EditorCore
     let theme: Theme
@@ -457,6 +411,8 @@ struct IDETabBar: View {
                 Button(action: { editorCore.addTab() }) {
                     Image(systemName: "plus").font(.caption).foregroundColor(theme.tabInactiveForeground).padding(8)
                 }
+                .accessibilityLabel("New tab")
+                .accessibilityHint("Double tap to open a new editor tab")
             }.padding(.horizontal, 4)
         }.frame(height: 36).background(theme.tabBarBackground)
     }
@@ -477,12 +433,17 @@ struct IDETabItem: View {
             Button(action: { editorCore.closeTab(id: tab.id) }) {
                 Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
                     .foregroundColor(isSelected ? theme.tabActiveForeground.opacity(0.6) : theme.tabInactiveForeground)
+                    .accessibilityLabel("Close tab")
+                    .accessibilityHint("Double tap to close \(tab.fileName)")
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? theme.tabActiveBackground : theme.tabInactiveBackground))
         .onTapGesture { editorCore.selectTab(id: tab.id) }
-    }
+        .accessibilityLabel("Tab: \(tab.fileName)\(tab.isUnsaved ? ", unsaved changes" : "")")
+        .accessibilityHint("Double tap to switch to this tab")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityElement(children: .contain)
 }
 
 // MARK: - Editor with Syntax Highlighting + Autocomplete + Folding
@@ -1020,28 +981,6 @@ struct WelcomeTip: View {
     }
 }
 
-struct WelcomeBtn: View {
-    let icon: String
-    let title: String
-    let shortcut: String
-    let theme: Theme
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon).frame(width: 24).foregroundColor(theme.editorForeground)
-                Text(title).foregroundColor(theme.editorForeground)
-                Spacer()
-                Text(shortcut).font(.caption).foregroundColor(theme.editorForeground.opacity(0.5))
-            }
-            .padding().frame(width: 280)
-            .background(theme.sidebarBackground)
-            .cornerRadius(8)
-        }.buttonStyle(.plain)
-    }
-}
-
 // MARK: - Command Palette
 
 struct IDECommandPalette: View {
@@ -1196,10 +1135,6 @@ struct IDEAIAssistant: View {
         }
     }
 }
-
-// MARK: - Status Bar
-
-
 
 // MARK: - Folder Picker
 
