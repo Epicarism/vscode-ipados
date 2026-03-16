@@ -721,6 +721,7 @@ struct ConnectedModeSettingsSection: View {
 
 // WebKit already imported at top of file
 
+@MainActor
 class SettingsWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var parent: SettingsWebView
     

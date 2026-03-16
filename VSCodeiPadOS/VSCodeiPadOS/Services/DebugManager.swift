@@ -125,6 +125,15 @@ final class DebugManager: ObservableObject {
     @Published var selectedFrameId: StackFrame.ID?
     @Published var consoleEntries: [ConsoleEntry] = []
 
+    /// Active JSRunner instance for the current debug session (used by console eval).
+    private var activeJSRunner: JSRunner?
+
+    /// Tracks whether all breakpoints are globally disabled via toggleAllBreakpoints().
+    private var allBreakpointsDisabled: Bool = false
+
+    /// Backup of breakpoints when they are globally disabled.
+    private var disabledBreakpointsBackup: [String: Set<Int>] = [:]
+
     // MARK: - Convenience views of state (for UI plumbing)
 
     var allBreakpoints: [Breakpoint] {
@@ -152,8 +161,51 @@ final class DebugManager: ObservableObject {
     
     func submitConsole(input: String) {
         consoleEntries.append(ConsoleEntry(message: "> \(input)", kind: .input))
-        // Simulate response
-        consoleEntries.append(ConsoleEntry(message: "undefined", kind: .output))
+
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        switch state {
+        case .paused, .running:
+            // Evaluate expression using JSRunner
+            let runner: JSRunner
+            if let existing = activeJSRunner {
+                runner = existing
+            } else {
+                runner = JSRunner()
+                activeJSRunner = runner
+                // Forward console.log output to the debug console
+                runner.setConsoleHandler { [weak self] message in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        let clean = message
+                            .replacingOccurrences(of: "[LOG] ", with: "")
+                            .replacingOccurrences(of: "[ERROR] ", with: "")
+                            .replacingOccurrences(of: "[WARN] ", with: "")
+                            .replacingOccurrences(of: "[INFO] ", with: "")
+                        self.consoleEntries.append(ConsoleEntry(message: clean, kind: .output))
+                    }
+                }
+            }
+            Task {
+                do {
+                    let result = try await runner.execute(code: trimmed, timeout: 10.0)
+                    let resultString = result.toString() ?? "undefined"
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        if !resultString.isEmpty && resultString != "undefined" {
+                            self.consoleEntries.append(ConsoleEntry(message: resultString, kind: .output))
+                        }
+                    }
+                } catch {
+                    await MainActor.run { [weak self] in
+                        self?.consoleEntries.append(ConsoleEntry(message: error.localizedDescription, kind: .error))
+                    }
+                }
+            }
+        case .stopped:
+            consoleEntries.append(ConsoleEntry(message: "No active debug session", kind: .warning))
+        }
     }
     
     func copyConsoleToClipboard() {
@@ -377,6 +429,7 @@ final class DebugManager: ObservableObject {
         // Run JavaScript with JSRunner
         Task {
             let runner = JSRunner()
+            self.activeJSRunner = runner
             
             // Capture console output
             runner.setConsoleHandler { [weak self] message in
@@ -418,6 +471,7 @@ final class DebugManager: ObservableObject {
                     ))
                     self.state = .stopped
                     self.callStack.removeAll()
+                    self.activeJSRunner = nil
                 }
             } catch {
                 await MainActor.run {
@@ -430,6 +484,7 @@ final class DebugManager: ObservableObject {
                         kind: .system
                     ))
                     self.state = .stopped
+                    self.activeJSRunner = nil
                 }
             }
         }
@@ -440,6 +495,7 @@ final class DebugManager: ObservableObject {
         callStack = []
         variables = []
         selectedFrameId = nil
+        activeJSRunner = nil
     }
 
     func pause() {
@@ -483,12 +539,23 @@ final class DebugManager: ObservableObject {
         if allBreakpoints.isEmpty {
             return
         }
-        // Toggle: remove all breakpoints for now
-        breakpointsByFile = [:]
+        if allBreakpointsDisabled {
+            // Re-enable: restore from backup
+            allBreakpointsDisabled = false
+            breakpointsByFile = disabledBreakpointsBackup
+            disabledBreakpointsBackup = [:]
+        } else {
+            // Disable: backup current breakpoints then clear
+            allBreakpointsDisabled = true
+            disabledBreakpointsBackup = breakpointsByFile
+            breakpointsByFile = [:]
+        }
     }
 
     func removeAllBreakpoints() {
         breakpointsByFile = [:]
+        allBreakpointsDisabled = false
+        disabledBreakpointsBackup = [:]
     }
 
     func toggleBreakpoint(_ id: String) {
