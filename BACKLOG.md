@@ -107,3 +107,10 @@
 | BUG-009: Wired syntax highlighter to ThemeManager colors | Mar 16 | Claude Agent |
 | POLISH: VoiceOver labels on TerminalView (8 buttons) + SearchView (4 hints) | Mar 16 | Claude Agent |
 | SECURITY: API keys migrated from UserDefaults to iOS Keychain | Mar 16 | Claude Agent |
+| FIX: Eliminated 10 crash points (URL force-unwraps, dict force-unwraps, array bounds) | Mar 16 | Claude Agent |
+| FEAT: LocalLLM conversation history fix (reuse MLXChatSession) | Mar 16 | Claude Agent |
+| FEAT: Context window management for LocalLLM (auto-reset at 75% capacity) | Mar 16 | Claude Agent |
+| FEAT: Large file performance guard (100K threshold, isLargeFile flag) | Mar 16 | Claude Agent |
+| BRAND: Renamed display name from "VS Code" to "CodePad" (trademark compliance) | Mar 16 | Claude Agent |
+| FIX: HuggingFace token moved from UserDefaults to Keychain | Mar 16 | Claude Agent |
+| FIX: Info.plist version aligned to 1.0 (matching MARKETING_VERSION) | Mar 16 | Claude Agent |
