@@ -302,7 +302,7 @@ struct SearchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: onAppear)
         .onDisappear(perform: onDisappear)
-        .onChange(of: processedResults) { _ in
+        .onChange(of: processedResults) { _, _ in
             navigationItems = buildNavigationItems()
         }
     }

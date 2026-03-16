@@ -2,7 +2,7 @@
 //  GitManager.swift
 //  VSCodeiPadOS
 //
-//  Minimal Git Manager - stub implementation
+//  Git Manager - hybrid local/SSH implementation
 //  TODO: Implement real git operations via SSH
 //
 
@@ -258,8 +258,14 @@ final class GitManager: ObservableObject {
                     }
                 }
                 if let remoteSHA, remoteSHA != headSHA {
-                    aheadCount = 1
-                    behindCount = 0
+                    // Walk the commit chain from HEAD to count ahead/behind accurately
+                    let (ahead, behind) = countAheadBehind(
+                        headSHA: headSHA,
+                        remoteSHA: remoteSHA,
+                        reader: reader
+                    )
+                    aheadCount = ahead
+                    behindCount = behind
                 } else {
                     aheadCount = 0
                     behindCount = 0
@@ -288,6 +294,60 @@ final class GitManager: ObservableObject {
         case .ignored: return .ignored
         }
     }
+    /// Walk commit chains from HEAD and remote to count ahead/behind commits.
+    /// Uses the NativeGitReader's parseCommit to follow parent links.
+    /// Falls back to approximate counts if the chain is too long to walk locally.
+    private func countAheadBehind(headSHA: String, remoteSHA: String, reader: NativeGitReader) -> (ahead: Int, behind: Int) {
+        var ahead: Int = 0
+        var behind: Int = 0
+        let maxWalk: Int = 200 // safety limit to avoid excessive work
+
+        // Walk from HEAD towards the remote tracking branch
+        var visited = Set<String>()
+        var queue = [headSHA]
+        var foundRemote = false
+        while !queue.isEmpty && ahead < maxWalk {
+            let sha = queue.removeFirst()
+            guard !visited.contains(sha) else { continue }
+            visited.insert(sha)
+            if sha == remoteSHA {
+                foundRemote = true
+                break
+            }
+            ahead += 1
+            if let commit = reader.parseCommit(sha: sha), let parent = commit.parentSHA {
+                queue.append(parent)
+            }
+        }
+        if !foundRemote {
+            // Could not reach remote from HEAD — we are definitely ahead, but count is approximate
+            ahead = max(ahead, 1)
+        }
+
+        // Walk from remote towards HEAD
+        visited.removeAll()
+        queue = [remoteSHA]
+        var foundHead = false
+        while !queue.isEmpty && behind < maxWalk {
+            let sha = queue.removeFirst()
+            guard !visited.contains(sha) else { continue }
+            visited.insert(sha)
+            if sha == headSHA {
+                foundHead = true
+                break
+            }
+            behind += 1
+            if let commit = reader.parseCommit(sha: sha), let parent = commit.parentSHA {
+                queue.append(parent)
+            }
+        }
+        if !foundHead {
+            behind = max(behind, 1)
+        }
+
+        return (ahead, behind)
+    }
+
     
     /// Build a real diff for a working-copy file against HEAD (offline, using NativeGitReader).
     func diffWorkingCopyToHEAD(path: String, kind: GitChangeKind) async -> DiffFile? {
@@ -360,6 +420,23 @@ final class GitManager: ObservableObject {
         // Update HEAD to point to the branch
         let headPath = repoURL.appendingPathComponent(".git/HEAD")
         try "ref: refs/heads/\(branch)\n".write(to: headPath, atomically: true, encoding: .utf8)
+        
+        // Update the working tree via SSH if connected
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd \(dir) && git checkout \(branch)", timeout: 60)
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(
+                    args: "checkout \(branch)",
+                    exitCode: result.exitCode,
+                    message: result.stderr
+                )
+            }
+        } else {
+            // No SSH — HEAD is updated but working tree is not.
+            // Post a warning so the user knows a full checkout requires SSH.
+            print("[GitManager] checkout: SSH not connected — HEAD updated but working tree may be stale. Connect SSH for full checkout.")
+        }
         
         currentBranch = branch
         await refresh()
@@ -530,8 +607,21 @@ final class GitManager: ObservableObject {
     }
     
     func fetch() async throws {
-        // NOTE: A real fetch requires network (git fetch via SSH or GitHub API).
-        // For now, just refresh local state without merging.
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd \(dir) && git fetch", timeout: 60)
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(
+                    args: "fetch",
+                    exitCode: result.exitCode,
+                    message: result.stderr
+                )
+            }
+            await refresh()
+            return
+        }
+        // No SSH connection — refresh local state only and warn
+        print("[GitManager] fetch: SSH not connected — refreshing local state only. Connect SSH for remote fetch.")
         await refresh()
     }
     

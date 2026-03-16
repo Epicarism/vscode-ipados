@@ -12,6 +12,7 @@ struct SidebarView: View {
     var theme: Theme = ThemeManager.shared.currentTheme
     @State private var showCommitAlert: Bool = false
     @State private var commitMessage: String = ""
+    @State private var commitErrorMessage: String = ""
     
     var body: some View {
         HStack(spacing: 0) {
@@ -63,11 +64,25 @@ struct SidebarView: View {
             TextField("Commit message", text: $commitMessage)
             Button("Commit", role: nil) {
                 guard !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                Task { try? await GitManager.shared.commit(message: commitMessage) }
+                Task {
+                    do {
+                        try await GitManager.shared.commit(message: commitMessage)
+                    } catch {
+                        commitErrorMessage = error.localizedDescription
+                    }
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Enter a message for this commit.")
+        }
+        .alert("Commit Error", isPresented: .init(
+            get: { !commitErrorMessage.isEmpty },
+            set: { if !$0 { commitErrorMessage = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(commitErrorMessage)
         }
     }
 
@@ -256,7 +271,7 @@ struct IDEActivityBar: View {
             // Bottom Group
             Group {
                 Menu {
-                    Button(action: { /* Sign in with GitHub - placeholder */ }) {
+                    Button(action: { /* TODO: Implement GitHub OAuth sign-in (future feature) */ }) {
                         Label("Sign in with GitHub...", systemImage: "person.crop.circle.badge.questionmark")
                     }
                     Button(action: { /* Manage Trusted Extensions - placeholder */ }) {

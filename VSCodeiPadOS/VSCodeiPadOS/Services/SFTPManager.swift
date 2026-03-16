@@ -89,10 +89,38 @@ class SFTPManager: @unchecked Sendable {
     private(set) var isConnected = false
     private(set) var currentDirectory = "~"
     
+    /// Shell-escape a string for safe use in SSH commands.
+    /// Wraps the string in single quotes and escapes any embedded single quotes.
+    private func shellEscape(_ string: String) -> String {
+        return "'\(string.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+    
+    // MARK: - Initializers
+    
+    /// Create SFTPManager with an existing SSHManager (assumed already connected)
+    init(sshManager: SSHManager) {
+        self.sshManager = sshManager
+        self.isConnected = true
+    }
+    
+    /// Create SFTPManager (call connect() to establish a connection)
+    init() {
+        self.sshManager = nil
+        self.isConnected = false
+    }
+    
     // MARK: - Connection
     
+    /// Connect using a provided SSHManager instance
+    func connect(sshManager: SSHManager, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
+        self.sshManager = sshManager
+        self.isConnected = true
+        completion(.success(()))
+    }
+    
+    /// Connect using SSHManager.shared
     func connect(config: SSHConnectionConfig, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
-        sshManager = SSHManager()
+        sshManager = SSHManager.shared
         sshManager?.connect(config: config) { [weak self] result in
             switch result {
             case .success:
@@ -113,13 +141,13 @@ class SFTPManager: @unchecked Sendable {
     // MARK: - Directory Operations
     
     /// List files in a remote directory using ls command
-    func listDirectory(_ path: String, completion: @Sendable @escaping (Result<[SFTPFileInfo], Error>) -> Void) {
+    func listDirectory(_ path: String, completion: @escaping @Sendable (Result<[SFTPFileInfo], Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        let command = "ls -la \(path)"
+        let command = "ls -la \(shellEscape(path))"
         
         Task { @Sendable in
             do {
@@ -168,28 +196,29 @@ class SFTPManager: @unchecked Sendable {
             let yearOrTime = fields[7]
             
             // If yearOrTime contains ":", it's a time; otherwise it's a year
+            let date: Date?
             if yearOrTime.contains(":") {
                 dateFormatter.dateFormat = "MMM dd HH:mm"
                 let currentYear = Calendar.current.component(.year, from: Date())
                 let dateString = "\(month) \(day) \(yearOrTime)"
-                var date = dateFormatter.date(from: dateString)
-                if let d = date {
+                if let d = dateFormatter.date(from: dateString) {
                     let adjusted = Calendar.current.date(bySetting: .year, value: currentYear, of: d)
                     if let adjusted = adjusted, adjusted > Date() {
                         date = Calendar.current.date(byAdding: .year, value: -1, to: adjusted)
                     } else {
-                        date = adjusted
+                        date = adjusted ?? d
                     }
+                } else {
+                    date = nil
                 }
-                let fullPath = basePath.hasSuffix("/") ? "\(basePath)\(name)" : "\(basePath)/\(name)"
-                files.append(SFTPFileInfo(name: name, path: fullPath, isDirectory: isDirectory, size: size, modificationDate: date, permissions: permissions))
             } else {
                 dateFormatter.dateFormat = "MMM dd yyyy"
                 let dateString = "\(month) \(day) \(yearOrTime)"
-                let date = dateFormatter.date(from: dateString)
-                let fullPath = basePath.hasSuffix("/") ? "\(basePath)\(name)" : "\(basePath)/\(name)"
-                files.append(SFTPFileInfo(name: name, path: fullPath, isDirectory: isDirectory, size: size, modificationDate: date, permissions: permissions))
+                date = dateFormatter.date(from: dateString)
             }
+            
+            let fullPath = basePath.hasSuffix("/") ? "\(basePath)\(name)" : "\(basePath)/\(name)"
+            files.append(SFTPFileInfo(name: name, path: fullPath, isDirectory: isDirectory, size: size, modificationDate: date, permissions: permissions))
         }
         
         return files
@@ -197,31 +226,52 @@ class SFTPManager: @unchecked Sendable {
     
     // MARK: - File Transfer
     
-    /// Download a file from remote server
-    /// Uses SCP protocol through SSH
-    func downloadFile(remotePath: String, localURL: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Download a file from remote server using base64 encoding over SSH.
+    /// Note: Uses base64 to safely transfer binary data through the SSH text channel.
+    func downloadFile(remotePath: String, localURL: URL, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
         let fileName = (remotePath as NSString).lastPathComponent
+        let totalSize = UInt64(0) // Unknown until transfer starts
         delegate?.sftpManager(self, didStartTransfer: fileName, isUpload: false)
+        delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(
+            fileName: fileName, bytesTransferred: 0, totalBytes: totalSize, isUpload: false
+        ))
         
-        // For full SCP/SFTP implementation, we would need to:
-        // 1. Create an exec channel with "scp -f remotePath"
-        // 2. Handle the SCP protocol handshake
-        // 3. Receive file data and write to local URL
-        // 4. Report progress
-        
-        // This requires more complex channel handling than simple shell commands
-        // For production, consider using a library with built-in SFTP support
-        
-        completion(.failure(SFTPError.transferFailed("Full SFTP not yet implemented. Use shell commands like: cat remotePath > localPath")))
+        Task { @Sendable in
+            do {
+                // Use base64 encoding to safely transfer binary files
+                guard let result = try await sshManager?.executeCommand("base64 \(shellEscape(remotePath))") else {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                
+                guard let data = Data(base64Encoded: result.stdout, options: .ignoreUnknownCharacters) else {
+                    completion(.failure(SFTPError.transferFailed("Failed to decode base64 data from remote file")))
+                    return
+                }
+                
+                do {
+                    try data.write(to: localURL)
+                    delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(
+                        fileName: fileName, bytesTransferred: UInt64(data.count), totalBytes: UInt64(data.count), isUpload: false
+                    ))
+                    delegate?.sftpManager(self, didCompleteTransfer: fileName, isUpload: false)
+                    completion(.success(()))
+                } catch {
+                    completion(.failure(SFTPError.transferFailed("Failed to write local file: \(error.localizedDescription)")))
+                }
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Download failed: \(error.localizedDescription)")))
+            }
+        }
     }
     
-    /// Upload a file to remote server
-    func uploadFile(localURL: URL, remotePath: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Upload a file to remote server using base64 encoding over SSH
+    func uploadFile(localURL: URL, remotePath: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
@@ -229,75 +279,161 @@ class SFTPManager: @unchecked Sendable {
         
         let fileName = localURL.lastPathComponent
         delegate?.sftpManager(self, didStartTransfer: fileName, isUpload: true)
+        delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(
+            fileName: fileName, bytesTransferred: 0, totalBytes: 0, isUpload: true
+        ))
         
-        // Similar to download - full SCP upload requires:
-        // 1. Create exec channel with "scp -t remotePath"
-        // 2. Handle SCP protocol
-        // 3. Send file data
-        // 4. Report progress
-        
-        completion(.failure(SFTPError.transferFailed("Full SFTP not yet implemented. Use shell commands for file transfer.")))
+        Task { @Sendable in
+            do {
+                let fileData = try Data(contentsOf: localURL)
+                
+                guard fileData.count < 100 * 1024 else {
+                    completion(.failure(SFTPError.transferFailed("File too large for base64 upload (max 100KB). Size: \(fileData.count) bytes")))
+                    return
+                }
+                
+                let base64String = fileData.base64EncodedString()
+                delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(
+                    fileName: fileName, bytesTransferred: 0, totalBytes: UInt64(fileData.count), isUpload: true
+                ))
+                
+                // Ensure parent directory exists
+                let parentDir = (remotePath as NSString).deletingLastPathComponent
+                _ = try? await sshManager?.executeCommand("mkdir -p \(shellEscape(parentDir))")
+                
+                // Write base64 data using printf to avoid echo issues with special characters
+                let escapedPath = shellEscape(remotePath)
+                let command = "printf '%s' \(shellEscape(base64String)) | base64 -d > \(escapedPath)"
+                let cmdResult = try await sshManager?.executeCommand(command)
+                if cmdResult == nil {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                
+                delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(
+                    fileName: fileName, bytesTransferred: UInt64(fileData.count), totalBytes: UInt64(fileData.count), isUpload: true
+                ))
+                delegate?.sftpManager(self, didCompleteTransfer: fileName, isUpload: true)
+                completion(.success(()))
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Upload failed: \(error.localizedDescription)")))
+            }
+        }
     }
     
     // MARK: - Quick File Operations via Shell
     
     /// Read a small text file using cat command
-    func readTextFile(remotePath: String, completion: @escaping (Result<String, Error>) -> Void) {
+    func readTextFile(remotePath: String, completion: @escaping @Sendable (Result<String, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        // This would send "cat remotePath" and capture output
-        // Simplified - full implementation needs exec channel output capture
-        sshManager?.send(command: "cat \(remotePath)")
-        
-        // Output will come through delegate - this is async
-        // Real implementation would collect output until command completes
+        Task { @Sendable in
+            do {
+                guard let result = try await sshManager?.executeCommand("cat \(shellEscape(remotePath))") else {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                completion(.success(result.stdout))
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Failed to read file: \(error.localizedDescription)")))
+            }
+        }
     }
     
-    /// Write a small text file using echo/cat
-    func writeTextFile(remotePath: String, content: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Write a small text file using base64 encoding
+    func writeTextFile(remotePath: String, content: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        // Escape content for shell
-        let escaped = content.replacingOccurrences(of: "'", with: "'\"'\"'")
-        let command = "echo '\(escaped)' > \(remotePath)"
-        sshManager?.send(command: command)
+        Task { @Sendable in
+            do {
+                guard let data = content.data(using: .utf8) else {
+                    completion(.failure(SFTPError.transferFailed("Failed to encode content")))
+                    return
+                }
+                let base64String = data.base64EncodedString()
+                let escapedPath = shellEscape(remotePath)
+                let command = "printf '%s' \(shellEscape(base64String)) | base64 -d > \(escapedPath)"
+                let cmdResult = try await sshManager?.executeCommand(command)
+                if cmdResult == nil {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                completion(.success(()))
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Failed to write file: \(error.localizedDescription)")))
+            }
+        }
     }
     
     /// Create a directory
-    func createDirectory(remotePath: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    func createDirectory(remotePath: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        sshManager?.send(command: "mkdir -p \(remotePath)")
+        Task { @Sendable in
+            do {
+                let cmdResult = try await sshManager?.executeCommand("mkdir -p \(shellEscape(remotePath))")
+                if cmdResult == nil {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                completion(.success(()))
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Failed to create directory: \(error.localizedDescription)")))
+            }
+        }
     }
     
     /// Delete a file or directory
-    func delete(remotePath: String, recursive: Bool = false, completion: @escaping (Result<Void, Error>) -> Void) {
+    func delete(remotePath: String, recursive: Bool = false, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        let command = recursive ? "rm -rf \(remotePath)" : "rm \(remotePath)"
-        sshManager?.send(command: command)
+        let flag = recursive ? "-rf" : "-f"
+        
+        Task { @Sendable in
+            do {
+                let cmdResult = try await sshManager?.executeCommand("rm \(flag) \(shellEscape(remotePath))")
+                if cmdResult == nil {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                completion(.success(()))
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Failed to delete: \(error.localizedDescription)")))
+            }
+        }
     }
     
     /// Rename/move a file
-    func rename(from oldPath: String, to newPath: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    func rename(from oldPath: String, to newPath: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        sshManager?.send(command: "mv \(oldPath) \(newPath)")
+        Task { @Sendable in
+            do {
+                let cmdResult = try await sshManager?.executeCommand("mv \(shellEscape(oldPath)) \(shellEscape(newPath))")
+                if cmdResult == nil {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                completion(.success(()))
+            } catch {
+                completion(.failure(SFTPError.transferFailed("Failed to rename: \(error.localizedDescription)")))
+            }
+        }
     }
     
     deinit {
@@ -362,6 +498,21 @@ class SFTPManager: @unchecked Sendable {
     }
     
     func goUp() {
+        // NSString.deletingLastPathComponent doesn't handle "~" correctly,
+        // so we handle tilde paths explicitly
+        if currentPath == "~" || currentPath.hasPrefix("~/") {
+            if currentPath == "~" {
+                currentPath = "/"
+            } else {
+                // Remove last component after ~/
+                let relativePath = String(currentPath.dropFirst(2)) // drop "~/"
+                let parent = (relativePath as NSString).deletingLastPathComponent
+                currentPath = parent.isEmpty ? "~" : "~/\(parent)"
+            }
+            listCurrentDirectory()
+            return
+        }
+        
         let parent = (currentPath as NSString).deletingLastPathComponent
         navigateToDirectory(parent.isEmpty ? "/" : parent)
     }

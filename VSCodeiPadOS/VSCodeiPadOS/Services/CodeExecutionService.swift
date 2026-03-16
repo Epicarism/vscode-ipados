@@ -26,20 +26,193 @@ final class CodeExecutionService {
     ///   - fileName: Name of the file to execute
     ///   - content: Content/code of the file
     func executeCurrentFile(fileName: String, content: String) {
-        let fileExtension = (fileName as NSString).pathExtension.lowercased()
+        let fileExtension = URL(fileURLWithPath: fileName).pathExtension.lowercased()
         
         switch fileExtension {
         case "js", "mjs":
             executeJavaScript(fileName: fileName, code: content)
         case "ts", "tsx":
-            outputManager.append("[ERROR] TypeScript execution requires transpilation. Coming soon!", to: OutputChannel.javascript, streamType: StreamType.stderr)
-            outputManager.selectedChannel = OutputChannel.javascript
+            executeTypeScript(fileName: fileName, code: content)
         case "py":
-            outputManager.append("[ERROR] Python execution not yet available on-device.", to: OutputChannel.python, streamType: StreamType.stderr)
-            outputManager.selectedChannel = OutputChannel.python
+            executePython(fileName: fileName, code: content)
+        case "sh":
+            executeShellScript(fileName: fileName, code: content)
         default:
             outputManager.append("[ERROR] No runner available for .\(fileExtension) files", to: OutputChannel.output, streamType: StreamType.stderr)
             outputManager.selectedChannel = OutputChannel.output
+        }
+    }
+    
+    // MARK: - TypeScript Execution
+    
+    private func executeTypeScript(fileName: String, code: String) {
+        let strippedCode = stripTypeAnnotations(code)
+        executeJavaScript(fileName: fileName, code: strippedCode)
+    }
+    
+    /// Strips TypeScript-specific syntax to produce valid JavaScript.
+    /// Handles: type annotations, interface/type declarations, generics, and 'as' casts.
+    ///
+    /// This is a best-effort transform that covers common TypeScript patterns.
+    /// It will not handle every edge case but works for typical code.
+    private func stripTypeAnnotations(_ code: String) -> String {
+        var result = code
+        
+        // 1. Remove entire interface declarations (multi-line)
+        result = result.replacingOccurrences(
+            of: #"interface\s+\w+(\s*extends\s+\w+(\s*,\s*\w+)*)?\s*\{[^}]*\}"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 2. Remove entire type alias declarations
+        result = result.replacingOccurrences(
+            of: #"type\s+\w+(\s*<[^>]*>)?\s*=\s*[^;]+;"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 3. Remove 'as Type' and 'as unknown as Type' casts
+        result = result.replacingOccurrences(
+            of: #"\bas\s+(?:unknown\s+as\s+)?\w+(?:<[^>]*>)?(?=\s*[)\];,\n+\-])"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 4. Remove angle bracket generics (e.g., Array<string> -> Array, Map<string, number> -> Map)
+        result = result.replacingOccurrences(
+            of: #"<[^>]+>"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 5. Remove type annotations after colons in parameters and variables
+        //    Match colon followed by a type expression up to the next delimiter
+        result = result.replacingOccurrences(
+            of: #":\s*(?:\{[^}]*\}|\([^)]*\)|[\w\[\]|&\.,\s]+?)(?=\s*[),=;{>\n])"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 6. Remove return type annotations (e.g., function foo(): string { -> function foo() {)
+        result = result.replacingOccurrences(
+            of: #"\)\s*:\s*[^{]+\{"#,
+            with: ") {",
+            options: .regularExpression
+        )
+        
+        // 7. Remove 'export' and 'export default' keywords
+        result = result.replacingOccurrences(
+            of: #"\bexport\s+(?:default\s+)?"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 8. Remove 'declare' keyword
+        result = result.replacingOccurrences(
+            of: #"\bdeclare\s+"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 9. Remove 'readonly' modifier
+        result = result.replacingOccurrences(
+            of: #"\breadonly\s+"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 10. Remove 'enum' declarations (replace with const object pattern later if needed)
+        result = result.replacingOccurrences(
+            of: #"enum\s+\w+\s*\{[^}]*\}"#,
+            with: "",
+            options: .regularExpression
+        )
+        
+        return result
+    }
+    
+    // MARK: - Python Execution
+    
+    private func executePython(fileName: String, code: String) {
+        outputManager.selectedChannel = OutputChannel.python
+        outputManager.clear(OutputChannel.python)
+        outputManager.append("▶ Running: \(fileName)", to: OutputChannel.python)
+        outputManager.append("─────────────────────────────────────", to: OutputChannel.python)
+        
+        let ssh = SSHManager.shared
+        if ssh.isConnected {
+            Task { @MainActor in
+                let startTime = Date()
+                do {
+                    // Escape single quotes in the code for safe shell execution
+                    let escapedCode = code.replacingOccurrences(of: "'", with: "'\\''")
+                    let command = "python3 -c '\(escapedCode)'"
+                    let result = try await ssh.executeCommand(command, timeout: 30)
+                    let duration = Date().timeIntervalSince(startTime)
+                    
+                    if !result.stdout.isEmpty {
+                        outputManager.append(result.stdout, to: OutputChannel.python)
+                    }
+                    if !result.stderr.isEmpty {
+                        outputManager.append(result.stderr, to: OutputChannel.python, streamType: StreamType.stderr)
+                    }
+                    
+                    outputManager.append("─────────────────────────────────────", to: OutputChannel.python)
+                    let statusIcon = result.isSuccess ? "✓" : "✗"
+                    outputManager.append("\(statusIcon) Completed in \(String(format: "%.2f", duration * 1000))ms (exit code: \(result.exitCode))", to: OutputChannel.python)
+                    
+                } catch {
+                    outputManager.append("─────────────────────────────────────", to: OutputChannel.python)
+                    outputManager.append("✗ SSH Error: \(error.localizedDescription)", to: OutputChannel.python, streamType: StreamType.stderr)
+                }
+            }
+        } else {
+            outputManager.append("[INFO] Python execution requires a remote server connection.", to: OutputChannel.python, streamType: StreamType.stderr)
+            outputManager.append("[INFO] Connect to a remote server via SSH to enable Python support.", to: OutputChannel.python, streamType: StreamType.stderr)
+            outputManager.append("[INFO] Open the Remote Explorer panel to configure an SSH connection.", to: OutputChannel.python, streamType: StreamType.stderr)
+        }
+    }
+    
+    // MARK: - Shell Script Execution
+    
+    private func executeShellScript(fileName: String, code: String) {
+        outputManager.selectedChannel = OutputChannel.output
+        outputManager.clear(OutputChannel.output)
+        outputManager.append("▶ Running: \(fileName)", to: OutputChannel.output)
+        outputManager.append("─────────────────────────────────────", to: OutputChannel.output)
+        
+        let ssh = SSHManager.shared
+        if ssh.isConnected {
+            Task { @MainActor in
+                let startTime = Date()
+                do {
+                    // Escape single quotes in the code for safe shell execution
+                    let escapedCode = code.replacingOccurrences(of: "'", with: "'\\''")
+                    let command = "bash -c '\(escapedCode)'"
+                    let result = try await ssh.executeCommand(command, timeout: 30)
+                    let duration = Date().timeIntervalSince(startTime)
+                    
+                    if !result.stdout.isEmpty {
+                        outputManager.append(result.stdout, to: OutputChannel.output)
+                    }
+                    if !result.stderr.isEmpty {
+                        outputManager.append(result.stderr, to: OutputChannel.output, streamType: StreamType.stderr)
+                    }
+                    
+                    outputManager.append("─────────────────────────────────────", to: OutputChannel.output)
+                    let statusIcon = result.isSuccess ? "✓" : "✗"
+                    outputManager.append("\(statusIcon) Completed in \(String(format: "%.2f", duration * 1000))ms (exit code: \(result.exitCode))", to: OutputChannel.output)
+                    
+                } catch {
+                    outputManager.append("─────────────────────────────────────", to: OutputChannel.output)
+                    outputManager.append("✗ SSH Error: \(error.localizedDescription)", to: OutputChannel.output, streamType: StreamType.stderr)
+                }
+            }
+        } else {
+            outputManager.append("[INFO] Shell script execution requires a remote server connection.", to: OutputChannel.output, streamType: StreamType.stderr)
+            outputManager.append("[INFO] Connect to a remote server via SSH to enable shell script support.", to: OutputChannel.output, streamType: StreamType.stderr)
+            outputManager.append("[INFO] Open the Remote Explorer panel to configure an SSH connection.", to: OutputChannel.output, streamType: StreamType.stderr)
         }
     }
     
@@ -87,20 +260,17 @@ final class CodeExecutionService {
                 let result = try await runner?.execute(code: code)
                 let duration = Date().timeIntervalSince(startTime)
                 
+                // Show completion separator
+                outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
+                
                 // Show result if it's not undefined
                 if let result = result, !result.isUndefined {
                     let resultString = formatJSValue(result)
-                    outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
                     outputManager.append("⮐ Result: \(resultString)", to: OutputChannel.javascript)
                 }
                 
                 // Show completion message
-                outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
                 outputManager.append("✓ Completed in \(String(format: "%.2f", duration * 1000))ms", to: OutputChannel.javascript)
-                
-            } catch let error as JSRunnerError {
-                outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
-                outputManager.append("✗ Error: \(error.localizedDescription)", to: OutputChannel.javascript, streamType: StreamType.stderr)
                 
             } catch {
                 outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
@@ -125,8 +295,8 @@ final class CodeExecutionService {
         } else if value.isNumber {
             let num = value.toNumber()
             // Check if it's an integer
-            if let n = num, n.doubleValue == Double(n.intValue) {
-                return "\(n.intValue)"
+            if let n = num, n.doubleValue.truncatingRemainder(dividingBy: 1) == 0, !n.doubleValue.isInfinite, !n.doubleValue.isNaN {
+                return String(format: "%.0f", n.doubleValue)
             }
             return "\(num?.doubleValue ?? 0)"
         } else if value.isString {

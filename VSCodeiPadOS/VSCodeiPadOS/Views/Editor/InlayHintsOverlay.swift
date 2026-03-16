@@ -66,8 +66,8 @@ struct InlayHintsOverlay: View {
         }
         .allowsHitTesting(false)
         .onAppear { recompute() }
-        .onChange(of: code) { _ in recompute() }
-        .onChange(of: language) { _ in recompute() }
+        .onChange(of: code) { _, _ in recompute() }
+        .onChange(of: language) { _, _ in recompute() }
     }
 
     private func recompute() {

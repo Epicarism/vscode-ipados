@@ -292,7 +292,7 @@ struct SingleTerminalView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
                 }
-                .onChange(of: terminal.output.count) { _ in
+                .onChange(of: terminal.output.count) { _, _ in
                     withAnimation(.easeOut(duration: 0.1)) {
                         proxy.scrollTo(terminal.output.last?.id, anchor: .bottom)
                     }
@@ -584,6 +584,7 @@ extension TerminalTab: Equatable {}
     private var currentConfig: SSHConnectionConfig?
     private var commandHistory: [String] = []
     private var historyIndex = 0
+    private var currentDirectory: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     
     func clear() {
         output = []
@@ -705,6 +706,20 @@ extension TerminalTab: Equatable {}
               whoami            - Show current user
               history           - Show command history
               ssh               - Show SSH connection info
+              ls [path]         - List files
+              cd <path>         - Change directory
+              pwd               - Print working directory
+              cat <file>        - Display file contents
+              mkdir <name>      - Create directory
+              touch <name>      - Create empty file
+              rm <name>         - Remove file
+              cp <src> <dst>    - Copy file
+              mv <src> <dst>    - Move/rename file
+              head <file>       - Show first 10 lines
+              tail <file>       - Show last 10 lines
+              wc <file>         - Word/line count
+              find <pattern>    - Find files matching pattern
+              env               - Show environment info
             
             Connect via SSH using the network button in toolbar.
             Real SSH protocol powered by SwiftNIO SSH.
@@ -718,10 +733,12 @@ extension TerminalTab: Equatable {}
             appendOutput(text, type: .output)
             
         case "date":
-            appendOutput(Date().description, type: .output)
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE MMM dd HH:mm:ss zzz yyyy"
+            appendOutput(formatter.string(from: Date()), type: .output)
             
         case "whoami":
-            appendOutput("ipad-user", type: .output)
+            appendOutput(ProcessInfo.processInfo.hostName.components(separatedBy: ".").first ?? "ipad-user", type: .output)
             
         case "history":
             for (index, cmd) in commandHistory.enumerated() {
@@ -735,8 +752,230 @@ extension TerminalTab: Equatable {}
             Features: Password auth, Key auth, PTY support, Shell sessions
             """, type: .output)
             
+        case "pwd":
+            appendOutput(currentDirectory.path, type: .output)
+            
+        case "ls":
+            let targetPath: URL
+            if parts.count > 1 {
+                let arg = String(parts[1])
+                if arg.hasPrefix("/") {
+                    targetPath = URL(fileURLWithPath: arg)
+                } else if arg == ".." {
+                    targetPath = currentDirectory.deletingLastPathComponent()
+                } else if arg == "~" {
+                    targetPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                } else {
+                    targetPath = currentDirectory.appendingPathComponent(arg)
+                }
+            } else {
+                targetPath = currentDirectory
+            }
+            do {
+                let items = try FileManager.default.contentsOfDirectory(at: targetPath, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey], options: [.skipsHiddenFiles])
+                if items.isEmpty {
+                    appendOutput("(empty directory)", type: .output)
+                } else {
+                    for item in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                        let isDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                        let size = (try? item.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                        let name = item.lastPathComponent + (isDir ? "/" : "")
+                        let sizeStr = isDir ? "-" : ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+                        appendOutput("  \(sizeStr.padding(toLength: 10, withPad: " ", startingAt: 0)) \(name)", type: .output)
+                    }
+                }
+            } catch {
+                appendOutput("ls: \(error.localizedDescription)", type: .error)
+            }
+            
+        case "cd":
+            guard parts.count > 1 else {
+                currentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                appendOutput(currentDirectory.path, type: .output)
+                return
+            }
+            let arg = String(parts[1])
+            let targetPath: URL
+            if arg == ".." {
+                targetPath = currentDirectory.deletingLastPathComponent()
+            } else if arg == "~" {
+                targetPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            } else if arg.hasPrefix("/") {
+                targetPath = URL(fileURLWithPath: arg)
+            } else {
+                targetPath = currentDirectory.appendingPathComponent(arg)
+            }
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: targetPath.path, isDirectory: &isDir), isDir.boolValue {
+                currentDirectory = targetPath
+                promptString = "\(targetPath.lastPathComponent) $ "
+            } else {
+                appendOutput("cd: no such directory: \(arg)", type: .error)
+            }
+            
+        case "cat":
+            guard parts.count > 1 else {
+                appendOutput("cat: missing file operand", type: .error)
+                return
+            }
+            let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
+            do {
+                let content = try String(contentsOf: filePath, encoding: .utf8)
+                appendOutput(content, type: .output)
+            } catch {
+                appendOutput("cat: \(String(parts[1])): \(error.localizedDescription)", type: .error)
+            }
+            
+        case "head":
+            guard parts.count > 1 else {
+                appendOutput("head: missing file operand", type: .error)
+                return
+            }
+            let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
+            do {
+                let content = try String(contentsOf: filePath, encoding: .utf8)
+                let lines = content.components(separatedBy: .newlines).prefix(10)
+                appendOutput(lines.joined(separator: "\n"), type: .output)
+            } catch {
+                appendOutput("head: \(String(parts[1])): \(error.localizedDescription)", type: .error)
+            }
+            
+        case "tail":
+            guard parts.count > 1 else {
+                appendOutput("tail: missing file operand", type: .error)
+                return
+            }
+            let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
+            do {
+                let content = try String(contentsOf: filePath, encoding: .utf8)
+                let lines = content.components(separatedBy: .newlines).suffix(10)
+                appendOutput(lines.joined(separator: "\n"), type: .output)
+            } catch {
+                appendOutput("tail: \(String(parts[1])): \(error.localizedDescription)", type: .error)
+            }
+            
+        case "mkdir":
+            guard parts.count > 1 else {
+                appendOutput("mkdir: missing operand", type: .error)
+                return
+            }
+            let dirPath = currentDirectory.appendingPathComponent(String(parts[1]))
+            do {
+                try FileManager.default.createDirectory(at: dirPath, withIntermediateDirectories: true)
+                appendOutput("Created directory: \(String(parts[1]))", type: .output)
+            } catch {
+                appendOutput("mkdir: \(error.localizedDescription)", type: .error)
+            }
+            
+        case "touch":
+            guard parts.count > 1 else {
+                appendOutput("touch: missing operand", type: .error)
+                return
+            }
+            let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
+            if !FileManager.default.fileExists(atPath: filePath.path) {
+                FileManager.default.createFile(atPath: filePath.path, contents: nil)
+                appendOutput("Created: \(String(parts[1]))", type: .output)
+            } else {
+                appendOutput("File already exists: \(String(parts[1]))", type: .output)
+            }
+            
+        case "rm":
+            guard parts.count > 1 else {
+                appendOutput("rm: missing operand", type: .error)
+                return
+            }
+            let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
+            do {
+                try FileManager.default.removeItem(at: filePath)
+                appendOutput("Removed: \(String(parts[1]))", type: .output)
+            } catch {
+                appendOutput("rm: \(error.localizedDescription)", type: .error)
+            }
+            
+        case "cp":
+            let allParts = command.split(separator: " ")
+            guard allParts.count >= 3 else {
+                appendOutput("cp: usage: cp <source> <destination>", type: .error)
+                return
+            }
+            let src = currentDirectory.appendingPathComponent(String(allParts[1]))
+            let dst = currentDirectory.appendingPathComponent(String(allParts[2]))
+            do {
+                try FileManager.default.copyItem(at: src, to: dst)
+                appendOutput("Copied \(allParts[1]) → \(allParts[2])", type: .output)
+            } catch {
+                appendOutput("cp: \(error.localizedDescription)", type: .error)
+            }
+            
+        case "mv":
+            let allParts = command.split(separator: " ")
+            guard allParts.count >= 3 else {
+                appendOutput("mv: usage: mv <source> <destination>", type: .error)
+                return
+            }
+            let src = currentDirectory.appendingPathComponent(String(allParts[1]))
+            let dst = currentDirectory.appendingPathComponent(String(allParts[2]))
+            do {
+                try FileManager.default.moveItem(at: src, to: dst)
+                appendOutput("Moved \(allParts[1]) → \(allParts[2])", type: .output)
+            } catch {
+                appendOutput("mv: \(error.localizedDescription)", type: .error)
+            }
+            
+        case "wc":
+            guard parts.count > 1 else {
+                appendOutput("wc: missing file operand", type: .error)
+                return
+            }
+            let filePath = currentDirectory.appendingPathComponent(String(parts[1]))
+            do {
+                let content = try String(contentsOf: filePath, encoding: .utf8)
+                let lineCount = content.components(separatedBy: .newlines).count
+                let wordCount = content.split(whereSeparator: { $0.isWhitespace }).count
+                let charCount = content.count
+                appendOutput("  \(lineCount) lines  \(wordCount) words  \(charCount) chars  \(String(parts[1]))", type: .output)
+            } catch {
+                appendOutput("wc: \(error.localizedDescription)", type: .error)
+            }
+            
+        case "find":
+            guard parts.count > 1 else {
+                appendOutput("find: missing pattern", type: .error)
+                return
+            }
+            let pattern = String(parts[1]).lowercased()
+            do {
+                let enumerator = FileManager.default.enumerator(at: currentDirectory, includingPropertiesForKeys: nil)
+                var found = 0
+                while let url = enumerator?.nextObject() as? URL {
+                    if url.lastPathComponent.lowercased().contains(pattern) {
+                        let relativePath = url.path.replacingOccurrences(of: currentDirectory.path + "/", with: "")
+                        appendOutput("  \(relativePath)", type: .output)
+                        found += 1
+                        if found >= 100 {
+                            appendOutput("  ... (limited to 100 results)", type: .output)
+                            break
+                        }
+                    }
+                }
+                if found == 0 {
+                    appendOutput("No files matching '\(pattern)'", type: .output)
+                }
+            }
+            
+        case "env":
+            appendOutput("""
+            PLATFORM: iPadOS \(UIDevice.current.systemVersion)
+            DEVICE: \(UIDevice.current.model)
+            APP: CodePad Terminal v2.0
+            PWD: \(currentDirectory.path)
+            HOME: \(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.path ?? "~")
+            SSH: \(isConnected ? "Connected" : "Not connected")
+            """, type: .output)
+            
         default:
-            appendOutput("\(cmd): command not found (local mode)", type: .error)
+            appendOutput("\(cmd): command not found (local mode). Type 'help' for available commands.", type: .error)
         }
     }
     

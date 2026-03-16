@@ -21,11 +21,23 @@ struct DebugConsoleEntryView: View {
                 
                 // Main content
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.text)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(color(for: entry.kind))
-                        .textSelection(.enabled)
-                        .lineLimit(isExpanded ? nil : 10)
+                    if entry.kind == .error {
+                        // Errors get a subtle background highlight
+                        Text(entry.text)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(color(for: entry.kind))
+                            .textSelection(.enabled)
+                            .lineLimit(isExpanded ? nil : 10)
+                            .padding(4)
+                            .background(theme.selection.opacity(0.15))
+                            .cornerRadius(3)
+                    } else {
+                        Text(entry.text)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(color(for: entry.kind))
+                            .textSelection(.enabled)
+                            .lineLimit(isExpanded ? nil : 10)
+                    }
                     
                     // Show expand button if text is long
                     if entry.text.count > 200 {
@@ -107,7 +119,24 @@ struct DebugConsoleView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        if debugManager.consoleEntries.isEmpty {
+                            HStack {
+                                Spacer()
+                                VStack(spacing: 6) {
+                                    Text("Debug Console")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(theme.comment)
+                                    Text("Type expressions to evaluate JavaScript, or type \"help\" for commands.")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(theme.comment.opacity(0.7))
+                                        .multilineTextAlignment(.center)
+                                }
+                                .padding(.vertical, 40)
+                                Spacer()
+                            }
+                        }
+
                         ForEach(debugManager.consoleEntries) { entry in
                             DebugConsoleEntryView(entry: entry)
                         }
@@ -116,7 +145,7 @@ struct DebugConsoleView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .background(theme.editorBackground)
-                .onChange(of: debugManager.consoleEntries.count) { _ in
+                .onChange(of: debugManager.consoleEntries.count) { _, _ in
                     if let last = debugManager.consoleEntries.last {
                         withAnimation(.easeOut(duration: 0.12)) {
                             proxy.scrollTo(last.id, anchor: .bottom)
@@ -188,7 +217,7 @@ struct DebugConsoleView: View {
 
     private var inputBar: some View {
         VStack(spacing: 0) {
-            // Quick evaluation buttons
+            // Quick evaluation buttons (visible when paused)
             if debugManager.state == .paused {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {

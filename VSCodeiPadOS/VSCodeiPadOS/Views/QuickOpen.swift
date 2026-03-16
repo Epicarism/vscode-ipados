@@ -278,7 +278,7 @@ struct QuickOpenView: View {
             isSearchFocused = true
             selectedIndex = 0
         }
-        .onChange(of: searchText) { _ in
+        .onChange(of: searchText) { _, _ in
             selectedIndex = 0
         }
     }

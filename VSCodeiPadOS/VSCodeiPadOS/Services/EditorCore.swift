@@ -74,6 +74,111 @@ struct PeekState: Equatable {
     let sourceLine: Int // The line where peek was triggered
 }
 
+// MARK: - Diagnostics Service
+
+@MainActor
+class DiagnosticsService: ObservableObject {
+    static let shared = DiagnosticsService()
+    
+    @Published var diagnostics: [DiagnosticItem] = []
+    
+    func analyzeFile(content: String, filename: String, filePath: String) {
+        var items: [DiagnosticItem] = []
+        let lines = content.components(separatedBy: "\n")
+        let ext = (filename as NSString).pathExtension.lowercased()
+        
+        for (index, line) in lines.enumerated() {
+            let lineNum = index + 1
+            
+            // Universal checks
+            if line.count > 120 {
+                items.append(DiagnosticItem(file: filename, line: lineNum, column: 121, message: "Line exceeds 120 characters (\(line.count))", severity: .info))
+            }
+            if line.hasSuffix(" ") || line.hasSuffix("\t") {
+                items.append(DiagnosticItem(file: filename, line: lineNum, column: line.count, message: "Trailing whitespace", severity: .info))
+            }
+            
+            // TODO/FIXME/HACK
+            if line.contains("TODO:") {
+                items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: String(line.trimmingCharacters(in: .whitespaces)), severity: .info))
+            }
+            if line.contains("FIXME:") {
+                items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: String(line.trimmingCharacters(in: .whitespaces)), severity: .warning))
+            }
+            if line.contains("HACK:") || line.contains("XXX:") {
+                items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: String(line.trimmingCharacters(in: .whitespaces)), severity: .warning))
+            }
+            
+            // Swift-specific
+            if ext == "swift" {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") {
+                    if line.contains("!") && !line.contains("!=") && !line.contains("\"!") {
+                        let pattern = try? NSRegularExpression(pattern: "\\w+!(?:\\.|\\s|$|\\))")
+                        if let pattern = pattern, pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+                            items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Force unwrap detected - consider using optional binding", severity: .warning))
+                        }
+                    }
+                    if trimmed.hasPrefix("print(") || trimmed.contains(" print(") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "print() statement - consider using a logger", severity: .info))
+                    }
+                    if line.contains("try!") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Force try detected - consider using do/catch", severity: .warning))
+                    }
+                }
+            }
+            
+            // JS/TS specific
+            if ["js", "jsx", "ts", "tsx", "mjs"].contains(ext) {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") {
+                    if trimmed.hasPrefix("var ") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Use 'let' or 'const' instead of 'var'", severity: .warning))
+                    }
+                    if trimmed.contains("console.log(") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "console.log() statement", severity: .info))
+                    }
+                    if line.contains("==") && !line.contains("===") && !line.contains("!=") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Use === instead of ==", severity: .warning))
+                    }
+                    if trimmed.contains("eval(") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "eval() is dangerous - avoid using it", severity: .error))
+                    }
+                }
+            }
+            
+            // Python specific
+            if ext == "py" {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if !trimmed.hasPrefix("#") {
+                    if trimmed.contains("import *") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Wildcard import - import specific names", severity: .warning))
+                    }
+                    if trimmed.hasPrefix("except:") && !trimmed.contains("except ") {
+                        items.append(DiagnosticItem(file: filename, line: lineNum, column: 1, message: "Bare except - catch specific exceptions", severity: .warning))
+                    }
+                }
+            }
+        }
+        
+        self.diagnostics = items
+        
+        // Post notification for ProblemsView — convert to [[String: Any]] format
+        // that DiagnosticItem(userInfo:) expects
+        let itemsDicts: [[String: Any]] = items.map { item in
+            [
+                "id": item.id,
+                "message": item.message,
+                "file": item.file,
+                "line": item.line,
+                "column": item.column,
+                "severity": item.severity.rawValue
+            ]
+        }
+        NotificationCenter.default.post(name: .diagnosticsUpdated, object: nil, userInfo: ["diagnostics": itemsDicts])
+    }
+}
+
 // MARK: - Editor Core (Central State Manager)
 @MainActor
 class EditorCore: ObservableObject {
@@ -996,6 +1101,13 @@ mod tests {
             }
 
             tabs[index].isUnsaved = false
+            
+            // Run diagnostics on the saved file
+            DiagnosticsService.shared.analyzeFile(
+                content: contentToSave,
+                filename: tabs[index].fileName,
+                filePath: url.path
+            )
         } catch {
             AppLogger.editor.error("Error saving file: \(error)")
         }

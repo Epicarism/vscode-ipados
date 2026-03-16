@@ -106,14 +106,14 @@ struct AIAssistantView: View {
                     }
                     .padding()
                 }
-                .onChange(of: aiManager.currentSession.messages.count) { _ in
+                .onChange(of: aiManager.currentSession.messages.count) { _, _ in
                     withAnimation {
                         if let lastId = aiManager.currentSession.messages.last?.id {
                             proxy.scrollTo(lastId, anchor: .bottom)
                         }
                     }
                 }
-                .onChange(of: aiManager.streamingResponse) { _ in
+                .onChange(of: aiManager.streamingResponse) { _, _ in
                     // Auto-scroll as streaming tokens arrive
                     if aiManager.isLoading {
                         withAnimation(.easeOut(duration: 0.15)) {

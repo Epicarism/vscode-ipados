@@ -9,21 +9,7 @@ struct DebugVariable: Identifiable {
     var children: [DebugVariable]?
 }
 
-struct DebugCallFrame: Identifiable {
-    let id = UUID()
-    let functionName: String
-    let fileName: String
-    let lineNumber: Int
-    let isActive: Bool
-}
 
-struct DebugBreakpointItem: Identifiable {
-    let id = UUID()
-    var fileName: String
-    var lineNumber: Int
-    var isEnabled: Bool
-    var condition: String?
-}
 
 // MARK: - Debug View
 
@@ -43,10 +29,6 @@ struct DebugView: View {
     @State private var isWatchExpanded: Bool = true
     @State private var isCallStackExpanded: Bool = true
     @State private var isBreakpointsExpanded: Bool = true
-    
-    // Breakpoints state
-    @State private var breakpoints: [DebugBreakpointItem] = []
-    @State private var allBreakpointsEnabled: Bool = true
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -128,7 +110,7 @@ struct DebugView: View {
                     .background(Color.green.opacity(0.1))
                     .cornerRadius(4)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.plain)
             .accessibilityLabel("Start debugging")
             .accessibilityHint("Double tap to start or continue debugging")
             
@@ -137,7 +119,7 @@ struct DebugView: View {
                     Label("Clear All Breakpoints", systemImage: "xmark.circle")
                 }
                 Button(action: { debugManager.toggleAllBreakpoints() }) {
-                    Label(allBreakpointsEnabled ? "Disable All Breakpoints" : "Enable All Breakpoints", systemImage: allBreakpointsEnabled ? "circle.slash" : "circle")
+                    Label(debugManager.allBreakpointsEnabled ? "Disable All Breakpoints" : "Enable All Breakpoints", systemImage: debugManager.allBreakpointsEnabled ? "circle.slash" : "circle")
                 }
                 Divider()
                 Button(action: { debugManager.play() }) {
@@ -148,7 +130,7 @@ struct DebugView: View {
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.plain)
             .padding(.leading, 8)
             .accessibilityLabel("More debug options")
             .accessibilityHint("Double tap to open additional debug settings")
@@ -191,7 +173,7 @@ struct DebugView: View {
             
             // Step Into
             DebugToolbarButton(
-                icon: "arrow.down",
+                icon: "arrow.down.right",
                 color: theme.editorForeground,
                 label: "Step Into",
                 theme: theme
@@ -202,7 +184,7 @@ struct DebugView: View {
             
             // Step Out
             DebugToolbarButton(
-                icon: "arrow.up",
+                icon: "arrow.up.left",
                 color: theme.editorForeground,
                 label: "Step Out",
                 theme: theme
@@ -302,6 +284,13 @@ struct DebugView: View {
                     .padding(.leading, 12)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Watch: \(watch.expression), value: \(watch.value)")
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            debugManager.removeWatchExpression(id: watch.id)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
                 
                 if isAddingWatch {
@@ -352,7 +341,7 @@ struct DebugView: View {
                         .font(.caption)
                         .foregroundColor(theme.comment)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(.plain)
                 .opacity(isWatchExpanded ? 1 : 0)
                 .accessibilityLabel("Add watch expression")
                 .accessibilityHint("Double tap to add a new watch expression")
@@ -401,11 +390,20 @@ struct DebugView: View {
         DisclosureGroup(isExpanded: $isBreakpointsExpanded) {
             VStack(alignment: .leading, spacing: 0) {
                 if debugManager.breakpoints.isEmpty {
-                    Text("No breakpoints set")
-                        .font(.caption)
-                        .foregroundColor(theme.comment)
-                        .padding(.vertical, 4)
-                        .padding(.leading, 12)
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 6) {
+                            Text("No breakpoints set")
+                                .font(.caption)
+                                .foregroundColor(theme.comment)
+                            Text("Click in the editor gutter to add a breakpoint")
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.comment.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.vertical, 12)
+                        Spacer()
+                    }
                 } else {
                     ForEach(debugManager.breakpoints) { bp in
                         BreakpointRow(breakpoint: bp, theme: theme)
@@ -415,16 +413,16 @@ struct DebugView: View {
             .padding(.leading, 4)
         } label: {
             HStack {
-                DebugSectionHeader(title: "BREAKPOINTS", theme: theme)
+                DebugSectionHeader(title: "BREAKPOINTS", count: debugManager.breakpoints.count, theme: theme)
                 Spacer()
                 if !debugManager.breakpoints.isEmpty {
                     Button(action: { debugManager.toggleAllBreakpoints() }) {
-                        Image(systemName: allBreakpointsEnabled ? "circle.slash" : "circle")
+                        Image(systemName: debugManager.allBreakpointsEnabled ? "circle.slash" : "circle")
                             .font(.system(size: 10))
                             .foregroundColor(theme.comment)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .accessibilityLabel(allBreakpointsEnabled ? "Disable all breakpoints" : "Enable all breakpoints")
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(debugManager.allBreakpointsEnabled ? "Disable all breakpoints" : "Enable all breakpoints")
                     .accessibilityHint("Double tap to toggle all breakpoints")
                     
                     Button(action: { debugManager.removeAllBreakpoints() }) {
@@ -432,7 +430,7 @@ struct DebugView: View {
                             .font(.system(size: 10))
                             .foregroundColor(theme.comment)
                     }
-                    .buttonStyle(PlainButtonStyle())
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Remove all breakpoints")
                     .accessibilityHint("Double tap to remove all breakpoints")
                 }
@@ -465,13 +463,21 @@ struct DebugView: View {
 
 struct DebugSectionHeader: View {
     let title: String
+    var count: Int? = nil
     let theme: Theme
     
     var body: some View {
-        Text(title)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(theme.comment)
-            .padding(.vertical, 4)
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(theme.comment)
+            if let count {
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(theme.comment.opacity(0.6))
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -493,7 +499,7 @@ struct DebugToolbarButton: View {
                 .background(theme.editorForeground.opacity(0.08))
                 .cornerRadius(4)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
         .accessibilityLabel(label)
         .accessibilityHint("Double tap to \(label.lowercased())")
     }
@@ -563,7 +569,7 @@ struct CallStackRow: View {
     var body: some View {
         HStack(spacing: 6) {
             if isActive {
-                Image(systemName: "arrowtriangle.right.fill")
+                Image(systemName: "play.fill")
                     .font(.system(size: 7))
                     .foregroundColor(.yellow)
                     .accessibilityLabel("Active frame")
@@ -578,7 +584,7 @@ struct CallStackRow: View {
             
             Spacer()
             
-            Text("\(frame.file):\(frame.line)")
+            Text("\(frame.fileName):\(frame.line)")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(theme.comment.opacity(0.7))
                 .lineLimit(1)
@@ -589,7 +595,7 @@ struct CallStackRow: View {
         .cornerRadius(2)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(isActive ? "Active frame: " : "")\(frame.function) at \(frame.file) line \(frame.line)")
+        .accessibilityLabel("\(isActive ? "Active frame: " : "")\(frame.function) at \(frame.fileName) line \(frame.line)")
     }
 }
 
@@ -603,14 +609,17 @@ struct BreakpointRow: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            // Enable/disable toggle
-            Button(action: { debugManager.toggleBreakpoint(breakpoint.id) }) {
-                Image(systemName: breakpoint.isEnabled ? "circle.fill" : "circle")
+            // Enable/disable toggle – correctly calls toggleBreakpoint(_ id: String)
+            // which parses "file::line" and calls toggleBreakpoint(file:line:)
+            Button(action: {
+                debugManager.toggleBreakpoint(breakpoint.id)
+            }) {
+                Image(systemName: "circle.fill")
                     .font(.system(size: 10))
                     .foregroundColor(breakpoint.isEnabled ? .red : theme.comment)
             }
-            .buttonStyle(PlainButtonStyle())
-            .accessibilityLabel(breakpoint.isEnabled ? "Enabled" : "Disabled")
+            .buttonStyle(.plain)
+            .accessibilityLabel(breakpoint.isEnabled ? "Enabled breakpoint – tap to disable" : "Disabled breakpoint – tap to enable")
             .accessibilityHint("Double tap to toggle breakpoint")
             
             // File name
@@ -619,7 +628,7 @@ struct BreakpointRow: View {
                 .foregroundColor(theme.editorForeground)
                 .lineLimit(1)
             
-            // Line number
+            // Line number (1-based for display)
             Text(":\(breakpoint.lineNumber)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(theme.comment)
@@ -635,12 +644,14 @@ struct BreakpointRow: View {
             Spacer()
             
             // Delete
-            Button(action: { debugManager.removeBreakpoint(breakpoint.id) }) {
+            Button(action: {
+                debugManager.removeBreakpoint(breakpoint.id)
+            }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9))
                     .foregroundColor(theme.comment)
             }
-            .buttonStyle(PlainButtonStyle())
+            .buttonStyle(.plain)
             .accessibilityLabel("Remove breakpoint")
             .accessibilityHint("Double tap to remove this breakpoint")
         }

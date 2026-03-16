@@ -27,6 +27,7 @@ struct PanelView: View {
     @State private var selectedTab: PanelTab = .terminal
     @State private var isMaximized: Bool = false
     @State private var previousHeight: CGFloat = 200
+    @State private var problemCount: Int = 0
     @ObservedObject private var themeManager = ThemeManager.shared
     
     private var theme: Theme { themeManager.currentTheme }
@@ -54,7 +55,7 @@ struct PanelView: View {
             // Tab Bar
             HStack(spacing: 0) {
                 ForEach(PanelTab.allCases) { tab in
-                    PanelTabButton(tab: tab, isSelected: selectedTab == tab, theme: theme) {
+                    PanelTabButton(tab: tab, isSelected: selectedTab == tab, theme: theme, problemCount: tab == .problems ? problemCount : 0) {
                         selectedTab = tab
                     }
                 }
@@ -127,6 +128,13 @@ struct PanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .switchToProblemsPanel)) { _ in
             selectedTab = .problems
         }
+        .onReceive(NotificationCenter.default.publisher(for: .diagnosticsUpdated)) { notification in
+            if let items = notification.userInfo?["items"] as? [[String: Any]] {
+                problemCount = items.count
+            } else if let clear = notification.userInfo?["clear"] as? Bool, clear {
+                problemCount = 0
+            }
+        }
         .onChange(of: isVisible) { _, newValue in
             if !newValue {
                 terminalFocused = false
@@ -151,6 +159,7 @@ struct PanelTabButton: View {
     let tab: PanelTab
     let isSelected: Bool
     let theme: Theme
+    var problemCount: Int = 0
     let action: () -> Void
     
     var body: some View {
@@ -159,10 +168,13 @@ struct PanelTabButton: View {
                 Text(tab.rawValue.uppercased())
                     .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
                 
-                if tab == .problems {
-                    Circle()
-                        .fill(theme.comment)
-                        .frame(width: 6, height: 6)
+                if tab == .problems && problemCount > 0 {
+                    Text("\(problemCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.red.opacity(0.8)))
                 }
             }
             .foregroundColor(isSelected ? theme.tabActiveForeground : theme.comment)

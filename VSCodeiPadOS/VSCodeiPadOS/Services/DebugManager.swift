@@ -1,11 +1,9 @@
-import Foundation
 import SwiftUI
-import Foundation
 
 /// UI-only debug state manager.
 ///
-/// This does not perform real debugging yet; it only provides observable state
-/// for the Debug sidebar and breakpoint gutter markers.
+/// This provides observable state for the Debug sidebar, breakpoint gutter markers,
+/// and a functional JavaScript console REPL using JSRunner.
 @MainActor
 final class DebugManager: ObservableObject {
     typealias CallStackFrame = StackFrame
@@ -156,50 +154,96 @@ final class DebugManager: ObservableObject {
     
     // MARK: - Console Methods
     
+    /// Submit a console input. Handles special commands, JS evaluation, and sessions.
     func submitConsole(input: String) {
-        consoleEntries.append(ConsoleEntry(message: "> \(input)", kind: .input))
-
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        switch state {
-        case .paused, .running:
-            // Evaluate expression using JSRunner
-            let runner: JSRunner
-            if let existing = activeJSRunner {
-                runner = existing
+        // Handle special console commands
+        let lower = trimmed.lowercased()
+        if lower == "clear" {
+            consoleEntries.removeAll()
+            consoleEntries.append(ConsoleEntry(message: "Console cleared.", kind: .system))
+            return
+        }
+        if lower == "help" {
+            consoleEntries.append(ConsoleEntry(message: "> \(trimmed)", kind: .input))
+            consoleEntries.append(ConsoleEntry(
+                message: """
+                Available commands:
+                  clear    – Clear the console
+                  help     – Show this help
+                  bp       – List all breakpoints
+                Any other input is evaluated as JavaScript.
+                """,
+                kind: .info
+            ))
+            return
+        }
+        if lower == "bp" || lower == "breakpoints" {
+            consoleEntries.append(ConsoleEntry(message: "> \(trimmed)", kind: .input))
+            let bps = allBreakpoints
+            if bps.isEmpty {
+                consoleEntries.append(ConsoleEntry(message: "No breakpoints set.", kind: .system))
             } else {
-                runner = JSRunner()
-                activeJSRunner = runner
-                // Forward console.log output to the debug console
-                runner.setConsoleHandler { [weak self] message in
-                    Task { @MainActor in
-                        guard let self else { return }
-                        let clean = message
-                            .replacingOccurrences(of: "[LOG] ", with: "")
-                            .replacingOccurrences(of: "[ERROR] ", with: "")
-                            .replacingOccurrences(of: "[WARN] ", with: "")
-                            .replacingOccurrences(of: "[INFO] ", with: "")
-                        self.consoleEntries.append(ConsoleEntry(message: clean, kind: .output))
-                    }
+                for bp in bps {
+                    consoleEntries.append(ConsoleEntry(
+                        message: "• \(bp.fileName):\(bp.displayLine) \(bp.isEnabled ? "[enabled]" : "[disabled]")",
+                        kind: .info
+                    ))
                 }
             }
-            Task {
-                do {
-                    let result = try await runner.execute(code: trimmed, timeout: 10.0)
-                    let resultString = result.toString() ?? "undefined"
-                    await MainActor.run { [weak self] in
-                        guard let self else { return }
+            return
+        }
+
+        consoleEntries.append(ConsoleEntry(message: "> \(input)", kind: .input))
+
+        // Evaluate JavaScript in all states (stopped, paused, running)
+        evaluateJavaScript(trimmed)
+    }
+
+    /// Evaluate a JavaScript expression and append the result (or error) to the console.
+    private func evaluateJavaScript(_ code: String) {
+        let runner: JSRunner
+        if let existing = activeJSRunner {
+            runner = existing
+        } else {
+            runner = JSRunner()
+            activeJSRunner = runner
+            // Forward console.log output to the debug console
+            runner.setConsoleHandler { [weak self] message in
+                Task { @MainActor in
+                    guard let self else { return }
+                    let clean = message
+                        .replacingOccurrences(of: "[LOG] ", with: "")
+                        .replacingOccurrences(of: "[ERROR] ", with: "")
+                        .replacingOccurrences(of: "[WARN] ", with: "")
+                        .replacingOccurrences(of: "[INFO] ", with: "")
+                    self.consoleEntries.append(ConsoleEntry(message: clean, kind: .output))
+                }
+            }
+        }
+        Task {
+            do {
+                let result = try await runner.execute(code: code, timeout: 10.0)
+                let resultString = result.toString() ?? "undefined"
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if resultString.isEmpty || resultString == "undefined" {
+                        self.consoleEntries.append(ConsoleEntry(message: "undefined", kind: .output))
+                    } else {
                         self.consoleEntries.append(ConsoleEntry(message: resultString, kind: .output))
                     }
-                } catch {
-                    await MainActor.run { [weak self] in
-                        self?.consoleEntries.append(ConsoleEntry(message: error.localizedDescription, kind: .error))
-                    }
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.consoleEntries.append(ConsoleEntry(
+                        message: "Error: \(error.localizedDescription)",
+                        kind: .error
+                    ))
                 }
             }
-        case .stopped:
-            consoleEntries.append(ConsoleEntry(message: "No active debug session", kind: .system))
         }
     }
     
@@ -232,6 +276,7 @@ final class DebugManager: ObservableObject {
     }
 
     func hasBreakpoint(file: String, line: Int) -> Bool {
+        guard allBreakpointsEnabled else { return false }
         let fileId = canonicalFileId(file)
         let line = canonicalLine(line)
         return breakpointsByFile[fileId]?.contains(line) == true
@@ -245,7 +290,9 @@ final class DebugManager: ObservableObject {
         var dict = breakpointsByFile
         var set = dict[fileId] ?? []
 
-        if set.contains(line) {
+        let wasPresent = set.contains(line)
+
+        if wasPresent {
             set.remove(line)
         } else {
             set.insert(line)
@@ -258,6 +305,20 @@ final class DebugManager: ObservableObject {
         }
 
         breakpointsByFile = dict
+
+        // Log to console
+        let shortName = (fileId as NSString).lastPathComponent
+        if wasPresent {
+            consoleEntries.append(ConsoleEntry(
+                message: "Breakpoint removed at \(shortName):\(line + 1)",
+                kind: .system
+            ))
+        } else {
+            consoleEntries.append(ConsoleEntry(
+                message: "Breakpoint added at \(shortName):\(line + 1)",
+                kind: .system
+            ))
+        }
     }
 
     func setBreakpoint(file: String, line: Int, isEnabled: Bool) {
@@ -365,8 +426,9 @@ final class DebugManager: ObservableObject {
             }
     }
 
-    // MARK: - Debug controls (UI only)
+    // MARK: - Debug controls
 
+    /// Start or continue debugging.
     func play() {
         // If paused, resume; if stopped, start a simulated session.
         if state == .stopped {
@@ -389,6 +451,11 @@ final class DebugManager: ObservableObject {
                     ]
                 )
             ]
+
+            consoleEntries.append(ConsoleEntry(
+                message: "Debug session started.",
+                kind: .system
+            ))
         }
 
         state = .running
@@ -397,7 +464,13 @@ final class DebugManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                if self.state == .running { self.state = .paused }
+                if self.state == .running {
+                    self.state = .paused
+                    self.consoleEntries.append(ConsoleEntry(
+                        message: "Paused.",
+                        kind: .system
+                    ))
+                }
             }
         }
     }
@@ -472,7 +545,7 @@ final class DebugManager: ObservableObject {
             } catch {
                 await MainActor.run {
                     self.consoleEntries.append(ConsoleEntry(
-                        message: error.localizedDescription,
+                        message: "Error: \(error.localizedDescription)",
                         kind: .error
                     ))
                     self.consoleEntries.append(ConsoleEntry(
@@ -480,6 +553,7 @@ final class DebugManager: ObservableObject {
                         kind: .system
                     ))
                     self.state = .stopped
+                    self.callStack.removeAll()
                     self.activeJSRunner = nil
                 }
             }
@@ -487,20 +561,35 @@ final class DebugManager: ObservableObject {
     }
     
     func stop() {
+        let wasActive = state != .stopped
         state = .stopped
         callStack = []
         variables = []
         selectedFrameId = nil
         activeJSRunner = nil
+        if wasActive {
+            consoleEntries.append(ConsoleEntry(
+                message: "Debug session stopped.",
+                kind: .system
+            ))
+        }
     }
 
     func pause() {
         state = .paused
+        consoleEntries.append(ConsoleEntry(
+            message: "Paused.",
+            kind: .system
+        ))
     }
 
     func stepOver() {
         guard state.canStep else { return }
         advanceTopFrameLine(by: 1)
+        consoleEntries.append(ConsoleEntry(
+            message: "Stepped over.",
+            kind: .system
+        ))
     }
 
     func stepInto() {
@@ -513,6 +602,10 @@ final class DebugManager: ObservableObject {
             callStack = cs
             selectedFrameId = callStack.first?.id
         }
+        consoleEntries.append(ConsoleEntry(
+            message: "Stepped into helper().",
+            kind: .system
+        ))
     }
 
     func stepOut() {
@@ -524,28 +617,49 @@ final class DebugManager: ObservableObject {
             callStack = cs
             selectedFrameId = callStack.first?.id
         }
+        consoleEntries.append(ConsoleEntry(
+            message: "Stepped out.",
+            kind: .system
+        ))
     }
 
     func restart() {
+        consoleEntries.append(ConsoleEntry(
+            message: "Restarting debug session…",
+            kind: .system
+        ))
         stop()
         play()
     }
 
     func toggleAllBreakpoints() {
         allBreakpointsEnabled.toggle()
+        let status = allBreakpointsEnabled ? "enabled" : "disabled"
+        let count = allBreakpoints.count
+        consoleEntries.append(ConsoleEntry(
+            message: "All breakpoints \(status) (\(count) breakpoint\(count == 1 ? "" : "s")).",
+            kind: .system
+        ))
     }
 
     func removeAllBreakpoints() {
+        let count = allBreakpoints.count
         breakpointsByFile = [:]
         allBreakpointsEnabled = true
+        consoleEntries.append(ConsoleEntry(
+            message: "All \(count) breakpoint\(count == 1 ? "" : "s") removed.",
+            kind: .system
+        ))
     }
 
+    /// Toggle a breakpoint by its composite id string ("file::line").
     func toggleBreakpoint(_ id: String) {
         let parts = id.components(separatedBy: "::")
         guard parts.count == 2, let line = Int(parts[1]) else { return }
         toggleBreakpoint(file: parts[0], line: line)
     }
 
+    /// Remove a breakpoint by its composite id string ("file::line").
     func removeBreakpoint(_ id: String) {
         let parts = id.components(separatedBy: "::")
         guard parts.count == 2, let line = Int(parts[1]) else { return }

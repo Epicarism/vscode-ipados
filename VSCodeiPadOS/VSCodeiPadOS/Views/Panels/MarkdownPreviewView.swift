@@ -230,7 +230,7 @@ struct MarkdownPreviewView: View {
             .onAppear {
                 loadMarkdown()
             }
-            .onChange(of: content) { _ in
+            .onChange(of: content) { _, _ in
                 loadMarkdown()
             }
     }

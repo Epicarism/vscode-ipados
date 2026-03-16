@@ -679,7 +679,7 @@ struct PaneEditorView: View {
             // Detect foldable regions for this file
             foldingManager.detectFoldableRegions(in: text, filePath: fileId)
         }
-        .onChange(of: tab.id) { _ in
+        .onChange(of: tab.id) { _, _ in
             text = tab.content
             // Re-detect foldable regions for new file
             foldingManager.detectFoldableRegions(in: text, filePath: fileId)

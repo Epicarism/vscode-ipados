@@ -482,7 +482,7 @@ struct OutputView: View {
                 .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .onChange(of: lines.count) { _ in
+            .onChange(of: lines.count) { _, _ in
                 guard !lines.isEmpty && outputManager.isAutoScrollEnabled else { return }
                 withAnimation(.easeOut(duration: 0.1)) {
                     if let lastLine = lines.last {

@@ -28,7 +28,7 @@ struct StickyHeaderView: View {
                 }
             }
         }
-        .onChange(of: currentLine) { _ in updateStickyLines() }
+        .onChange(of: currentLine) { _, _ in updateStickyLines() }
         .onAppear { updateStickyLines() }
     }
     

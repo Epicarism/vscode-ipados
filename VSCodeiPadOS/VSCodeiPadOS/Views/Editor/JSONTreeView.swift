@@ -35,7 +35,7 @@ struct JSONTreeView: View {
         }
         .background(Color(UIColor.systemBackground))
         .onAppear { parseJSON() }
-        .onChange(of: data) { _ in parseJSON() }
+        .onChange(of: data) { _, _ in parseJSON() }
     }
 
     private func parseJSON() {

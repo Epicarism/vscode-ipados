@@ -64,8 +64,8 @@ struct OutlineView: View {
         }
         .background(Color(UIColor.secondarySystemBackground))
         .onAppear { scheduleParse() }
-        .onChange(of: editorCore.activeTabId) { _ in scheduleParse() }
-        .onChange(of: activeContent) { _ in scheduleParse() }
+        .onChange(of: editorCore.activeTabId) { _, _ in scheduleParse() }
+        .onChange(of: activeContent) { _, _ in scheduleParse() }
     }
 
     // MARK: - UI

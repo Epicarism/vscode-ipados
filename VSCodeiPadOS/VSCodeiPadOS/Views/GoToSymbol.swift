@@ -496,10 +496,10 @@ struct GoToSymbolView: View {
             selectedIndex = 0
             parseSymbols()
         }
-        .onChange(of: editorCore.activeTabId) { _ in
+        .onChange(of: editorCore.activeTabId) { _, _ in
             parseSymbols()
         }
-        .onChange(of: searchText) { _ in
+        .onChange(of: searchText) { _, _ in
             selectedIndex = 0
         }
         .modifier(GoToSymbolKeyboardModifier(
