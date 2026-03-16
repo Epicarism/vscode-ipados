@@ -1378,7 +1378,7 @@ Use the EXACT filename shown in the file list. Examples:
             AppLogger.ai.debug("✅ Stream complete: \(chunkCount) chunks, fullResponse=\(fullResponse.count) chars")
             // Return the clean display text (what was streamed to the UI)
             let finalResponse = sanitizeLocalModelText(self.streamingResponse, fallbackRaw: fullResponse)
-            AppLogger.ai.debug("Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(self.streamingResponse.count) chars)"
+            AppLogger.ai.debug("Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(self.streamingResponse.count) chars")
             return finalResponse
         } catch {
             AppLogger.ai.error("❌ LocalMLX streaming error: \(error)")

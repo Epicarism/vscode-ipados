@@ -89,7 +89,7 @@ struct LoadingView: View {
                 if let message {
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(theme.isDark ? Color(hex: "#858585") : Color(hex: "#6A6A6A"))
+                        .foregroundStyle(theme.editorForeground.opacity(0.6))
                         .multilineTextAlignment(.center)
                 }
             }
@@ -149,9 +149,10 @@ extension View {
 
 #Preview("Full Screen") {
     ZStack {
-        Color(hex: "#1E1E1E").ignoresSafeArea()
+        Color(.systemBackground).ignoresSafeArea()
         LoadingView("Loading workspace…", style: .fullScreen)
     }
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Inline") {
@@ -161,8 +162,9 @@ extension View {
         Text("Some content below")
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(hex: "#1E1E1E").ignoresSafeArea())
+    .background(Color(.systemBackground).ignoresSafeArea())
     .foregroundStyle(.white)
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Overlay") {
@@ -173,7 +175,8 @@ extension View {
                 .foregroundStyle(.white)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: "#1E1E1E").ignoresSafeArea())
+        .background(Color(.systemBackground).ignoresSafeArea())
         LoadingView("Processing…", style: .overlay)
     }
+    .preferredColorScheme(.dark)
 }

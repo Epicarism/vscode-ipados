@@ -148,7 +148,7 @@ xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
 ```
 
 ### Git Status
-- Local `main` is **64 commits ahead** of `origin/main`
+- Local `main` is **~88 commits ahead** of `origin/main`
 - Origin has 1 divergent commit (`6b71943 chore: verify email linkage`)
 - **Need to reconcile before push** — suggest `git pull --rebase origin main`
 

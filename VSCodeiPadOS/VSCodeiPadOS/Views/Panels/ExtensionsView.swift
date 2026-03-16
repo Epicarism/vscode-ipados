@@ -32,6 +32,8 @@ struct ExtensionsPanel: View {
                 extensionList
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Extensions panel")
         .sheet(item: $selectedExtension) { ext in
             ExtensionDetailView(extension_: ext, manager: manager)
         }
@@ -44,12 +46,14 @@ struct ExtensionsPanel: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
                 .font(.system(size: 12))
+                .accessibilityHidden(true)
             
             TextField("Search Extensions in Marketplace", text: $manager.searchText)
                 .font(.system(size: 13))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .accessibilityLabel("Search extensions in marketplace")
             
             if !manager.searchText.isEmpty {
                 Button(action: { manager.searchText = "" }) {
@@ -58,6 +62,8 @@ struct ExtensionsPanel: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search text")
+                .accessibilityHint("Double tap to clear the search field")
             }
         }
         .padding(.horizontal, 12)
@@ -81,6 +87,7 @@ struct ExtensionsPanel: View {
                 Divider()
                     .frame(height: 16)
                     .padding(.horizontal, 4)
+                    .accessibilityHidden(true)
                 
                 // Category dropdown
                 Menu {
@@ -108,6 +115,8 @@ struct ExtensionsPanel: View {
                     .cornerRadius(4)
                     .foregroundColor(manager.selectedCategory != nil ? .accentColor : .secondary)
                 }
+                .accessibilityLabel("Filter by category")
+                .accessibilityHint("Double tap to choose an extension category")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
@@ -138,6 +147,9 @@ struct ExtensionsPanel: View {
             .foregroundColor(isSelected ? .accentColor : .secondary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(filter.rawValue) filter\(count > 0 && filter == .installed ? ", \(count) installed" : "")")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityHint("Double tap to filter extensions by \(filter.rawValue)")
     }
     
     private func filterCount(_ filter: ExtensionFilter) -> Int {
@@ -162,6 +174,8 @@ struct ExtensionsPanel: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Extensions list, \(manager.filteredExtensions.count) extensions")
     }
     
     // MARK: - Empty State
@@ -172,6 +186,7 @@ struct ExtensionsPanel: View {
             Image(systemName: emptyIcon)
                 .font(.system(size: 32))
                 .foregroundColor(.secondary.opacity(0.5))
+                .accessibilityHidden(true)
             Text(emptyMessage)
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
@@ -183,6 +198,7 @@ struct ExtensionsPanel: View {
                 .font(.system(size: 13))
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .accessibilityHint("Double tap to browse popular extensions")
             }
             Spacer()
         }
@@ -219,6 +235,7 @@ struct ExtensionRowView: View {
             HStack(alignment: .top, spacing: 10) {
                 // Icon
                 extensionIcon
+                    .accessibilityHidden(true)
                 
                 // Info
                 VStack(alignment: .leading, spacing: 3) {
@@ -253,6 +270,7 @@ struct ExtensionRowView: View {
                                 .font(.system(size: 10))
                         }
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("\(extension_.formattedDownloads) downloads")
                         
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
@@ -261,6 +279,7 @@ struct ExtensionRowView: View {
                                 .font(.system(size: 10))
                         }
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("Rating: \(String(format: "%.1f", extension_.rating)) out of 5")
                     }
                 }
                 
@@ -275,6 +294,9 @@ struct ExtensionRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(extension_.displayName), by \(extension_.publisher)")
+        .accessibilityHint("\(extension_.isInstalled ? "Installed" : "Not installed"). \(extension_.description). Double tap to view details.")
+        .accessibilityAddTraits(.isButton)
         .onHover { isHovering = $0 }
     }
     
@@ -349,6 +371,8 @@ struct ExtensionRowView: View {
                 .cornerRadius(4)
                 .foregroundColor(extension_.isEnabled ? .secondary : .orange)
             }
+            .accessibilityLabel("Manage \(extension_.displayName), currently \(extension_.isEnabled ? "enabled" : "disabled")")
+            .accessibilityHint("Double tap to disable, enable, or uninstall this extension")
         } else {
             Button(action: { manager.install(extension_) }) {
                 Text("Install")
@@ -360,6 +384,8 @@ struct ExtensionRowView: View {
                     .cornerRadius(4)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Install \(extension_.displayName)")
+            .accessibilityHint("Double tap to install this extension")
         }
     }
 }
@@ -402,9 +428,12 @@ struct ExtensionDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") { dismiss() }
+                        .accessibilityHint("Double tap to dismiss extension details")
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Details for \(extension_.displayName)")
     }
     
     private var headerSection: some View {
@@ -418,6 +447,7 @@ struct ExtensionDetailView: View {
                     .font(.system(size: 28))
                     .foregroundColor(.accentColor)
             }
+            .accessibilityHidden(true)
             
             VStack(alignment: .leading, spacing: 6) {
                 Text(extension_.displayName)
@@ -432,6 +462,8 @@ struct ExtensionDetailView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.accentColor)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(extension_.publisher), verified publisher")
                 
                 Text(extension_.description)
                     .font(.system(size: 13))
@@ -452,6 +484,8 @@ struct ExtensionDetailView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Uninstall \(extension_.displayName)")
+                    .accessibilityHint("Double tap to uninstall this extension")
                 } else {
                     Button(action: { manager.install(current) }) {
                         Text("Install")
@@ -463,6 +497,8 @@ struct ExtensionDetailView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Install \(extension_.displayName)")
+                    .accessibilityHint("Double tap to install this extension")
                 }
             }
         }
@@ -475,6 +511,8 @@ struct ExtensionDetailView: View {
             detailItem(title: "Rating", value: String(format: "%.1f ★", extension_.rating))
             detailItem(title: "Publisher", value: extension_.publisher)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Extension details. Version \(extension_.version). \(extension_.formattedDownloads) downloads. Rating \(String(format: "%.1f", extension_.rating)) out of 5. Publisher: \(extension_.publisher)")
     }
     
     private func detailItem(title: String, value: String) -> some View {
@@ -503,6 +541,7 @@ struct ExtensionDetailView: View {
                     .cornerRadius(4)
             }
         }
+        .accessibilityElement(children: .combine)
     }
     
     private var descriptionSection: some View {
@@ -519,6 +558,7 @@ struct ExtensionDetailView: View {
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(.secondary)
                 .padding(.top, 8)
+                .accessibilityLabel("Extension identifier: \(extension_.fullId)")
         }
     }
 }

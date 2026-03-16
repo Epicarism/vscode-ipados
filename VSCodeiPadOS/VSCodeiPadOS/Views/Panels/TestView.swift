@@ -41,7 +41,25 @@ struct TestView: View {
             .background(Color(UIColor.secondarySystemBackground))
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack {
+                    // Banner: test execution requires language-specific runners
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 11))
+                            .foregroundColor(.orange)
+                        Text("Test execution requires language-specific test runners (e.g., XCTest for Swift, Jest for JavaScript, pytest for Python).")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.8))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.orange.opacity(0.08))
+                    .cornerRadius(6)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+                    .padding(.bottom, 4)
+
                     if isScanning {
                         HStack {
                             ProgressView()
@@ -52,19 +70,19 @@ struct TestView: View {
                         }
                         .padding()
                     } else if testSuites.isEmpty && hasScanned {
-                        VStack(alignment: .center, spacing: 8) {
+                        VStack(alignment: .center, spacing: 12) {
                             Image(systemName: "testtube.2")
                                 .font(.system(size: 24))
                                 .foregroundColor(.secondary.opacity(0.5))
-                            Text("No test functions found")
-                                .accessibilityLabel("No test functions found in workspace")
+                            Text("Test discovery not available")
+                                .accessibilityLabel("Test discovery not available")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.secondary)
-                            Text("Scan Swift files in the workspace for functions prefixed with \"test\"")
+                            Text("Test execution is not implemented on device. Run tests via Xcode or a CI pipeline.")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary.opacity(0.7))
                                 .multilineTextAlignment(.center)
-                                .frame(maxWidth: 280)
+                                .frame(maxWidth: 300)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)

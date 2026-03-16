@@ -253,7 +253,7 @@
 		8014 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		8016 /* NotificationToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToastView.swift; sourceTree = "<group>"; };
 		8018 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
-		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"};
+		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
 		9004 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Notification+Names.swift"; path = "Extensions/Notification+Names.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
