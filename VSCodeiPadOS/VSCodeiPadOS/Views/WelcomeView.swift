@@ -166,7 +166,7 @@ struct WelcomeView: View {
                 subtitle: "View all available keyboard shortcuts",
                 actionKey: "shortcuts"
             ) {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowKeyboardShortcuts"), object: nil)
+                NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
             }
 
             actionRow(

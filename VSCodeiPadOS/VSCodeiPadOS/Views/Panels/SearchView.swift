@@ -1,13 +1,6 @@
 import SwiftUI
 import Combine
 
-// MARK: - Notification Names for Search
-
-extension NSNotification.Name {
-    static let collapseAllSearchResults = NSNotification.Name("collapseAllSearchResults")
-    static let expandAllSearchResults = NSNotification.Name("expandAllSearchResults")
-}
-
 enum SearchField: Hashable {
     case search
     case replace

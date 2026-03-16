@@ -116,7 +116,6 @@
 		1156 /* MockRunners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2156 /* MockRunners.swift */; };
 		1157 /* NodeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2157 /* NodeRunner.swift */; };
 		1158 /* SwiftRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2158 /* SwiftRunner.swift */; };
-		1159 /* PythonRunnerAlt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2159 /* PythonRunnerAlt.swift */; };
 		1160 /* CodeExecutionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2160 /* CodeExecutionService.swift */; };
 		1161 /* OutputPanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2161 /* OutputPanelManager.swift */; };
 		1162 /* WordOccurrenceHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2162 /* WordOccurrenceHighlighter.swift */; };
@@ -241,7 +240,6 @@
 		2156 /* MockRunners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRunners.swift; sourceTree = "<group>"; };
 		2157 /* NodeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeRunner.swift; sourceTree = "<group>"; };
 		2158 /* SwiftRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftRunner.swift; sourceTree = "<group>"; };
-		2159 /* PythonRunnerAlt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRunnerAlt.swift; sourceTree = "<group>"; };
 		2160 /* CodeExecutionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeExecutionService.swift; sourceTree = "<group>"; };
 		2161 /* OutputPanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputPanelManager.swift; sourceTree = "<group>"; };
 		2162 /* WordOccurrenceHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordOccurrenceHighlighter.swift; sourceTree = "<group>"; };
@@ -499,7 +497,6 @@
 			children = (
 				2157 /* NodeRunner.swift */,
 				2158 /* SwiftRunner.swift */,
-				2159 /* PythonRunnerAlt.swift */,
 			);
 			path = Runners;
 			sourceTree = "<group>";
@@ -717,7 +714,6 @@
 				1156 /* MockRunners.swift in Sources */,
 				1157 /* NodeRunner.swift in Sources */,
 				1158 /* SwiftRunner.swift in Sources */,
-				1159 /* PythonRunnerAlt.swift in Sources */,
 				1160 /* CodeExecutionService.swift in Sources */,
 				1161 /* OutputPanelManager.swift in Sources */,
 				1162 /* WordOccurrenceHighlighter.swift in Sources */,

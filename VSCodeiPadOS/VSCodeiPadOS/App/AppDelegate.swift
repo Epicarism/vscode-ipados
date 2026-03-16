@@ -24,7 +24,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleWindowTitleChange(_:)),
-            name: NSNotification.Name("WindowTitleDidChange"),
+            name: .windowTitleDidChange,
             object: nil
         )
         

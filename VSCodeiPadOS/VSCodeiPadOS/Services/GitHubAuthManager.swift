@@ -231,7 +231,7 @@ class GitHubAuthManager: ObservableObject {
                     
                     // Notify other parts of the app
                     NotificationCenter.default.post(
-                        name: NSNotification.Name("GitHubAuthDidChange"),
+                        name: .gitHubAuthDidChange,
                         object: nil,
                         userInfo: ["authenticated": true]
                     )
@@ -350,7 +350,7 @@ class GitHubAuthManager: ObservableObject {
         errorMessage = nil
         
         NotificationCenter.default.post(
-            name: NSNotification.Name("GitHubAuthDidChange"),
+            name: .gitHubAuthDidChange,
             object: nil,
             userInfo: ["authenticated": false]
         )

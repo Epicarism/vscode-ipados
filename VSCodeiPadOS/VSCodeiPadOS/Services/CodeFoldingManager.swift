@@ -66,7 +66,7 @@ struct UserDefaultsKeys {
 
 // MARK: - Notification for layout invalidation
 extension Notification.Name {
-    static let codeFoldingDidChange = Notification.Name("codeFoldingDidChange")
+    static let codeFoldingDidChange = .codeFoldingDidChange
 }
 
 // MARK: - Code Folding Manager

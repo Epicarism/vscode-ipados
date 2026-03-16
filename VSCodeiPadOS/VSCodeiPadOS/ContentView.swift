@@ -75,40 +75,40 @@ struct ContentView: View {
                 // Persist open tabs when they change
                 editorCore.saveOpenTabPaths()
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowCommandPalette"))) { _ in editorCore.showCommandPalette = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleTerminal"))) { _ in showTerminal.toggle() }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSidebar"))) { _ in editorCore.toggleSidebar() }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowQuickOpen"))) { _ in editorCore.showQuickOpen = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToSymbol"))) { _ in editorCore.showGoToSymbol = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowGoToLine"))) { _ in editorCore.showGoToLine = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowAIAssistant"))) { _ in editorCore.showAIAssistant = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NewFile"))) { _ in editorCore.addTab() }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveFile"))) { _ in editorCore.saveActiveTab() }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloseTab"))) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowFind"))) { _ in editorCore.showSearch = true }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomIn"))) { _ in editorCore.zoomIn() }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ZoomOut"))) { _ in editorCore.zoomOut() }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunWithoutDebugging"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in editorCore.showCommandPalette = true }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in showTerminal.toggle() }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in editorCore.toggleSidebar() }
+            .onReceive(NotificationCenter.default.publisher(for: .showQuickOpen)) { _ in editorCore.showQuickOpen = true }
+            .onReceive(NotificationCenter.default.publisher(for: .showGoToSymbol)) { _ in editorCore.showGoToSymbol = true }
+            .onReceive(NotificationCenter.default.publisher(for: .showGoToLine)) { _ in editorCore.showGoToLine = true }
+            .onReceive(NotificationCenter.default.publisher(for: .showAIAssistant)) { _ in editorCore.showAIAssistant = true }
+            .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in editorCore.addTab() }
+            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
+            .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
+            .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
+            .onReceive(NotificationCenter.default.publisher(for: .runWithoutDebugging)) { _ in
                 if let activeTab = editorCore.activeTab {
                     CodeExecutionService.shared.executeCurrentFile(fileName: activeTab.fileName, content: activeTab.content)
                     showTerminal = true
-                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
+                    NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunSampleWASM"))) { _ in Task { await runSampleWASM() } }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RunJavaScript"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .runSampleWASM)) { _ in Task { await runSampleWASM() } }
+            .onReceive(NotificationCenter.default.publisher(for: .runJavaScript)) { _ in
                 if let activeTab = editorCore.activeTab {
                     Task { await runJavaScript(code: activeTab.content, fileName: activeTab.fileName) }
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("StartDebugging"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .startDebugging)) { _ in
                 if let activeTab = editorCore.activeTab {
                     let ext = (activeTab.fileName as NSString).pathExtension.lowercased()
                     if ext == "js" || ext == "mjs" {
                         let fileId = activeTab.url?.path ?? activeTab.fileName
                         DebugManager.shared.startDebugging(code: activeTab.content, fileName: activeTab.fileName, fileId: fileId)
                         showTerminal = true
-                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToDebugConsole"), object: nil)
+                        NotificationCenter.default.post(name: .switchToDebugConsole, object: nil)
                     } else {
                         DebugManager.shared.consoleEntries.append(DebugManager.ConsoleEntry(message: "Debug not supported for .\(ext) files. Only .js is supported.", kind: .error))
                     }
@@ -204,7 +204,7 @@ struct ContentView: View {
                         .gesture(
                             DragGesture(minimumDistance: 1)
                                 .onChanged { value in
-                                    let newWidth = geo.size.width - value.translation.width
+                                    let newWidth = geo.size.width + value.translation.width
                                     aiPanelWidth = min(max(newWidth, 300), 600)
                                 }
                         )
@@ -265,7 +265,7 @@ struct ContentView: View {
         
         // Notify the app of the title change
         NotificationCenter.default.post(
-            name: NSNotification.Name("WindowTitleDidChange"),
+            name: .windowTitleDidChange,
             object: nil,
             userInfo: ["title": windowTitle]
         )
@@ -1285,15 +1285,15 @@ extension ContentView {
         guard let wasmURL = Bundle.main.url(forResource: "test", withExtension: "wasm") else {
             await MainActor.run {
                 showTerminal = true
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "❌ Error: test.wasm not found in bundle\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: test.wasm not found in bundle\n"])
             }
             return
         }
         
         await MainActor.run {
             showTerminal = true
-            NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
-            NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "▶ Running bundled WASM: test.wasm\n─────────────────────────────────────\n"])
+            NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
+            NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "▶ Running bundled WASM: test.wasm\n─────────────────────────────────────\n"])
         }
         
         do {
@@ -1302,20 +1302,20 @@ extension ContentView {
             
             try await runner.load(from: wasmURL)
             await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "✓ Module loaded\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "✓ Module loaded\n"])
             }
             
             // Call main() which returns 42
             let result = try await runner.execute(function: "main", args: [])
             
             await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
             }
             
             await runner.unload()
         } catch {
             await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
             }
         }
     }
@@ -1324,8 +1324,8 @@ extension ContentView {
     func runJavaScript(code: String, fileName: String) async {
         await MainActor.run {
             showTerminal = true
-            NotificationCenter.default.post(name: NSNotification.Name("SwitchToOutputPanel"), object: nil)
-            NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "▶ Running JavaScript: \(fileName)\n─────────────────────────────────────\n"])
+            NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
+            NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "▶ Running JavaScript: \(fileName)\n─────────────────────────────────────\n"])
         }
         
         let runner = JSRunner()
@@ -1333,18 +1333,18 @@ extension ContentView {
         // Capture console output
         runner.setConsoleHandler { message in
             Task { @MainActor in
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "\(message)\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "\(message)\n"])
             }
         }
         
         do {
             let result = try await runner.execute(code: code)
             await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
             }
         } catch {
             await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("AppendOutput"), object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
+                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
             }
         }
     }

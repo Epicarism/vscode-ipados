@@ -105,7 +105,7 @@ struct PanelView: View {
             .frame(height: isMaximized ? UIScreen.main.bounds.height - 140 : height - 36)
         }
         .background(Color(UIColor.systemBackground))
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToOutputPanel"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .switchToOutputPanel)) { _ in
             selectedTab = .output
         }
     }

@@ -1577,6 +1577,6 @@ extension EditorCore {
 // MARK: - Notification Names for Code Folding
 
 extension Notification.Name {
-    static let collapseAllFolds = Notification.Name("collapseAllFolds")
-    static let expandAllFolds = Notification.Name("expandAllFolds")
+    static let collapseAllFolds = .collapseAllFolds
+    static let expandAllFolds = .expandAllFolds
 }

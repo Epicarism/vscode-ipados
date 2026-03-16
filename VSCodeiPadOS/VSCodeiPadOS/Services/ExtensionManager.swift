@@ -381,8 +381,8 @@ class ExtensionManager: ObservableObject {
 // MARK: - Notifications
 
 extension Notification.Name {
-    static let extensionInstalled = Notification.Name("extensionInstalled")
-    static let extensionUninstalled = Notification.Name("extensionUninstalled")
+    static let extensionInstalled = .extensionInstalled
+    static let extensionUninstalled = .extensionUninstalled
 }
 
 // MARK: - Download Count Formatting

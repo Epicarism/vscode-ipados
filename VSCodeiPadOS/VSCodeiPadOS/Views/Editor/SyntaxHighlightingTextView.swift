@@ -1433,47 +1433,47 @@ class EditorTextView: MultiCursorTextView {
     // MARK: - App-Level Shortcut Handlers
     
     @objc func handleShowCommandPalette() {
-        NotificationCenter.default.post(name: NSNotification.Name("ShowCommandPalette"), object: nil)
+        NotificationCenter.default.post(name: .showCommandPalette, object: nil)
     }
     
     @objc func handleToggleTerminal() {
-        NotificationCenter.default.post(name: NSNotification.Name("ToggleTerminal"), object: nil)
+        NotificationCenter.default.post(name: .toggleTerminal, object: nil)
     }
     
     @objc func handleShowAIAssistant() {
-        NotificationCenter.default.post(name: NSNotification.Name("ShowAIAssistant"), object: nil)
+        NotificationCenter.default.post(name: .showAIAssistant, object: nil)
     }
     
     @objc func handleToggleSidebar() {
-        NotificationCenter.default.post(name: NSNotification.Name("ToggleSidebar"), object: nil)
+        NotificationCenter.default.post(name: .toggleSidebar, object: nil)
     }
     
     @objc func handleShowQuickOpen() {
-        NotificationCenter.default.post(name: NSNotification.Name("ShowQuickOpen"), object: nil)
+        NotificationCenter.default.post(name: .showQuickOpen, object: nil)
     }
     
     @objc func handleNewFile() {
-        NotificationCenter.default.post(name: NSNotification.Name("NewFile"), object: nil)
+        NotificationCenter.default.post(name: .newFile, object: nil)
     }
     
     @objc func handleSaveFile() {
-        NotificationCenter.default.post(name: NSNotification.Name("SaveFile"), object: nil)
+        NotificationCenter.default.post(name: .saveFile, object: nil)
     }
     
     @objc func handleCloseTab() {
-        NotificationCenter.default.post(name: NSNotification.Name("CloseTab"), object: nil)
+        NotificationCenter.default.post(name: .closeTab, object: nil)
     }
     
     @objc func handleFind() {
-        NotificationCenter.default.post(name: NSNotification.Name("ShowFind"), object: nil)
+        NotificationCenter.default.post(name: .showFind, object: nil)
     }
     
     @objc func handleZoomIn() {
-        NotificationCenter.default.post(name: NSNotification.Name("ZoomIn"), object: nil)
+        NotificationCenter.default.post(name: .zoomIn, object: nil)
     }
     
     @objc func handleZoomOut() {
-        NotificationCenter.default.post(name: NSNotification.Name("ZoomOut"), object: nil)
+        NotificationCenter.default.post(name: .zoomOut, object: nil)
     }
     
     // MARK: - Custom Actions

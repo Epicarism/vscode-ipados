@@ -121,4 +121,42 @@ extension Notification.Name {
     static let undo = Notification.Name("Undo")
     /// Redo the last undone action.
     static let redo = Notification.Name("Redo")
+
+    // MARK: - Code
+
+    /// AI-generated code was inserted into the editor.
+    static let codeInserted = Notification.Name("CodeInserted")
+    /// Append text to the output panel.
+    static let appendOutput = Notification.Name("AppendOutput")
+
+    // MARK: - Code Folding
+
+    /// Collapse all code folds.
+    static let collapseAllFolds = Notification.Name("collapseAllFolds")
+    /// Expand all code folds.
+    static let expandAllFolds = Notification.Name("expandAllFolds")
+    /// Code folding regions changed.
+    static let codeFoldingDidChange = Notification.Name("codeFoldingDidChange")
+
+    // MARK: - Extensions
+
+    /// An extension was installed.
+    static let extensionInstalled = Notification.Name("extensionInstalled")
+    /// An extension was uninstalled.
+    static let extensionUninstalled = Notification.Name("extensionUninstalled")
+
+    // MARK: - Inline Suggestions
+
+    /// Partially accept an inline suggestion.
+    static let inlineSuggestionPartialAccept = Notification.Name("inlineSuggestionPartialAccept")
+
+    // MARK: - Auth
+
+    /// GitHub authentication state changed.
+    static let gitHubAuthDidChange = Notification.Name("GitHubAuthDidChange")
+
+    // MARK: - Auto Save
+
+    /// A file was auto-saved.
+    static let autoSaved = Notification.Name("AutoSaved")
 }

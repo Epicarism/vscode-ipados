@@ -523,5 +523,5 @@ extension UIResponder {
 extension Notification.Name {
     /// Posted when partial accept should be performed.
     /// Bind your editor's insert method to this notification.
-    static let inlineSuggestionPartialAccept = Notification.Name("inlineSuggestionPartialAccept")
+    static let inlineSuggestionPartialAccept = .inlineSuggestionPartialAccept
 }

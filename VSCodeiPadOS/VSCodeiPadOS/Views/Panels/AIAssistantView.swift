@@ -238,7 +238,7 @@ struct AIAssistantView: View {
             editorCore.tabs[index].content = newLines.joined(separator: "\n")
             
             // Post notification for visual feedback
-            NotificationCenter.default.post(name: NSNotification.Name("CodeInserted"), object: nil, userInfo: ["code": code])
+            NotificationCenter.default.post(name: .codeInserted, object: nil, userInfo: ["code": code])
             print("[AI] Inserted \(code.count) chars at line \(cursorLine)")
         } else {
             // No active tab - create a new one with the code
