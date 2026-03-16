@@ -64,10 +64,7 @@ struct UserDefaultsKeys {
     static let foldStatePrefix = "codeFoldingState_"
 }
 
-// MARK: - Notification for layout invalidation
-extension Notification.Name {
-    static let codeFoldingDidChange = .codeFoldingDidChange
-}
+// MARK: - Notification (codeFoldingDidChange defined in Notification+Names.swift)
 
 // MARK: - Code Folding Manager
 @MainActor

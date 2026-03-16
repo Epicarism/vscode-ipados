@@ -178,7 +178,7 @@ class EditorCore: ObservableObject {
         }
 
         // Connect AutoSaveManager
-        AutoSaveManager.shared.connect(to: self)
+        Task { @MainActor in AutoSaveManager.shared.connect(to: self) }
 
         // Observe UserDefaults changes from Settings slider
         fontSizeObserver = NotificationCenter.default.addObserver(
@@ -1040,7 +1040,7 @@ mod tests {
             addTab(fileName: url.lastPathComponent, content: content, url: url)
 
             // Track recently opened file
-            RecentFileManager.shared.addRecentFile(url)
+            Task { @MainActor in RecentFileManager.shared.addRecentFile(url) }
 
             // Index the file in Spotlight for search
             SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
@@ -1550,7 +1550,7 @@ extension EditorCore {
                     tabs.append(tab)
 
                     // Track recently opened file
-                    RecentFileManager.shared.addRecentFile(fileURL)
+                    Task { @MainActor in RecentFileManager.shared.addRecentFile(fileURL) }
 
                     if path == activeTabPath {
                         activeTabId = tab.id
@@ -1576,7 +1576,4 @@ extension EditorCore {
 
 // MARK: - Notification Names for Code Folding
 
-extension Notification.Name {
-    static let collapseAllFolds = .collapseAllFolds
-    static let expandAllFolds = .expandAllFolds
-}
+// Notification names (collapseAllFolds, expandAllFolds) defined in Notification+Names.swift
