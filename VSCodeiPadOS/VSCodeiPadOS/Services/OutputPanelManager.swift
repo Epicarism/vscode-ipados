@@ -100,6 +100,129 @@ struct OutputLine: Identifiable {
     }
 }
 
+// MARK: - ANSI Parser
+
+/// Parses ANSI escape codes from text and extracts color attributes
+enum ANSIParser {
+    /// ANSI escape sequence pattern: ESC [ ... m
+    private static let ansiPattern = "\\x1B\\[[0-9;]*m"
+    
+    /// Check if text contains ANSI escape codes
+    static func containsANSICodes(_ text: String) -> Bool {
+        return text.contains("\u{1B}[")
+    }
+    
+    /// Strip ANSI escape codes from text
+    static func stripANSICodes(from text: String) -> String {
+        guard containsANSICodes(text) else { return text }
+        return text.replacingOccurrences(
+            of: ansiPattern,
+            with: "",
+            options: .regularExpression
+        )
+    }
+    
+    /// Parse ANSI codes and return stripped text with color attributes
+    static func parseANSI(_ text: String) -> (strippedText: String, attributes: [NSRange: [NSAttributedString.Key: Any]]) {
+        guard containsANSICodes(text) else {
+            return (text, [:])
+        }
+        
+        var attributes: [NSRange: [NSAttributedString.Key: Any]] = [:]
+        var strippedText = ""
+        var currentAttrs: [NSAttributedString.Key: Any] = [:]
+        var scanner = Scanner(string: text)
+        scanner.charactersToBeSkipped = nil
+        
+        while !scanner.isAtEnd {
+            // Scan up to escape character
+            if let plainText = scanner.scanUpToString("\u{1B}") {
+                let startIndex = strippedText.count
+                strippedText += plainText
+                if !currentAttrs.isEmpty {
+                    let range = NSRange(location: startIndex, length: plainText.count)
+                    attributes[range] = currentAttrs
+                }
+            }
+            
+            // Check if we have an escape sequence
+            if scanner.scanString("\u{1B}") != nil {
+                if scanner.scanString("[") != nil {
+                    // Parse CSI sequence
+                    var codeString = ""
+                    while !scanner.isAtEnd {
+                        if let char = scanner.scanCharacter(), char.isNumber || char == ";" {
+                            codeString.append(char)
+                        } else {
+                            // End of sequence (should be 'm' for SGR)
+                            break
+                        }
+                    }
+                    
+                    // Parse SGR codes
+                    let codes = codeString.split(separator: ";").compactMap { Int($0) }
+                    currentAttrs = parseSGRCodes(codes, currentAttrs: currentAttrs)
+                }
+            } else if !scanner.isAtEnd {
+                // No escape found, take rest of string
+                let remaining = String(text[scanner.currentIndex...])
+                let startIndex = strippedText.count
+                strippedText += remaining
+                if !currentAttrs.isEmpty {
+                    let range = NSRange(location: startIndex, length: remaining.count)
+                    attributes[range] = currentAttrs
+                }
+                break
+            }
+        }
+        
+        return (strippedText, attributes)
+    }
+    
+    /// Parse SGR (Select Graphic Rendition) codes into attributes
+    private static func parseSGRCodes(_ codes: [Int], currentAttrs: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+        var attrs = currentAttrs
+        
+        for code in codes {
+            switch code {
+            case 0: // Reset
+                attrs = [:]
+            case 1: // Bold
+                attrs[.font] = UIFont.boldSystemFont(ofSize: 12)
+            case 4: // Underline
+                attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            case 30: attrs[.foregroundColor] = UIColor.black
+            case 31: attrs[.foregroundColor] = UIColor.red
+            case 32: attrs[.foregroundColor] = UIColor.green
+            case 33: attrs[.foregroundColor] = UIColor(red: 1.0, green: 0.8, blue: 0.0, alpha: 1.0) // Yellow/Orange
+            case 34: attrs[.foregroundColor] = UIColor.blue
+            case 35: attrs[.foregroundColor] = UIColor.magenta
+            case 36: attrs[.foregroundColor] = UIColor.cyan
+            case 37: attrs[.foregroundColor] = UIColor.white
+            case 90: attrs[.foregroundColor] = UIColor.darkGray // Bright black
+            case 91: attrs[.foregroundColor] = UIColor(red: 1.0, green: 0.4, blue: 0.4, alpha: 1.0) // Bright red
+            case 92: attrs[.foregroundColor] = UIColor(red: 0.4, green: 1.0, blue: 0.4, alpha: 1.0) // Bright green
+            case 93: attrs[.foregroundColor] = UIColor(red: 1.0, green: 1.0, blue: 0.4, alpha: 1.0) // Bright yellow
+            case 94: attrs[.foregroundColor] = UIColor(red: 0.4, green: 0.4, blue: 1.0, alpha: 1.0) // Bright blue
+            case 95: attrs[.foregroundColor] = UIColor(red: 1.0, green: 0.4, blue: 1.0, alpha: 1.0) // Bright magenta
+            case 96: attrs[.foregroundColor] = UIColor(red: 0.4, green: 1.0, blue: 1.0, alpha: 1.0) // Bright cyan
+            case 97: attrs[.foregroundColor] = UIColor(red: 0.9, green: 0.9, blue: 0.9, alpha: 1.0) // Bright white
+            case 40: attrs[.backgroundColor] = UIColor.black
+            case 41: attrs[.backgroundColor] = UIColor.red
+            case 42: attrs[.backgroundColor] = UIColor.green
+            case 43: attrs[.backgroundColor] = UIColor(red: 1.0, green: 0.8, blue: 0.0, alpha: 1.0) // Yellow bg
+            case 44: attrs[.backgroundColor] = UIColor.blue
+            case 45: attrs[.backgroundColor] = UIColor.magenta
+            case 46: attrs[.backgroundColor] = UIColor.cyan
+            case 47: attrs[.backgroundColor] = UIColor.white
+            default: break
+            }
+        }
+        
+        return attrs
+    }
+}
+
 // MARK: - Remote Execution Status
 
 /// Tracks the state of remote execution for progress indication
@@ -174,12 +297,23 @@ final class OutputPanelManager: ObservableObject {
     /// Append a single line to a channel
     func appendLine(_ line: String, to channel: OutputChannel, streamType: StreamType = .stdout) {
         let logLevel: LogLevel = inferLogLevel(from: line, streamType: streamType)
-
+        
+        // Parse ANSI codes if present
+        let isAnsiFormatted = ANSIParser.containsANSICodes(line)
+        let (strippedText, ansiAttributes) = isAnsiFormatted 
+            ? ANSIParser.parseANSI(line)
+            : (line, nil)
+        
+        // Use stripped text for log level inference to avoid false positives from escape sequences
+        let effectiveLogLevel = isAnsiFormatted ? inferLogLevel(from: strippedText, streamType: streamType) : logLevel
+        
         let outputLine = OutputLine(
-            text: line,
-            logLevel: logLevel,
+            text: strippedText,
+            logLevel: effectiveLogLevel,
             streamType: streamType,
-            timestamp: Date()
+            timestamp: Date(),
+            isAnsiFormatted: isAnsiFormatted && !ansiAttributes.isEmpty,
+            ansiAttributes: ansiAttributes
         )
 
         var current = outputLines[channel] ?? []

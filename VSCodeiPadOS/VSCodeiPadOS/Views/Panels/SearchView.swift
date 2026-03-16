@@ -363,6 +363,8 @@ struct SearchView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Clear search")
+            .accessibilityHint("Double tap to clear the search and results")
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -434,6 +436,8 @@ struct SearchView: View {
                     .frame(width: 20)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(showReplace ? "Hide replace" : "Show replace")
+            .accessibilityHint("Double tap to toggle the replace text field")
             
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
@@ -596,6 +600,8 @@ struct SearchView: View {
             .buttonStyle(.borderedProminent)
             .disabled(searchText.count < 2 || searchManager.isSearching)
             .controlSize(.small)
+            .accessibilityLabel("Search")
+            .accessibilityHint("Double tap to search for the entered text")
             
             Spacer()
             
@@ -636,11 +642,15 @@ struct SearchView: View {
                 }
                 Spacer()
             }
+            }
             .onTapGesture {
                 withAnimation {
                     showDetails.toggle()
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Files to include/exclude filter")
+            .accessibilityHint("Double tap to show or hide file filter options")
             
             if showDetails {
                 filesToIncludeExcludeInputs
@@ -654,7 +664,8 @@ struct SearchView: View {
             TextField("files to include", text: $filesToInclude)
                 .textFieldStyle(.plain)
                 .padding(6)
-
+                .accessibilityLabel("Files to include")
+                .accessibilityHint("Enter file patterns to include in search, separated by commas")
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(4)
                 .overlay(
@@ -665,7 +676,8 @@ struct SearchView: View {
             TextField("files to exclude", text: $filesToExclude)
                 .textFieldStyle(.plain)
                 .padding(6)
-
+                .accessibilityLabel("Files to exclude")
+                .accessibilityHint("Enter file patterns to exclude from search, separated by commas")
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(4)
                 .overlay(
@@ -900,6 +912,10 @@ struct SearchView: View {
             do {
                 let result = try await searchManager.replace(in: rootURL, query: query, replacement: replaceText)
                 AppLogger.editor.debug("Replace completed: \(result.replacements) replacements in \(result.filesTouched) files")
+                // Refresh search results after replace
+                if !searchText.isEmpty {
+                    debouncedSearch(immediate: true)
+                }
             } catch {
                 AppLogger.editor.debug("Replace failed: \(error.localizedDescription)")
             }
@@ -934,7 +950,7 @@ struct SearchView: View {
     private var rawResults: [FileSearchResult] {
         cachedConvertedResults
     }
-}
+
 
 // MARK: - Supporting Views
 
@@ -955,7 +971,8 @@ struct ToggleIcon: View {
                 .cornerRadius(3)
         }
         .buttonStyle(.plain)
-        .accessibilityHint(tooltip ?? "")
+        .accessibilityLabel(tooltip ?? "Toggle option")
+        .accessibilityHint(isSelected ? "Currently enabled. Double tap to disable." : "Currently disabled. Double tap to enable.")
     }
 }
 
@@ -1034,6 +1051,9 @@ struct FileResultRow: View {
             .background(isAnyMatchSelected ? Color.accentColor.opacity(0.1) : Color.clear)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(fileResult.fileName), \(fileResult.matches.count) matches")
+        .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to expand")
     }
     
     @ViewBuilder
@@ -1098,6 +1118,9 @@ struct MatchRow: View {
             .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Line \(match.lineNumber): \(match.text)")
+        .accessibilityHint("Double tap to open this match")
     }
 }
 
@@ -1125,6 +1148,8 @@ struct DirectoryGroupHeader: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Directory: \(directory), \(count) files")
     }
 }
 
@@ -1286,6 +1311,8 @@ struct SearchProgressView: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Cancel search")
+                .accessibilityHint("Double tap to cancel the current search")
             }
             
             HStack {
@@ -1295,6 +1322,8 @@ struct SearchProgressView: View {
                 
                 Spacer()
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Searching, \(Int(progress * 100)) percent complete")
         }
     }
 }

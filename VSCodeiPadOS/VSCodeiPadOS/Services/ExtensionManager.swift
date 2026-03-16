@@ -75,6 +75,8 @@ final class ExtensionManager: ObservableObject {
     @Published var selectedFilter: ExtensionFilter = .installed
     @Published var selectedCategory: ExtensionCategory? = nil
     @Published var isLoading: Bool = false
+    @Published var lastError: ExtensionError? = nil
+    @Published var operationInProgress: String? = nil
     
     private let installedKey = "installedExtensionIds"
     
@@ -123,6 +125,11 @@ final class ExtensionManager: ObservableObject {
     // MARK: - Install / Uninstall
     
     func install(_ extension_: IDEExtension) {
+        guard !extension_.isInstalled else { return }
+        
+        operationInProgress = extension_.id
+        lastError = nil
+        
         if let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) {
             catalogExtensions[index].isInstalled = true
             catalogExtensions[index].isEnabled = true
@@ -133,9 +140,16 @@ final class ExtensionManager: ObservableObject {
                 userInfo: ["extension": extension_.displayName]
             )
         }
+        
+        operationInProgress = nil
     }
     
     func uninstall(_ extension_: IDEExtension) {
+        guard extension_.isInstalled else { return }
+        
+        operationInProgress = extension_.id
+        lastError = nil
+        
         if let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) {
             catalogExtensions[index].isInstalled = false
             catalogExtensions[index].isEnabled = false
@@ -146,13 +160,27 @@ final class ExtensionManager: ObservableObject {
                 userInfo: ["extension": extension_.displayName]
             )
         }
+        
+        operationInProgress = nil
     }
     
     func toggleEnabled(_ extension_: IDEExtension) {
+        guard extension_.isInstalled else { return }
+        
         if let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) {
             catalogExtensions[index].isEnabled.toggle()
             saveInstalledState()
         }
+    }
+    
+    func clearError() {
+        lastError = nil
+    }
+    
+    // MARK: - Helper to get current extension state
+    
+    func currentExtension(for id: String) -> IDEExtension? {
+        catalogExtensions.first { $0.id == id }
     }
     
     // MARK: - Persistence
@@ -378,7 +406,39 @@ final class ExtensionManager: ObservableObject {
     ]
 }
 
-// MARK: - Notifications (defined in Notification+Names.swift)
+// MARK: - Error Types
+
+enum ExtensionError: Identifiable, LocalizedError {
+    case installFailed(String)
+    case uninstallFailed(String)
+    case networkError(String)
+    case unknown(String)
+    
+    var id: String {
+        switch self {
+        case .installFailed(let name): return "install-\(name)"
+        case .uninstallFailed(let name): return "uninstall-\(name)"
+        case .networkError(let msg): return "network-\(msg)"
+        case .unknown(let msg): return "unknown-\(msg)"
+        }
+    }
+    
+    var errorDescription: String? {
+        switch self {
+        case .installFailed(let name): return "Failed to install \(name)"
+        case .uninstallFailed(let name): return "Failed to uninstall \(name)"
+        case .networkError(let msg): return "Network error: \(msg)"
+        case .unknown(let msg): return msg
+        }
+    }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let extensionInstalled = Notification.Name("extensionInstalled")
+    static let extensionUninstalled = Notification.Name("extensionUninstalled")
+}
 
 // MARK: - Download Count Formatting
 

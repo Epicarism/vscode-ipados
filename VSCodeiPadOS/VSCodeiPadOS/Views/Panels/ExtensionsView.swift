@@ -12,8 +12,8 @@ import SwiftUI
 
 struct ExtensionsPanel: View {
     @StateObject private var manager = ExtensionManager.shared
-    @State private var selectedExtension: IDEExtension? = nil
-    @State private var showDetail: Bool = false
+    @State private var selectedExtensionId: String? = nil
+    @State private var showingDetail: Bool = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +26,9 @@ struct ExtensionsPanel: View {
             Divider()
             
             // Extension list
-            if manager.filteredExtensions.isEmpty {
+            if manager.isLoading {
+                loadingState
+            } else if manager.filteredExtensions.isEmpty {
                 emptyState
             } else {
                 extensionList
@@ -34,8 +36,19 @@ struct ExtensionsPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Extensions panel")
-        .sheet(item: $selectedExtension) { ext in
-            ExtensionDetailView(extension_: ext, manager: manager)
+        .sheet(isPresented: $showingDetail) {
+            if let extId = selectedExtensionId,
+               let ext = manager.currentExtension(for: extId) {
+                ExtensionDetailView(extension_: ext, manager: manager)
+            }
+        }
+        .alert("Error", isPresented: .init(
+            get: { manager.lastError != nil },
+            set: { if !$0 { manager.clearError() } }
+        )) {
+            Button("OK", role: .cancel) { manager.clearError() }
+        } message: {
+            Text(manager.lastError?.errorDescription ?? "Unknown error")
         }
     }
     
@@ -168,7 +181,10 @@ struct ExtensionsPanel: View {
                     ExtensionRowView(
                         extension_: ext,
                         manager: manager,
-                        onTap: { selectedExtension = ext }
+                        onTap: {
+                            selectedExtensionId = ext.id
+                            showingDetail = true
+                        }
                     )
                     Divider().padding(.leading, 52)
                 }
@@ -176,6 +192,20 @@ struct ExtensionsPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Extensions list, \(manager.filteredExtensions.count) extensions")
+    }
+    
+    // MARK: - Loading State
+    
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Loading extensions...")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
     }
     
     // MARK: - Empty State
@@ -229,7 +259,7 @@ struct ExtensionRowView: View {
     @ObservedObject var manager: ExtensionManager
     let onTap: () -> Void
     
-    @State private var isHovering = false
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: onTap) {
@@ -276,6 +306,7 @@ struct ExtensionRowView: View {
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 9))
+                                .foregroundColor(.yellow)
                             Text(String(format: "%.1f", extension_.rating))
                                 .font(.system(size: 10))
                         }
@@ -291,14 +322,13 @@ struct ExtensionRowView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(isHovering ? Color(UIColor.systemFill).opacity(0.5) : Color.clear)
+            .background(isPressed ? Color(UIColor.systemFill).opacity(0.5) : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle(isPressed: $isPressed))
         .accessibilityLabel("\(extension_.displayName), by \(extension_.publisher)")
         .accessibilityHint("\(extension_.isInstalled ? "Installed" : "Not installed"). \(extension_.description). Double tap to view details.")
         .accessibilityAddTraits(.isButton)
-        .onHover { isHovering = $0 }
     }
     
     private var extensionIcon: some View {
@@ -340,7 +370,13 @@ struct ExtensionRowView: View {
     
     @ViewBuilder
     private var actionButton: some View {
-        if extension_.isInstalled {
+        let isOperating = manager.operationInProgress == extension_.id
+        
+        if isOperating {
+            ProgressView()
+                .scaleEffect(0.7)
+                .frame(width: 60)
+        } else if extension_.isInstalled {
             Menu {
                 if extension_.isEnabled {
                     Button(action: { manager.toggleEnabled(extension_) }) {
@@ -397,12 +433,30 @@ struct ExtensionRowView: View {
     }
 }
 
+// MARK: - Pressable Button Style
+
+struct PressableButtonStyle: ButtonStyle {
+    @Binding var isPressed: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .onChange(of: configuration.isPressed) { _, newValue in
+                isPressed = newValue
+            }
+    }
+}
+
 // MARK: - Extension Detail View
 
 struct ExtensionDetailView: View {
     let extension_: IDEExtension
     @ObservedObject var manager: ExtensionManager
     @Environment(\.dismiss) var dismiss
+    
+    // Get current state from manager
+    private var currentExtension: IDEExtension? {
+        manager.currentExtension(for: extension_.id)
+    }
     
     var body: some View {
         NavigationView {
@@ -479,34 +533,66 @@ struct ExtensionDetailView: View {
             
             Spacer()
             
-            // Install button
-            if let current = manager.catalogExtensions.first(where: { $0.id == extension_.id }) {
-                if current.isInstalled {
+            // Action button
+            actionButton
+        }
+    }
+    
+    @ViewBuilder
+    private var actionButton: some View {
+        if let current = currentExtension {
+            let isOperating = manager.operationInProgress == current.id
+            
+            if isOperating {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(width: 80)
+            } else if current.isInstalled {
+                VStack(spacing: 8) {
                     Button(action: { manager.uninstall(current) }) {
                         Text("Uninstall")
                             .font(.system(size: 13, weight: .medium))
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color(UIColor.systemFill))
+                            .background(Color.red.opacity(0.1))
+                            .foregroundColor(.red)
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Uninstall \(extension_.displayName)")
+                    .accessibilityLabel("Uninstall \(current.displayName)")
                     .accessibilityHint("Double tap to uninstall this extension")
-                } else {
-                    Button(action: { manager.install(current) }) {
-                        Text("Install")
-                            .font(.system(size: 13, weight: .medium))
+                    
+                    Button(action: { manager.toggleEnabled(current) }) {
+                        Text(current.isEnabled ? "Disable" : "Enable")
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.accentColor)
-                            .foregroundColor(.white)
+                            .padding(.vertical, 6)
+                            .background(Color(UIColor.systemFill))
+                            .foregroundColor(current.isEnabled ? .secondary : .green)
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Install \(extension_.displayName)")
-                    .accessibilityHint("Double tap to install this extension")
+                    .accessibilityLabel(current.isEnabled ? "Disable \(current.displayName)" : "Enable \(current.displayName)")
+                    .accessibilityHint("Double tap to \(current.isEnabled ? "disable" : "enable") this extension")
                 }
+                .frame(width: 100)
+            } else {
+                Button(action: { manager.install(current) }) {
+                    Text("Install")
+                        .font(.system(size: 13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.accentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Install \(current.displayName)")
+                .accessibilityHint("Double tap to install this extension")
+                .frame(width: 100)
             }
         }
     }
@@ -568,4 +654,23 @@ struct ExtensionDetailView: View {
                 .accessibilityLabel("Extension identifier: \(extension_.fullId)")
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Extensions Panel") {
+    ExtensionsPanel()
+        .frame(width: 350, height: 600)
+}
+
+#Preview("Extension Row") {
+    let manager = ExtensionManager.shared
+    return VStack {
+        ExtensionRowView(
+            extension_: ExtensionManager.builtInCatalog[0],
+            manager: manager,
+            onTap: {}
+        )
+    }
+    .padding()
 }

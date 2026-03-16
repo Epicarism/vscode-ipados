@@ -219,6 +219,9 @@ class EditorCore: ObservableObject {
     @Published var showSaveAsDialog = false
     @Published var saveAsContent: String = ""
 
+    // Pending close tab (for unsaved changes confirmation)
+    @Published var pendingCloseTabId: UUID? = nil
+
     // Cursor tracking
     @Published var cursorPosition = CursorPosition()
 
@@ -975,6 +978,20 @@ mod tests {
 
     func closeTab(id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+
+        // If the tab has unsaved changes, defer close to confirmation dialog
+        if tabs[index].isUnsaved {
+            pendingCloseTabId = id
+            return
+        }
+
+        forceCloseTab(id: id)
+    }
+
+    /// Actually removes the tab without confirmation. Call after user confirms.
+    func forceCloseTab(id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        pendingCloseTabId = nil
 
         // Release security-scoped access if this tab was holding it.
         if let url = tabs[index].url {

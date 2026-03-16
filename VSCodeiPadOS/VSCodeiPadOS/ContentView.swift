@@ -2,6 +2,57 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+// MARK: - Sidebar Tab Enum
+/// Represents the available sidebar tabs with named cases for clarity
+enum SidebarTab: Int, CaseIterable {
+    case files = 0
+    case search = 1
+    case sourceControl = 2
+    case runAndDebug = 3
+    case remoteExplorer = 4
+    case extensions = 5
+    case testing = 6
+    
+    /// Accessibility label for VoiceOver
+    var accessibilityLabel: String {
+        switch self {
+        case .files: return "File Explorer"
+        case .search: return "Search in Files"
+        case .sourceControl: return "Source Control - Git"
+        case .runAndDebug: return "Run and Debug"
+        case .remoteExplorer: return "Remote Explorer - SSH"
+        case .extensions: return "Extensions"
+        case .testing: return "Test Explorer"
+        }
+    }
+    
+    /// SF Symbol icon name for the tab
+    var icon: String {
+        switch self {
+        case .files: return "folder"
+        case .search: return "magnifyingglass"
+        case .sourceControl: return "arrow.triangle.branch"
+        case .runAndDebug: return "play.fill"
+        case .remoteExplorer: return "network"
+        case .extensions: return "puzzlepiece"
+        case .testing: return "testtube.2"
+        }
+    }
+    
+    /// Human-readable title for the tab
+    var title: String {
+        switch self {
+        case .files: return "Explorer"
+        case .search: return "Search"
+        case .sourceControl: return "Source Control"
+        case .runAndDebug: return "Run & Debug"
+        case .remoteExplorer: return "Remote"
+        case .extensions: return "Extensions"
+        case .testing: return "Testing"
+        }
+    }
+}
+
 // MARK: - Helper Functions
 // Moved to Extensions/FileHelpers.swift
 
@@ -389,49 +440,55 @@ struct ContentView: View {
     
     @ViewBuilder
     private var sidebarContent: some View {
-        switch editorCore.focusedSidebarTab {
-        case 0:
-            IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
-        case 1:
-            if let rootURL = fileNavigator.rootURL {
-                SearchView(
-                    onResultSelected: { filePath, lineNumber in
-                        // Open file and go to line
-                        let url = URL(fileURLWithPath: filePath)
-                        editorCore.openFile(from: url)
-                        editorCore.requestedGoToLine = lineNumber
-                    },
-                    rootURL: rootURL
-                )
-            } else {
-                // No workspace open - show placeholder
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "folder.badge.questionmark")
-                        .font(.system(size: 40))
-                        .foregroundColor(theme.sidebarForeground.opacity(0.3))
-                    Text("Open a folder to search")
-                        .font(.caption)
-                        .foregroundColor(theme.sidebarForeground.opacity(0.6))
-                    Spacer()
+        // Convert Int to enum, defaulting to .files for invalid values
+        let sidebarTab = SidebarTab(rawValue: editorCore.focusedSidebarTab) ?? .files
+        
+        Group {
+            switch sidebarTab {
+            case .files:
+                IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
+            case .search:
+                if let rootURL = fileNavigator.rootURL {
+                    SearchView(
+                        onResultSelected: { filePath, lineNumber in
+                            // Open file and go to line
+                            let url = URL(fileURLWithPath: filePath)
+                            editorCore.openFile(from: url)
+                            editorCore.requestedGoToLine = lineNumber
+                        },
+                        rootURL: rootURL
+                    )
+                } else {
+                    // No workspace open - show placeholder
+                    VStack(spacing: 12) {
+                        Spacer()
+                        Image(systemName: "folder.badge.questionmark")
+                            .font(.system(size: 40))
+                            .foregroundColor(theme.sidebarForeground.opacity(0.3))
+                        Text("Open a folder to search")
+                            .font(.caption)
+                            .foregroundColor(theme.sidebarForeground.opacity(0.6))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .background(theme.sidebarBackground)
                 }
-                .frame(maxWidth: .infinity)
-                .background(theme.sidebarBackground)
+            case .sourceControl:
+                GitView()
+            case .runAndDebug:
+                DebugView()
+            case .remoteExplorer:
+                RemoteExplorerView(editorCore: editorCore)
+            case .extensions:
+                ExtensionsPanel()
+            case .testing:
+                TestView()
             }
-        case 2:
-            GitView()
-        case 3:
-            DebugView()
-        case 4:
-            RemoteExplorerView(editorCore: editorCore)
-        case 5:
-            ExtensionsPanel()
-        case 6:
-            TestView()
-        default:
-            IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(sidebarTab.accessibilityLabel)
     }
+
 }
 
 // MARK: - Activity Bar

@@ -1257,6 +1257,7 @@ struct ANSIText: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     private static let ansiRegex = try! NSRegularExpression(pattern: "\u{1B}\\[([0-9;]*)([a-zA-Z])")
+    private static let oscRegex = try! NSRegularExpression(pattern: "\u{1B}\\][^\u{07}\u{1B}]*(\u{07}|\u{1B}\\\\)")
     
     init(_ text: String) {
         self.text = text
@@ -1306,18 +1307,21 @@ struct ANSIText: View {
     }
     
     private func parseANSI(_ input: String) -> [ANSISegment] {
+        // First strip OSC sequences (terminal title changes, etc.)
+        let cleanedInput = Self.oscRegex.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: "")
+        
         var segments: [ANSISegment] = []
         var currentColor: Color? = nil
         var currentBackgroundColor: Color? = nil
         var bold = false
         var italic = false
         var underline = false
-        
+        var reverseVideo = false
         let regex = Self.ansiRegex
         
-        let nsInput = input as NSString
+        let nsInput = cleanedInput as NSString
         var lastEnd = 0
-        let matches = regex.matches(in: input, range: NSRange(location: 0, length: nsInput.length))
+        let matches = regex.matches(in: cleanedInput, range: NSRange(location: 0, length: nsInput.length))
         
         for match in matches {
             let matchRange = match.range
@@ -1327,7 +1331,9 @@ struct ANSIText: View {
                 let textRange = NSRange(location: lastEnd, length: matchRange.location - lastEnd)
                 let text = nsInput.substring(with: textRange)
                 if !text.isEmpty {
-                    segments.append(ANSISegment(text: text, color: currentColor, backgroundColor: currentBackgroundColor, bold: bold, italic: italic, underline: underline))
+                    let fg = reverseVideo ? currentBackgroundColor : currentColor
+                    let bg = reverseVideo ? currentColor : currentBackgroundColor
+                    segments.append(ANSISegment(text: text, color: fg, backgroundColor: bg, bold: bold, italic: italic, underline: underline))
                 }
             }
             
@@ -1342,13 +1348,18 @@ struct ANSIText: View {
                     let code = parts.isEmpty ? 0 : parts[i]
                     switch code {
                     case 0:  // Reset
-                        currentColor = nil; currentBackgroundColor = nil; bold = false; italic = false; underline = false
+                        currentColor = nil; currentBackgroundColor = nil; bold = false; italic = false; underline = false; reverseVideo = false
                     case 1: bold = true
+                    case 2: bold = false  // Dim/faint - treat as un-bold
                     case 3: italic = true
                     case 4: underline = true
+                    case 7: reverseVideo = true
+                    case 9: underline = true  // Strikethrough - approximate with underline
                     case 22: bold = false
                     case 23: italic = false
                     case 24: underline = false
+                    case 27: reverseVideo = false
+                    case 29: underline = false  // Un-strikethrough
                     // Standard foreground colors (30-37)
                     case 30: currentColor = colorForANSI(0, bold: bold)
                     case 31: currentColor = colorForANSI(1, bold: bold)
@@ -1422,6 +1433,9 @@ struct ANSIText: View {
                     }
                     i += 1
                 }
+            } else {
+                // Non-SGR CSI sequences (cursor movement, erase, etc.) - strip them
+                // J=erase display, K=erase line, H/f=cursor position, A/B/C/D=cursor move
             }
             
             lastEnd = matchRange.location + matchRange.length
@@ -1431,7 +1445,9 @@ struct ANSIText: View {
         if lastEnd < nsInput.length {
             let text = nsInput.substring(from: lastEnd)
             if !text.isEmpty {
-                segments.append(ANSISegment(text: text, color: currentColor, backgroundColor: currentBackgroundColor, bold: bold, italic: italic, underline: underline))
+                let fg = reverseVideo ? currentBackgroundColor : currentColor
+                let bg = reverseVideo ? currentColor : currentBackgroundColor
+                segments.append(ANSISegment(text: text, color: fg, backgroundColor: bg, bold: bold, italic: italic, underline: underline))
             }
         }
         
