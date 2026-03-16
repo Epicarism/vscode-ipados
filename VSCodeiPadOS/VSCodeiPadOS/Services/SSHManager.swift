@@ -49,7 +49,7 @@ enum SSHClientError: Error, LocalizedError {
     case notConnected
     case timeout
     case invalidPrivateKey
-    case commandExecutionFailed(String)
+    case commandFailed(String)
     case notImplemented
     
     var errorDescription: String? {
@@ -61,7 +61,7 @@ enum SSHClientError: Error, LocalizedError {
         case .notConnected: return "Not connected to server"
         case .timeout: return "Connection timed out"
         case .invalidPrivateKey: return "Invalid private key format"
-        case .commandExecutionFailed(let reason): return "Command execution failed: \(reason)"
+        case .commandFailed(let reason): return "Command execution failed: \(reason)"
         case .notImplemented: return "SSH not yet implemented - add SwiftNIO SSH package"
         }
     }

@@ -95,34 +95,3 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
 }
-
-// MARK: - Scene Session Extensions
-
-extension UISceneSession {
-    /// Get a stable identifier for this scene session
-    var windowId: UUID {
-        // Use persistentIdentifier to create a stable UUID
-        if let uuid = UUID(uuidString: persistentIdentifier) {
-            return uuid
-        }
-        // Fallback: create deterministic UUID from identifier
-        let data = Data(persistentIdentifier.utf8)
-        return UUID(uuid: (data as NSData).hash.uuid)
-    }
-}
-
-private extension Int {
-    var uuid: uuid_t {
-        var value = self
-        var bytes = [UInt8](repeating: 0, count: 16)
-        withUnsafeBytes(of: &value) { buffer in
-            for (index, byte) in buffer.enumerated() where index < 16 {
-                bytes[index] = byte
-            }
-        }
-        return (bytes[0], bytes[1], bytes[2], bytes[3],
-                bytes[4], bytes[5], bytes[6], bytes[7],
-                bytes[8], bytes[9], bytes[10], bytes[11],
-                bytes[12], bytes[13], bytes[14], bytes[15])
-    }
-}

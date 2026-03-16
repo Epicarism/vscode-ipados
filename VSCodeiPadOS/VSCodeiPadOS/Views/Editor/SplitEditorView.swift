@@ -13,68 +13,6 @@
 
 import SwiftUI
 
-// MARK: - Split Direction
-
-enum SplitDirection: String, CaseIterable {
-    case horizontal // side by side
-    case vertical   // top and bottom
-}
-
-// MARK: - Editor Pane Model
-
-class EditorPane: ObservableObject, Identifiable {
-    let id: UUID
-    @Published var tabs: [Tab]
-    @Published var activeTabId: UUID?
-    @Published var scrollOffset: CGFloat = 0
-    
-    var activeTab: Tab? {
-        tabs.first { $0.id == activeTabId }
-    }
-    
-    init(id: UUID = UUID(), tabs: [Tab] = [], activeTabId: UUID? = nil) {
-        self.id = id
-        self.tabs = tabs
-        self.activeTabId = activeTabId ?? tabs.first?.id
-    }
-    
-    func addTab(_ tab: Tab) {
-        // Check if already exists
-        if let existing = tabs.first(where: { $0.url == tab.url && tab.url != nil }) {
-            activeTabId = existing.id
-            return
-        }
-        tabs.append(tab)
-        activeTabId = tab.id
-    }
-    
-    func closeTab(id: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        tabs.remove(at: index)
-        
-        if activeTabId == id {
-            if tabs.isEmpty {
-                activeTabId = nil
-            } else if index >= tabs.count {
-                activeTabId = tabs[tabs.count - 1].id
-            } else {
-                activeTabId = tabs[index].id
-            }
-        }
-    }
-    
-    func selectTab(id: UUID) {
-        activeTabId = id
-    }
-    
-    func updateTabContent(_ content: String) {
-        guard let index = tabs.firstIndex(where: { $0.id == activeTabId }) else { return }
-        tabs[index].content = content
-        if tabs[index].url != nil {
-            tabs[index].isUnsaved = true
-        }
-    }
-}
 
 // MARK: - Split Editor Manager
 

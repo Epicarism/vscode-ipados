@@ -7,6 +7,7 @@ import Combine
 //
 // NOTE: This file is intentionally self-contained so it can integrate with varying app models.
 
+@MainActor
 public final class SearchManager: ObservableObject {
 
     // MARK: - Types
@@ -167,14 +168,14 @@ public final class SearchManager: ObservableObject {
         persistHistory()
     }
 
-    private func loadHistory() {
+    nonisolated private func loadHistory() {
         guard let data = UserDefaults.standard.data(forKey: historyKey) else { return }
         if let decoded = try? JSONDecoder().decode([SearchQuery].self, from: data) {
             history = decoded
         }
     }
 
-    private func persistHistory() {
+    nonisolated private func persistHistory() {
         guard let data = try? JSONEncoder().encode(history) else { return }
         UserDefaults.standard.set(data, forKey: historyKey)
     }
@@ -308,7 +309,7 @@ public final class SearchManager: ObservableObject {
 
     // MARK: - File enumeration + filtering
 
-    private func resolveFiles(rootURL: URL, provided: [URL]?, query: SearchQuery) throws -> [URL] {
+    nonisolated private func resolveFiles(rootURL: URL, provided: [URL]?, query: SearchQuery) throws -> [URL] {
         let all: [URL]
         if let provided {
             all = provided
@@ -324,7 +325,7 @@ public final class SearchManager: ObservableObject {
         }
     }
 
-    private func enumerateFiles(rootURL: URL) throws -> [URL] {
+    nonisolated private func enumerateFiles(rootURL: URL) throws -> [URL] {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(at: rootURL,
                                             includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
@@ -354,7 +355,7 @@ public final class SearchManager: ObservableObject {
         let kind: Kind
     }
 
-    private func compilePattern(for query: SearchQuery) throws -> CompiledPattern {
+    nonisolated private func compilePattern(for query: SearchQuery) throws -> CompiledPattern {
         if query.options.isRegex {
             let opts: NSRegularExpression.Options = query.options.isCaseSensitive ? [] : [.caseInsensitive]
             do {
@@ -372,7 +373,7 @@ public final class SearchManager: ObservableObject {
         }
     }
 
-    private func searchFile(url: URL, rootURL: URL, query: SearchQuery) throws -> FileMatch? {
+    nonisolated private func searchFile(url: URL, rootURL: URL, query: SearchQuery) throws -> FileMatch? {
         let compiled = try compilePattern(for: query)
         let data: Data
         do {
@@ -397,7 +398,7 @@ public final class SearchManager: ObservableObject {
         return FileMatch(filePath: relPath, matches: matches)
     }
 
-    private func findMatches(in text: String, compiled: CompiledPattern) -> [FileMatch.Match] {
+    nonisolated private func findMatches(in text: String, compiled: CompiledPattern) -> [FileMatch.Match] {
         switch compiled.kind {
         case .regex(let re):
             return regexMatches(in: text, re: re)
@@ -406,7 +407,7 @@ public final class SearchManager: ObservableObject {
         }
     }
 
-    private func regexMatches(in text: String, re: NSRegularExpression) -> [FileMatch.Match] {
+    nonisolated private func regexMatches(in text: String, re: NSRegularExpression) -> [FileMatch.Match] {
         let ns = text as NSString
         let range = NSRange(location: 0, length: ns.length)
         let matches = re.matches(in: text, options: [], range: range)
@@ -423,7 +424,7 @@ public final class SearchManager: ObservableObject {
         }
     }
 
-    private func literalMatches(in text: String,
+    nonisolated private func literalMatches(in text: String,
                                needle: String,
                                compareLowercased: Bool,
                                wholeWord: Bool) -> [FileMatch.Match] {
@@ -469,7 +470,7 @@ public final class SearchManager: ObservableObject {
         return results
     }
 
-    private func isWholeWordMatch(in nsText: NSString, range: NSRange) -> Bool {
+    nonisolated private func isWholeWordMatch(in nsText: NSString, range: NSRange) -> Bool {
         // Word boundary definition: letters, numbers, underscore.
         func isWordChar(_ u: unichar) -> Bool {
             if u == 95 { return true } // '_'
@@ -492,7 +493,7 @@ public final class SearchManager: ObservableObject {
 
     // MARK: - Replace implementation
 
-    private func replaceInFile(url: URL,
+    nonisolated private func replaceInFile(url: URL,
                                compiled: CompiledPattern,
                                replacement: String) throws -> (changed: Bool, replacements: Int) {
         let data: Data
@@ -515,7 +516,7 @@ public final class SearchManager: ObservableObject {
         return (true, reps)
     }
 
-    private func replaceAll(in text: String,
+    nonisolated private func replaceAll(in text: String,
                             compiled: CompiledPattern,
                             replacement: String) -> (String, Int) {
         switch compiled.kind {
@@ -575,7 +576,7 @@ public final class SearchManager: ObservableObject {
 
     /// Very small glob matcher supporting '*', '**', and '?'.
     /// Matching is path-based (uses '/' as separator). Globs are compared against the full path.
-    private func matchesAnyGlob(path: String, globs: [String]) -> Bool {
+    nonisolated private func matchesAnyGlob(path: String, globs: [String]) -> Bool {
         guard !globs.isEmpty else { return false }
         for g in globs {
             if globMatch(path: path, pattern: g) { return true }
@@ -583,7 +584,7 @@ public final class SearchManager: ObservableObject {
         return false
     }
 
-    private func globMatch(path: String, pattern: String) -> Bool {
+    nonisolated private func globMatch(path: String, pattern: String) -> Bool {
         // Convert glob to regex.
         // - '**' => '.*'
         // - '*' => '[^/]*'

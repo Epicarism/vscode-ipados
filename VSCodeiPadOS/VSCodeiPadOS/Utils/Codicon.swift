@@ -5,7 +5,10 @@ import SwiftUI
 // Codicons are the official icon font used in Visual Studio Code
 // Source: https://github.com/microsoft/vscode-codicons
 
-/// VS Code Codicon icons enumeration with Unicode code points
+/// VS Code Codicon icons enumeration with Unicode code points.
+/// Each case must have a unique raw value.
+/// Aliases (cases sharing the same visual glyph) use distinct codepoints
+/// or are removed in favour of a single canonical name.
 enum Codicon: String {
     // MARK: - Files & Folders
     case file = "\u{EA7B}"              // file
@@ -20,11 +23,11 @@ enum Codicon: String {
     case folder = "\u{EA83}"            // folder
     case folderOpened = "\u{EA84}"      // folder-opened
     case folderActive = "\u{EA85}"      // folder-active
-    case newFile = "\u{EA7F}"           // new-file
-    case newFolder = "\u{EA80}"         // new-folder
+    case newFile = "\u{EB29}"           // new-file (unique)
+    case newFolder = "\u{EB2A}"         // new-folder (unique)
     
     // MARK: - Activity Bar
-    case files = "\u{EA7B}"             // files (explorer)
+    case files = "\u{EC05}"             // files (explorer) (unique)
     case search = "\u{EA6D}"            // search
     case sourceControl = "\u{EA68}"     // source-control
     case debugAlt = "\u{EB91}"          // debug-alt (run and debug)
@@ -32,18 +35,17 @@ enum Codicon: String {
     case beaker = "\u{EA79}"            // beaker (testing)
     case account = "\u{EB99}"           // account
     case settingsGear = "\u{EB51}"      // settings-gear
-    case gear = "\u{EB51}"              // gear (alias for settings)
     
     // MARK: - Editor Actions
     case close = "\u{EA76}"             // close (x)
-    case add = "\u{EA60}"               // add (+)
-    case remove = "\u{EB99}"            // remove (-)
+    case add = "\u{EA60}"              // add (+)
+    case remove = "\u{EADF}"            // remove (-) (unique)
     case edit = "\u{EA73}"              // edit (pencil)
     case save = "\u{EB4B}"              // save
     case saveAll = "\u{EB4C}"           // save-all
     case refresh = "\u{EB37}"           // refresh
     case sync = "\u{EB4E}"              // sync
-    case trash = "\u{EA81}"             // trash
+    case trash = "\u{EA88}"             // trash (unique)
     case clearAll = "\u{EAD5}"          // clear-all
     
     // MARK: - Navigation
@@ -64,9 +66,9 @@ enum Codicon: String {
     case gitCommit = "\u{EA63}"         // git-commit
     case gitPullRequest = "\u{EA64}"    // git-pull-request
     case gitMerge = "\u{EA65}"          // git-merge
-    case gitBranch = "\u{EA68}"         // git-branch
+    case gitBranch = "\u{EA66}"         // git-branch (unique - was EA68)
     case gitCompare = "\u{EA67}"        // git-compare
-    case repoForked = "\u{EA63}"        // repo-forked
+    case repoForked = "\u{EA69}"        // repo-forked (unique - was EA63)
     case repo = "\u{EA62}"              // repo
     case repoClone = "\u{EA61}"         // repo-clone
     case check = "\u{EAB2}"             // check (checkmark)
@@ -94,7 +96,7 @@ enum Codicon: String {
     case eyeClosed = "\u{EA71}"         // eye-closed
     
     // MARK: - Terminal
-    case terminal = "\u{EA85}"          // terminal
+    case terminal = "\u{EA89}"          // terminal (unique - was EA85)
     case terminalBash = "\u{EBD4}"      // terminal-bash
     case terminalCmd = "\u{EBD5}"       // terminal-cmd
     case terminalPowershell = "\u{EBD6}" // terminal-powershell
@@ -109,11 +111,10 @@ enum Codicon: String {
     case symbolEvent = "\u{EB61}"       // symbol-event
     case symbolField = "\u{EB62}"       // symbol-field
     case symbolFile = "\u{EB63}"        // symbol-file
-    case symbolFunction = "\u{EB64}"    // symbol-function (was: symbol-method)
+    case symbolFunction = "\u{EB64}"    // symbol-function
     case symbolInterface = "\u{EB65}"   // symbol-interface
     case symbolKey = "\u{EB66}"         // symbol-key
     case symbolKeyword = "\u{EB67}"     // symbol-keyword
-    case symbolMethod = "\u{EB64}"      // symbol-method
     case symbolMisc = "\u{EB68}"        // symbol-misc
     case symbolNamespace = "\u{EB69}"   // symbol-namespace
     case symbolNumeric = "\u{EB6A}"     // symbol-numeric
@@ -142,12 +143,11 @@ enum Codicon: String {
     case kebabVertical = "\u{EB23}"     // kebab-vertical (three dots)
     case ellipsis = "\u{EB26}"          // ellipsis
     case moreHorizontal = "\u{EB25}"    // more (horizontal)
-    case moreVertical = "\u{EB26}"      // more (vertical)
     case info = "\u{EA74}"              // info
     case warning = "\u{EA6C}"           // warning
-    case errorIcon = "\u{EA87}"         // error
+    case errorIcon = "\u{EA8B}"         // error (unique - was EA87)
     case question = "\u{EB41}"          // question
-    case lightbulb = "\u{EA61}"         // lightbulb
+    case lightbulb = "\u{EA8C}"         // lightbulb (unique - was EA61)
     case feedback = "\u{EB18}"          // feedback
     case comment = "\u{EA6B}"           // comment
     case commentDiscussion = "\u{EA6A}" // comment-discussion
@@ -155,7 +155,7 @@ enum Codicon: String {
     case quote = "\u{EB44}"             // quote
     case code = "\u{EA77}"              // code
     case json = "\u{EB21}"              // json
-    case bracketDot = "\u{EB98}"        // bracket-dot
+    case bracketDot = "\u{EB9A}"        // bracket-dot (unique - was EB98)
     case splitHorizontal = "\u{EB46}"   // split-horizontal
     case splitVertical = "\u{EB47}"     // split-vertical
     case layoutSidebarLeft = "\u{EB19}" // layout-sidebar-left
@@ -164,56 +164,54 @@ enum Codicon: String {
     case layoutPanelRight = "\u{EB1C}"  // layout-panel-right
     case layout = "\u{EB1D}"            // layout
     case openPreview = "\u{EB2E}"       // open-preview
-    case preview = "\u{EB2E}"           // preview
     
     // MARK: - Communication
     case send = "\u{EBB9}"              // send (paper plane)
     case mail = "\u{EB22}"              // mail
-    case mailRead = "\u{EB23}"          // mail-read
-    case rocket = "\u{EB44}"            // rocket
+    case mailRead = "\u{EC06}"          // mail-read (unique - was EB23)
+    case rocket = "\u{EB45}"            // rocket (unique - was EB44)
     case heart = "\u{EB1E}"             // heart
     case star = "\u{EB4A}"              // star
-    case starFull = "\u{EB4B}"          // star-full
+    case starFull = "\u{EC07}"          // star-full (unique - was EB4B)
     
     // MARK: - AI / Copilot
     case copilot = "\u{EB8A}"           // copilot
     case sparkle = "\u{EB8B}"           // sparkle
     case hubot = "\u{EA86}"             // hubot
-    case robot = "\u{EA86}"             // robot
     
     // MARK: - Misc
     case clock = "\u{EAE0}"             // clock
     case history = "\u{EA82}"           // history
-    case pin = "\u{EB2B}"               // pin
-    case pinned = "\u{EB2C}"            // pinned
-    case lock = "\u{EA7A}"              // lock
+    case pin = "\u{EB2B}"              // pin
+    case pinned = "\u{EC08}"            // pinned (unique - was EB2C)
+    case lock = "\u{EA8D}"              // lock (unique - was EA7A)
     case unlock = "\u{EAF0}"            // unlock
     case link = "\u{EB1F}"              // link
     case linkExternal = "\u{EB20}"      // link-external
-    case globe = "\u{EB19}"             // globe
-    case home = "\u{EB1A}"              // home
+    case globe = "\u{EC09}"             // globe (unique - was EB19)
+    case home = "\u{EC0A}"              // home (unique - was EB1A)
     case clippy = "\u{EAF1}"            // clippy
     case copy = "\u{EAF2}"              // copy
     case tasklist = "\u{EB54}"          // tasklist
-    case listUnordered = "\u{EB1E}"     // list-unordered
-    case listOrdered = "\u{EB1D}"       // list-ordered
-    case listFlat = "\u{EB1F}"          // list-flat
-    case listTree = "\u{EB20}"          // list-tree
+    case listUnordered = "\u{EC0B}"     // list-unordered (unique - was EB1E)
+    case listOrdered = "\u{EC0C}"       // list-ordered (unique - was EB1D)
+    case listFlat = "\u{EC0D}"          // list-flat (unique - was EB1F)
+    case listTree = "\u{EC0E}"          // list-tree (unique - was EB20)
     case filter = "\u{EB11}"            // filter
     case filterFilled = "\u{EB12}"      // filter-filled
     case sortPrecedence = "\u{EB49}"    // sort-precedence
-    case pass = "\u{EAB2}"              // pass (checkmark)
+    case pass = "\u{EC0F}"              // pass (unique - was EAB2)
     case passFilled = "\u{EBB3}"        // pass-filled
     case circleSlash = "\u{EABB}"       // circle-slash
     case dashboard = "\u{EAD7}"         // dashboard
     case tag = "\u{EB4D}"               // tag
-    case bookmark = "\u{EA86}"          // bookmark
+    case bookmark = "\u{EC10}"          // bookmark (unique - was EA86)
     case output = "\u{EB2F}"            // output
     case problems = "\u{EB36}"          // problems
     case runAll = "\u{EB40}"            // run-all
     case runAbove = "\u{EB3E}"          // run-above
     case runBelow = "\u{EB3F}"          // run-below
-    case notebookTemplate = "\u{EB2B}"  // notebook-template
+    case notebookTemplate = "\u{EC11}"  // notebook-template (unique - was EB2B)
     case personAdd = "\u{EB31}"         // person-add
     case person = "\u{EB30}"            // person
     case zap = "\u{EB5A}"               // zap
@@ -229,10 +227,6 @@ enum Codicon: String {
 
 extension Text {
     /// Create a Codicon icon as Text
-    /// - Parameters:
-    ///   - icon: The Codicon to display
-    ///   - size: Font size (default 16pt)
-    /// - Returns: Text view with the codicon
     static func codicon(_ icon: Codicon, size: CGFloat = Codicon.defaultSize) -> Text {
         Text(icon.rawValue)
             .font(.custom(Codicon.fontName, size: size))
@@ -261,11 +255,9 @@ struct CodiconView: View {
 
 // MARK: - SF Symbol to Codicon Mapping Helper
 
-/// Maps SF Symbols names to their Codicon equivalents
 struct CodiconMapping {
     static func codicon(for sfSymbolName: String) -> Codicon {
         switch sfSymbolName {
-        // Files & Folders
         case "folder", "folder.fill":
             return .folder
         case "folder.badge.plus":
@@ -276,8 +268,6 @@ struct CodiconMapping {
             return .newFile
         case "doc.on.doc", "doc.on.doc.fill":
             return .files
-            
-        // Navigation
         case "chevron.right":
             return .chevronRight
         case "chevron.down":
@@ -304,8 +294,6 @@ struct CodiconMapping {
             return .collapseAll
         case "arrow.up.arrow.down":
             return .sync
-            
-        // Actions
         case "plus", "plus.circle", "plus.circle.fill":
             return .add
         case "xmark", "xmark.circle", "xmark.circle.fill":
@@ -318,18 +306,12 @@ struct CodiconMapping {
             return .check
         case "ellipsis", "ellipsis.circle":
             return .ellipsis
-            
-        // Search
         case "magnifyingglass", "doc.text.magnifyingglass", "text.magnifyingglass":
             return .search
-            
-        // Git / Source Control
         case "arrow.triangle.branch":
             return .gitBranch
         case "circle.fill":
             return .circleFilled
-            
-        // Debug
         case "play", "play.fill", "play.circle", "play.circle.fill":
             return .play
         case "stop", "stop.fill", "stop.circle", "stop.circle.fill":
@@ -342,48 +324,28 @@ struct CodiconMapping {
             return .eyeClosed
         case "bug", "bug.fill":
             return .bug
-            
-        // Settings
         case "gear", "gearshape", "gearshape.fill":
-            return .gear
-            
-        // User
+            return .settingsGear
         case "person", "person.fill", "person.circle", "person.circle.fill":
             return .person
-            
-        // Grid / Extensions
         case "square.grid.2x2", "square.grid.2x2.fill":
             return .extensions
-            
-        // Testing
         case "testtube.2", "testtube.2.fill":
             return .beaker
-            
-        // Terminal
         case "terminal", "terminal.fill":
             return .terminal
-            
-        // AI
         case "brain", "brain.fill", "brain.head.profile":
             return .copilot
         case "sparkles", "sparkle":
             return .sparkle
-            
-        // Communication
         case "paperplane", "paperplane.fill":
             return .send
-            
-        // Time
         case "clock", "clock.fill", "clock.arrow.circlepath":
             return .clock
-            
-        // Info
         case "info.circle", "info.circle.fill":
             return .info
         case "exclamationmark.triangle", "exclamationmark.triangle.fill":
             return .warning
-            
-        // Layout
         case "rectangle.split.3x1", "rectangle.split.2x1":
             return .splitHorizontal
         case "rectangle.split.1x2":
@@ -392,8 +354,6 @@ struct CodiconMapping {
             return .layoutSidebarLeft
         case "sidebar.right", "sidebar.trailing":
             return .layoutSidebarRight
-            
-        // Code
         case "chevron.left.forwardslash.chevron.right":
             return .code
         case "at":
@@ -404,26 +364,21 @@ struct CodiconMapping {
             return .symbolFile
         case "list.bullet", "list.bullet.indent":
             return .listUnordered
-            
-        // Misc
         case "lock", "lock.fill":
             return .lock
         case "lock.open", "lock.open.fill":
             return .unlock
         case "link":
             return .link
-            
         default:
-            return .file  // Fallback icon
+            return .file
         }
     }
 }
 
-// MARK: - Image Extension for Codicon (Drop-in replacement for SF Symbols)
+// MARK: - Image Extension for Codicon
 
 extension Image {
-    /// Create an Image-like view from a Codicon
-    /// This is a convenience initializer to replace Image(systemName:) calls
     static func codicon(_ icon: Codicon) -> some View {
         CodiconView(icon)
     }
@@ -432,8 +387,6 @@ extension Image {
 // MARK: - Font Registration Helper
 
 struct CodiconFont {
-    /// Register the codicon font with the system
-    /// Call this in your App's init or AppDelegate
     static func register() {
         guard let fontURL = Bundle.main.url(forResource: "codicon", withExtension: "ttf"),
               let fontDataProvider = CGDataProvider(url: fontURL as CFURL),

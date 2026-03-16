@@ -22,7 +22,7 @@ final class AutoSaveManager: ObservableObject {
     
     private weak var editorCore: EditorCore?
     private var autoSaveTask: Task<Void, Never>?
-    private var focusObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var focusObserver: NSObjectProtocol?
     
     /// Tracks pending saves per tab ID to avoid duplicate saves
     private var pendingSaves: Set<UUID> = []

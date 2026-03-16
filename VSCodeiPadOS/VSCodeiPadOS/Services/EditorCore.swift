@@ -235,7 +235,7 @@ class EditorCore: ObservableObject {
         examples.append(Tab(
             fileName: "Welcome.swift",
             content: """
-// Welcome to VS Code for iPadOS! 🎉
+// Welcome to CodePad! 🎉
 //
 // Features:
 // • Syntax highlighting for Swift, JS, Python, and more

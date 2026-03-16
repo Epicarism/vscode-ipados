@@ -45,7 +45,7 @@ final class LocalLLMService: ObservableObject {
         subsystem: Bundle.main.bundleIdentifier ?? "VSCodeiPadOS",
         category: "LocalLLM"
     )
-    private var memoryWarningObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
     
     // Published state
     @Published var isModelLoaded = false
@@ -63,7 +63,7 @@ final class LocalLLMService: ObservableObject {
     
     // HuggingFace token for gated models (stored in Keychain)
     @Published var hfToken: String = "" {
-        didSet { KeychainHelper.shared.set(newValue, forKey: KeychainHelper.hfToken) }
+        didSet { KeychainHelper.shared.set(hfToken, forKey: KeychainHelper.hfToken) }
     }
     
     // Model container

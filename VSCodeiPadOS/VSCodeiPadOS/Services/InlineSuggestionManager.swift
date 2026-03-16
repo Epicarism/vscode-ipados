@@ -1,5 +1,6 @@
 import os
 import Foundation
+import UIKit
 import Combine
 
 /// Manages inline code suggestions with debouncing, throttling, and cancellation support.
@@ -517,12 +518,4 @@ extension UIResponder {
             object: nil
         )
     }
-}
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    /// Posted when partial accept should be performed.
-    /// Bind your editor's insert method to this notification.
-    static let inlineSuggestionPartialAccept = .inlineSuggestionPartialAccept
 }

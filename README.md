@@ -1,8 +1,8 @@
 # VSCode for iPadOS
 
-🚀 **A native VSCode experience for iPad** — built with Swift/SwiftUI
+🚀 **A native code editor for iPad inspired by VS Code** — built with Swift/SwiftUI
 
-[![Swift 5.9](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+[![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/Platform-iPadOS%2017+-blue.svg)](https://developer.apple.com/ipados/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 

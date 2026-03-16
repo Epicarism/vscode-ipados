@@ -234,6 +234,7 @@ struct AIAgentContext: Codable {
 
 // MARK: - Tool Executor
 
+@MainActor
 class AIToolExecutor {
     weak var editorCore: EditorCore?
     var fileNavigator: FileSystemNavigator?

@@ -114,7 +114,7 @@ enum JSRunnerError: Error, LocalizedError {
  * }
  * ```
  */
-class JSRunner {
+class JSRunner: @unchecked Sendable {
     
     // MARK: - Properties
     
