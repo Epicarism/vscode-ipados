@@ -66,7 +66,7 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
     
     private var currentTask: Task<Void, Never>?
     private var currentStatus: ExecutionStatus = .idle
-    private nonisolated(unsafe) nonisolated(unsafe) let lock = NSLock()
+    private nonisolated(unsafe) let lock = NSLock()
     
     public init(
         runnerId: String = "mock-js-runner",
@@ -186,7 +186,7 @@ public final class MockPythonRunner: CodeRunner, MockConfigurable {
     
     private var currentTask: Task<Void, Never>?
     private var currentStatus: ExecutionStatus = .idle
-    private nonisolated(unsafe) nonisolated(unsafe) let lock = NSLock()
+    private nonisolated(unsafe) let lock = NSLock()
     
     public init(
         runnerId: String = "mock-python-runner",
@@ -320,7 +320,7 @@ public final class MockWASMRunner: CodeRunner, MockConfigurable {
     
     private var currentTask: Task<Void, Never>?
     private var currentStatus: ExecutionStatus = .idle
-    private nonisolated(unsafe) nonisolated(unsafe) let lock = NSLock()
+    private nonisolated(unsafe) let lock = NSLock()
     
     public init(runnerId: String = "mock-wasm-runner") {
         self.runnerId = runnerId
