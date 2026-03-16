@@ -23,6 +23,8 @@ struct TestView: View {
                         .padding(4)
                 }
                 .help("Rescan Workspace")
+                .accessibilityLabel("Rescan Workspace")
+                .accessibilityHint("Double tap to scan workspace for test functions")
                 .buttonStyle(PlainButtonStyle())
 
                 Button(action: {}) {
@@ -55,6 +57,7 @@ struct TestView: View {
                                 .font(.system(size: 24))
                                 .foregroundColor(.secondary.opacity(0.5))
                             Text("No test functions found")
+                                .accessibilityLabel("No test functions found in workspace")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.secondary)
                             Text("Scan Swift files in the workspace for functions prefixed with \"test\"")

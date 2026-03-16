@@ -58,8 +58,51 @@ struct ProblemsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header with counts
+            HStack {
+                Text("PROBLEMS")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                if !problems.isEmpty {
+                    let errors = problems.filter { $0.severity == .error }.count
+                    let warnings = problems.filter { $0.severity == .warning }.count
+                    HStack(spacing: 8) {
+                        if errors > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.red)
+                                    .font(.system(size: 10))
+                                Text("\(errors)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(errors) error\(errors == 1 ? "" : "s")")
+                        }
+                        if warnings > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 10))
+                                Text("\(warnings)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(warnings) warning\(warnings == 1 ? "" : "s")")
+                        }
+                    }
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(UIColor.secondarySystemBackground))
+
             if problems.isEmpty {
                 noProblemsPlaceholder
+                    .accessibilityLabel("No problems detected")
             } else {
                 problemList
             }
@@ -99,19 +142,13 @@ struct ProblemsView: View {
                         Text(problem.message)
                             .font(.system(size: 13))
                             .foregroundColor(.primary)
-                            .lineLimit(1)
+                            .lineLimit(2)
 
                         HStack(spacing: 4) {
                             Text(problem.file)
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
-                            Text("[")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            Text("\(problem.line), \(problem.column)")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            Text("]")
+                            Text("[\(problem.line), \(problem.column)]")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                         }
@@ -120,6 +157,8 @@ struct ProblemsView: View {
                 .padding(.vertical, 2)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(problem.severity.rawValue): \(problem.message), in \(problem.file) line \(problem.line)")
             }
         }
         .listStyle(.plain)
