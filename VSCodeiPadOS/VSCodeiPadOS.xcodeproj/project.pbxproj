@@ -36,9 +36,6 @@
 		1053 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2053 /* DebugView.swift */; };
 		1054 /* WorkspaceTrustManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2054 /* WorkspaceTrustManager.swift */; };
 		1055 /* AIManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2055 /* AIManager.swift */; };
-		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
-		9001 /* AIAgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002 /* AIAgentTools.swift */; };
-		8003 /* LocalLLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004 /* LocalLLMService.swift */; };
 		1056 /* ColorPickerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2056 /* ColorPickerManager.swift */; };
 		1057 /* GitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2057 /* GitManager.swift */; };
 		1058 /* GitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2058 /* GitService.swift */; };
@@ -48,7 +45,6 @@
 		1062 /* RecentFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* RecentFileManager.swift */; };
 		1063 /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* SearchManager.swift */; };
 		1064 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* SettingsManager.swift */; };
-		8020 /* AutoSaveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8021 /* AutoSaveManager.swift */; };
 		1065 /* SnippetsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* SnippetsManager.swift */; };
 		1066 /* TasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* TasksManager.swift */; };
 		1067 /* WorkspaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2067 /* WorkspaceManager.swift */; };
@@ -57,10 +53,8 @@
 		1070 /* SpotlightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2070 /* SpotlightManager.swift */; };
 		1099 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2099 /* Assets.xcassets */; };
 		1100 /* test.wasm in Resources */ = {isa = PBXBuildFile; fileRef = 2100 /* test.wasm */; };
-		8005 /* LocalModels.json in Resources */ = {isa = PBXBuildFile; fileRef = 8006 /* LocalModels.json */; };
 		1101 /* BranchMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2101 /* BranchMenu.swift */; };
 		1102 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2102 /* CommandPalette.swift */; };
-		1901 /* KeyCommandBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2901 /* KeyCommandBridge.swift */; };
 		1103 /* DiffComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2103 /* DiffComponents.swift */; };
 		1104 /* FileIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2104 /* FileIconView.swift */; };
 		1105 /* GoToSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2105 /* GoToSymbol.swift */; };
@@ -106,7 +100,6 @@
 		1147 /* RunestoneEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2147 /* RunestoneEditorView.swift */; };
 		1148 /* RunestoneThemeAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2148 /* RunestoneThemeAdapter.swift */; };
 		1149 /* TreeSitterLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */; };
-		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
 		1150 /* JSRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2150 /* JSRunner.swift */; };
 		1151 /* CodeAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2151 /* CodeAnalyzer.swift */; };
 		1152 /* RunnerSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152 /* RunnerSelector.swift */; };
@@ -122,16 +115,53 @@
 		1163 /* GitHubAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2163 /* GitHubAuthManager.swift */; };
 		1164 /* GitHubLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2164 /* GitHubLoginView.swift */; };
 		1165 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2165 /* KeychainManager.swift */; };
+		16AE4B084CAA297D994F0E3F /* RunConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE15C63C875548573754E1A7 /* RunConfigView.swift */; };
+		1901 /* KeyCommandBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2901 /* KeyCommandBridge.swift */; };
+		19EC15A0E8DDCB0CDC307F95 /* InlineSuggestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */; };
+		267E5C73339E4A2046BCD25A /* Array+Safe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E70842EC260BF4AA42344E /* Array+Safe.swift */; };
+		351ADC4052ACAADD4536971C /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE814C21BB995B940748C92 /* KeychainHelper.swift */; };
+		35BF151D49904BC89A3FC364 /* InlineSuggestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */; };
+		43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */; };
+		4745DF982F59D018D819AE60 /* FileDragModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858D08F90B4DD92ABD76A9CE /* FileDragModifier.swift */; };
+		5AC9E5FE66317900502462CC /* BracketMatchingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDF346FA8697F71C1802A47 /* BracketMatchingManager.swift */; };
+		5C78C87974CA648FB14CBC80 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2305D4B39C54469E738C61 /* LoadingView.swift */; };
+		7513892E59B691367EFC56EB /* ErrorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */; };
+		8003 /* LocalLLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004 /* LocalLLMService.swift */; };
+		8005 /* LocalModels.json in Resources */ = {isa = PBXBuildFile; fileRef = 8006 /* LocalModels.json */; };
 		8011 /* ExtensionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8010 /* ExtensionManager.swift */; };
 		8013 /* ExtensionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8012 /* ExtensionsView.swift */; };
 		8015 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8014 /* NotificationManager.swift */; };
 		8017 /* NotificationToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8016 /* NotificationToastView.swift */; };
 		8019 /* KeyboardShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8018 /* KeyboardShortcutsView.swift */; };
-		9101 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9102 /* AppLogger.swift */; };
+		8020 /* AutoSaveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8021 /* AutoSaveManager.swift */; };
+		861AF3F49041DDA8E3DFE5A1 /* ErrorBoundaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */; };
+		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
+		8CA403766E4C8AC0F3AE0195 /* ModifierTapGestureRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */; };
+		8F09852A2FAFCCDE9BF57E1B /* SuggestionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161CE6C43626812282CD4694 /* SuggestionCache.swift */; };
+		9001 /* AIAgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002 /* AIAgentTools.swift */; };
 		9003 /* Notification+Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9004 /* Notification+Names.swift */; };
+		9101 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9102 /* AppLogger.swift */; };
+		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
+		A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */; };
+		A5B5365FE7897DB66FFCF462 /* FoldingLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */; };
+		A98A310BC3D5D18B40194571 /* SFTPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171C91E00F87228803CDB1DD /* SFTPManager.swift */; };
+		BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885F3C3B4438947AA7802BF5 /* Codicon.swift */; };
+		BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76695AA95638C9192E12E05E /* WindowStateManager.swift */; };
+		CCAF5453C0F54271A96F81C8 /* RemoteRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B06DD76A4067F87F1441E8D /* RemoteRunner.swift */; };
+		D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */; };
+		D0940CDBF3BE2C1681C37A94 /* SyntaxHighlightingTextView_Update.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */; };
+		D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301258073261580A471BF74C /* VSCodeTunnelView.swift */; };
+		D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBE91AB571E62605847001D /* RemoteDebugger.swift */; };
+		DA028286E4A33FB60DBDF812 /* SSHGitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF086617008172C344E5466E /* SSHGitClient.swift */; };
+		E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA35FC9065D549599858CE86 /* CommandPaletteView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionManager.swift; path = Services/InlineSuggestionManager.swift; sourceTree = "<group>"; };
+		14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorBoundaryView.swift; path = Views/ErrorBoundaryView.swift; sourceTree = "<group>"; };
+		15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorParser.swift; path = Services/ErrorParser.swift; sourceTree = "<group>"; };
+		161CE6C43626812282CD4694 /* SuggestionCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SuggestionCache.swift; path = Services/SuggestionCache.swift; sourceTree = "<group>"; };
+		171C91E00F87228803CDB1DD /* SFTPManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SFTPManager.swift; path = Services/SFTPManager.swift; sourceTree = "<group>"; };
 		2001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2002 /* VSCodeiPadOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VSCodeiPadOSApp.swift; sourceTree = "<group>"; };
 		2003 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
@@ -161,9 +191,6 @@
 		2053 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		2054 /* WorkspaceTrustManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTrustManager.swift; sourceTree = "<group>"; };
 		2055 /* AIManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIManager.swift; sourceTree = "<group>"; };
-		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
-		8004 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
-		9002 /* AIAgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAgentTools.swift; sourceTree = "<group>"; };
 		2056 /* ColorPickerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPickerManager.swift; sourceTree = "<group>"; };
 		2057 /* GitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitManager.swift; sourceTree = "<group>"; };
 		2058 /* GitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitService.swift; sourceTree = "<group>"; };
@@ -173,7 +200,6 @@
 		2062 /* RecentFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFileManager.swift; sourceTree = "<group>"; };
 		2063 /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
 		2064 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
-		8021 /* AutoSaveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveManager.swift; sourceTree = "<group>"; };
 		2065 /* SnippetsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsManager.swift; sourceTree = "<group>"; };
 		2066 /* TasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksManager.swift; sourceTree = "<group>"; };
 		2067 /* WorkspaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceManager.swift; sourceTree = "<group>"; };
@@ -182,10 +208,8 @@
 		2070 /* SpotlightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightManager.swift; sourceTree = "<group>"; };
 		2099 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2100 /* test.wasm */ = {isa = PBXFileReference; lastKnownFileType = file; path = Resources/test.wasm; sourceTree = "<group>"; };
-		8006 /* LocalModels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/LocalModels.json; sourceTree = "<group>"; };
 		2101 /* BranchMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchMenu.swift; sourceTree = "<group>"; };
 		2102 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
-		2901 /* KeyCommandBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyCommandBridge.swift; sourceTree = "<group>"; };
 		2103 /* DiffComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffComponents.swift; sourceTree = "<group>"; };
 		2104 /* FileIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIconView.swift; sourceTree = "<group>"; };
 		2105 /* GoToSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToSymbol.swift; sourceTree = "<group>"; };
@@ -230,9 +254,6 @@
 		2146 /* NativeGitWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitWriter.swift; sourceTree = "<group>"; };
 		2147 /* RunestoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneEditorView.swift; sourceTree = "<group>"; };
 		2148 /* RunestoneThemeAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneThemeAdapter.swift; sourceTree = "<group>"; };
-		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
-		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
 		2150 /* JSRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSRunner.swift; sourceTree = "<group>"; };
 		2151 /* CodeAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAnalyzer.swift; sourceTree = "<group>"; };
 		2152 /* RunnerSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerSelector.swift; sourceTree = "<group>"; };
@@ -248,14 +269,53 @@
 		2163 /* GitHubAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubAuthManager.swift; sourceTree = "<group>"; };
 		2164 /* GitHubLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubLoginView.swift; sourceTree = "<group>"; };
 		2165 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
+		2901 /* KeyCommandBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyCommandBridge.swift; sourceTree = "<group>"; };
+		2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GitGutterView.swift; path = Views/Editor/GitGutterView.swift; sourceTree = "<group>"; };
+		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		301258073261580A471BF74C /* VSCodeTunnelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VSCodeTunnelView.swift; path = Views/VSCodeTunnelView.swift; sourceTree = "<group>"; };
+		33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ModifierTapGestureRecognizer.swift; path = Views/Editor/ModifierTapGestureRecognizer.swift; sourceTree = "<group>"; };
+		4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WelcomeView.swift; path = Views/WelcomeView.swift; sourceTree = "<group>"; };
+		59E70842EC260BF4AA42344E /* Array+Safe.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Array+Safe.swift"; path = "Extensions/Array+Safe.swift"; sourceTree = "<group>"; };
+		6B06DD76A4067F87F1441E8D /* RemoteRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteRunner.swift; path = Services/RemoteRunner.swift; sourceTree = "<group>"; };
+		76695AA95638C9192E12E05E /* WindowStateManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WindowStateManager.swift; path = Services/WindowStateManager.swift; sourceTree = "<group>"; };
+		7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MergeConflictView.swift; path = Views/Editor/MergeConflictView.swift; sourceTree = "<group>"; };
+		7C2305D4B39C54469E738C61 /* LoadingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LoadingView.swift; path = Views/LoadingView.swift; sourceTree = "<group>"; };
+		8004 /* LocalLLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLLMService.swift; sourceTree = "<group>"; };
+		8006 /* LocalModels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/LocalModels.json; sourceTree = "<group>"; };
 		8010 /* ExtensionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionManager.swift; sourceTree = "<group>"; };
 		8012 /* ExtensionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionsView.swift; sourceTree = "<group>"; };
 		8014 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		8016 /* NotificationToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToastView.swift; sourceTree = "<group>"; };
 		8018 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
-		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
+		8021 /* AutoSaveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveManager.swift; sourceTree = "<group>"; };
+		858D08F90B4DD92ABD76A9CE /* FileDragModifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FileDragModifier.swift; path = Utils/FileDragModifier.swift; sourceTree = "<group>"; };
+		885F3C3B4438947AA7802BF5 /* Codicon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Codicon.swift; path = Utils/Codicon.swift; sourceTree = "<group>"; };
+		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
+		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
+		8DDF346FA8697F71C1802A47 /* BracketMatchingManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BracketMatchingManager.swift; path = Services/BracketMatchingManager.swift; sourceTree = "<group>"; };
+		9002 /* AIAgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAgentTools.swift; sourceTree = "<group>"; };
 		9004 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Notification+Names.swift"; path = "Extensions/Notification+Names.swift"; sourceTree = "<group>"; };
+		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
+		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
+		9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionView.swift; path = Views/Editor/InlineSuggestionView.swift; sourceTree = "<group>"; };
+		9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightingTextView_Update.swift; path = Views/Editor/SyntaxHighlightingTextView_Update.swift; sourceTree = "<group>"; };
+		AEBE91AB571E62605847001D /* RemoteDebugger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteDebugger.swift; path = Services/RemoteDebugger.swift; sourceTree = "<group>"; };
+		AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FoldingLayoutManager.swift; path = Views/Editor/FoldingLayoutManager.swift; sourceTree = "<group>"; };
+		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
+		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
+		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
+		FF086617008172C344E5466E /* SSHGitClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SSHGitClient.swift; path = Services/NativeGit/SSHGitClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		4000 = {
@@ -283,6 +343,31 @@
 				4005 /* Models */,
 				4006 /* Services */,
 				4007 /* Views */,
+				59E70842EC260BF4AA42344E /* Array+Safe.swift */,
+				8DDF346FA8697F71C1802A47 /* BracketMatchingManager.swift */,
+				885F3C3B4438947AA7802BF5 /* Codicon.swift */,
+				FA35FC9065D549599858CE86 /* CommandPaletteView.swift */,
+				14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */,
+				15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */,
+				858D08F90B4DD92ABD76A9CE /* FileDragModifier.swift */,
+				AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */,
+				2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */,
+				01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */,
+				9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */,
+				DEE814C21BB995B940748C92 /* KeychainHelper.swift */,
+				7C2305D4B39C54469E738C61 /* LoadingView.swift */,
+				7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */,
+				33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */,
+				AEBE91AB571E62605847001D /* RemoteDebugger.swift */,
+				6B06DD76A4067F87F1441E8D /* RemoteRunner.swift */,
+				FE15C63C875548573754E1A7 /* RunConfigView.swift */,
+				171C91E00F87228803CDB1DD /* SFTPManager.swift */,
+				FF086617008172C344E5466E /* SSHGitClient.swift */,
+				161CE6C43626812282CD4694 /* SuggestionCache.swift */,
+				9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */,
+				301258073261580A471BF74C /* VSCodeTunnelView.swift */,
+				4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */,
+				76695AA95638C9192E12E05E /* WindowStateManager.swift */,
 			);
 			path = VSCodeiPadOS;
 			sourceTree = "<group>";
@@ -586,16 +671,6 @@
 		};
 /* End PBXProject section */
 
-/* Begin PBXFrameworksBuildPhase section */
-		5003 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
 /* Begin PBXResourcesBuildPhase section */
 		5002 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
@@ -733,6 +808,31 @@
 				8015 /* NotificationManager.swift in Sources */,
 				8017 /* NotificationToastView.swift in Sources */,
 				8019 /* KeyboardShortcutsView.swift in Sources */,
+				267E5C73339E4A2046BCD25A /* Array+Safe.swift in Sources */,
+				5AC9E5FE66317900502462CC /* BracketMatchingManager.swift in Sources */,
+				BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */,
+				E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */,
+				861AF3F49041DDA8E3DFE5A1 /* ErrorBoundaryView.swift in Sources */,
+				7513892E59B691367EFC56EB /* ErrorParser.swift in Sources */,
+				4745DF982F59D018D819AE60 /* FileDragModifier.swift in Sources */,
+				A5B5365FE7897DB66FFCF462 /* FoldingLayoutManager.swift in Sources */,
+				A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */,
+				35BF151D49904BC89A3FC364 /* InlineSuggestionManager.swift in Sources */,
+				19EC15A0E8DDCB0CDC307F95 /* InlineSuggestionView.swift in Sources */,
+				351ADC4052ACAADD4536971C /* KeychainHelper.swift in Sources */,
+				5C78C87974CA648FB14CBC80 /* LoadingView.swift in Sources */,
+				D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */,
+				8CA403766E4C8AC0F3AE0195 /* ModifierTapGestureRecognizer.swift in Sources */,
+				D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */,
+				CCAF5453C0F54271A96F81C8 /* RemoteRunner.swift in Sources */,
+				16AE4B084CAA297D994F0E3F /* RunConfigView.swift in Sources */,
+				A98A310BC3D5D18B40194571 /* SFTPManager.swift in Sources */,
+				DA028286E4A33FB60DBDF812 /* SSHGitClient.swift in Sources */,
+				8F09852A2FAFCCDE9BF57E1B /* SuggestionCache.swift in Sources */,
+				D0940CDBF3BE2C1681C37A94 /* SyntaxHighlightingTextView_Update.swift in Sources */,
+				D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */,
+				43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */,
+				BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -744,8 +844,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = VSCodeiPadOS/VSCodeiPadOS.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = LAB993Y8WK;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -775,8 +875,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = VSCodeiPadOS/VSCodeiPadOS.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = LAB993Y8WK;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1023,7 +1123,6 @@
 			package = 89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
 			productName = MLXLMCommon;
 		};
-
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7000 /* Project object */;

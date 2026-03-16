@@ -125,13 +125,16 @@ struct AddTunnelSheet: View {
                                 .tag(type)
                         }
                     }
+                        .accessibilityHint("Select the type of server to connect to")
                     
                     TextField("Name", text: $name, prompt: Text("My MacBook"))
+                        .accessibilityHint("Enter a display name for this server")
                     
                     TextField("URL", text: $url, prompt: Text(selectedType.placeholder))
                         .textContentType(.URL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
+                        .accessibilityHint("Enter the server URL to connect to")
                 }
                 
                 Section {
@@ -145,9 +148,10 @@ struct AddTunnelSheet: View {
                         dismiss()
                     }
                     .disabled(url.isEmpty)
+                        .accessibilityHint("Add this server configuration")
                 }
                 
-                Section(header: Text("Help")) {
+                Section(header: Text("Help").accessibilityAddTraits(.isHeader)) {
                     switch selectedType {
                     case .vscodeDevTunnel:
                         Text("Run `code tunnel` on your machine, then copy the vscode.dev URL.")
@@ -169,6 +173,7 @@ struct AddTunnelSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityHint("Dismiss without adding a server")
                 }
             }
         }

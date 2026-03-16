@@ -322,8 +322,7 @@ struct RunestoneEditorView: UIViewRepresentable {
     }
     
     // MARK: - Coordinator
-    
-    class Coordinator: NSObject, TextViewDelegate {
+    class Coordinator: NSObject, TextViewDelegate, @unchecked Sendable {
         var parent: RunestoneEditorView
         weak var textView: TextView?
         var isUpdatingFromTextView = false
