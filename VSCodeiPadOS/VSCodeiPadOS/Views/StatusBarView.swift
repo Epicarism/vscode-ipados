@@ -15,7 +15,7 @@ struct StatusBarView: View {
     @AppStorage("editor.encoding") private var encoding: String = "UTF-8"
     @AppStorage("editor.eol") private var eolSetting: String = "LF"
 
-    @ObservedObject private var notifications = NotificationManager.shared
+    @StateObject private var notifications = NotificationManager.shared
 
     var theme: Theme { themeManager.currentTheme }
 
@@ -34,7 +34,7 @@ struct StatusBarView: View {
             // Subtle separator line at top (matches VSCode)
             Rectangle()
                 .fill(theme.statusBarForeground.opacity(0.15))
-                .frame(height: 1 / UIScreen.main.scale)  // hairline
+                .frame(height: CGFloat(1) / UIScreen.main.scale)  // hairline
 
             HStack(spacing: 0) {
                 // ── Left side ──────────────────────────────────────────
@@ -76,9 +76,12 @@ struct StatusBarView: View {
                 .accessibilityHint("Double tap to show Git actions")
             }
 
-            // Errors & Warnings ( Problems )
+            // Errors & Warnings (Problems)
+            let errorCount = editorCore.errorCount
+            let warningCount = editorCore.warningCount
+
             StatusBarItem(
-                text: "0",
+                text: "\(errorCount)",
                 icon: "xmark.circle.fill",
                 theme: theme
             ) {
@@ -86,11 +89,11 @@ struct StatusBarView: View {
                 editorCore.focusedSidebarTab = 0
                 withAnimation { editorCore.showSidebar = true }
             }
-            .accessibilityLabel("Errors, 0")
+            .accessibilityLabel("Errors, \(errorCount)")
             .accessibilityHint("Double tap to view errors")
 
             StatusBarItem(
-                text: "0",
+                text: "\(warningCount)",
                 icon: "exclamationmark.triangle.fill",
                 theme: theme
             ) {
@@ -98,7 +101,7 @@ struct StatusBarView: View {
                 editorCore.focusedSidebarTab = 0
                 withAnimation { editorCore.showSidebar = true }
             }
-            .accessibilityLabel("Warnings, 0")
+            .accessibilityLabel("Warnings, \(warningCount)")
             .accessibilityHint("Double tap to view warnings")
         }
     }
@@ -205,7 +208,7 @@ struct StatusBarView: View {
                 if notifications.unreadCount > 0 {
                     Text("\(min(notifications.unreadCount, 99))")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(.systemBackground))
                         .padding(.horizontal, 3)
                         .padding(.vertical, 1)
                         .background(Color.accentColor)
@@ -243,7 +246,7 @@ struct StatusBarItem: View {
             }
             .padding(.horizontal, 8)
             .frame(maxHeight: .infinity)
-            .background(isHovering ? Color.white.opacity(0.12) : Color.clear)
+            .background(isHovering ? theme.statusBarForeground.opacity(0.12) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -275,7 +278,7 @@ struct StatusBarLabel: View {
         }
         .padding(.horizontal, 8)
         .frame(maxHeight: .infinity)
-        .background(isHovering ? Color.white.opacity(0.12) : Color.clear)
+        .background(isHovering ? theme.statusBarForeground.opacity(0.12) : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
     }
