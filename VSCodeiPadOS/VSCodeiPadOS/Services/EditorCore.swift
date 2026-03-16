@@ -1096,9 +1096,18 @@ mod tests {
     }
 
     func saveActiveTab() {
+        // Force the editor view to sync any pending text changes immediately
+        NotificationCenter.default.post(name: .forceEditorSync, object: nil)
+        
+        // Small delay to allow sync to complete before reading content
+        DispatchQueue.main.async { [self] in
+            self._performSave()
+        }
+    }
+    
+    private func _performSave() {
         guard let index = activeTabIndex,
               let url = tabs[index].url else { return }
-
         // Apply file cleanup settings before saving
         var contentToSave = tabs[index].content
         contentToSave = applyFileSaveSettings(to: contentToSave)

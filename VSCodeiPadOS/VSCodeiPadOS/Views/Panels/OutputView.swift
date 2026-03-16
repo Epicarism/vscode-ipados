@@ -7,6 +7,7 @@ struct OutputLineView: View {
     let line: OutputLine
     let showTimestamp: Bool
     let wordWrap: Bool
+    let theme: Theme
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
@@ -59,17 +60,21 @@ struct OutputLineView: View {
     
     private var textColor: Color {
         switch line.logLevel {
-        case .error: return .red
-        case .warning: return .orange
-        case .debug: return .secondary
-        case .info: return .primary
+        case .error: return theme.keyword // Error color from theme
+        case .warning: return theme.number // Warning color from theme
+        case .debug: return theme.comment
+        case .info: return theme.editorForeground
         }
     }
     
-    private func formatTimestamp(_ date: Date) -> String {
+    private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss.SSS"
-        return formatter.string(from: date)
+        return formatter
+    }()
+    
+    private func formatTimestamp(_ date: Date) -> String {
+        Self.timestampFormatter.string(from: date)
     }
     
     /// Creates SwiftUI AttributedString from ANSI attributes
@@ -174,8 +179,8 @@ struct RemoteProgressView: View {
 
 struct OutputSearchBar: View {
     @ObservedObject var outputManager = OutputPanelManager.shared
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var localQuery: String = ""
-    
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
@@ -215,7 +220,7 @@ struct OutputSearchBar: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color(UIColor.tertiarySystemFill))
+        .background(themeManager.currentTheme.tabBarBackground)
         .cornerRadius(6)
     }
 }
@@ -224,7 +229,7 @@ struct OutputSearchBar: View {
 
 struct LogLevelFilterView: View {
     @ObservedObject var outputManager = OutputPanelManager.shared
-    
+    @ObservedObject var themeManager = ThemeManager.shared
     var body: some View {
         HStack(spacing: 8) {
             Text("Filter:")
@@ -265,7 +270,7 @@ struct LogLevelFilterView: View {
                 }) {
                     Text("Reset")
                         .font(.system(size: 10))
-                        .foregroundColor(.blue)
+                        .foregroundColor(themeManager.currentTheme.keyword)
                 }
                 .accessibilityLabel("Reset log level filters")
             }
@@ -369,7 +374,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .font(.system(size: 12))
-                    .foregroundColor(showingLogLevelFilter ? .blue : theme.comment)
+                    .foregroundColor(showingLogLevelFilter ? theme.keyword : theme.comment)
             }
             .accessibilityLabel("Log level filter")
             .accessibilityHint("Double tap to \(showingLogLevelFilter ? "hide" : "show") log level filter")
@@ -385,7 +390,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
-                    .foregroundColor(showingSearchBar ? .blue : theme.comment)
+                    .foregroundColor(showingSearchBar ? theme.keyword : theme.comment)
             }
             .accessibilityLabel("Search in output")
             .accessibilityHint("Double tap to \(showingSearchBar ? "hide" : "show") the output search bar")
@@ -396,7 +401,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: outputManager.wordWrapEnabled ? "text.wrap" : "text.badge.xmark")
                     .font(.system(size: 12))
-                    .foregroundColor(outputManager.wordWrapEnabled ? .blue : theme.comment)
+                    .foregroundColor(outputManager.wordWrapEnabled ? theme.keyword : theme.comment)
             }
             .accessibilityLabel("Toggle word wrap, currently \(outputManager.wordWrapEnabled ? "on" : "off")")
             .accessibilityHint("Double tap to toggle word wrap")
@@ -407,7 +412,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: outputManager.showTimestamps ? "clock.fill" : "clock")
                     .font(.system(size: 12))
-                    .foregroundColor(outputManager.showTimestamps ? .blue : theme.comment)
+                    .foregroundColor(outputManager.showTimestamps ? theme.keyword : theme.comment)
             }
             .accessibilityLabel("Toggle timestamps, currently \(outputManager.showTimestamps ? "on" : "off")")
             .accessibilityHint("Double tap to show or hide timestamps")
@@ -418,7 +423,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: outputManager.isAutoScrollEnabled ? "lock.open.fill" : "lock")
                     .font(.system(size: 12))
-                    .foregroundColor(outputManager.isAutoScrollEnabled ? .blue : theme.comment)
+                    .foregroundColor(outputManager.isAutoScrollEnabled ? theme.keyword : theme.comment)
             }
             .accessibilityLabel("Toggle auto-scroll, currently \(outputManager.isAutoScrollEnabled ? "on" : "off")")
             .accessibilityHint("Double tap to toggle auto-scroll to latest output")
@@ -471,7 +476,8 @@ struct OutputView: View {
                         OutputLineView(
                             line: line,
                             showTimestamp: outputManager.showTimestamps,
-                            wordWrap: outputManager.wordWrapEnabled
+                            wordWrap: outputManager.wordWrapEnabled,
+                            theme: theme
                         )
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)

@@ -314,13 +314,16 @@ struct RunestoneEditorView: UIViewRepresentable {
     
     private func countLines(in text: String) -> Int {
         guard !text.isEmpty else { return 1 }
+        // Use NSString for efficient newline counting (avoids char-by-char iteration)
+        let ns = text as NSString
         var count = 1
-        var index = text.startIndex
-        while index < text.endIndex {
-            if text[index] == "\n" {
-                count += 1
-            }
-            index = text.index(after: index)
+        var searchRange = NSRange(location: 0, length: ns.length)
+        while searchRange.location < ns.length {
+            let found = ns.range(of: "\n", range: searchRange)
+            if found.location == NSNotFound { break }
+            count += 1
+            searchRange.location = found.location + found.length
+            searchRange.length = ns.length - searchRange.location
         }
         return count
     }
@@ -341,17 +344,31 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Debounced text sync to avoid SwiftUI re-renders on every keystroke
         private var textSyncWorkItem: DispatchWorkItem?
         private let debounceInterval: TimeInterval = 0.5 // 500ms
+        private var forceSyncObserver: NSObjectProtocol?
         
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
             self.lastFontSize = parent.fontSize
             self.lastThemeId = ""  // Will be set on first update from MainActor
             self.lastFilename = parent.filename
+            super.init()
+            
+            // Listen for force sync requests (e.g., before save)
+            forceSyncObserver = NotificationCenter.default.addObserver(
+                forName: .forceEditorSync,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.syncTextImmediately()
+            }
         }
         
         deinit {
             // Cancel any pending debounced updates
             textSyncWorkItem?.cancel()
+            if let observer = forceSyncObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
         
         // MARK: - TextViewDelegate

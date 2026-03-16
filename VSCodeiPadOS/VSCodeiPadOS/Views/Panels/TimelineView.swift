@@ -420,7 +420,7 @@ struct TimelineView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(.secondarySystemBackground))
+        .background(ThemeManager.shared.currentTheme.sidebarBackground)
     }
 
     // MARK: Content
@@ -444,9 +444,9 @@ struct TimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)
-        .background(Color(.systemBackground))
+        .background(ThemeManager.shared.currentTheme.editorBackground)
     }
-
+    
     private var empty: some View {
         VStack(alignment: .center, spacing: 10) {
             Text("No timeline entries")
@@ -457,10 +457,9 @@ struct TimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)
-        .background(Color(.systemBackground))
+        .background(ThemeManager.shared.currentTheme.editorBackground)
     }
 }
-
 // MARK: - Row
 
 private struct TimelineRow: View {
@@ -486,10 +485,10 @@ private struct TimelineRow: View {
                     if let sha = entry.commitSHA {
                         Text(String(sha.prefix(7)))
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(Color(.tertiaryLabel))
+                            .foregroundStyle(ThemeManager.shared.currentTheme.comment)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color(.quaternarySystemFill))
+                            .background(ThemeManager.shared.currentTheme.tabBarBackground)
                             .cornerRadius(4)
                     }
                 }
@@ -558,7 +557,7 @@ private struct DiffBadge: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(.tertiarySystemFill))
+                    .fill(ThemeManager.shared.currentTheme.tabBarBackground)
             )
             .accessibilityLabel(accessibilityText)
     }

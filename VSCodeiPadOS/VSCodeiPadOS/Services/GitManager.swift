@@ -231,7 +231,7 @@ final class GitManager: ObservableObject {
         }
         
         unstagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
-            guard let working = status.working else { return nil }
+            guard let working = status.working, working != .untracked else { return nil }
             return GitFileChange(path: status.path, kind: mapStatusType(working), staged: false)
         }
         

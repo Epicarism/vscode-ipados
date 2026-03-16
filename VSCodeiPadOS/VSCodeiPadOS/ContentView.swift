@@ -178,7 +178,11 @@ struct ContentView: View {
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .runSampleWASM)) { _ in
-                    // WASM execution handled via notification
+                    if let activeTab = editorCore.activeTab {
+                        CodeExecutionService.shared.executeCurrentFile(fileName: activeTab.fileName, content: activeTab.content)
+                        showTerminal = true
+                        NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .runJavaScript)) { _ in
                     if let activeTab = editorCore.activeTab {
@@ -220,7 +224,7 @@ struct ContentView: View {
     
     // MARK: - Extracted View Components
     
-    @ObservedObject private var tunnelManager = TunnelManager.shared
+    @StateObject private var tunnelManager = TunnelManager.shared
     
     @ViewBuilder
     private var mainContentView: some View {

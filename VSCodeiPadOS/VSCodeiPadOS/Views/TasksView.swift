@@ -62,6 +62,9 @@ private struct TaskRow: View {
     let task: VSCodeTask
 
     @ObservedObject private var tasksManager = TasksManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
+
+    private var theme: Theme { themeManager.currentTheme }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -69,23 +72,27 @@ private struct TaskRow: View {
                 HStack(spacing: 6) {
                     Text(task.label)
                         .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.editorForeground)
                         .lineLimit(1)
+                        .accessibilityLabel("Task: \(task.label)")
 
                     if let group = task.group {
                         Text(group.rawValue.uppercased())
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(theme.comment)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color(UIColor.tertiarySystemFill))
+                            .background(theme.tabBarBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .accessibilityLabel("Group: \(group.rawValue)")
                     }
                 }
 
                 Text(commandPreview)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.comment)
                     .lineLimit(1)
+                    .accessibilityLabel("Command: \(commandPreview)")
             }
 
             Spacer()
@@ -95,15 +102,20 @@ private struct TaskRow: View {
             } label: {
                 Image(systemName: isRunningThisTask ? "stop.circle" : "play.circle")
                     .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(isRunningThisTask ? theme.keyword : theme.editorForeground)
             }
             .buttonStyle(.plain)
             .disabled(tasksManager.isRunning && !isRunningThisTask)
             .help("Run")
+            .accessibilityLabel(isRunningThisTask ? "Stop task" : "Run task")
+            .accessibilityHint(isRunningThisTask ? "Double tap to stop this task" : "Double tap to run this task")
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        .background(Color(UIColor.tertiarySystemFill).opacity(0.6))
+        .background(theme.tabBarBackground.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Task: \(task.label). Command: \(commandPreview)")
     }
 
     private var commandPreview: String {
@@ -115,6 +127,7 @@ private struct TaskRow: View {
         tasksManager.runningTaskLabel == task.label
     }
 }
+
 
 #Preview {
     TasksView()

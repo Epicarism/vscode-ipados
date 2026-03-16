@@ -25,6 +25,9 @@ extension Notification.Name {
 
     // MARK: - Editor
 
+    /// Force the editor to sync its text content immediately (used before save).
+    static let forceEditorSync = Notification.Name("ForceEditorSync")
+
     /// Show the Find bar.
     static let showFind = Notification.Name("ShowFind")
     /// Show the Replace bar.

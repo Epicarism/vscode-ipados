@@ -3,12 +3,15 @@ import SwiftUI
 // MARK: - Git View (Source Control Panel)
 
 struct GitView: View {
-    @ObservedObject private var gitManager = GitManager.shared
+    @StateObject private var gitManager = GitManager.shared
     @EnvironmentObject var editorCore: EditorCore
     @State private var commitMessage = ""
     @State private var selectedEntry: GitStatusEntry?
     @State private var showingDiffEntry: GitStatusEntry?
     @State private var showBranchPicker = false
+    @State private var errorMessage: String?
+    @State private var showError = false
+    @State private var isOperationInProgress = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -104,7 +107,7 @@ struct GitView: View {
                     .buttonStyle(.plain)
                     
                     Menu {
-                        Button(action: { Task { try? await gitManager.stageAll() } }) {
+                        Button(action: { stageAll() }) {
                             Label("Stage All", systemImage: "plus.circle")
                         }
                         Button(action: commitAndPush) {
@@ -246,6 +249,11 @@ struct GitView: View {
             .padding(12)
         }
         .background(Color(UIColor.systemBackground))
+        .alert("Git Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred")
+        }
         .sheet(isPresented: $showBranchPicker) {
             BranchPickerSheet(gitManager: gitManager)
         }
@@ -328,7 +336,7 @@ struct GitView: View {
             
             if !isStaged && entry.kind != .untracked {
                 Button(role: .destructive, action: {
-                    Task { try? await gitManager.discardChanges(file: entry.path) }
+                    Task { await performGitOp { try await gitManager.discardChanges(file: entry.path) } }
                 }) {
                     Label("Discard Changes", systemImage: "trash")
                 }
@@ -387,40 +395,69 @@ struct GitView: View {
     }
     
     private func stageFile(_ path: String) {
-        Task { try? await gitManager.stage(file: path) }
+        Task { await performGitOp { try await gitManager.stage(file: path) } }
     }
     
     private func unstageFile(_ path: String) {
-        Task { try? await gitManager.unstage(file: path) }
+        Task { await performGitOp { try await gitManager.unstage(file: path) } }
+    }
+    
+    private func stageAll() {
+        Task { await performGitOp { try await gitManager.stageAll() } }
     }
     
     private func commitChanges() {
         guard canCommit else { return }
+        let message = commitMessage
+        commitMessage = ""
         Task {
-            try? await gitManager.commit(message: commitMessage)
-            await MainActor.run { commitMessage = "" }
+            await performGitOp {
+                try await gitManager.commit(message: message)
+            }
+            if showError {
+                await MainActor.run { commitMessage = message }
+            }
         }
     }
     
     private func commitAndPush() {
         guard canCommit else { return }
+        let message = commitMessage
+        commitMessage = ""
         Task {
-            try? await gitManager.commit(message: commitMessage)
-            await MainActor.run { commitMessage = "" }
-            try? await gitManager.push()
+            await performGitOp {
+                try await gitManager.commit(message: message)
+                try await gitManager.push()
+            }
+            if showError {
+                await MainActor.run { commitMessage = message }
+            }
         }
     }
     
     private func pullChanges() {
-        Task { try? await gitManager.pull() }
+        Task { await performGitOp { try await gitManager.pull() } }
     }
     
     private func pushChanges() {
-        Task { try? await gitManager.push() }
+        Task { await performGitOp { try await gitManager.push() } }
     }
     
     private func fetchChanges() {
-        Task { try? await gitManager.fetch() }
+        Task { await performGitOp { try await gitManager.fetch() } }
+    }
+    
+    /// Performs a git operation with proper error handling and user feedback
+    private func performGitOp(_ operation: @escaping () async throws -> Void) async {
+        isOperationInProgress = true
+        defer { isOperationInProgress = false }
+        do {
+            try await operation()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+            print("[GitView] Git operation failed: \(error.localizedDescription)")
+        }
     }
 }
 
@@ -508,7 +545,11 @@ struct BranchPickerSheet: View {
     
     private func checkout(_ branch: String) {
         Task {
-            try? await gitManager.checkout(branch: branch)
+            do {
+                try await gitManager.checkout(branch: branch)
+            } catch {
+                print("[GitView] Checkout failed: \(error.localizedDescription)")
+            }
             await MainActor.run { dismiss() }
         }
     }
@@ -516,7 +557,11 @@ struct BranchPickerSheet: View {
     private func createBranch() {
         guard !newBranchName.isEmpty else { return }
         Task {
-            try? await gitManager.createBranch(name: newBranchName)
+            do {
+                try await gitManager.createBranch(name: newBranchName)
+            } catch {
+                print("[GitView] Create branch failed: \(error.localizedDescription)")
+            }
             await MainActor.run {
                 newBranchName = ""
                 showCreateBranch = false

@@ -335,12 +335,10 @@ struct SingleTerminalView: View {
             .onTapGesture {
                 onActivate()
                 terminalFocused = true
-                // Force the editor to resign first responder on tap
-                DispatchQueue.main.async {
-                    UIApplication.shared.sendAction(
-                        #selector(UIResponder.resignFirstResponder),
-                        to: nil, from: nil, for: nil
-                    )
+                // Focus the terminal input field after a brief delay
+                // to allow any editor to resign first
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    isInputFocused = true
                 }
             }
 
@@ -395,14 +393,6 @@ struct SingleTerminalView: View {
         .onChange(of: isInputFocused) { _, newValue in
             if newValue {
                 terminalFocused = true
-                // Force the editor to resign first responder so keyboard input
-                // goes exclusively to the terminal.
-                DispatchQueue.main.async {
-                    UIApplication.shared.sendAction(
-                        #selector(UIResponder.resignFirstResponder),
-                        to: nil, from: nil, for: nil
-                    )
-                }
             }
         }
         .onChange(of: terminalFocused) { _, newValue in
@@ -678,17 +668,21 @@ extension TerminalTab: Equatable {}
     
     func previousCommand() -> String? {
         guard !commandHistory.isEmpty else { return nil }
-        historyIndex = max(0, historyIndex - 1)
+        if historyIndex > 0 {
+            historyIndex -= 1
+        }
         return commandHistory[historyIndex]
     }
     
     func nextCommand() -> String? {
         guard !commandHistory.isEmpty else { return nil }
-        historyIndex = min(commandHistory.count, historyIndex + 1)
-        if historyIndex >= commandHistory.count {
-            return ""
+        if historyIndex < commandHistory.count - 1 {
+            historyIndex += 1
+            return commandHistory[historyIndex]
+        } else {
+            historyIndex = commandHistory.count
+            return ""  // Return empty when past end of history
         }
-        return commandHistory[historyIndex]
     }
     
     private func processLocalCommand(_ command: String) {
