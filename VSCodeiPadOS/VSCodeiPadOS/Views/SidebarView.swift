@@ -31,6 +31,8 @@ struct SidebarView: View {
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.secondary)
                                 .textCase(.uppercase)
+                                .accessibilityLabel("Sidebar: \(sidebarTitle)")
+                                .accessibilityAddTraits(.isHeader)
                                 .accessibilityIdentifier("sidebar.header.title")
                             Spacer()
                             sidebarHeaderActions
@@ -47,6 +49,7 @@ struct SidebarView: View {
                     }
                     .frame(width: editorCore.sidebarWidth)
                     .background(Color(UIColor.secondarySystemBackground)) // Theme aware
+                    .accessibilityLabel("Sidebar panel")
                     .accessibilityIdentifier("sidebar.panel")
                     
                     // 5. Resize Handle
@@ -79,6 +82,8 @@ struct SidebarView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
+                .accessibilityLabel("Open Folder")
+                .accessibilityHint("Double tap to open a folder")
                 .help("Open Folder")
                 
                 Button(action: { editorCore.addTab() }) {
@@ -86,6 +91,8 @@ struct SidebarView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
+                .accessibilityLabel("New File")
+                .accessibilityHint("Double tap to create a new file")
                 .help("New File")
                 
                 Button(action: { fileNavigator.refreshFileTree() }) {
@@ -93,6 +100,8 @@ struct SidebarView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
+                .accessibilityLabel("Refresh File Tree")
+                .accessibilityHint("Double tap to refresh the file tree")
                 .help("Refresh")
                 
                 Button(action: { 
@@ -103,6 +112,8 @@ struct SidebarView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                 }
+                .accessibilityLabel("Collapse All Folders")
+                .accessibilityHint("Double tap to collapse all expanded folders")
                 .help("Collapse All Folders")
             }
         }
@@ -277,6 +288,8 @@ struct ResizeHandle: View {
                     .fill(isDragging ? Color.accentColor : Color(UIColor.separator))
                     .frame(width: 1)
             }
+            .accessibilityLabel("Resize sidebar")
+            .accessibilityHint("Drag to adjust sidebar width")
             .contentShape(Rectangle())
             .gesture(
                 DragGesture()
