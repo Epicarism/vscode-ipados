@@ -236,6 +236,40 @@ final class GitManager: ObservableObject {
             return GitFileChange(path: status.path, kind: .untracked, staged: false)
         }
         
+        // Populate ahead/behind counts (simplified)
+        if let headSHA = reader.headSHA() {
+            // Look for a remote tracking branch matching the current branch
+            let trackingRemote = remoteBranches.first { $0.name.hasSuffix("/\(currentBranch)") }
+            if let tracking = trackingRemote {
+                let refPath = workingDirectory?.appendingPathComponent(".git/refs/remotes/\(tracking.name)")
+                var remoteSHA: String?
+                if let refPath, let data = try? Data(contentsOf: refPath) {
+                    remoteSHA = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    // Fallback: check packed-refs
+                    if let packedRefPath = workingDirectory?.appendingPathComponent(".git/packed-refs"),
+                       let packedContent = try? String(contentsOf: packedRefPath, encoding: .utf8) {
+                        for line in packedContent.components(separatedBy: .newlines) {
+                            if line.hasPrefix("refs/remotes/\(tracking.name)") {
+                                remoteSHA = line.components(separatedBy: .whitespaces).first
+                                break
+                            }
+                        }
+                    }
+                }
+                if let remoteSHA, remoteSHA != headSHA {
+                    aheadCount = 1
+                    behindCount = 0
+                } else {
+                    aheadCount = 0
+                    behindCount = 0
+                }
+            } else {
+                aheadCount = 0
+                behindCount = 0
+            }
+        }
+
         // Recent commits
         let commits = reader.recentCommits(count: 20)
         recentCommits = commits.map { commit in
@@ -454,6 +488,11 @@ final class GitManager: ObservableObject {
     }
     
     func discard(file: String) async throws {
+        try discardFileWithoutRefresh(file: file)
+        await refresh()
+    }
+    
+    private func discardFileWithoutRefresh(file: String) throws {
         // Discard changes by restoring from HEAD
         guard let repoURL = workingDirectory,
               let reader = nativeReader else {
@@ -470,14 +509,13 @@ final class GitManager: ObservableObject {
             let filePath = repoURL.appendingPathComponent(file)
             try? FileManager.default.removeItem(at: filePath)
         }
-        
-        await refresh()
     }
     
     func discardAll() async throws {
-        // Discard all changes by restoring each file from HEAD
+        // Discard all unstaged changes using the no-refresh helper,
+        // then refresh once at the end.
         for change in unstagedChanges {
-            try await discard(file: change.path)
+            try discardFileWithoutRefresh(file: change.path)
         }
         for file in untrackedFiles {
             guard let repoURL = workingDirectory else { continue }
@@ -492,8 +530,9 @@ final class GitManager: ObservableObject {
     }
     
     func fetch() async throws {
-        // Fetch requires network - same as pull
-        try await pull()
+        // NOTE: A real fetch requires network (git fetch via SSH or GitHub API).
+        // For now, just refresh local state without merging.
+        await refresh()
     }
     
     /// Alias for lastError for compatibility

@@ -359,6 +359,8 @@ struct SingleTerminalView: View {
                     Button("Esc") { terminal.sendEscape() }
                     Button("Ctrl+C") { terminal.sendInterrupt() }
                         .foregroundColor(.red)
+                    Button("↑") { if let cmd = terminal.previousCommand() { terminal.draftCommand = cmd } }
+                    Button("↓") { if let cmd = terminal.nextCommand() { terminal.draftCommand = cmd } }
                     Spacer()
                     Button("ls") { terminal.draftCommand = "ls -la" }
                     Button("git status") { terminal.draftCommand = "git status" }
@@ -715,6 +717,9 @@ extension TerminalTab: Equatable {}
         for line in lines {
             if !line.isEmpty || lines.count == 1 {
                 self.output.append(TerminalLine(text: line, type: type, isANSI: isANSI || line.contains("\u{1B}")))
+                if self.output.count > 10000 {
+                    self.output.removeFirst(self.output.count - 10000)
+                }
             }
         }
     }
@@ -971,6 +976,8 @@ struct ANSIText: View {
     let text: String
     @ObservedObject private var themeManager = ThemeManager.shared
     
+    private static let ansiRegex = try! NSRegularExpression(pattern: "\u{1B}\\[([0-9;]*)([a-zA-Z])")
+    
     init(_ text: String) {
         self.text = text
     }
@@ -1020,10 +1027,7 @@ struct ANSIText: View {
         var italic = false
         var underline = false
         
-        let pattern = "\u{1B}\\[([0-9;]*)([a-zA-Z])"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return [ANSISegment(text: input, color: nil, bold: false, italic: false, underline: false)]
-        }
+        let regex = Self.ansiRegex
         
         let nsInput = input as NSString
         var lastEnd = 0
@@ -1057,7 +1061,7 @@ struct ANSIText: View {
                     case 22: bold = false
                     case 23: italic = false
                     case 24: underline = false
-                    case 30: currentColor = Color(.sRGB, red: 0, green: 0, blue: 0)
+                    case 30: currentColor = Color(.sRGB, red: 0.3, green: 0.3, blue: 0.3)
                     case 31: currentColor = .red
                     case 32: currentColor = .green
                     case 33: currentColor = .yellow
