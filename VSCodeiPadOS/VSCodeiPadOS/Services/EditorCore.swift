@@ -183,7 +183,6 @@ class EditorCore: ObservableObject {
     @Published var showSidebar = true
     @Published var sidebarWidth: CGFloat = 250
     @Published var showFilePicker = false
-    // searchText removed - was dead @Published property
     @Published var showSearch = false
     @Published var showCommandPalette = false
     @Published var showQuickOpen = false
@@ -235,12 +234,10 @@ class EditorCore: ObservableObject {
     @Published var requestedGoToLine: Int?
 
     // UI Panel state
-    // showPanel removed - was write-only @Published property
     @Published var showKeyboardShortcuts = false
     @Published var focusedSidebarTab = 0
 
     // Debug state
-    // breakpoints removed - debug breakpoints handled by DebugManager
 
     // Reference to file navigator for workspace search
     weak var fileNavigator: FileSystemNavigator?
@@ -1075,22 +1072,38 @@ mod tests {
     }
 
     func saveActiveTab() {
+        // Capture the active tab identity BEFORE posting the sync notification.
+        // This prevents a race where the active tab changes between the sync
+        // and the async save dispatch.
+        let capturedTabId = activeTabId
+        let capturedIndex = activeTabIndex
+
         // Force the editor view to sync any pending text changes immediately
         NotificationCenter.default.post(name: .forceEditorSync, object: nil)
-        
+
         // Small delay to allow sync to complete before reading content
         DispatchQueue.main.async { [self] in
-            self._performSave()
+            self._performSave(tabId: capturedTabId, index: capturedIndex)
         }
     }
-    
-    private func _performSave() {
-        guard let index = activeTabIndex,
-              let url = tabs[index].url else { return }
+
+    private func _performSave(tabId: UUID? = nil, index: Int? = nil) {
+        // Use the explicitly provided tab identity if available (race-safe),
+        // otherwise fall back to reading the current active tab.
+        let saveIndex: Int
+        if let index {
+            saveIndex = index
+        } else {
+            guard let idx = activeTabIndex else { return }
+            saveIndex = idx
+        }
+
+        guard tabs.indices.contains(saveIndex),
+              let url = tabs[saveIndex].url else { return }
         // Apply file cleanup settings before saving
-        var contentToSave = tabs[index].content
+        var contentToSave = tabs[saveIndex].content
         contentToSave = applyFileSaveSettings(to: contentToSave)
-        tabs[index].content = contentToSave
+        tabs[saveIndex].content = contentToSave
 
         do {
             if let fileNavigator {
@@ -1102,12 +1115,12 @@ mod tests {
                 try contentToSave.write(to: url, atomically: true, encoding: .utf8)
             }
 
-            tabs[index].isUnsaved = false
-            
+            tabs[saveIndex].isUnsaved = false
+
             // Run diagnostics on the saved file
             DiagnosticsService.shared.analyzeFile(
                 content: contentToSave,
-                filename: tabs[index].fileName,
+                filename: tabs[saveIndex].fileName,
                 filePath: url.path
             )
         } catch {
@@ -1147,27 +1160,40 @@ mod tests {
     }
 
     func saveAllTabs() {
-        for index in tabs.indices {
-            guard let url = tabs[index].url, tabs[index].isUnsaved else { continue }
+        // Force the editor view to sync any pending text changes immediately
+        NotificationCenter.default.post(name: .forceEditorSync, object: nil)
 
-            // Apply file cleanup settings before saving
-            var contentToSave = tabs[index].content
-            contentToSave = applyFileSaveSettings(to: contentToSave)
-            tabs[index].content = contentToSave
+        // Small delay to allow sync to complete before reading content
+        DispatchQueue.main.async { [self] in
+            for index in self.tabs.indices {
+                guard let url = self.tabs[index].url, self.tabs[index].isUnsaved else { continue }
 
-            do {
-                if let fileNavigator {
-                    try fileNavigator.writeFile(at: url, content: contentToSave)
-                } else {
-                    // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
-                    let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
-                    defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                    try contentToSave.write(to: url, atomically: true, encoding: .utf8)
+                // Apply file cleanup settings before saving
+                var contentToSave = self.tabs[index].content
+                contentToSave = self.applyFileSaveSettings(to: contentToSave)
+                self.tabs[index].content = contentToSave
+
+                do {
+                    if let fileNavigator {
+                        try fileNavigator.writeFile(at: url, content: contentToSave)
+                    } else {
+                        // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
+                        let didStart = (self.securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
+                        defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+                        try contentToSave.write(to: url, atomically: true, encoding: .utf8)
+                    }
+
+                    self.tabs[index].isUnsaved = false
+
+                    // Run diagnostics on the saved file
+                    DiagnosticsService.shared.analyzeFile(
+                        content: contentToSave,
+                        filename: self.tabs[index].fileName,
+                        filePath: url.path
+                    )
+                } catch {
+                    AppLogger.editor.error("Error saving file: \(error)")
                 }
-
-                tabs[index].isUnsaved = false
-            } catch {
-                AppLogger.editor.error("Error saving file: \(error)")
             }
         }
     }
