@@ -1110,53 +1110,6 @@ struct QuickOpenRow: View {
     }
 }
 
-// MARK: - AI Assistant
-
-struct IDEAIAssistant: View {
-    @ObservedObject var editorCore: EditorCore
-    let theme: Theme
-    @State private var userInput = ""
-    @State private var messages: [(id: UUID, role: String, content: String)] = [(UUID(), "assistant", "Hello! I'm your AI coding assistant. How can I help?")]
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "brain").foregroundColor(.blue)
-                Text("AI Assistant").font(.headline).foregroundColor(theme.editorForeground)
-                Spacer()
-                Button(action: { editorCore.showAIAssistant = false }) { Image(systemName: "xmark.circle.fill").foregroundColor(theme.editorForeground.opacity(0.5)) }
-            }.padding().background(theme.sidebarBackground)
-            
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(messages, id: \.id) { msg in
-                        HStack {
-                            if msg.role == "user" { Spacer(minLength: 60) }
-                            Text(msg.content).padding(12).background(RoundedRectangle(cornerRadius: 12).fill(msg.role == "user" ? Color.blue : theme.sidebarBackground)).foregroundColor(msg.role == "user" ? .white : theme.editorForeground)
-                            if msg.role == "assistant" { Spacer(minLength: 60) }
-                        }
-                    }
-                }.padding()
-            }.background(theme.editorBackground)
-            
-            HStack(spacing: 12) {
-                TextField("Ask about your code...", text: $userInput).textFieldStyle(.roundedBorder)
-                Button(action: { sendMessage() }) { Image(systemName: "paperplane.fill").foregroundColor(userInput.isEmpty ? .gray : .blue) }.disabled(userInput.isEmpty)
-            }.padding().background(theme.sidebarBackground)
-        }.background(theme.editorBackground).cornerRadius(12).shadow(radius: 20)
-    }
-    
-    func sendMessage() {
-        guard !userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        messages.append((UUID(), "user", userInput))
-        let input = userInput
-        userInput = ""
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            messages.append((UUID(), "assistant", "I can help with '\(input)'! What specifically would you like to know?"))
-        }
-    }
-}
-
 // MARK: - Folder Picker
 
 struct IDEFolderPicker: UIViewControllerRepresentable {

@@ -1,24 +1,12 @@
 import SwiftUI
+import Foundation
 
 struct TestView: View {
-    @State private var testSuites: [TestSuite] = [
-        TestSuite(name: "CalculatorTests", tests: [
-            TestCase(name: "testAddition", status: .success),
-            TestCase(name: "testSubtraction", status: .failure),
-            TestCase(name: "testMultiplication", status: .none),
-            TestCase(name: "testDivision", status: .none)
-        ]),
-        TestSuite(name: "StringTests", tests: [
-            TestCase(name: "testConcatenation", status: .success),
-            TestCase(name: "testSplit", status: .none),
-            TestCase(name: "testEmpty", status: .none)
-        ]),
-        TestSuite(name: "NetworkTests", tests: [
-            TestCase(name: "testFetchData", status: .none),
-            TestCase(name: "testUploadData", status: .none)
-        ])
-    ]
-    
+    @State private var testSuites: [TestSuite] = []
+    @State private var isScanning: Bool = false
+    @State private var scanMessage: String = "Scanning workspace for tests…"
+    @State private var hasScanned: Bool = false
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -28,30 +16,20 @@ struct TestView: View {
                     .fontWeight(.bold)
                     .foregroundColor(.secondary)
                 Spacer()
-                Button(action: { runAllTests() }) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.green)
-                        .padding(4)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(4)
-                }
-                .help("Run All Tests")
-                .buttonStyle(PlainButtonStyle())
-                
-                Button(action: { refreshTests() }) {
+                Button(action: { scanWorkspaceForTests() }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                         .padding(4)
                 }
-                .help("Refresh Tests")
+                .help("Rescan Workspace")
                 .buttonStyle(PlainButtonStyle())
-                
+
                 Button(action: {}) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
+                        .padding(4)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .padding(.leading, 4)
@@ -59,45 +37,174 @@ struct TestView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(Color(UIColor.secondarySystemBackground))
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach($testSuites) { $suite in
-                        TestSuiteRow(suite: $suite)
+                    if isScanning {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Text(scanMessage)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                    } else if testSuites.isEmpty && hasScanned {
+                        VStack(alignment: .center, spacing: 8) {
+                            Image(systemName: "testtube.2")
+                                .font(.system(size: 24))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Text("No test functions found")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.secondary)
+                            Text("Scan Swift files in the workspace for functions prefixed with \"test\"")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 280)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    } else {
+                        ForEach($testSuites) { $suite in
+                            TestSuiteRow(suite: $suite)
+                        }
                     }
                 }
                 .padding(.top, 4)
             }
         }
         .background(Color(UIColor.systemBackground))
-    }
-    
-    func runAllTests() {
-        for i in 0..<testSuites.count {
-            for j in 0..<testSuites[i].tests.count {
-                testSuites[i].tests[j].status = .running
+        .onAppear {
+            if !hasScanned {
+                scanWorkspaceForTests()
             }
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            for i in 0..<testSuites.count {
-                for j in 0..<testSuites[i].tests.count {
-                    testSuites[i].tests[j].status = Bool.random() ? .success : .failure
+    }
+
+    // MARK: - Workspace Test Scanning
+
+    /// Scans the workspace for Swift files containing test functions.
+    /// Test functions are identified as `func test...` declarations in files
+    /// whose names end with "Tests.swift" or that contain `import XCTest`.
+    func scanWorkspaceForTests() {
+        isScanning = true
+        scanMessage = "Scanning workspace for tests…"
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let discoveredSuites = Self.discoverTestFunctions()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                testSuites = discoveredSuites
+                isScanning = false
+                hasScanned = true
+            }
+        }
+    }
+
+    /// Scans the app's documents directory and bundle for Swift test files.
+    static func discoverTestFunctions() -> [TestSuite] {
+        var suites: [TestSuite] = [:String, [String]]()
+
+        // Scan the app's documents directory (workspace files)
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        if let docsURL = documentsURL {
+            scanDirectoryRecursively(docsURL, into: &suites)
+        }
+
+        // Also scan the main bundle for test files included in the app
+        if let bundleTests = Bundle.main.urls(forResourcesWithExtension: "swift", subdirectory: nil) {
+            for url in bundleTests {
+                let filename = url.lastPathComponent
+                if filename.hasSuffix("Tests.swift") || filename.hasSuffix("Test.swift") {
+                    scanSwiftFile(at: url, into: &suites)
                 }
             }
         }
+
+        // Convert dictionary to TestSuite array
+        return suites.map { name, tests in
+            TestSuite(
+                name: name,
+                tests: tests.sorted().map { TestCase(name: $0, status: .none) }
+            )
+        }.sorted(by: { $0.name < $1.name })
     }
-    
-    func refreshTests() {
-        // Mock refresh animation
-        // In a real app this would rescan files
+
+    /// Recursively scans a directory for Swift test files.
+    private static func scanDirectoryRecursively(_ url: URL, into suites: inout [String: [String]]) {
+        let fileManager = FileManager.default
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for case let fileURL as URL in enumerator {
+            let filename = fileURL.lastPathComponent
+            // Only look at Swift files that appear to be test files
+            guard filename.hasSuffix(".swift") else { continue }
+            guard filename.hasSuffix("Tests.swift") || filename.hasSuffix("Test.swift") else {
+                // Also check file content for XCTest import
+                continue
+            }
+            scanSwiftFile(at: fileURL, into: &suites)
+        }
+    }
+
+    /// Parses a single Swift file for test function declarations.
+    /// Looks for patterns like `func testName(` that start with "test".
+    private static func scanSwiftFile(at url: URL, into suites: inout [String: [String]]) {
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
+
+        // Check for XCTest import (confirm this is a test file)
+        let hasXCTestImport = content.contains("import XCTest")
+        let filename = url.deletingPathExtension().lastPathComponent
+
+        // Extract test function names: lines matching "func test..."
+        let lines = content.components(separatedBy: .newlines)
+        var foundTests: [String] = []
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Match "func testName(" or "func testName _("
+            guard trimmed.hasPrefix("func test") else { continue }
+            // Extract the function name between "func " and the "("
+            if let parenRange = trimmed.range(of: "(") {
+                let funcDecl = trimmed[trimmed.startIndex..<parenRange.lowerBound]
+                // Remove "func " prefix and any generic parameters
+                var name = funcDecl
+                if name.hasPrefix("func ") {
+                    name = String(name.dropFirst(5))
+                }
+                // Remove generic parameters like "<T>"
+                if let genericStart = name.firstIndex(of: "<") {
+                    name = String(name[name.startIndex..<genericStart])
+                }
+                // Clean up whitespace
+                name = name.trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty && name.hasPrefix("test") {
+                    // Skip private/internal access modifiers that got mixed in
+                    foundTests.append(name)
+                }
+            }
+        }
+
+        if !foundTests.isEmpty || hasXCTestImport {
+            if suites[filename] == nil {
+                suites[filename] = []
+            }
+            suites[filename]?.append(contentsOf: foundTests)
+        }
     }
 }
+
+// MARK: - Test Suite Row
 
 struct TestSuiteRow: View {
     @Binding var suite: TestSuite
     @State private var isExpanded: Bool = true
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -109,89 +216,89 @@ struct TestSuiteRow: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(PlainButtonStyle())
-                
+
                 Image(systemName: "testtube.2")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Text(suite.name)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.primary)
-                
+
                 Spacer()
-                
-                Button(action: { runSuite() }) {
-                    Image(systemName: "play.fill")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .opacity(0.7)
-                        .padding(4)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
+
+                Text("\(suite.tests.count)")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            
+
             if isExpanded {
-                ForEach($suite.tests) { $test in
-                    TestCaseRow(test: $test)
+                if suite.tests.isEmpty {
+                    Text("No test functions found in this file")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary.opacity(0.7))
                         .padding(.leading, 24)
+                        .padding(.vertical, 4)
+                } else {
+                    ForEach($suite.tests) { $test in
+                        TestCaseRow(test: $test)
+                            .padding(.leading, 24)
+                    }
                 }
+
+                // Unavailability notice
+                unavailableNotice
+                    .padding(.leading, 24)
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 6)
             }
         }
     }
-    
-    func runSuite() {
-        for i in 0..<suite.tests.count {
-            suite.tests[i].status = .running
+
+    private var unavailableNotice: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 10))
+                .foregroundColor(.orange)
+            Text("Test execution is not available on device. Run tests via Xcode or a CI pipeline.")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.8))
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            for i in 0..<suite.tests.count {
-                suite.tests[i].status = Bool.random() ? .success : .failure
-            }
-        }
+        .padding(.vertical, 4)
     }
 }
 
+// MARK: - Test Case Row
+
 struct TestCaseRow: View {
     @Binding var test: TestCase
-    @State private var isHovered: Bool = false
-    
+
     var body: some View {
         HStack(spacing: 6) {
             StatusIcon(status: test.status)
-            
+
             Text(test.name)
                 .font(.system(size: 12))
                 .foregroundColor(.primary)
-            
+
             Spacer()
-            
-            Button(action: { runTest() }) {
-                Image(systemName: "play.fill")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .padding(4)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding(.vertical, 2)
         .padding(.trailing, 8)
     }
-    
-    func runTest() {
-        test.status = .running
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            test.status = Bool.random() ? .success : .failure
-        }
-    }
 }
+
+// MARK: - Status Icon
 
 struct StatusIcon: View {
     let status: TestStatus
-    
+
     var body: some View {
         ZStack {
             switch status {
@@ -199,10 +306,10 @@ struct StatusIcon: View {
                 Circle()
                     .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
                     .frame(width: 10, height: 10)
-            case .running:
-                ProgressView()
-                    .scaleEffect(0.4)
-                    .frame(width: 10, height: 10)
+            case .skipped:
+                Image(systemName: "minus.circle")
+                    .foregroundColor(.orange)
+                    .font(.system(size: 10))
             case .success:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
@@ -217,6 +324,8 @@ struct StatusIcon: View {
     }
 }
 
+// MARK: - Models
+
 struct TestSuite: Identifiable {
     let id = UUID()
     let name: String
@@ -230,8 +339,12 @@ struct TestCase: Identifiable {
 }
 
 enum TestStatus {
+    /// Not yet run / discovered but idle
     case none
-    case running
+    /// Cannot be run on device (replaces fake random results)
+    case skipped
+    /// Test passed
     case success
+    /// Test failed
     case failure
 }
