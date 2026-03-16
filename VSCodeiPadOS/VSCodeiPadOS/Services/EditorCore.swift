@@ -1039,6 +1039,9 @@ mod tests {
             let content = try String(contentsOf: url, encoding: .utf8)
             addTab(fileName: url.lastPathComponent, content: content, url: url)
 
+            // Track recently opened file
+            RecentFileManager.shared.addRecentFile(url)
+
             // Index the file in Spotlight for search
             SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
         } catch {
@@ -1545,6 +1548,10 @@ extension EditorCore {
                         url: fileURL
                     )
                     tabs.append(tab)
+
+                    // Track recently opened file
+                    RecentFileManager.shared.addRecentFile(fileURL)
+
                     if path == activeTabPath {
                         activeTabId = tab.id
                     }

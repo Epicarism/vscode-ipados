@@ -887,6 +887,7 @@ struct IDEWelcomeView: View {
                                 Button(action: {
                                     let content = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
                                     editorCore.addTab(fileName: url.lastPathComponent, content: content, url: url)
+                                    RecentFileManager.shared.addRecentFile(url)
                                 }) {
                                     HStack(spacing: 8) {
                                         Image(systemName: url.hasDirectoryPath ? "folder.fill" : "doc.fill")

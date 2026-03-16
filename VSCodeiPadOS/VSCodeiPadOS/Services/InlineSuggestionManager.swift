@@ -333,20 +333,7 @@ final class InlineSuggestionManager: ObservableObject {
         // This should be replaced with actual LLM or completion service integration
         return nil
     }
-    
-    /// Fetches a suggestion from the completion service.
-    /// This is a placeholder that should be replaced with actual implementation.
-    private func fetchSuggestion(for context: SuggestionContext) async throws -> String? {
-        // Simulate network delay - replace with actual API call
-        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-        
-        // Check for cancellation
-        try Task.checkCancellation()
-        
-        // Placeholder: Return nil or mock suggestion based on context
-        // This should be replaced with actual LLM or completion service integration
-        return nil
-    }
+
     
     /// Extracts context information from the content at the given position.
     private func extractContext(from content: String, at position: CursorPosition) -> SuggestionContext {

@@ -13,7 +13,7 @@ struct VSCodeiPadOSApp: App {
             KeyCommandBridge {
                 ContentView()
                     .environmentObject(editorCore)
-                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WindowTitleDidChange"))) { notification in
+                    .onReceive(NotificationCenter.default.publisher(for: .windowTitleDidChange)) { notification in
                         if let userInfo = notification.userInfo,
                            let title = userInfo["title"] as? String {
                             windowTitle = title
@@ -52,7 +52,7 @@ struct FileMenuCommands: Commands {
         // Add to existing system File menu
         CommandGroup(replacing: .newItem) {
             Button("New File") {
-                NotificationCenter.default.post(name: NSNotification.Name("NewFile"), object: nil)
+                NotificationCenter.default.post(name: .newFile, object: nil)
             }
             .keyboardShortcut("n", modifiers: .command)
             
@@ -66,25 +66,25 @@ struct FileMenuCommands: Commands {
             Divider()
             
             Button("Open...") {
-                NotificationCenter.default.post(name: NSNotification.Name("OpenFile"), object: nil)
+                NotificationCenter.default.post(name: .openFile, object: nil)
             }
             
             Divider()
             
             Button("Save") {
-                NotificationCenter.default.post(name: NSNotification.Name("SaveFile"), object: nil)
+                NotificationCenter.default.post(name: .saveFile, object: nil)
             }
             .keyboardShortcut("s", modifiers: .command)
             
             Button("Save All") {
-                NotificationCenter.default.post(name: NSNotification.Name("SaveAllFiles"), object: nil)
+                NotificationCenter.default.post(name: .saveAllFiles, object: nil)
             }
             .keyboardShortcut("s", modifiers: [.command, .option])
             
             Divider()
             
             Button("Close Tab") {
-                NotificationCenter.default.post(name: NSNotification.Name("CloseTab"), object: nil)
+                NotificationCenter.default.post(name: .closeTab, object: nil)
             }
             .keyboardShortcut("w", modifiers: .command)
         }
@@ -100,12 +100,12 @@ struct EditMenuCommands: Commands {
             Divider()
             
             Button("Find") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowFind"), object: nil)
+                NotificationCenter.default.post(name: .showFind, object: nil)
             }
             .keyboardShortcut("f", modifiers: .command)
             
             Button("Replace") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowReplace"), object: nil)
+                NotificationCenter.default.post(name: .showReplace, object: nil)
             }
             .keyboardShortcut("h", modifiers: [.command, .option])
         }
@@ -120,12 +120,12 @@ struct SelectionMenuCommands: Commands {
             // Note: Select All removed - conflicts with UITextView Cmd+A
             
             Button("Add Cursor Above") {
-                NotificationCenter.default.post(name: NSNotification.Name("AddCursorAbove"), object: nil)
+                NotificationCenter.default.post(name: .addCursorAbove, object: nil)
             }
             .keyboardShortcut(.upArrow, modifiers: [.command, .option])
             
             Button("Add Cursor Below") {
-                NotificationCenter.default.post(name: NSNotification.Name("AddCursorBelow"), object: nil)
+                NotificationCenter.default.post(name: .addCursorBelow, object: nil)
             }
             .keyboardShortcut(.downArrow, modifiers: [.command, .option])
         }
@@ -139,36 +139,36 @@ struct ViewMenuCommands: Commands {
         // Add to existing system View menu
         CommandGroup(replacing: .sidebar) {
             Button("Toggle Sidebar") {
-                NotificationCenter.default.post(name: NSNotification.Name("ToggleSidebar"), object: nil)
+                NotificationCenter.default.post(name: .toggleSidebar, object: nil)
             }
             // Note: Cmd+B shortcut handled by UIKeyCommand in editor to override Bold
         }
         
         CommandGroup(after: .sidebar) {
             Button("Command Palette") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowCommandPalette"), object: nil)
+                NotificationCenter.default.post(name: .showCommandPalette, object: nil)
             }
             // Shortcut Cmd+Shift+P handled by AppDelegate.buildMenu
             
             Button("Toggle Terminal") {
-                NotificationCenter.default.post(name: NSNotification.Name("ToggleTerminal"), object: nil)
+                NotificationCenter.default.post(name: .toggleTerminal, object: nil)
             }
             // Shortcut Cmd+J handled by AppDelegate.buildMenu
             
             Button("AI Assistant") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowAIAssistant"), object: nil)
+                NotificationCenter.default.post(name: .showAIAssistant, object: nil)
             }
             // Shortcut Cmd+Shift+A handled by AppDelegate.buildMenu
             
             Divider()
             
             Button("Zoom In") {
-                NotificationCenter.default.post(name: NSNotification.Name("ZoomIn"), object: nil)
+                NotificationCenter.default.post(name: .zoomIn, object: nil)
             }
             .keyboardShortcut("+", modifiers: .command)
             
             Button("Zoom Out") {
-                NotificationCenter.default.post(name: NSNotification.Name("ZoomOut"), object: nil)
+                NotificationCenter.default.post(name: .zoomOut, object: nil)
             }
             .keyboardShortcut("-", modifiers: .command)
         }
@@ -181,34 +181,34 @@ struct GoMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Go") {
             Button("Go to File...") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowQuickOpen"), object: nil)
+                NotificationCenter.default.post(name: .showQuickOpen, object: nil)
             }
             .keyboardShortcut("p", modifiers: .command)
             
             Button("Go to Symbol...") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowGoToSymbol"), object: nil)
+                NotificationCenter.default.post(name: .showGoToSymbol, object: nil)
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
             
             Button("Go to Line...") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowGoToLine"), object: nil)
+                NotificationCenter.default.post(name: .showGoToLine, object: nil)
             }
             .keyboardShortcut("g", modifiers: .control)
             
             Divider()
             
             Button("Go to Definition") {
-                NotificationCenter.default.post(name: NSNotification.Name("GoToDefinition"), object: nil)
+                NotificationCenter.default.post(name: .goToDefinition, object: nil)
             }
             .keyboardShortcut(.return, modifiers: .command)
             
             Button("Go Back") {
-                NotificationCenter.default.post(name: NSNotification.Name("GoBack"), object: nil)
+                NotificationCenter.default.post(name: .goBack, object: nil)
             }
             .keyboardShortcut("[", modifiers: .control)
             
             Button("Go Forward") {
-                NotificationCenter.default.post(name: NSNotification.Name("GoForward"), object: nil)
+                NotificationCenter.default.post(name: .goForward, object: nil)
             }
             .keyboardShortcut("]", modifiers: .control)
         }
@@ -221,30 +221,30 @@ struct RunMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Run") {
             Button("Start Debugging") {
-                NotificationCenter.default.post(name: NSNotification.Name("StartDebugging"), object: nil)
+                NotificationCenter.default.post(name: .startDebugging, object: nil)
             }
             .keyboardShortcut("d", modifiers: [.command, .shift])
             
             Button("Run Without Debugging") {
-                NotificationCenter.default.post(name: NSNotification.Name("RunWithoutDebugging"), object: nil)
+                NotificationCenter.default.post(name: .runWithoutDebugging, object: nil)
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
             
             Divider()
             
             Button("Toggle Breakpoint") {
-                NotificationCenter.default.post(name: NSNotification.Name("ToggleBreakpoint"), object: nil)
+                NotificationCenter.default.post(name: .toggleBreakpoint, object: nil)
             }
             .keyboardShortcut("b", modifiers: [.command, .shift])
             
             Divider()
             
             Button("Run Sample WASM") {
-                NotificationCenter.default.post(name: NSNotification.Name("RunSampleWASM"), object: nil)
+                NotificationCenter.default.post(name: .runSampleWASM, object: nil)
             }
             
             Button("Run JavaScript") {
-                NotificationCenter.default.post(name: NSNotification.Name("RunJavaScript"), object: nil)
+                NotificationCenter.default.post(name: .runJavaScript, object: nil)
             }
         }
     }
@@ -256,12 +256,12 @@ struct TerminalMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Terminal") {
             Button("New Terminal") {
-                NotificationCenter.default.post(name: NSNotification.Name("NewTerminal"), object: nil)
+                NotificationCenter.default.post(name: .newTerminal, object: nil)
             }
             .keyboardShortcut("`", modifiers: [.control, .shift])
             
             Button("Clear Terminal") {
-                NotificationCenter.default.post(name: NSNotification.Name("ClearTerminal"), object: nil)
+                NotificationCenter.default.post(name: .clearTerminal, object: nil)
             }
             .keyboardShortcut("k", modifiers: .command)
         }
@@ -281,14 +281,14 @@ struct HelpMenuCommands: Commands {
             }
             
             Button("Keyboard Shortcuts") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowKeyboardShortcuts"), object: nil)
+                NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
             }
             .keyboardShortcut("/", modifiers: [.command])
             
             Divider()
             
             Button("About VS Code for iPad") {
-                NotificationCenter.default.post(name: NSNotification.Name("ShowAbout"), object: nil)
+                NotificationCenter.default.post(name: .showAbout, object: nil)
             }
         }
     }
