@@ -37,6 +37,8 @@ struct BreadcrumbsView: View {
                     .padding(.vertical, 4)
                     .padding(.horizontal, 4)
                     .contentShape(Rectangle())
+                    .accessibilityLabel("Navigate to \(component)")
+                    .accessibilityHint("Navigate to folder/file name")
                     .onTapGesture {
                         // Handle navigation
                     }

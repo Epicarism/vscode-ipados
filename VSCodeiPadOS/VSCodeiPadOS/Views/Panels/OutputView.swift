@@ -153,7 +153,8 @@ struct RemoteProgressView: View {
                             .font(.system(size: 16))
                             .foregroundColor(.secondary)
                     }
-                    .help("Cancel remote execution")
+                    .accessibilityLabel("Cancel remote execution")
+                    .accessibilityHint("Double tap to cancel the running remote command")
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)

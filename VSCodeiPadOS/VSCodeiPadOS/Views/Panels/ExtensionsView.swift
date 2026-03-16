@@ -198,6 +198,7 @@ struct ExtensionsPanel: View {
                 .font(.system(size: 13))
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .accessibilityLabel("Browse Marketplace")
                 .accessibilityHint("Double tap to browse popular extensions")
             }
             Spacer()
@@ -345,15 +346,20 @@ struct ExtensionRowView: View {
                     Button(action: { manager.toggleEnabled(extension_) }) {
                         Label("Disable", systemImage: "pause.circle")
                     }
+                    .accessibilityLabel("Disable \(extension_.displayName)")
+                    .accessibilityHint("Double tap to disable this extension")
                 } else {
                     Button(action: { manager.toggleEnabled(extension_) }) {
                         Label("Enable", systemImage: "play.circle")
                     }
-                }
+                    .accessibilityLabel("Enable \(extension_.displayName)")
+                    .accessibilityHint("Double tap to enable this extension")
                 Divider()
                 Button(role: .destructive, action: { manager.uninstall(extension_) }) {
                     Label("Uninstall", systemImage: "trash")
                 }
+                .accessibilityLabel("Uninstall \(extension_.displayName)")
+                .accessibilityHint("Double tap to uninstall this extension")
             } label: {
                 HStack(spacing: 4) {
                     if !extension_.isEnabled {

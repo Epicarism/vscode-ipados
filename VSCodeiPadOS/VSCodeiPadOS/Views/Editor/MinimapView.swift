@@ -88,6 +88,8 @@ struct MinimapView: View {
             .frame(width: minimapWidth, height: minimapHeight)
             .clipShape(Rectangle())
             .contentShape(Rectangle())
+            .accessibilityLabel("Code minimap")
+            .accessibilityHint("Scroll to position")
             // Click-to-scroll + drag scrolling (DragGesture(minDistance: 0) captures taps too)
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)

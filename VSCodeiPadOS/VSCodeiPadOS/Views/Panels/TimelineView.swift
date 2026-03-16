@@ -301,8 +301,10 @@ private struct TimelineRow: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Timeline entry: \(entry.message). By \(entry.author). \(entry.source.label). \(Self.timestampFormatter.string(from: entry.timestamp))")
+        .accessibilityHint("Timeline entry")
         // Future: selection / open diff action hook.
-    }
 
     private var sourceIcon: some View {
         ZStack {
@@ -315,6 +317,7 @@ private struct TimelineRow: View {
                 .foregroundStyle(entry.source.tint)
         }
         .padding(.top, 2)
+        .accessibilityHidden(true)
     }
 
     private static let timestampFormatter: DateFormatter = {

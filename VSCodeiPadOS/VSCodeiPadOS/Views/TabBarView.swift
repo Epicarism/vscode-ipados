@@ -50,6 +50,8 @@ struct TabBarView: View {
         }
         .background(themeManager.currentTheme.tabBarBackground)
         .frame(height: 35)
+        .accessibilityLabel("Tab bar")
+        .accessibilityHint("Contains \(tabs.count) open tab\(tabs.count == 1 ? "" : "s")")
     }
 
     private func closeTab(_ tab: Tab) {
@@ -153,6 +155,8 @@ struct TabItemView: View {
                         }
                         .buttonStyle(.plain)
                         .opacity(isHovering ? 1 : 0)
+                        .accessibilityLabel("Close tab \(tab.fileName)")
+                        .accessibilityHint("Closes this tab")
                     }
                 }
                 .frame(width: 16, height: 16)
@@ -173,12 +177,37 @@ struct TabItemView: View {
             isHovering = hovering
         }
         .contextMenu {
-            Button(action: onClose) { Label("Close", systemImage: "xmark") }
-            Button(action: onPin) { Label(tab.isPinned ? "Unpin" : "Pin", systemImage: "pin") }
+            Button(action: onClose) {
+                Label("Close", systemImage: "xmark")
+            }
+            .accessibilityLabel("Close tab \(tab.fileName)")
+            .accessibilityHint("Closes this tab")
+
+            Button(action: onPin) {
+                Label(tab.isPinned ? "Unpin" : "Pin", systemImage: "pin")
+            }
+            .accessibilityLabel(tab.isPinned ? "Unpin tab \(tab.fileName)" : "Pin tab \(tab.fileName)")
+            .accessibilityHint(tab.isPinned ? "Unpins this tab so it can be closed" : "Pins this tab to the tab bar")
+
             Divider()
-            Button(action: onCloseOthers) { Label("Close Others", systemImage: "xmark.circle") }
-            Button(action: onCloseRight) { Label("Close to the Right", systemImage: "xmark.square") }
+
+            Button(action: onCloseOthers) {
+                Label("Close Others", systemImage: "xmark.circle")
+            }
+            .accessibilityLabel("Close other tabs")
+            .accessibilityHint("Closes all tabs except \(tab.fileName)")
+
+            Button(action: onCloseRight) {
+                Label("Close to the Right", systemImage: "xmark.square")
+            }
+            .accessibilityLabel("Close tabs to the right of \(tab.fileName)")
+            .accessibilityHint("Closes all tabs to the right of this one")
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tab.isPinned ? "Pinned tab" : "Tab"), \(tab.fileName)\(tab.isUnsaved ? ", unsaved changes" : "")\(tab.isPreview ? ", preview" : "")")
+        .accessibilityHint("Double tap to switch to this tab")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(isActive ? "Active" : "Inactive")
     }
 }
 
