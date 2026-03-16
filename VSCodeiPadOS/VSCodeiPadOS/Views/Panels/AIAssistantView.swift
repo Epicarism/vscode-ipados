@@ -294,6 +294,8 @@ struct AIAssistantHeader: View {
                     .font(.system(size: 16))
             }
             .foregroundColor(.secondary)
+            .accessibilityLabel("New Chat")
+            .accessibilityHint("Double tap to start a new conversation")
             
             // History button
             Button(action: { showHistory = true }) {
@@ -301,6 +303,8 @@ struct AIAssistantHeader: View {
                     .font(.system(size: 16))
             }
             .foregroundColor(.secondary)
+            .accessibilityLabel("Chat History")
+            .accessibilityHint("Double tap to view conversation history")
             
             // Settings button
             Button(action: { showSettings = true }) {
@@ -308,6 +312,8 @@ struct AIAssistantHeader: View {
                     .font(.system(size: 16))
             }
             .foregroundColor(.secondary)
+            .accessibilityLabel("AI Settings")
+            .accessibilityHint("Double tap to configure AI provider and model")
             
             // Close button
             Button(action: onClose) {
@@ -315,6 +321,8 @@ struct AIAssistantHeader: View {
                     .font(.system(size: 20))
                     .foregroundColor(.secondary)
             }
+            .accessibilityLabel("Close AI Assistant")
+            .accessibilityHint("Double tap to close the AI assistant panel")
         }
         .padding()
         .background(Color(UIColor.secondarySystemBackground))
@@ -612,6 +620,8 @@ struct ChatInputArea: View {
                 .onSubmit {
                     if !isLoading { onSend() }
                 }
+                .accessibilityLabel("Message input")
+                .accessibilityHint("Type your question about code here")
             
             Button(action: { isLoading ? onStop() : onSend() }) {
                 Image(systemName: isLoading ? "stop.circle.fill" : "paperplane.fill")
@@ -619,6 +629,8 @@ struct ChatInputArea: View {
                     .foregroundColor(userInput.isEmpty && !isLoading ? .gray : .accentColor)
             }
             .disabled(userInput.isEmpty && !isLoading)
+            .accessibilityLabel(isLoading ? "Stop generating" : "Send message")
+            .accessibilityHint(isLoading ? "Double tap to stop AI response" : "Double tap to send your message")
         }
         .padding()
         .background(Color(UIColor.systemBackground))

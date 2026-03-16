@@ -79,36 +79,35 @@ final class CodeExecutionService {
         }
         
         // Execute the code asynchronously
-        nonisolated(unsafe) let runner = self.jsRunner
-        Task { @MainActor [weak self] in
+        Task {
             let startTime = Date()
             
             do {
-                let result = try await runner?.execute(code: code)
+                let result = try await jsRunner?.execute(code: code)
                 let duration = Date().timeIntervalSince(startTime)
                 
                 // Show result if it's not undefined
                 if let result = result, !result.isUndefined {
-                    let resultString = self?.formatJSValue(result) ?? "\(result)"
-                    self?.outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
-                    self?.outputManager.append("⮐ Result: \(resultString)", to: OutputChannel.javascript)
+                    let resultString = formatJSValue(result) ?? "\(result)"
+                    outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
+                    outputManager.append("⮐ Result: \(resultString)", to: OutputChannel.javascript)
                 }
                 
                 // Show completion message
-                self?.outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
-                self?.outputManager.append("✓ Completed in \(String(format: "%.2f", duration * 1000))ms", to: OutputChannel.javascript)
+                outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
+                outputManager.append("✓ Completed in \(String(format: "%.2f", duration * 1000))ms", to: OutputChannel.javascript)
                 
             } catch let error as JSRunnerError {
-                self?.outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
-                self?.outputManager.append("✗ Error: \(error.localizedDescription)", to: OutputChannel.javascript, streamType: StreamType.stderr)
+                outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
+                outputManager.append("✗ Error: \(error.localizedDescription)", to: OutputChannel.javascript, streamType: StreamType.stderr)
                 
             } catch {
-                self?.outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
-                self?.outputManager.append("✗ Error: \(error.localizedDescription)", to: OutputChannel.javascript, streamType: StreamType.stderr)
+                outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
+                outputManager.append("✗ Error: \(error.localizedDescription)", to: OutputChannel.javascript, streamType: StreamType.stderr)
             }
             
             // Clean up runner
-            self?.jsRunner = nil
+            jsRunner = nil
         }
     }
     
