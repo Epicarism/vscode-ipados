@@ -1097,10 +1097,9 @@ mod tests {
 
         guard tabs.indices.contains(saveIndex),
               let url = tabs[saveIndex].url else { return }
-        // Apply file cleanup settings before saving
+        // Apply file cleanup settings to a local copy only — don't mutate tab content
         var contentToSave = tabs[saveIndex].content
         contentToSave = applyFileSaveSettings(to: contentToSave)
-        tabs[saveIndex].content = contentToSave
 
         do {
             if let fileNavigator {
@@ -1165,10 +1164,9 @@ mod tests {
             for index in self.tabs.indices {
                 guard let url = self.tabs[index].url, self.tabs[index].isUnsaved else { continue }
 
-                // Apply file cleanup settings before saving
+                // Apply file cleanup settings to a local copy only — don't mutate tab content
                 var contentToSave = self.tabs[index].content
                 contentToSave = self.applyFileSaveSettings(to: contentToSave)
-                self.tabs[index].content = contentToSave
 
                 do {
                     if let fileNavigator {

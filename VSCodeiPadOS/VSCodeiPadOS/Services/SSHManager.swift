@@ -111,7 +111,7 @@ final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             nextChallengePromise.succeed(
                 NIOSSHUserAuthenticationOffer(
                     username: username,
-                    serviceName: "",
+                    serviceName: "ssh-connection",
                     offer: .password(.init(password: password))
                 )
             )
@@ -191,7 +191,12 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     // MARK: - Connection Methods
     
     func connect(config: SSHConnectionConfig) async throws {
-        currentConfig = config
+        // Disconnect existing session if connected to prevent resource leaks
+        if isConnected {
+            disconnect()
+        }
+        
+        await MainActor.run { self.currentConfig = config }
         
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.group = group
@@ -203,6 +208,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         case .privateKey(let key, _):
             // For private key auth, we'd need to parse the key
             // For now fall back to password-style with key as password
+            // TODO: Implement proper NIOSSHPrivateKey-based public key authentication
             authDelegate = PasswordAuthDelegate(username: config.username, password: key)
         }
         
@@ -230,7 +236,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             ).get()
             
             self.channel = connection
-            self.isConnected = true
+            await MainActor.run { self.isConnected = true }
             
             // Notify delegate and post notification on main thread
             let delegate = self.delegate
@@ -243,7 +249,11 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             try await startInteractiveShell()
             
         } catch {
-            self.isConnected = false
+            await MainActor.run { self.isConnected = false }
+            // Clean up leaked EventLoopGroup on failure
+            let failedGroup = group
+            self.group = nil
+            DispatchQueue.global().async { try? failedGroup.syncShutdownGracefully() }
             throw SSHClientError.connectionFailed(error.localizedDescription)
         }
     }
@@ -260,6 +270,10 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     }
     
     func disconnect() {
+        // Set isConnected = false synchronously BEFORE clearing channels
+        // to prevent race where isConnected=true but channels are nil
+        isConnected = false
+        
         shellChannel?.close(mode: .all, promise: nil)
         channel?.close(mode: .all, promise: nil)
         try? group?.syncShutdownGracefully()
@@ -270,7 +284,6 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         let delegate = self.delegate
         DispatchQueue.main.async {
-            self.isConnected = false
             self.currentConfig = nil
             delegate?.sshManagerDidDisconnect(self, error: nil)
         }

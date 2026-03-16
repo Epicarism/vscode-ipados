@@ -60,8 +60,8 @@ struct OutputLineView: View {
     
     private var textColor: Color {
         switch line.logLevel {
-        case .error: return theme.keyword // Error color from theme
-        case .warning: return theme.number // Warning color from theme
+        case .error: return Color.red
+        case .warning: return Color.orange
         case .debug: return theme.comment
         case .info: return theme.editorForeground
         }
@@ -219,6 +219,7 @@ struct OutputSearchBar: View {
             if stats.filtered != stats.total {
                 Text("\(stats.filtered)/\(stats.total)")
                     .font(.system(size: 10))
+                    .monospacedDigit()
                     .foregroundColor(.secondary)
                     .accessibilityLabel("\(stats.filtered) of \(stats.total) output lines visible")
             }
@@ -476,20 +477,31 @@ struct OutputView: View {
 
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 1) {
-                    ForEach(lines) { line in
-                        OutputLineView(
-                            line: line,
-                            showTimestamp: outputManager.showTimestamps,
-                            wordWrap: outputManager.wordWrapEnabled,
-                            theme: theme
-                        )
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
+                if lines.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("No output yet")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(lines) { line in
+                            OutputLineView(
+                                line: line,
+                                showTimestamp: outputManager.showTimestamps,
+                                wordWrap: outputManager.wordWrapEnabled,
+                                theme: theme
+                            )
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.vertical, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onChange(of: lines.count) { _, _ in
                 guard !lines.isEmpty && outputManager.isAutoScrollEnabled else { return }

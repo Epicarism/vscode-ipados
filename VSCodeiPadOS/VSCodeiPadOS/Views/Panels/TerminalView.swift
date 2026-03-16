@@ -580,6 +580,14 @@ extension TerminalTab: Equatable {}
     private var historyIndex = 0
     private var currentDirectory: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
     
+    // Persistent ANSI state across line boundaries
+    // TODO: Pass these to parseANSI for cross-line ANSI state continuity
+    var ansiColor: Color? = nil
+    var ansiBgColor: Color? = nil
+    var ansiBold = false
+    var ansiItalic = false
+    var ansiUnderline = false
+    
     func clear() {
         output = []
     }
@@ -658,8 +666,9 @@ extension TerminalTab: Equatable {}
     func sendInterrupt() {
         if isConnected {
             sshManager?.sendInterrupt()
+        } else {
+            appendOutput("^C", type: .system)
         }
-        appendOutput("^C", type: .system)
     }
     
     func sendTab() {
@@ -689,7 +698,7 @@ extension TerminalTab: Equatable {}
             return commandHistory[historyIndex]
         } else {
             historyIndex = commandHistory.count
-            return ""  // Return empty when past end of history
+            return nil  // Return nil when past end of history to preserve draft
         }
     }
     
@@ -1385,7 +1394,7 @@ struct ANSIText: View {
                         // Format: 48;5;N (256-color background) or 48;2;R;G;B (true color background)
                         if i + 2 < parts.count {
                             let mode = parts[i + 1]
-                            if mode == 5 && i + 2 < parts.count {
+                            if mode == 5 && i + 3 <= parts.count {
                                 // 256-color mode
                                 let colorIndex = parts[i + 2]
                                 let color = color256(colorIndex)
@@ -1395,7 +1404,7 @@ struct ANSIText: View {
                                     currentBackgroundColor = color
                                 }
                                 i += 2
-                            } else if mode == 2 && i + 4 < parts.count {
+                            } else if mode == 2 && i + 5 <= parts.count {
                                 // 24-bit true color (RGB)
                                 let r = Double(parts[i + 2]) / 255.0
                                 let g = Double(parts[i + 3]) / 255.0
@@ -1427,7 +1436,9 @@ struct ANSIText: View {
         }
         
         if segments.isEmpty {
-            segments.append(ANSISegment(text: input, color: nil, backgroundColor: nil, bold: false, italic: false, underline: false))
+            // Strip raw ANSI escape codes before showing as plaintext
+            let stripped = input.replacingOccurrences(of: "\u{1B}\\[[0-9;]*[a-zA-Z]", with: "", options: .regularExpression)
+            segments.append(ANSISegment(text: stripped.isEmpty ? " " : stripped, color: nil, backgroundColor: nil, bold: false, italic: false, underline: false))
         }
         
         return segments
