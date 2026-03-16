@@ -28,29 +28,60 @@ struct ContentView: View {
     
     var body: some View {
         contentWithSheets
-            .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in editorCore.showCommandPalette = true }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in showTerminal.toggle() }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in editorCore.toggleSidebar() }
-            .onReceive(NotificationCenter.default.publisher(for: .showQuickOpen)) { _ in editorCore.showQuickOpen = true }
-            .onReceive(NotificationCenter.default.publisher(for: .showGoToSymbol)) { _ in editorCore.showGoToSymbol = true }
-            .onReceive(NotificationCenter.default.publisher(for: .showGoToLine)) { _ in editorCore.showGoToLine = true }
-            .onReceive(NotificationCenter.default.publisher(for: .showAIAssistant)) { _ in editorCore.showAIAssistant = true }
-            .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in editorCore.addTab() }
-            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
-            .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
-            .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
-            .onReceive(NotificationCenter.default.publisher(for: .showReplace)) { _ in editorCore.showSearch = true }
-            .onReceive(NotificationCenter.default.publisher(for: .saveAllFiles)) { _ in editorCore.saveAllTabs() }
-            .onReceive(NotificationCenter.default.publisher(for: .goToDefinition)) { _ in editorCore.goToDefinitionAtCursor() }
-            .onReceive(NotificationCenter.default.publisher(for: .goBack)) { _ in editorCore.navigateBack() }
-            .onReceive(NotificationCenter.default.publisher(for: .goForward)) { _ in editorCore.navigateForward() }
-            .onReceive(NotificationCenter.default.publisher(for: .addCursorAbove)) { _ in editorCore.addCursorAbove() }
-            .onReceive(NotificationCenter.default.publisher(for: .addCursorBelow)) { _ in editorCore.addCursorBelow() }
-            .onReceive(NotificationCenter.default.publisher(for: .showSettings)) { _ in showSettings = true }
+            .modifier(NavigationHandlers(editorCore: editorCore, showTerminal: $showTerminal, showSettings: $showSettings))
+            .modifier(EditorActionHandlers(editorCore: editorCore))
+            .modifier(CursorAndZoomHandlers(editorCore: editorCore))
             .environmentObject(themeManager)
             .environmentObject(editorCore)
+    }
+
+    // MARK: - Notification Handler Modifiers (split to help type-checker)
+
+    private struct NavigationHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+        @Binding var showTerminal: Bool
+        @Binding var showSettings: Bool
+
+        func body(content: Content) -> some View {
+            content
+                .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in editorCore.showCommandPalette = true }
+                .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in showTerminal.toggle() }
+                .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in editorCore.toggleSidebar() }
+                .onReceive(NotificationCenter.default.publisher(for: .showQuickOpen)) { _ in editorCore.showQuickOpen = true }
+                .onReceive(NotificationCenter.default.publisher(for: .showGoToSymbol)) { _ in editorCore.showGoToSymbol = true }
+                .onReceive(NotificationCenter.default.publisher(for: .showGoToLine)) { _ in editorCore.showGoToLine = true }
+                .onReceive(NotificationCenter.default.publisher(for: .showAIAssistant)) { _ in editorCore.showAIAssistant = true }
+                .onReceive(NotificationCenter.default.publisher(for: .showSettings)) { _ in showSettings = true }
+        }
+    }
+
+    private struct EditorActionHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+
+        func body(content: Content) -> some View {
+            content
+                .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in editorCore.addTab() }
+                .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
+                .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
+                .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
+                .onReceive(NotificationCenter.default.publisher(for: .showReplace)) { _ in editorCore.showSearch = true }
+                .onReceive(NotificationCenter.default.publisher(for: .saveAllFiles)) { _ in editorCore.saveAllTabs() }
+                .onReceive(NotificationCenter.default.publisher(for: .goToDefinition)) { _ in editorCore.goToDefinitionAtCursor() }
+        }
+    }
+
+    private struct CursorAndZoomHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+
+        func body(content: Content) -> some View {
+            content
+                .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
+                .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
+                .onReceive(NotificationCenter.default.publisher(for: .goBack)) { _ in editorCore.navigateBack() }
+                .onReceive(NotificationCenter.default.publisher(for: .goForward)) { _ in editorCore.navigateForward() }
+                .onReceive(NotificationCenter.default.publisher(for: .addCursorAbove)) { _ in editorCore.addCursorAbove() }
+                .onReceive(NotificationCenter.default.publisher(for: .addCursorBelow)) { _ in editorCore.addCursorBelow() }
+        }
     }
 
     @ViewBuilder
