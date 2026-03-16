@@ -104,7 +104,7 @@ struct NotificationToast: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(notification.type.rawValue) notification: \(notification.message)")
+        .accessibilityLabel("\(String(describing: notification.type)) notification: \(notification.message)")
         .padding(12)
         .frame(width: 360)
         .background {

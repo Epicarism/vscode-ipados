@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftUI
 
 // MARK: - Git View (Source Control Panel)
 

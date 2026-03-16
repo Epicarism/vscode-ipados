@@ -27,7 +27,27 @@ struct ContentView: View {
     private var theme: Theme { themeManager.currentTheme }
     
     var body: some View {
-        mainContentView
+        contentWithSheets
+            .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in editorCore.showCommandPalette = true }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in showTerminal.toggle() }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in editorCore.toggleSidebar() }
+            .onReceive(NotificationCenter.default.publisher(for: .showQuickOpen)) { _ in editorCore.showQuickOpen = true }
+            .onReceive(NotificationCenter.default.publisher(for: .showGoToSymbol)) { _ in editorCore.showGoToSymbol = true }
+            .onReceive(NotificationCenter.default.publisher(for: .showGoToLine)) { _ in editorCore.showGoToLine = true }
+            .onReceive(NotificationCenter.default.publisher(for: .showAIAssistant)) { _ in editorCore.showAIAssistant = true }
+            .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in editorCore.addTab() }
+            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
+            .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
+            .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
+            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
+            .environmentObject(themeManager)
+            .environmentObject(editorCore)
+    }
+
+    @ViewBuilder
+    private var contentWithSheets: some View {
+        contentWithHandlers
             .sheet(isPresented: $showingDocumentPicker) { IDEDocumentPicker(editorCore: editorCore) }
             .sheet(isPresented: $showingFolderPicker) {
                 IDEFolderPicker(fileNavigator: fileNavigator) { url in
@@ -46,6 +66,11 @@ struct ContentView: View {
                     suggestedName: editorCore.activeTab?.fileName ?? "Untitled.txt"
                 )
             }
+    }
+
+    @ViewBuilder
+    private var contentWithHandlers: some View {
+        mainContentView
             .onChange(of: editorCore.showFilePicker) { show in showingDocumentPicker = show }
             .onChange(of: editorCore.activeTab?.fileName) { _ in updateWindowTitle() }
             .onChange(of: editorCore.tabs.count) { _ in updateWindowTitle() }
@@ -54,15 +79,12 @@ struct ContentView: View {
             .onAppear {
                 editorCore.fileNavigator = fileNavigator
                 updateWindowTitle()
-                
-                // Restore last workspace on launch
                 if editorCore.restoredWorkspace, let url = editorCore.restoreWorkspaceURL() {
                     let accessing = url.startAccessingSecurityScopedResource()
                     if FileManager.default.fileExists(atPath: url.path) {
                         finishOpeningWorkspace(url)
                         editorCore.restoreOpenTabs(workspaceURL: url)
                     } else {
-                        // Folder no longer exists - clear state and show examples
                         editorCore.clearWorkspaceState()
                         let exampleTabs = EditorCore.createExampleTabs()
                         editorCore.tabs.append(contentsOf: exampleTabs)
@@ -72,22 +94,8 @@ struct ContentView: View {
                 }
             }
             .onChange(of: editorCore.tabs.map { $0.id }) { _ in
-                // Persist open tabs when they change
                 editorCore.saveOpenTabPaths()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in editorCore.showCommandPalette = true }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in showTerminal.toggle() }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in editorCore.toggleSidebar() }
-            .onReceive(NotificationCenter.default.publisher(for: .showQuickOpen)) { _ in editorCore.showQuickOpen = true }
-            .onReceive(NotificationCenter.default.publisher(for: .showGoToSymbol)) { _ in editorCore.showGoToSymbol = true }
-            .onReceive(NotificationCenter.default.publisher(for: .showGoToLine)) { _ in editorCore.showGoToLine = true }
-            .onReceive(NotificationCenter.default.publisher(for: .showAIAssistant)) { _ in editorCore.showAIAssistant = true }
-            .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in editorCore.addTab() }
-            .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
-            .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
-            .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
-            .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
             .onReceive(NotificationCenter.default.publisher(for: .runWithoutDebugging)) { _ in
                 if let activeTab = editorCore.activeTab {
                     CodeExecutionService.shared.executeCurrentFile(fileName: activeTab.fileName, content: activeTab.content)
@@ -114,8 +122,6 @@ struct ContentView: View {
                     }
                 }
             }
-            .environmentObject(themeManager)
-            .environmentObject(editorCore)
     }
     
     // MARK: - Extracted View Components
@@ -321,6 +327,8 @@ struct ContentView: View {
             GitView()
         case 3:
             DebugView()
+        case 4:
+            RemoteExplorerView(editorCore: editorCore)
         default:
             IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
         }
@@ -508,6 +516,29 @@ struct IDEEditorView: View {
     // Code folding removed - will use VS Code tunnel for real folding
     @StateObject private var findViewModel = FindViewModel()
     
+    // MARK: - Shared Autocomplete Handlers
+    private func handleAcceptAutocomplete() -> Bool {
+        guard showAutocomplete else { return false }
+        var tempText = text
+        var tempCursor = cursorIndex
+        autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
+        if tempText != text {
+            text = tempText
+            cursorIndex = tempCursor
+            requestedCursorIndex = tempCursor
+            showAutocomplete = false
+            return true
+        }
+        return false
+    }
+    
+    private func handleDismissAutocomplete() -> Bool {
+        guard showAutocomplete else { return false }
+        autocomplete.hideSuggestions()
+        showAutocomplete = false
+        return true
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Find/Replace bar
@@ -535,13 +566,7 @@ struct IDEEditorView: View {
                         .background(theme.sidebarBackground.opacity(0.5))
                     }
                     
-                    // Use Runestone for all files including JSON (has TreeSitter JSON support)
-                    if false && tab.fileName.hasSuffix(".json") {
-                        // JSON Tree View disabled - using Runestone editor instead
-                        JSONTreeView(data: text.data(using: .utf8) ?? Data())
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(theme.editorBackground)
-                    } else {
+                    // Editor content
                         // Use Runestone for O(log n) performance, or legacy view as fallback
                         Group {
                             if useRunestoneEditor {
@@ -555,26 +580,8 @@ struct IDEEditorView: View {
                                     cursorIndex: $cursorIndex,
                                     isActive: true,
                                     fontSize: editorCore.editorFontSize,
-                                    onAcceptAutocomplete: {
-                                        guard showAutocomplete else { return false }
-                                        var tempText = text
-                                        var tempCursor = cursorIndex
-                                        autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
-                                        if tempText != text {
-                                            text = tempText
-                                            cursorIndex = tempCursor
-                                            requestedCursorIndex = tempCursor
-                                            showAutocomplete = false
-                                            return true
-                                        }
-                                        return false
-                                    },
-                                    onDismissAutocomplete: {
-                                        guard showAutocomplete else { return false }
-                                        autocomplete.hideSuggestions()
-                                        showAutocomplete = false
-                                        return true
-                                    }
+                                    onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
+                                    onDismissAutocomplete: { self.handleDismissAutocomplete() }
                                 )
                             } else {
                                 // Legacy SyntaxHighlightingTextView (fallback)
@@ -593,26 +600,8 @@ struct IDEEditorView: View {
                                     fontSize: editorCore.editorFontSize,
                                     requestedLineSelection: $requestedLineSelection,
                                     requestedCursorIndex: $requestedCursorIndex,
-                                    onAcceptAutocomplete: {
-                                        guard showAutocomplete else { return false }
-                                        var tempText = text
-                                        var tempCursor = cursorIndex
-                                        autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
-                                        if tempText != text {
-                                            text = tempText
-                                            cursorIndex = tempCursor
-                                            requestedCursorIndex = tempCursor
-                                            showAutocomplete = false
-                                            return true
-                                        }
-                                        return false
-                                    },
-                                    onDismissAutocomplete: {
-                                        guard showAutocomplete else { return false }
-                                        autocomplete.hideSuggestions()
-                                        showAutocomplete = false
-                                        return true
-                                    }
+                                    onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
+                                    onDismissAutocomplete: { self.handleDismissAutocomplete() }
                                 )
                             }
                         }
@@ -627,7 +616,6 @@ struct IDEEditorView: View {
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
                             showAutocomplete = autocomplete.showSuggestions
                         }
-                    }
                     
                     if !tab.fileName.hasSuffix(".json") {
                         MinimapView(
@@ -879,8 +867,14 @@ struct IDEWelcomeView: View {
                         WelcomeLink(icon: "doc.badge.plus", title: "New File", shortcut: "\u{2318}N", theme: theme) { editorCore.addTab() }
                         WelcomeLink(icon: "folder", title: "Open Folder...", shortcut: "\u{2318}\u{21E7}O", theme: theme) { showFolderPicker = true }
                         WelcomeLink(icon: "doc", title: "Open File...", shortcut: "\u{2318}O", theme: theme) { editorCore.showFilePicker = true }
-                        WelcomeLink(icon: "arrow.triangle.branch", title: "Clone Repository...", shortcut: nil, theme: theme) { }
-                        WelcomeLink(icon: "network", title: "Connect to SSH Host...", shortcut: nil, theme: theme) { }
+                        WelcomeLink(icon: "arrow.triangle.branch", title: "Clone Repository...", shortcut: nil, theme: theme) {
+                            editorCore.focusedSidebarTab = 1
+                            editorCore.showSidebar = true
+                        }
+                        WelcomeLink(icon: "network", title: "Connect to SSH Host...", shortcut: nil, theme: theme) {
+                            editorCore.showPanel = true
+                            NotificationCenter.default.post(name: .toggleTerminal, object: nil)
+                        }
                     }
                     .frame(width: 260)
                     
@@ -1016,114 +1010,6 @@ struct WelcomeTip: View {
     }
 }
 
-// MARK: - Command Palette
-
-struct IDECommandPalette: View {
-    @ObservedObject var editorCore: EditorCore
-    @Binding var showSettings: Bool
-    @Binding var showTerminal: Bool
-    @State private var searchText = ""
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundColor(.secondary)
-                TextField("Type a command...", text: $searchText).textFieldStyle(.plain)
-            }.padding().background(Color(UIColor.secondarySystemBackground))
-            Divider()
-            ScrollView {
-                VStack(spacing: 0) {
-                    let allCommands: [(icon: String, name: String, shortcut: String, action: () -> Void)] = [
-                        ("doc.badge.plus", "New File", "⌘N", { editorCore.addTab(); editorCore.showCommandPalette = false }),
-                        ("folder", "Open File", "⌘O", { editorCore.showFilePicker = true; editorCore.showCommandPalette = false }),
-                        ("square.and.arrow.down", "Save File", "⌘S", { editorCore.saveActiveTab(); editorCore.showCommandPalette = false }),
-                        ("sidebar.left", "Toggle Sidebar", "⌘B", { editorCore.toggleSidebar(); editorCore.showCommandPalette = false }),
-                        ("brain", "AI Assistant", "⌘⇧A", { editorCore.showAIAssistant = true; editorCore.showCommandPalette = false }),
-                        ("terminal", "Toggle Terminal", "⌘`", { showTerminal.toggle(); editorCore.showCommandPalette = false }),
-                        ("gear", "Settings", "⌘,", { showSettings = true; editorCore.showCommandPalette = false }),
-                        ("number", "Go to Line", "⌘G", { editorCore.showGoToLine = true; editorCore.showCommandPalette = false }),
-                        ("magnifyingglass", "Find in Files", "⌘⇧F", { editorCore.showSearch = true; editorCore.showCommandPalette = false }),
-                        ("arrow.uturn.backward", "Undo", "⌘Z", { NotificationCenter.default.post(name: .init("Undo"), object: nil); editorCore.showCommandPalette = false }),
-                        ("arrow.uturn.forward", "Redo", "⌘⇧Z", { NotificationCenter.default.post(name: .init("Redo"), object: nil); editorCore.showCommandPalette = false }),
-                        ("paintbrush", "Change Theme", "", { NotificationCenter.default.post(name: .init("ShowSettings"), object: nil); editorCore.showCommandPalette = false }),
-                        ("keyboard", "Keyboard Shortcuts", "", { editorCore.showKeyboardShortcuts = true; editorCore.showCommandPalette = false })
-                    ]
-                    let filtered = searchText.isEmpty ? allCommands : allCommands.filter { $0.name.localizedCaseInsensitiveContains(searchText) || $0.shortcut.contains(searchText) }
-                    ForEach(Array(filtered.enumerated()), id: \.offset) { _, cmd in
-                        CommandRow(icon: cmd.icon, name: cmd.name, shortcut: cmd.shortcut, action: cmd.action)
-                    }
-                    if filtered.isEmpty {
-                        Text("No matching commands")
-                            .foregroundColor(.secondary)
-                            .padding()
-                    }
-                }.padding(.vertical, 8)
-            }
-        }.frame(width: 500, height: 400).background(Color(UIColor.systemBackground)).cornerRadius(12).shadow(radius: 20)
-    }
-}
-
-struct CommandRow: View {
-    let icon: String; let name: String; let shortcut: String; let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon).foregroundColor(.accentColor).frame(width: 24)
-                Text(name).foregroundColor(.primary)
-                Spacer()
-                Text(shortcut).font(.caption).foregroundColor(.secondary).padding(.horizontal, 8).padding(.vertical, 4).background(Color(UIColor.tertiarySystemFill)).cornerRadius(4)
-            }.padding(.horizontal).padding(.vertical, 12).contentShape(Rectangle())
-        }.buttonStyle(.plain)
-    }
-}
-
-// MARK: - Quick Open
-
-struct IDEQuickOpen: View {
-    @ObservedObject var editorCore: EditorCore
-    @State private var searchText = ""
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundColor(.gray)
-                TextField("Search files...", text: $searchText).textFieldStyle(.plain)
-            }.padding().background(Color(UIColor.secondarySystemBackground))
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    let filteredTabs = searchText.isEmpty ? editorCore.tabs : editorCore.tabs.filter { $0.fileName.localizedCaseInsensitiveContains(searchText) }
-                    ForEach(filteredTabs) { tab in
-                        QuickOpenRow(name: tab.fileName, path: tab.url?.deletingLastPathComponent().path ?? "") {
-                            editorCore.selectTab(id: tab.id)
-                            editorCore.showQuickOpen = false
-                        }
-                    }
-                    if filteredTabs.isEmpty && !searchText.isEmpty {
-                        Text("No matching files")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 13))
-                            .padding()
-                    }
-                }
-            }.frame(maxHeight: 350)
-        }.frame(width: 500).background(Color(UIColor.systemBackground)).cornerRadius(12).shadow(radius: 20)
-    }
-}
-
-struct QuickOpenRow: View {
-    let name: String; let path: String; let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: fileIcon(for: name)).foregroundColor(fileColor(for: name)).frame(width: 20)
-                VStack(alignment: .leading, spacing: 2) { Text(name).font(.system(size: 14)); Text(path + name).font(.system(size: 11)).foregroundColor(.secondary) }
-                Spacer()
-            }.padding(.horizontal).padding(.vertical, 8).contentShape(Rectangle())
-        }.buttonStyle(.plain)
-    }
-}
-
 // MARK: - Folder Picker
 
 struct IDEFolderPicker: UIViewControllerRepresentable {
@@ -1147,11 +1033,15 @@ struct IDEFolderPicker: UIViewControllerRepresentable {
     
     class Coordinator: NSObject, UIDocumentPickerDelegate {
         let parent: IDEFolderPicker
+        private var scopedURL: URL?
         init(_ parent: IDEFolderPicker) { self.parent = parent }
         
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             if let url = urls.first {
-                _ = url.startAccessingSecurityScopedResource()
+                let didStart = url.startAccessingSecurityScopedResource()
+                if didStart {
+                    scopedURL = url
+                }
                 if let onPick = parent.onPick {
                     onPick(url)
                 } else {
@@ -1162,6 +1052,12 @@ struct IDEFolderPicker: UIViewControllerRepresentable {
                         GitManager.shared.setWorkingDirectory(url)
                     }
                 }
+            }
+        }
+        
+        deinit {
+            if let url = scopedURL {
+                url.stopAccessingSecurityScopedResource()
             }
         }
     }

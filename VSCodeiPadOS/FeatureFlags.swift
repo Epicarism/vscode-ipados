@@ -4,10 +4,10 @@ import Foundation
 
 struct FeatureFlags {
     // Core feature flags
-    static let enableSSH = false
-    static let enableiCloudSync = false
-    static let enableRemoteExecution = false
-    static let enableDebugger = false
+    static let enableSSH = true
+    static let enableiCloudSync = false  // Not yet implemented
+    static let enableRemoteExecution = true
+    static let enableDebugger = true
     
     /// Use Runestone editor instead of legacy regex-based highlighting
     /// Set to false to rollback if issues occur
@@ -15,4 +15,19 @@ struct FeatureFlags {
     
     /// Enable verbose logging for editor performance debugging
     static let editorPerformanceLogging = false
+    
+    // Remote features
+    static let enableRemoteFileSystem = true
+    static let enableIntegratedTerminal = true
+    static let enableGitOverSSH = true
+    
+    // Panel features
+    static let enableOutputPanel = true
+    static let enableProblemsPanel = true
+    static let enableDebugConsole = true
+    
+    // Polish features
+    static let enableNotificationToasts = true
+    static let enableBreadcrumbs = true
+    static let enableMinimap = true
 }

@@ -38,7 +38,7 @@ struct SearchResult: Identifiable {
 }
 
 /// View model for Find/Replace functionality
-final class FindViewModel: ObservableObject {
+@MainActor final class FindViewModel: ObservableObject {
     @Published var searchQuery: String = ""
     @Published var replaceQuery: String = ""
     @Published var searchResults: [SearchResult] = []
@@ -69,14 +69,14 @@ final class FindViewModel: ObservableObject {
     /// Bound externally by EditorCore
     weak var editorCore: EditorCore?
 
-    private var searchWorkItem: DispatchWorkItem?
+    private var searchTask: Task<Void, Never>?
 
     // MARK: - Public API
 
     /// Performs search with current query
     func performSearch() {
         // Cancel any pending search
-        searchWorkItem?.cancel()
+        searchTask?.cancel()
 
         guard !searchQuery.isEmpty else {
             searchResults = []
@@ -87,20 +87,15 @@ final class FindViewModel: ObservableObject {
 
         isSearching = true
 
-        // Debounce search
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-
+        // Debounce search using Task
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
+            guard !Task.isCancelled, let self else { return }
             let results = self.executeSearch()
-            DispatchQueue.main.async {
-                self.searchResults = results
-                self.currentResultIndex = min(self.currentResultIndex, max(0, results.count - 1))
-                self.isSearching = false
-            }
+            self.searchResults = results
+            self.currentResultIndex = min(self.currentResultIndex, max(0, results.count - 1))
+            self.isSearching = false
         }
-
-        searchWorkItem = workItem
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
 
     /// Moves to next search result

@@ -144,7 +144,7 @@ final class RunConfigViewModel: ObservableObject {
     @Published var executionOutput: String = ""
     
     private let presetsKey = "runConfigurationPresets"
-    private var remoteRunner: RemoteRunner?
+    nonisolated(unsafe) private var remoteRunner: RemoteRunner?
     
     init(remoteRunner: RemoteRunner? = nil) {
         self.remoteRunner = remoteRunner
@@ -267,7 +267,7 @@ final class RunConfigViewModel: ObservableObject {
         }
         
         // For other languages, use remote runner
-        guard let remoteRunner = remoteRunner else {
+        guard remoteRunner != nil else {
             alertMessage = "RemoteRunner not configured"
             showSaveAlert = true
             isExecuting = false
@@ -275,7 +275,7 @@ final class RunConfigViewModel: ObservableObject {
         }
         
         do {
-            let result = try await remoteRunner.execute(
+            let result = try await remoteRunner!.execute(
                 filePath: filePath,
                 configuration: currentConfig
             )

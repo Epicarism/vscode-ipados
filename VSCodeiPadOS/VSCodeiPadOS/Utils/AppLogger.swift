@@ -97,7 +97,8 @@ final class CrashReporter: ObservableObject, @unchecked Sendable {
         lines.append("")
 
         // Call stack
-        if let callStack = exception.callStackSymbols, !callStack.isEmpty {
+        let callStack = exception.callStackSymbols
+        if !callStack.isEmpty {
             lines.append("── Call Stack ─────────────────────────")
             for (index, frame) in callStack.enumerated() {
                 lines.append(String(format: "  %03d  %@", index + 1, frame))

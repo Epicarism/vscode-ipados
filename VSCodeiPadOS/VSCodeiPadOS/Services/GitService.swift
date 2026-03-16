@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct GitStash: Identifiable, Equatable {
     let id = UUID()
@@ -6,114 +7,178 @@ struct GitStash: Identifiable, Equatable {
     let date: Date
 }
 
-/// Lightweight in-memory git state + mocked operations.
+/// Thin observable façade that forwards all git operations to GitManager.shared.
 ///
-/// NOTE: This project does not yet have a real git backend (libgit2 / shell).
-/// This service exists to wire FEAT-076/077 UI and provide a single shared state
-/// for StatusBar + quick actions sheet.
+/// Previously this class contained mock data and simulated delays.
+/// Now every method calls through to the real GitManager backend so that
+/// the StatusBar / quick-actions UI drives actual git state.
 @MainActor
 final class GitService: ObservableObject {
     static let shared = GitService()
 
+    // MARK: - Published State (kept for existing UI consumers)
+
     @Published var currentBranch: String = "main"
-    @Published var statusText: String = "No changes"
-
-    /// Commits not pushed
+    @Published var statusText: String = ""
     @Published var aheadCount: Int = 0
-
-    /// Remote commits not pulled
     @Published var behindCount: Int = 0
-
     @Published var stashes: [GitStash] = []
-
     @Published var isBusy: Bool = false
-    
-    @Published var branches: [String] = ["main", "develop", "feature/ui-updates"]
-    
-    @Published var lastErrorMessage: String? = nil
+    @Published var branches: [String] = []
+    @Published var lastErrorMessage: String?
 
-    private init() {}
-    
-    func switchBranch(to branch: String) {
-        isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            self.currentBranch = branch
-            self.isBusy = false
-            self.refreshStatus()
+    // MARK: - Private
+
+    private var cancellables = Set<AnyCancellable>()
+    private let gitManager = GitManager.shared
+
+    private init() {
+        syncFromGitManager()
+    }
+
+    // MARK: - Periodic Sync
+
+    /// Polls GitManager every second so published properties stay up-to-date
+    /// with the real backend state.
+    private func syncFromGitManager() {
+        Timer.publish(every: 1.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.updateFromManager()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateFromManager() {
+        currentBranch  = gitManager.currentBranch
+        branches       = gitManager.branches.map { $0.name }
+        aheadCount     = gitManager.aheadCount
+        behindCount    = gitManager.behindCount
+
+        // Convert GitStashEntry → GitStash
+        stashes = gitManager.stashes.map {
+            GitStash(message: $0.message, date: Date())
+        }
+
+        // Build human-readable status text from change lists
+        let staged   = gitManager.stagedChanges.count
+        let unstaged = gitManager.unstagedChanges.count
+        let untracked = gitManager.untrackedFiles.count
+
+        if staged + unstaged + untracked == 0 {
+            statusText = "Working tree clean"
+        } else {
+            var parts: [String] = []
+            if staged > 0   { parts.append("\(staged) staged") }
+            if unstaged > 0 { parts.append("\(unstaged) modified") }
+            if untracked > 0 { parts.append("\(untracked) untracked") }
+            statusText = parts.joined(separator: ", ")
         }
     }
-    
+
+    // MARK: - Branch Operations
+
+    func switchBranch(to branch: String) {
+        isBusy = true
+        Task {
+            do {
+                try await gitManager.checkout(branch: branch)
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            isBusy = false
+        }
+    }
+
     func createBranch(named name: String, checkout: Bool = true) {
         guard !name.isEmpty else {
             lastErrorMessage = "Branch name cannot be empty"
             return
         }
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            self.branches.append(name)
-            if checkout {
-                self.currentBranch = name
+        Task {
+            do {
+                try await gitManager.createBranch(name: name)
+                if checkout {
+                    try await gitManager.checkout(branch: name)
+                }
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
             }
-            self.isBusy = false
+            isBusy = false
         }
     }
-    
+
     func deleteBranch(named branch: String) {
         guard branch != currentBranch else {
             lastErrorMessage = "Cannot delete current branch"
             return
         }
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            self.branches.removeAll { $0 == branch }
-            self.isBusy = false
+        Task {
+            do {
+                try await gitManager.deleteBranch(name: branch)
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            isBusy = false
         }
     }
 
+    // MARK: - Status / Commit
+
     func refreshStatus() {
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            self.statusText = "On branch \(self.currentBranch)\n" +
-            "Your branch is up to date with 'origin/\(self.currentBranch)'.\n\n" +
-            "Changes not staged for commit:\n" +
-            "  modified:   ContentView.swift\n" +
-            "  modified:   README.md"
-            self.isBusy = false
+        Task {
+            await gitManager.refresh()
+            lastErrorMessage = gitManager.lastError
+            isBusy = false
         }
     }
 
     func commit(message: String) {
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            self.aheadCount += 1
-            self.statusText = "On branch \(self.currentBranch)\n" +
-            "Your branch is ahead of 'origin/\(self.currentBranch)' by \(self.aheadCount) commit(s).\n\n" +
-            "nothing to commit, working tree clean"
-            self.isBusy = false
+        Task {
+            do {
+                try await gitManager.commit(message: message)
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            isBusy = false
         }
     }
 
+    // MARK: - Remote Operations
+
     func pull() {
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            if self.behindCount > 0 {
-                self.behindCount = 0
+        Task {
+            do {
+                try await gitManager.pull()
+                await gitManager.refresh()
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
             }
-            self.statusText = "On branch \(self.currentBranch)\n" +
-            "Already up to date."
-            self.isBusy = false
+            isBusy = false
         }
     }
 
     func push() {
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            if self.aheadCount > 0 {
-                self.aheadCount = 0
+        Task {
+            do {
+                try await gitManager.push()
+                await gitManager.refresh()
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
             }
-            self.statusText = "On branch \(self.currentBranch)\n" +
-            "Everything up-to-date"
-            self.isBusy = false
+            isBusy = false
         }
     }
 
@@ -121,32 +186,42 @@ final class GitService: ObservableObject {
 
     func stashSave(message: String?) {
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            let trimmed = (message ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let msg = trimmed.isEmpty ? "WIP on \(self.currentBranch)" : trimmed
-            self.stashes.insert(GitStash(message: msg, date: Date()), at: 0)
-            self.statusText = "Saved working directory and index state: \(msg)"
-            self.isBusy = false
+        Task {
+            do {
+                try await gitManager.stashPush(message: message)
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            isBusy = false
         }
     }
 
     func stashApply(index: Int) {
-        guard stashes.indices.contains(index) else { return }
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.statusText = "Applied stash@{\(index)}: \(self.stashes[index].message)"
-            self.isBusy = false
+        Task {
+            do {
+                // GitManager has stashPop which applies + drops; use it as the
+                // nearest equivalent since stashApply is not separately implemented.
+                try await gitManager.stashPop(index: index)
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            isBusy = false
         }
     }
 
     func stashPop(index: Int) {
-        guard stashes.indices.contains(index) else { return }
         isBusy = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let msg = self.stashes[index].message
-            self.stashes.remove(at: index)
-            self.statusText = "Dropped stash@{\(index)}: \(msg)"
-            self.isBusy = false
+        Task {
+            do {
+                try await gitManager.stashPop(index: index)
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            isBusy = false
         }
     }
 }

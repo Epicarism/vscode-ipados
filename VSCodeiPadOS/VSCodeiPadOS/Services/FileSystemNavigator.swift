@@ -2,6 +2,7 @@ import SwiftUI
 import Foundation
 import Combine
 
+@MainActor
 final class FileSystemNavigator: ObservableObject {
     @Published var fileTree: FileTreeNode?
     @Published var expandedPaths: Set<String> = []
@@ -264,7 +265,7 @@ final class FileSystemNavigator: ObservableObject {
 
     // MARK: - Tree
 
-    private func buildFileTree(at url: URL) -> FileTreeNode? {
+    nonisolated private func buildFileTree(at url: URL) -> FileTreeNode? {
         let fileManager = FileManager.default
 
         do {

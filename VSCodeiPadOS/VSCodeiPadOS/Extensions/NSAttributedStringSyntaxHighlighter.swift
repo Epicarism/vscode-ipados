@@ -10,6 +10,7 @@ import UIKit
 // - Comments: gray
 // - Numbers: green
 // - Functions: yellow
+@MainActor
 final class NSAttributedStringSyntaxHighlighter {
 
     // MARK: - Language
@@ -30,7 +31,7 @@ final class NSAttributedStringSyntaxHighlighter {
 
     // MARK: - Colors
 
-    private struct ColorScheme {
+    @MainActor private struct ColorScheme {
         // Theme-aware colors: read from ThemeManager at call time
         // so syntax highlighting always matches the active theme.
         static var keyword: UIColor { UIColor(ThemeManager.shared.currentTheme.keyword) }

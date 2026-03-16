@@ -82,7 +82,7 @@ protocol SFTPManagerDelegate: AnyObject {
 /// Note: SwiftNIO SSH doesn't include SFTP subsystem directly.
 /// This implementation uses SSH exec channels to run scp/sftp commands.
 /// For full SFTP support, consider using a dedicated SFTP library.
-class SFTPManager {
+class SFTPManager: @unchecked Sendable {
     weak var delegate: SFTPManagerDelegate?
     
     private var sshManager: SSHManager?
@@ -113,23 +113,86 @@ class SFTPManager {
     // MARK: - Directory Operations
     
     /// List files in a remote directory using ls command
-    func listDirectory(_ path: String, completion: @escaping (Result<[SFTPFileInfo], Error>) -> Void) {
+    func listDirectory(_ path: String, completion: @Sendable @escaping (Result<[SFTPFileInfo], Error>) -> Void) {
         guard isConnected else {
             completion(.failure(SFTPError.notConnected))
             return
         }
         
-        // Use ls -la to get file listing
-        // This is a workaround since SwiftNIO SSH doesn't have SFTP subsystem
         let command = "ls -la \(path)"
         
-        // For now, we would need to capture the output and parse it
-        // This is a simplified placeholder - full implementation would require
-        // exec channel with output capture
+        Task { @Sendable in
+            do {
+                guard let result = try await sshManager?.executeCommand(command) else {
+                    completion(.failure(SFTPError.notConnected))
+                    return
+                }
+                
+                let files = parseLSOutput(result.stdout, basePath: path)
+                completion(.success(files))
+            } catch {
+                completion(.failure(SFTPError.directoryListFailed))
+            }
+        }
+    }
+    
+    /// Parse ls -la output into SFTPFileInfo objects
+    private func parseLSOutput(_ output: String, basePath: String) -> [SFTPFileInfo] {
+        let lines = output.components(separatedBy: "\n")
+        var files: [SFTPFileInfo] = []
         
-        // Placeholder response
-        let files: [SFTPFileInfo] = []
-        completion(.success(files))
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        
+        for line in lines {
+            // Skip "total" line
+            guard !line.hasPrefix("total") else { continue }
+            
+            let fields = line.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            
+            // ls -la format: permissions, links, owner, group, size, month, day, time/year, name
+            guard fields.count >= 9 else { continue }
+            
+            let permissions = fields[0]
+            let name = fields[8]
+            
+            // Skip . and .. entries
+            guard name != "." && name != ".." else { continue }
+            
+            let isDirectory = permissions.first == "d"
+            let size = UInt64(fields[4]) ?? 0
+            
+            // Parse date: "Mar 15 10:30" or "Mar 15  2023"
+            let month = fields[5]
+            let day = fields[6]
+            let yearOrTime = fields[7]
+            
+            // If yearOrTime contains ":", it's a time; otherwise it's a year
+            if yearOrTime.contains(":") {
+                dateFormatter.dateFormat = "MMM dd HH:mm"
+                let currentYear = Calendar.current.component(.year, from: Date())
+                let dateString = "\(month) \(day) \(yearOrTime)"
+                var date = dateFormatter.date(from: dateString)
+                if let d = date {
+                    let adjusted = Calendar.current.date(bySetting: .year, value: currentYear, of: d)
+                    if let adjusted = adjusted, adjusted > Date() {
+                        date = Calendar.current.date(byAdding: .year, value: -1, to: adjusted)
+                    } else {
+                        date = adjusted
+                    }
+                }
+                let fullPath = basePath.hasSuffix("/") ? "\(basePath)\(name)" : "\(basePath)/\(name)"
+                files.append(SFTPFileInfo(name: name, path: fullPath, isDirectory: isDirectory, size: size, modificationDate: date, permissions: permissions))
+            } else {
+                dateFormatter.dateFormat = "MMM dd yyyy"
+                let dateString = "\(month) \(day) \(yearOrTime)"
+                let date = dateFormatter.date(from: dateString)
+                let fullPath = basePath.hasSuffix("/") ? "\(basePath)\(name)" : "\(basePath)/\(name)"
+                files.append(SFTPFileInfo(name: name, path: fullPath, isDirectory: isDirectory, size: size, modificationDate: date, permissions: permissions))
+            }
+        }
+        
+        return files
     }
     
     // MARK: - File Transfer
@@ -244,14 +307,14 @@ class SFTPManager {
 
 // MARK: - SFTP Session View Model
 
-class SFTPSessionViewModel: ObservableObject {
+@MainActor class SFTPSessionViewModel: ObservableObject {
     @Published var files: [SFTPFileInfo] = []
     @Published var currentPath: String = "~"
     @Published var isLoading = false
     @Published var error: String?
     @Published var transferProgress: SFTPTransferProgress?
     
-    private var sftpManager: SFTPManager?
+    private(set) var sftpManager: SFTPManager?
     
     func connect(config: SSHConnectionConfig) {
         isLoading = true
@@ -260,7 +323,7 @@ class SFTPSessionViewModel: ObservableObject {
         sftpManager = SFTPManager()
         sftpManager?.delegate = self
         sftpManager?.connect(config: config) { [weak self] result in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.isLoading = false
                 switch result {
                 case .success:
@@ -281,7 +344,7 @@ class SFTPSessionViewModel: ObservableObject {
     func listCurrentDirectory() {
         isLoading = true
         sftpManager?.listDirectory(currentPath) { [weak self] result in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.isLoading = false
                 switch result {
                 case .success(let fileList):
@@ -305,8 +368,8 @@ class SFTPSessionViewModel: ObservableObject {
 }
 
 extension SFTPSessionViewModel: SFTPManagerDelegate {
-    func sftpManager(_ manager: SFTPManager, didStartTransfer fileName: String, isUpload: Bool) {
-        DispatchQueue.main.async {
+    nonisolated func sftpManager(_ manager: SFTPManager, didStartTransfer fileName: String, isUpload: Bool) {
+        Task { @MainActor in
             self.transferProgress = SFTPTransferProgress(
                 fileName: fileName,
                 bytesTransferred: 0,
@@ -316,28 +379,28 @@ extension SFTPSessionViewModel: SFTPManagerDelegate {
         }
     }
     
-    func sftpManager(_ manager: SFTPManager, didUpdateProgress progress: SFTPTransferProgress) {
-        DispatchQueue.main.async {
+    nonisolated func sftpManager(_ manager: SFTPManager, didUpdateProgress progress: SFTPTransferProgress) {
+        Task { @MainActor in
             self.transferProgress = progress
         }
     }
     
-    func sftpManager(_ manager: SFTPManager, didCompleteTransfer fileName: String, isUpload: Bool) {
-        DispatchQueue.main.async {
+    nonisolated func sftpManager(_ manager: SFTPManager, didCompleteTransfer fileName: String, isUpload: Bool) {
+        Task { @MainActor in
             self.transferProgress = nil
             self.listCurrentDirectory()
         }
     }
     
-    func sftpManager(_ manager: SFTPManager, didFailWithError error: Error) {
-        DispatchQueue.main.async {
+    nonisolated func sftpManager(_ manager: SFTPManager, didFailWithError error: Error) {
+        Task { @MainActor in
             self.error = error.localizedDescription
             self.transferProgress = nil
         }
     }
     
-    func sftpManager(_ manager: SFTPManager, didListDirectory files: [SFTPFileInfo]) {
-        DispatchQueue.main.async {
+    nonisolated func sftpManager(_ manager: SFTPManager, didListDirectory files: [SFTPFileInfo]) {
+        Task { @MainActor in
             self.files = files
         }
     }

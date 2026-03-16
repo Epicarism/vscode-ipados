@@ -66,8 +66,9 @@ struct SidebarView: View {
         case 1: return "SEARCH"
         case 2: return "SOURCE CONTROL"
         case 3: return "RUN AND DEBUG"
-        case 4: return "EXTENSIONS"
-        case 5: return "TESTING"
+        case 4: return "REMOTE EXPLORER"
+        case 5: return "EXTENSIONS"
+        case 6: return "TESTING"
         default: return "EXPLORER"
         }
     }
@@ -155,8 +156,10 @@ struct SidebarView: View {
         case 3:
             DebugView()
         case 4:
-            ExtensionsPanel()
+            RemoteExplorerView(editorCore: editorCore)
         case 5:
+            ExtensionsPanel()
+        case 6:
             TestView()
         default:
             IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showFolderPicker, theme: theme)
@@ -180,8 +183,9 @@ struct IDEActivityBar: View {
                 ActivityBarIcon(icon: "magnifyingglass", title: "Search", index: 1, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.search")
                 ActivityBarIcon(icon: "arrow.triangle.branch", title: "Source Control", index: 2, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.sourceControl")
                 ActivityBarIcon(icon: "play.fill", title: "Run and Debug", index: 3, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.runAndDebug")
-                ActivityBarIcon(icon: "square.grid.2x2", title: "Extensions", index: 4, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.extensions")
-                ActivityBarIcon(icon: "testtube.2", title: "Testing", index: 5, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.testing")
+                ActivityBarIcon(icon: "server.rack", title: "Remote Explorer", index: 4, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.remoteExplorer")
+                ActivityBarIcon(icon: "square.grid.2x2", title: "Extensions", index: 5, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.extensions")
+                ActivityBarIcon(icon: "testtube.2", title: "Testing", index: 6, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.testing")
             }
             
             Spacer()

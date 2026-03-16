@@ -70,7 +70,7 @@ struct TimelineEntry: Identifiable, Hashable {
 // MARK: - Provider (structure for future Git integration)
 
 /// Abstraction point for later wiring to real Git history / local save tracking.
-protocol TimelineProviding {
+protocol TimelineProviding: Sendable {
     /// - Parameter filePath: A workspace-relative file path (or identifier) to fetch history for.
     func timelineEntries(for filePath: String?) async -> [TimelineEntry]
 }
@@ -305,6 +305,7 @@ private struct TimelineRow: View {
         .accessibilityLabel("Timeline entry: \(entry.message). By \(entry.author). \(entry.source.label). \(Self.timestampFormatter.string(from: entry.timestamp))")
         .accessibilityHint("Timeline entry")
         // Future: selection / open diff action hook.
+    }
 
     private var sourceIcon: some View {
         ZStack {

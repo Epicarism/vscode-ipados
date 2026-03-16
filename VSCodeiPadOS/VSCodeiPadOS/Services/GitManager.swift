@@ -14,7 +14,7 @@ import Combine
 enum GitManagerError: Error, LocalizedError {
     case noRepository
     case gitExecutableNotFound
-    case commandFailed(args: [String], exitCode: Int32, message: String)
+    case commandFailed(args: String, exitCode: Int, message: String)
     case notAvailableOnIOS
     case sshNotConnected
     case invalidRepository
@@ -26,7 +26,7 @@ enum GitManagerError: Error, LocalizedError {
         case .gitExecutableNotFound:
             return "Git executable not found"
         case let .commandFailed(args, exitCode, message):
-            return "git \(args.joined(separator: " ")) failed (\(exitCode)): \(message)"
+            return "git \(args) failed (\(exitCode)): \(message)"
         case .notAvailableOnIOS:
             return "Git is not available on iOS"
         case .sshNotConnected:
@@ -361,37 +361,95 @@ final class GitManager: ObservableObject {
         await refresh()
     }
     
+    // MARK: - Remote Operations (SSH-aware)
+    
     func pull() async throws {
-        // Pull requires network access to GitHub API
-        // For now, mark as not available - requires GitHub token setup
+        // Prefer SSH when available and a working directory is configured
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd \(dir) && git pull", timeout: 60)
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(
+                    args: "pull",
+                    exitCode: result.exitCode,
+                    message: result.stderr
+                )
+            }
+            await refresh()
+            return
+        }
+
+        // Fallback: requires GitHub token
         guard KeychainManager.shared.getGitHubToken() != nil else {
             throw GitManagerError.sshNotConnected
         }
-        
+
         // TODO: Implement full pull via GitHub API when GitHubAPIClient is integrated
         throw GitManagerError.notAvailableOnIOS
     }
     
     func push() async throws {
-        // Push requires network access to GitHub API
+        // Prefer SSH when available and a working directory is configured
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd \(dir) && git push", timeout: 60)
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(
+                    args: "push",
+                    exitCode: result.exitCode,
+                    message: result.stderr
+                )
+            }
+            await refresh()
+            return
+        }
+
+        // Fallback: requires GitHub token
         guard KeychainManager.shared.getGitHubToken() != nil else {
             throw GitManagerError.sshNotConnected
         }
-        
+
         // TODO: Implement full push via GitHub API when GitHubAPIClient is integrated
         throw GitManagerError.notAvailableOnIOS
     }
     
     func stashPush(message: String?) async throws {
-        // Stash not implemented for native git
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let msg = message ?? "Stash from CodePad"
+            let result = try await ssh.executeCommand("cd \(dir) && git stash push -m '\(msg)'")
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(args: "stash push", exitCode: result.exitCode, message: result.stderr)
+            }
+            await refresh()
+            return
+        }
         throw GitManagerError.notAvailableOnIOS
     }
     
     func stashPop(index: Int) async throws {
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd \(dir) && git stash pop stash@{\(index)}")
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(args: "stash pop", exitCode: result.exitCode, message: result.stderr)
+            }
+            await refresh()
+            return
+        }
         throw GitManagerError.notAvailableOnIOS
     }
     
     func stashDrop(index: Int) async throws {
+        let ssh = SSHManager.shared
+        if ssh.isConnected, let dir = workingDirectory?.path {
+            let result = try await ssh.executeCommand("cd \(dir) && git stash drop stash@{\(index)}")
+            if result.exitCode != 0 {
+                throw GitManagerError.commandFailed(args: "stash drop", exitCode: result.exitCode, message: result.stderr)
+            }
+            await refresh()
+            return
+        }
         throw GitManagerError.notAvailableOnIOS
     }
     

@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Output Line View
 
-/// Renders a single output line with ANSI color support and stream type styling
+/// Renders a single output line with log level colors and ANSI support
 struct OutputLineView: View {
     let line: OutputLine
     let showTimestamp: Bool
@@ -11,9 +11,9 @@ struct OutputLineView: View {
     @State private var attributedString: AttributedString?
     
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
-            // Stream type indicator
-            streamTypeIndicator
+        HStack(alignment: .top, spacing: 6) {
+            // Log level indicator
+            logLevelIndicator
             
             // Timestamp (if enabled)
             if showTimestamp {
@@ -22,34 +22,27 @@ struct OutputLineView: View {
             
             // Content with ANSI color support
             contentView
+                .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .id(line.id)
     }
     
     @ViewBuilder
-    private var streamTypeIndicator: some View {
-        switch line.streamType {
-        case .stdout:
-            Image(systemName: "arrow.right")
-                .font(.system(size: 8))
-                .foregroundColor(.blue)
-                .frame(width: 12)
-                .accessibilityHidden(true)
-        case .stderr:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 8))
-                .foregroundColor(.orange)
-                .frame(width: 12)
-                .accessibilityHidden(true)
-        }
+    private var logLevelIndicator: some View {
+        Image(systemName: line.logLevel.icon)
+            .font(.system(size: 9))
+            .foregroundColor(line.logLevel.color)
+            .frame(width: 14)
+            .accessibilityHidden(true)
     }
     
     @ViewBuilder
     private var timestampView: some View {
         Text(formatTimestamp(line.timestamp))
             .font(.system(size: 10, design: .monospaced))
-            .foregroundColor(.secondary)
+            .foregroundColor(.secondary.opacity(0.7))
+            .frame(minWidth: 65)
     }
     
     @ViewBuilder
@@ -58,7 +51,7 @@ struct OutputLineView: View {
             // Render with ANSI colors
             ansiAttributedText(attributes: attributes)
         } else {
-            // Plain text with stream type color
+            // Plain text with log level color
             Text(line.text)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(textColor)
@@ -67,15 +60,17 @@ struct OutputLineView: View {
     }
     
     private var textColor: Color {
-        switch line.streamType {
-        case .stdout: return .primary
-        case .stderr: return .orange
+        switch line.logLevel {
+        case .error: return .red
+        case .warning: return .orange
+        case .debug: return .secondary
+        case .info: return .primary
         }
     }
     
     private func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.timeStyle = .medium
+        formatter.dateFormat = "HH:mm:ss.SSS"
         return formatter.string(from: date)
     }
     
@@ -150,7 +145,7 @@ struct RemoteProgressView: View {
                     Spacer()
                     
                     Button(action: {
-                        // Cancel action would go here
+                        NotificationCenter.default.post(name: .cancelRemoteExecution, object: nil)
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 16))
@@ -227,12 +222,71 @@ struct OutputSearchBar: View {
     }
 }
 
+// MARK: - Log Level Filter View
+
+struct LogLevelFilterView: View {
+    @ObservedObject var outputManager = OutputPanelManager.shared
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Filter:")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            
+            ForEach(LogLevel.allCases) { level in
+                let counts = outputManager.logLevelCounts(for: outputManager.selectedChannel)
+                let count = counts[level] ?? 0
+                let isSelected = outputManager.selectedLogLevels.contains(level)
+                
+                Button(action: {
+                    outputManager.toggleLogLevel(level)
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: level.icon)
+                            .font(.system(size: 8))
+                        Text("\(count)")
+                            .font(.system(size: 10, weight: .medium))
+                            .monospacedDigit()
+                    }
+                    .foregroundColor(isSelected ? level.color : .secondary.opacity(0.5))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        isSelected ? level.color.opacity(0.15) : Color.clear
+                    )
+                    .cornerRadius(4)
+                }
+                .disabled(count == 0)
+                .accessibilityLabel("\(level.rawValue): \(count) entries")
+                .accessibilityHint(isSelected ? "Double tap to hide" : "Double tap to show")
+            }
+            
+            if outputManager.selectedLogLevels.count != LogLevel.allCases.count {
+                Button(action: {
+                    outputManager.resetLogLevelFilters()
+                }) {
+                    Text("Reset")
+                        .font(.system(size: 10))
+                        .foregroundColor(.blue)
+                }
+                .accessibilityLabel("Reset log level filters")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    }
+}
+
 // MARK: - Main Output View
 
 struct OutputView: View {
     @ObservedObject private var outputManager = OutputPanelManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var showingSearchBar: Bool = false
+    @State private var showingLogLevelFilter: Bool = false
 
+    private var theme: Theme { themeManager.currentTheme }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Remote execution progress indicator
@@ -246,6 +300,12 @@ struct OutputView: View {
             
             Divider()
             
+            // Optional log level filter
+            if showingLogLevelFilter {
+                LogLevelFilterView()
+                Divider()
+            }
+            
             // Optional search bar
             if showingSearchBar {
                 searchBarSection
@@ -255,7 +315,7 @@ struct OutputView: View {
             // Output content
             outputBody
         }
-        .background(Color(UIColor.systemBackground))
+        .background(theme.editorBackground)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Output panel")
     }
@@ -288,20 +348,33 @@ struct OutputView: View {
                         .foregroundColor(outputManager.selectedChannel.color)
                     Text(outputManager.selectedChannel.rawValue)
                         .font(.system(size: 11))
-                        .foregroundColor(.primary)
+                        .foregroundColor(theme.editorForeground)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(theme.comment)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color(UIColor.tertiarySystemFill))
+                .background(theme.tabBarBackground)
                 .cornerRadius(4)
             }
             .accessibilityLabel("Output channel: \(outputManager.selectedChannel.rawValue)")
             .accessibilityHint("Double tap to select an output channel")
             
             Spacer()
+            
+            // Filter toggle
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showingLogLevelFilter.toggle()
+                }
+            }) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(showingLogLevelFilter ? .blue : theme.comment)
+            }
+            .accessibilityLabel("Log level filter")
+            .accessibilityHint("Double tap to \(showingLogLevelFilter ? "hide" : "show") log level filter")
             
             // Search toggle
             Button(action: {
@@ -314,7 +387,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
-                    .foregroundColor(showingSearchBar ? .blue : .secondary)
+                    .foregroundColor(showingSearchBar ? .blue : theme.comment)
             }
             .accessibilityLabel("Search in output")
             .accessibilityHint("Double tap to \(showingSearchBar ? "hide" : "show") the output search bar")
@@ -325,7 +398,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: outputManager.wordWrapEnabled ? "text.wrap" : "text.badge.xmark")
                     .font(.system(size: 12))
-                    .foregroundColor(outputManager.wordWrapEnabled ? .blue : .secondary)
+                    .foregroundColor(outputManager.wordWrapEnabled ? .blue : theme.comment)
             }
             .accessibilityLabel("Toggle word wrap, currently \(outputManager.wordWrapEnabled ? "on" : "off")")
             .accessibilityHint("Double tap to toggle word wrap")
@@ -336,7 +409,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: outputManager.showTimestamps ? "clock.fill" : "clock")
                     .font(.system(size: 12))
-                    .foregroundColor(outputManager.showTimestamps ? .blue : .secondary)
+                    .foregroundColor(outputManager.showTimestamps ? .blue : theme.comment)
             }
             .accessibilityLabel("Toggle timestamps, currently \(outputManager.showTimestamps ? "on" : "off")")
             .accessibilityHint("Double tap to show or hide timestamps")
@@ -347,7 +420,7 @@ struct OutputView: View {
             }) {
                 Image(systemName: outputManager.isAutoScrollEnabled ? "lock.open.fill" : "lock")
                     .font(.system(size: 12))
-                    .foregroundColor(outputManager.isAutoScrollEnabled ? .blue : .secondary)
+                    .foregroundColor(outputManager.isAutoScrollEnabled ? .blue : theme.comment)
             }
             .accessibilityLabel("Toggle auto-scroll, currently \(outputManager.isAutoScrollEnabled ? "on" : "off")")
             .accessibilityHint("Double tap to toggle auto-scroll to latest output")
@@ -356,17 +429,28 @@ struct OutputView: View {
                 .frame(height: 16)
                 .accessibilityHidden(true)
             
+            // Copy button
+            Button(action: { 
+                outputManager.copyToClipboard(channel: outputManager.selectedChannel)
+            }) {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.comment)
+            }
+            .accessibilityLabel("Copy output")
+            .accessibilityHint("Double tap to copy all output to clipboard")
+            
             // Clear button
             Button(action: { outputManager.clear(outputManager.selectedChannel) }) {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(theme.comment)
             }
             .accessibilityLabel("Clear output")
             .accessibilityHint("Double tap to clear all output in the current channel")
         }
         .padding(6)
-        .background(Color(UIColor.secondarySystemBackground))
+        .background(theme.tabBarBackground)
     }
     
     private var searchBarSection: some View {
@@ -375,7 +459,7 @@ struct OutputView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color(UIColor.secondarySystemBackground))
+        .background(theme.tabBarBackground)
     }
 
     private var outputBody: some View {
@@ -384,17 +468,18 @@ struct OutputView: View {
 
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(lines) { line in
                         OutputLineView(
                             line: line,
                             showTimestamp: outputManager.showTimestamps,
                             wordWrap: outputManager.wordWrapEnabled
                         )
-                        .padding(.vertical, 1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
                     }
                 }
-                .padding(8)
+                .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onChange(of: lines.count) { _ in

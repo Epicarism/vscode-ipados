@@ -12,29 +12,6 @@ import NIOSSH
 import NIOCore
 import Combine
 
-// MARK: - SSH Command Output Types
-
-enum SSHCommandOutput: Sendable {
-    case stdout(String)
-    case stderr(String)
-    case exit(Int32)
-    case timeout
-    case error(Error)
-}
-
-struct SSHCommandResult: Sendable {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int
-    let isTimedOut: Bool
-}
-
-extension SSHClientError {
-    static let commandExecutionFailed: (String) -> SSHClientError = { reason in
-        return .connectionFailed("Command execution failed: \(reason)")
-    }
-}
-
 // MARK: - Process Model for Remote Execution
 
 struct RemoteProcess: Identifiable, Equatable, Sendable {
@@ -130,7 +107,7 @@ enum RemoteSupportedLanguage: String, CaseIterable, Sendable {
 // MARK: - Remote Runner
 
 @MainActor
-final class RemoteRunner: ObservableObject {
+final class RemoteRunner: ObservableObject, @unchecked Sendable {
     
     // MARK: - Published Properties
     
@@ -154,7 +131,6 @@ final class RemoteRunner: ObservableObject {
     
     // MARK: - Output Stream
     
-    private var outputStream: AsyncStream<String>?
     private var outputContinuation: AsyncStream<String>.Continuation?
     
     // MARK: - Initialization
@@ -164,7 +140,6 @@ final class RemoteRunner: ObservableObject {
     }
     
     private func setupDefaultEnvironment() {
-        // Default environment variables
         environmentVariables = [
             "TERM": "xterm-256color",
             "LANG": "en_US.UTF-8",
@@ -228,90 +203,72 @@ final class RemoteRunner: ObservableObject {
             endTime: nil
         )
         
-        await MainActor.run {
-            self.currentProcess = process
-            self.isRunning = true
-        }
+        self.currentProcess = process
+        self.isRunning = true
         
-        // Build command with working directory if specified
-        let finalCommand: String
+        // Build command with working directory and environment
+        var finalCommand = command
         if let cwd = workingDirectory {
             finalCommand = "cd '\(cwd)' && \(command)"
-        } else {
-            finalCommand = command
         }
         
-        // Execute via SSH with streaming
-        let stream = executeCommandStreaming(
-            command: finalCommand,
-            environment: environmentVariables,
-            timeout: defaultTimeout,
-            via: sshManager
-        )
+        // Prepend environment variables
+        if !environmentVariables.isEmpty {
+            let envPrefix = environmentVariables.map { "\($0.key)='\($0.value)'" }.joined(separator: " ")
+            finalCommand = "\(envPrefix) \(finalCommand)"
+        }
         
-        // Process the stream
-        var outputBuffer = ""
-        var receivedExit = false
-        
+        // Execute via SSH with streaming output
         do {
-            for try await outputEvent in stream {
-                switch outputEvent {
-                case .stdout(let text):
-                    outputBuffer.append(text)
-                    await MainActor.run {
+            try await sshManager.executeCommand(finalCommand) { [weak self] outputEvent in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    
+                    switch outputEvent {
+                    case .stdout(let text):
                         self.output.append(text)
-                    }
-                    
-                case .stderr(let text):
-                    outputBuffer.append("[stderr] \(text)")
-                    await MainActor.run {
+                        self.outputContinuation?.yield(text)
+                        
+                    case .stderr(let text):
                         self.output.append("[stderr] \(text)")
-                    }
-                    
-                case .exit(let code):
-                    receivedExit = true
-                    await MainActor.run {
-                        self.lastExitCode = Int(code)
-                        if var process = self.currentProcess {
-                            process.exitCode = Int(code)
-                            process.endTime = Date()
-                            self.currentProcess = process
-                            self.processHistory.append(process)
+                        self.outputContinuation?.yield("[stderr] \(text)")
+                        
+                    case .exit(let code):
+                        self.lastExitCode = code
+                        if var proc = self.currentProcess {
+                            proc.exitCode = code
+                            proc.endTime = Date()
+                            self.currentProcess = proc
+                            self.processHistory.append(proc)
                         }
                         self.isRunning = false
-                    }
-                    
-                case .timeout:
-                    outputBuffer.append("\n[Command timed out after \(defaultTimeout) seconds]")
-                    await MainActor.run {
+                        
+                    case .timeout:
                         self.output.append("\n[Command timed out after \(self.defaultTimeout) seconds]")
                         self.isRunning = false
                         self.lastExitCode = -1
+                        
+                    case .error(let error):
+                        self.output.append("\n[Error: \(error.localizedDescription)]")
+                        self.isRunning = false
                     }
-                    
-                case .error(let error):
-                    throw error
                 }
             }
             
-            // If no exit code was received, mark as completed
-            if !receivedExit {
-                await MainActor.run {
-                    self.isRunning = false
-                    if var process = self.currentProcess {
-                        process.exitCode = self.lastExitCode ?? 0
-                        process.endTime = Date()
-                        self.currentProcess = process
-                        self.processHistory.append(process)
-                    }
+            // Mark completed if not already
+            if isRunning {
+                isRunning = false
+                if var proc = currentProcess, proc.exitCode == nil {
+                    proc.exitCode = 0
+                    proc.endTime = Date()
+                    currentProcess = proc
+                    processHistory.append(proc)
                 }
             }
             
         } catch {
-            await MainActor.run {
-                self.isRunning = false
-                self.output.append("\n[Error: \(error.localizedDescription)]")
-            }
+            self.isRunning = false
+            self.output.append("\n[Error: \(error.localizedDescription)]")
             throw error
         }
     }
@@ -334,41 +291,39 @@ final class RemoteRunner: ObservableObject {
         
         // Build command to create temp file and execute
         let interpreter = RemoteSupportedLanguage(rawValue: language)?.interpreter ?? language
-        let runCommand: String
+        let shellCommand: String
         
         switch language {
         case "swift":
-            // For Swift, we need to write to file then run
             let createFileCmd = "printf '%b' '\(escapedCode)' > \(tempPath)"
             let runCmd = "swift \(tempPath)"
-            runCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
+            shellCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
             
         case "python", "python3":
             let createFileCmd = "printf '%b' '\(escapedCode)' > \(tempPath)"
             let runCmd = "python3 \(tempPath)"
-            runCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
+            shellCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
             
         case "node":
             let createFileCmd = "printf '%b' '\(escapedCode)' > \(tempPath)"
             let runCmd = "node \(tempPath)"
-            runCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
+            shellCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
             
         case "bash", "sh":
-            // For bash, we can use heredoc or direct execution
-            runCommand = "bash -c '\(escapedCode)'"
+            shellCommand = "bash -c '\(escapedCode)'"
             
         case "ruby":
             let createFileCmd = "printf '%b' '\(escapedCode)' > \(tempPath)"
             let runCmd = "ruby \(tempPath)"
-            runCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
+            shellCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
             
         default:
             let createFileCmd = "printf '%b' '\(escapedCode)' > \(tempPath)"
             let runCmd = "\(interpreter) \(tempPath)"
-            runCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
+            shellCommand = "\(createFileCmd) && \(runCmd) && rm \(tempPath)"
         }
         
-        try await runCommand(command: runCommand, via: sshManager)
+        try await runCommand(command: shellCommand, via: sshManager)
     }
     
     /// Detect language from file path
@@ -383,7 +338,7 @@ final class RemoteRunner: ObservableObject {
         case "js", "mjs", "cjs":
             return "node"
         case "ts":
-            return "node" // TypeScript can be run with ts-node or node
+            return "node"
         case "rb":
             return "ruby"
         case "sh":
@@ -413,10 +368,9 @@ final class RemoteRunner: ObservableObject {
         case "r":
             return "r"
         case "m", "mm":
-            return "objc" // Objective-C
+            return "objc"
         default:
-            // Try to detect from shebang if possible
-            return "bash" // Default fallback
+            return "bash"
         }
     }
     
@@ -449,7 +403,7 @@ final class RemoteRunner: ObservableObject {
     }
     
     /// Get output as async stream for real-time processing
-    func outputStream() -> AsyncStream<String> {
+    func getOutputStream() -> AsyncStream<String> {
         return AsyncStream { continuation in
             self.outputContinuation = continuation
             
@@ -491,240 +445,11 @@ final class RemoteRunner: ObservableObject {
     // MARK: - Private Methods
     
     private func resetState() async {
-        await MainActor.run {
-            output = ""
-            lastExitCode = nil
-        }
+        output = ""
+        lastExitCode = nil
     }
     
     private func fileExtension(for language: String) -> String {
         return RemoteSupportedLanguage(rawValue: language)?.fileExtension ?? ".tmp"
-    }
-    
-    /// Execute command with streaming output using AsyncStream
-    private func executeCommandStreaming(
-        command: String,
-        environment: [String: String]? = nil,
-        timeout: TimeInterval = 60,
-        via sshManager: SSHManager
-    ) -> AsyncStream<SSHCommandOutput> {
-        return AsyncStream { [weak self] continuation in
-            guard let self = self else {
-                continuation.finish()
-                return
-            }
-            
-            self.activeContinuation = continuation
-            
-            // Use SSHManager's async execution
-            let stream = sshManager.executeCommandAsync(
-                command: command,
-                workingDirectory: nil, // Already handled in command building
-                environment: environment,
-                timeout: timeout
-            )
-            
-            Task {
-                do {
-                    for try await event in stream {
-                        continuation.yield(event)
-                        
-                        // Store reference to channel for kill functionality
-                        if case .stdout = event, let channel = self.activeChannel {
-                            // Channel is tracked
-                        }
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.yield(.error(error))
-                    continuation.finish()
-                }
-            }
-            
-            // Handle cancellation
-            continuation.onTermination = { _ in
-                self.activeContinuation = nil
-            }
-        }
-    }
-}
-
-// MARK: - Extension to add executeCommandAsync to SSHManager if not present
-
-extension SSHManager {
-    /// Execute a command with real-time output streaming via AsyncStream
-    func executeCommandAsync(
-        command: String,
-        workingDirectory: String? = nil,
-        environment: [String: String]? = nil,
-        timeout: TimeInterval = 60
-    ) -> AsyncStream<SSHCommandOutput> {
-        return AsyncStream { [weak self] continuation in
-            guard let self = self, self.isConnected, let channel = self.channel, let sshHandler = self.sshHandler else {
-                continuation.yield(.error(SSHClientError.notConnected))
-                continuation.finish()
-                return
-            }
-            
-            let channelPromise = channel.eventLoop.makePromise(of: Channel.self)
-            var timeoutTask: DispatchWorkItem?
-            var isFinished = false
-            
-            func finishStream() {
-                guard !isFinished else { return }
-                isFinished = true
-                timeoutTask?.cancel()
-                continuation.finish()
-            }
-            
-            // Create the exec channel with real-time output handler
-            sshHandler.createChannel(channelPromise) { childChannel, channelType in
-                guard channelType == .session else {
-                    return childChannel.eventLoop.makeFailedFuture(SSHClientError.invalidChannelType)
-                }
-                
-                let handler = RemoteExecChannelHandler(
-                    outputHandler: { output in
-                        DispatchQueue.main.async {
-                            guard !isFinished else { return }
-                            continuation.yield(output)
-                            
-                            if case .exit = output {
-                                finishStream()
-                            }
-                        }
-                    },
-                    completionHandler: { result in
-                        DispatchQueue.main.async {
-                            guard !isFinished else { return }
-                            
-                            if result.isTimedOut {
-                                continuation.yield(.timeout)
-                            } else {
-                                continuation.yield(.exit(Int32(result.exitCode)))
-                            }
-                            finishStream()
-                        }
-                    }
-                )
-                
-                let execRequest = SSHChannelRequestEvent.ExecRequest(
-                    command: workingDirectory != nil ? "cd '\(workingDirectory!)' && \(command)" : command,
-                    wantReply: true
-                )
-                
-                return childChannel.pipeline.addHandler(handler).flatMap {
-                    childChannel.triggerUserOutboundEvent(execRequest, promise: nil)
-                    return childChannel.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
-                }
-            }
-            
-            // Handle errors
-            channelPromise.futureResult.whenFailure { error in
-                DispatchQueue.main.async {
-                    guard !isFinished else { return }
-                    continuation.yield(.error(error))
-                    finishStream()
-                }
-            }
-            
-            // Set up timeout
-            timeoutTask = DispatchWorkItem {
-                DispatchQueue.main.async {
-                    guard !isFinished else { return }
-                    continuation.yield(.timeout)
-                    finishStream()
-                }
-            }
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutTask!)
-            
-            // Handle cancellation
-            continuation.onTermination = { _ in
-                timeoutTask?.cancel()
-                channelPromise.futureResult.whenSuccess { channel in
-                    channel.close(promise: nil)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Remote Exec Channel Handler
-
-private class RemoteExecChannelHandler: ChannelDuplexHandler {
-    typealias InboundIn = SSHChannelData
-    typealias InboundOut = ByteBuffer
-    typealias OutboundIn = ByteBuffer
-    typealias OutboundOut = SSHChannelData
-    
-    private var stdoutBuffer = ByteBufferAllocator().buffer(capacity: 4096)
-    private var stderrBuffer = ByteBufferAllocator().buffer(capacity: 4096)
-    private var exitCode: Int?
-    private var outputHandler: ((SSHCommandOutput) -> Void)?
-    private var completionHandler: ((SSHCommandResult) -> Void)?
-    
-    init(
-        outputHandler: ((SSHCommandOutput) -> Void)? = nil,
-        completionHandler: ((SSHCommandResult) -> Void)? = nil
-    ) {
-        self.outputHandler = outputHandler
-        self.completionHandler = completionHandler
-    }
-    
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        let channelData = unwrapInboundIn(data)
-        
-        switch channelData.type {
-        case .channel:
-            guard case .byteBuffer(let buffer) = channelData.data else { return }
-            
-            // Accumulate stdout
-            var mutableBuffer = buffer
-            stdoutBuffer.writeBuffer(&mutableBuffer)
-            
-            // Notify real-time handler
-            if let text = buffer.getString(at: 0, length: buffer.readableBytes) {
-                outputHandler?(.stdout(text))
-            }
-            
-        case .stdErr:
-            guard case .byteBuffer(let buffer) = channelData.data else { return }
-            
-            // Accumulate stderr
-            var mutableBuffer = buffer
-            stderrBuffer.writeBuffer(&mutableBuffer)
-            
-            // Notify real-time handler
-            if let text = buffer.getString(at: 0, length: buffer.readableBytes) {
-                outputHandler?(.stderr(text))
-            }
-            
-        default:
-            break
-        }
-    }
-    
-    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
-        if let exitStatus = event as? SSHChannelRequestEvent.ExitStatus {
-            exitCode = Int(exitStatus.exitStatus)
-            outputHandler?(.exit(exitStatus.exitStatus))
-        }
-    }
-    
-    func channelInactive(context: ChannelHandlerContext) {
-        let stdout = stdoutBuffer.getString(at: 0, length: stdoutBuffer.readableBytes) ?? ""
-        let stderr = stderrBuffer.getString(at: 0, length: stderrBuffer.readableBytes) ?? ""
-        let result = SSHCommandResult(
-            stdout: stdout,
-            stderr: stderr,
-            exitCode: exitCode ?? -1,
-            isTimedOut: false
-        )
-        completionHandler?(result)
-    }
-    
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        outputHandler?(.error(error))
-        context.close(promise: nil)
     }
 }

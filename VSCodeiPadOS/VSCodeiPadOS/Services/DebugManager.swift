@@ -8,6 +8,8 @@ import Foundation
 /// for the Debug sidebar and breakpoint gutter markers.
 @MainActor
 final class DebugManager: ObservableObject {
+    typealias CallStackFrame = StackFrame
+
     static let shared = DebugManager()
 
     enum SessionState: String {
@@ -33,6 +35,10 @@ final class DebugManager: ObservableObject {
         var function: String
         var file: String
         var line: Int
+
+        var functionName: String { function }
+        var fileName: String { file }
+        var lineNumber: Int { line }
     }
 
     struct Breakpoint: Identifiable, Hashable {
@@ -50,6 +56,10 @@ final class DebugManager: ObservableObject {
 
         /// UI only for now; there is no real debugger yet.
         var isEnabled: Bool = true
+
+        var fileName: String { (file as NSString).lastPathComponent }
+        var lineNumber: Int { displayLine }
+        var condition: String? { nil }
     }
 
     struct Variable: Identifiable, Hashable {
@@ -128,8 +138,10 @@ final class DebugManager: ObservableObject {
             }
     }
 
+    var breakpoints: [Breakpoint] { allBreakpoints }
+
     private init() {
-        // Seed some UI data so the panels aren’t empty.
+        // Seed some UI data so the panels aren't empty.
         watchExpressions = [
             WatchExpression(expression: "counter", value: "0"),
             WatchExpression(expression: "user.name", value: "\"Taylor\""),
@@ -430,6 +442,10 @@ final class DebugManager: ObservableObject {
         selectedFrameId = nil
     }
 
+    func pause() {
+        state = .paused
+    }
+
     func stepOver() {
         guard state.canStep else { return }
         advanceTopFrameLine(by: 1)
@@ -445,6 +461,46 @@ final class DebugManager: ObservableObject {
             callStack = cs
             selectedFrameId = callStack.first?.id
         }
+    }
+
+    func stepOut() {
+        guard state.canStep else { return }
+        advanceTopFrameLine(by: 1)
+        if callStack.count > 1 {
+            var cs = callStack
+            cs.removeFirst()
+            callStack = cs
+            selectedFrameId = callStack.first?.id
+        }
+    }
+
+    func restart() {
+        stop()
+        play()
+    }
+
+    func toggleAllBreakpoints() {
+        if allBreakpoints.isEmpty {
+            return
+        }
+        // Toggle: remove all breakpoints for now
+        breakpointsByFile = [:]
+    }
+
+    func removeAllBreakpoints() {
+        breakpointsByFile = [:]
+    }
+
+    func toggleBreakpoint(_ id: String) {
+        let parts = id.components(separatedBy: "::")
+        guard parts.count == 2, let line = Int(parts[1]) else { return }
+        toggleBreakpoint(file: parts[0], line: line)
+    }
+
+    func removeBreakpoint(_ id: String) {
+        let parts = id.components(separatedBy: "::")
+        guard parts.count == 2, let line = Int(parts[1]) else { return }
+        removeBreakpoint(file: parts[0], line: line)
     }
 
     private func advanceTopFrameLine(by delta: Int) {

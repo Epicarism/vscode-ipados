@@ -76,6 +76,13 @@ struct StatusBarView: View {
                 .accessibilityHint("Double tap to show Git actions")
             }
 
+            // SSH Connection Status
+            SSHStatusIndicator(theme: theme) {
+                editorCore.focusedView = .explorer
+                editorCore.focusedSidebarTab = 4
+                withAnimation { editorCore.showSidebar = true }
+            }
+            
             // Errors & Warnings (Problems)
             let errorCount = editorCore.diagnosticErrorCount
             let warningCount = editorCore.diagnosticWarningCount
@@ -291,5 +298,54 @@ struct StatusBarLabel: View {
         .background(isHovering ? theme.statusBarForeground.opacity(0.12) : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
+    }
+}
+
+// MARK: - SSH Status Indicator
+
+struct SSHStatusIndicator: View {
+    let theme: Theme
+    let action: () -> Void
+    
+    @ObservedObject private var connectionStore = SSHConnectionStore.shared
+    @State private var isHovering = false
+    
+    private var activeConnection: SSHConnectionConfig? {
+        connectionStore.savedConnections.first { connection in
+            // In a real implementation, track active connections
+            // For now, show the most recently used
+            connection.lastUsed != nil
+        }
+    }
+    
+    private var displayText: String {
+        if let connection = activeConnection {
+            return connection.name
+        } else {
+            return "SSH: No Remote"
+        }
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: activeConnection != nil ? "server.rack" : "circle")
+                    .font(.system(size: 10))
+                    .foregroundColor(activeConnection != nil ? .green : theme.statusBarForeground.opacity(0.6))
+                
+                Text(displayText)
+                    .font(.system(size: 11))
+            }
+            .padding(.horizontal, 8)
+            .frame(maxHeight: .infinity)
+            .background(isHovering ? theme.statusBarForeground.opacity(0.12) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .accessibilityLabel(displayText)
+        .accessibilityHint("Double tap to manage SSH connections")
     }
 }

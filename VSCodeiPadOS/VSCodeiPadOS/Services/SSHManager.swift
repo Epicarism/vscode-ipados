@@ -92,7 +92,9 @@ struct SSHCommandResult {
 
 // MARK: - SSH Manager (Stub Implementation)
 
-class SSHManager {
+class SSHManager: @unchecked Sendable {
+    nonisolated(unsafe) static let shared = SSHManager()
+    
     weak var delegate: SSHManagerDelegate?
     
     private(set) var isConnected: Bool = false

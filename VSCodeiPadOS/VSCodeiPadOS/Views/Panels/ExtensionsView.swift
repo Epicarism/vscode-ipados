@@ -354,6 +354,7 @@ struct ExtensionRowView: View {
                     }
                     .accessibilityLabel("Enable \(extension_.displayName)")
                     .accessibilityHint("Double tap to enable this extension")
+                }
                 Divider()
                 Button(role: .destructive, action: { manager.uninstall(extension_) }) {
                     Label("Uninstall", systemImage: "trash")

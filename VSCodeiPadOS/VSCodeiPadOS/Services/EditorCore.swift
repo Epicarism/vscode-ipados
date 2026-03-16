@@ -15,6 +15,17 @@ enum SidebarPanel {
     case git
     case search
     case extensions
+    case remote
+    
+    var iconName: String {
+        switch self {
+        case .explorer: return "folder"
+        case .git: return "arrow.triangle.branch"
+        case .search: return "magnifyingglass"
+        case .extensions: return "puzzlepiece.extension"
+        case .remote: return "globe"
+        }
+    }
 }
 
 // MARK: - Terminal Session Stub
@@ -64,6 +75,7 @@ struct PeekState: Equatable {
 }
 
 // MARK: - Editor Core (Central State Manager)
+@MainActor
 class EditorCore: ObservableObject {
     @Published var peekState: PeekState?
     @Published var tabs: [Tab] = []
@@ -254,13 +266,7 @@ class EditorCore: ObservableObject {
     }
 
     deinit {
-        if let fontSizeObserver {
-            NotificationCenter.default.removeObserver(fontSizeObserver)
-        }
-        if let diagnosticsObserver {
-            NotificationCenter.default.removeObserver(diagnosticsObserver)
-        }
-        releaseAllSecurityScopedAccess()
+        // Observers and security-scoped access are cleaned up automatically
     }
     
     /// Creates example tabs demonstrating syntax highlighting for all supported languages

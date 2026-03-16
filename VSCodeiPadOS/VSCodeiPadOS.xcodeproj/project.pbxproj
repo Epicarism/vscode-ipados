@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C014100783893AFEE050E4 /* SFTPManager.swift */; };
+
+		D266803E574063F6130F2DF6 /* PortsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172DE17EC07EE0929C937717 /* PortsView.swift */; };
+
+		1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */; };
+
+		88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */; };
+
 		1001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001 /* ContentView.swift */; };
 		1002 /* VSCodeiPadOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002 /* VSCodeiPadOSApp.swift */; };
 		1003 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2003 /* AppCommands.swift */; };
@@ -141,6 +149,7 @@
 		9003 /* Notification+Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9004 /* Notification+Names.swift */; };
 		9101 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9102 /* AppLogger.swift */; };
 		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
+		9910 /* PortsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9911 /* PortsView.swift */; };
 		A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */; };
 		BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885F3C3B4438947AA7802BF5 /* Codicon.swift */; };
 		BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76695AA95638C9192E12E05E /* WindowStateManager.swift */; };
@@ -151,6 +160,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		67C014100783893AFEE050E4 /* SFTPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SFTPManager.swift"; path = "VSCodeiPadOS/Services/SFTPManager.swift"; sourceTree = "<group>"; };
+
+		172DE17EC07EE0929C937717 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "PortsView.swift"; path = "VSCodeiPadOS/Views/Panels/PortsView.swift"; sourceTree = "<group>"; };
+
+		EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "RemoteFileSystemProvider.swift"; path = "VSCodeiPadOS/Services/RemoteFileSystemProvider.swift"; sourceTree = "<group>"; };
+
+		5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "RemoteExplorerView.swift"; path = "VSCodeiPadOS/Views/Panels/RemoteExplorerView.swift"; sourceTree = "<group>"; };
+
 		01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionManager.swift; path = Services/InlineSuggestionManager.swift; sourceTree = "<group>"; };
 		14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorBoundaryView.swift; path = Views/ErrorBoundaryView.swift; sourceTree = "<group>"; };
 		15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorParser.swift; path = Services/ErrorParser.swift; sourceTree = "<group>"; };
@@ -288,6 +305,7 @@
 		9004 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Notification+Names.swift"; path = "Extensions/Notification+Names.swift"; sourceTree = "<group>"; };
 		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
 		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
+		9911 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsView.swift; sourceTree = "<group>"; };
 		9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionView.swift; path = Views/Editor/InlineSuggestionView.swift; sourceTree = "<group>"; };
 		AEBE91AB571E62605847001D /* RemoteDebugger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteDebugger.swift; path = Services/RemoteDebugger.swift; sourceTree = "<group>"; };
 		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
@@ -511,6 +529,7 @@
 				2124 /* OutlineView.swift */,
 				2115 /* OutputView.swift */,
 				2122 /* PanelView.swift */,
+				9911 /* PortsView.swift */,
 				2123 /* ProblemsView.swift */,
 				2116 /* SearchView.swift */,
 				2117 /* MarkdownPreviewView.swift */,
@@ -610,6 +629,10 @@
 				8965966F2F3B9FB7005B984D /* TreeSitterRustRunestone */,
 				89659701AAAA0002005B984D /* MLXLLM */,
 				89659703AAAA0004005B984D /* MLXLMCommon */,
+				89659712BBBB0003005B984D /* NIOSSH */,
+				89659713BBBB0004005B984D /* NIO */,
+				89659714BBBB0005005B984D /* NIOCore */,
+				89659715BBBB0006005B984D /* NIOPosix */,
 			);
 			productName = VSCodeiPadOS;
 			productReference = 3000 /* VSCodeiPadOS.app */;
@@ -643,6 +666,8 @@
 				896595ED2F3B8D73005B984D /* XCRemoteSwiftPackageReference "Runestone" */,
 				896595EF2F3B8F37005B984D /* XCRemoteSwiftPackageReference "TreeSitterLanguages" */,
 				89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+				89659710BBBB0001005B984D /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
+				89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */,
 			);
 			productRefGroup = 4099 /* Products */;
 			projectDirPath = "";
@@ -671,6 +696,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */,
+				D266803E574063F6130F2DF6 /* PortsView.swift in Sources */,
+				1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */,
+				88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */,
 				9003 /* Notification+Names.swift in Sources */,
 				9101 /* AppLogger.swift in Sources */,
 				1001 /* ContentView.swift in Sources */,
@@ -734,6 +763,7 @@
 				1124 /* OutlineView.swift in Sources */,
 				1115 /* OutputView.swift in Sources */,
 				1122 /* PanelView.swift in Sources */,
+				9910 /* PortsView.swift in Sources */,
 				1123 /* ProblemsView.swift in Sources */,
 				1116 /* SearchView.swift in Sources */,
 				1117 /* MarkdownPreviewView.swift in Sources */,
@@ -842,6 +872,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = targeted;
 				TARGETED_DEVICE_FAMILY = 2;
 			};
 			name = Debug;
@@ -873,6 +904,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
+				SWIFT_STRICT_CONCURRENCY = targeted;
 				TARGETED_DEVICE_FAMILY = 2;
 			};
 			name = Release;
@@ -1041,6 +1073,22 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		89659710BBBB0001005B984D /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-ssh";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.8.0;
+			};
+		};
+		89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.50.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1098,6 +1146,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
 			productName = MLXLMCommon;
+		};
+		89659712BBBB0003005B984D /* NIOSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659710BBBB0001005B984D /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
+		};
+		89659713BBBB0004005B984D /* NIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIO;
+		};
+		89659714BBBB0005005B984D /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+		89659715BBBB0006005B984D /* NIOPosix */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOPosix;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

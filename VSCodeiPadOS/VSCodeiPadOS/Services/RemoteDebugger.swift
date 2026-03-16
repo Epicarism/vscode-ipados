@@ -1428,7 +1428,7 @@ final class RemoteDebugger: ObservableObject {
 
 // MARK: - SSH Output Handler
 
-private class SSHOutputHandler: SSHManagerDelegate {
+private class SSHOutputHandler: SSHManagerDelegate, @unchecked Sendable {
     weak var debugger: RemoteDebugger?
     
     init(debugger: RemoteDebugger) {
@@ -1492,15 +1492,6 @@ enum RemoteDebuggerError: Error, LocalizedError {
         }
     }
 }
-
-// MARK: - SSH Command Extensions for RemoteDebugger
-
-extension SSHClientError {
-    static func commandExecutionFailed(_ reason: String) -> SSHClientError {
-        return .connectionFailed(reason)
-    }
-}
-
 // MARK: - Command Output Types
 
 

@@ -59,6 +59,8 @@ extension Notification.Name {
     static let goBack = Notification.Name("GoBack")
     /// Navigate forward in editor history.
     static let goForward = Notification.Name("GoForward")
+    /// Navigate to a specific file and line (from Problems panel, etc.)
+    static let navigateToFile = Notification.Name("navigateToFile")
 
     // MARK: - Terminal
 
@@ -101,6 +103,12 @@ extension Notification.Name {
     static let switchToOutputPanel = Notification.Name("SwitchToOutputPanel")
     /// Switch to the debug console panel.
     static let switchToDebugConsole = Notification.Name("SwitchToDebugConsole")
+    /// Switch to the terminal panel.
+    static let switchToTerminalPanel = Notification.Name("SwitchToTerminalPanel")
+    /// Switch to the problems panel.
+    static let switchToProblemsPanel = Notification.Name("SwitchToProblemsPanel")
+    /// Switch to the ports panel.
+    static let switchToPortsPanel = Notification.Name("SwitchToPortsPanel")
     /// Show the settings view.
     static let showSettings = Notification.Name("ShowSettings")
     /// Show the keyboard shortcuts view.
@@ -128,6 +136,8 @@ extension Notification.Name {
     static let codeInserted = Notification.Name("CodeInserted")
     /// Append text to the output panel.
     static let appendOutput = Notification.Name("AppendOutput")
+    /// Cancel remote execution in progress.
+    static let cancelRemoteExecution = Notification.Name("CancelRemoteExecution")
 
     // MARK: - Code Folding
 
@@ -159,6 +169,13 @@ extension Notification.Name {
 
     /// A file was auto-saved.
     static let autoSaved = Notification.Name("AutoSaved")
+
+    // MARK: - Ports
+
+    /// A port was forwarded.
+    static let portForwarded = Notification.Name("PortForwarded")
+    /// A port was stopped.
+    static let portStopped = Notification.Name("PortStopped")
 
     // MARK: - System
 

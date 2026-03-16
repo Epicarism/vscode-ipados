@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftUI
 import UIKit
 import Network
 import Foundation
@@ -418,7 +417,7 @@ struct TerminalLineView: View {
 
 // MARK: - Terminal Workspace Manager
 
-struct TerminalTab: Identifiable, Equatable {
+@MainActor struct TerminalTab: Identifiable {
     let id: UUID
     var panes: [TerminalManager]
     var activePaneId: UUID
@@ -433,12 +432,14 @@ struct TerminalTab: Identifiable, Equatable {
         panes.first?.title ?? "Terminal"
     }
 
-    static func == (lhs: TerminalTab, rhs: TerminalTab) -> Bool {
+    nonisolated static func == (lhs: TerminalTab, rhs: TerminalTab) -> Bool {
         lhs.id == rhs.id
     }
 }
 
-final class TerminalWorkspace: ObservableObject, @unchecked Sendable {
+extension TerminalTab: Equatable {}
+
+@MainActor final class TerminalWorkspace: ObservableObject {
     static let shared = TerminalWorkspace()
 
     @Published var tabs: [TerminalTab] = []
@@ -533,7 +534,7 @@ final class TerminalWorkspace: ObservableObject, @unchecked Sendable {
 
 // MARK: - Terminal Manager
 
-class TerminalManager: ObservableObject, Identifiable {
+@MainActor class TerminalManager: ObservableObject, Identifiable {
     let id = UUID()
     @Published var title: String = "Terminal"
     
@@ -707,13 +708,11 @@ class TerminalManager: ObservableObject, Identifiable {
     }
     
     func appendOutput(_ text: String, type: LineType, isANSI: Bool = false) {
-        DispatchQueue.main.async {
-            // Split multi-line output into separate lines
-            let lines = text.components(separatedBy: .newlines)
-            for line in lines {
-                if !line.isEmpty || lines.count == 1 {
-                    self.output.append(TerminalLine(text: line, type: type, isANSI: isANSI || line.contains("\u{1B}")))
-                }
+        // Split multi-line output into separate lines
+        let lines = text.components(separatedBy: .newlines)
+        for line in lines {
+            if !line.isEmpty || lines.count == 1 {
+                self.output.append(TerminalLine(text: line, type: type, isANSI: isANSI || line.contains("\u{1B}")))
             }
         }
     }
@@ -721,8 +720,8 @@ class TerminalManager: ObservableObject, Identifiable {
 
 // MARK: - SSH Manager Delegate
 extension TerminalManager: SSHManagerDelegate {
-    func sshManagerDidConnect(_ manager: SSHManager) {
-        DispatchQueue.main.async {
+    nonisolated func sshManagerDidConnect(_ manager: SSHManager) {
+        Task { @MainActor in
             self.isConnected = true
             self.isConnecting = false
             self.connectionStatus = "Connected"
@@ -731,8 +730,8 @@ extension TerminalManager: SSHManagerDelegate {
         }
     }
     
-    func sshManagerDidDisconnect(_ manager: SSHManager, error: Error?) {
-        DispatchQueue.main.async {
+    nonisolated func sshManagerDidDisconnect(_ manager: SSHManager, error: Error?) {
+        Task { @MainActor in
             self.isConnected = false
             self.isConnecting = false
             self.connectionStatus = "Disconnected"
@@ -743,12 +742,16 @@ extension TerminalManager: SSHManagerDelegate {
         }
     }
     
-    func sshManager(_ manager: SSHManager, didReceiveOutput text: String) {
-        appendOutput(text, type: .output)
+    nonisolated func sshManager(_ manager: SSHManager, didReceiveOutput text: String) {
+        Task { @MainActor in
+            self.appendOutput(text, type: .output)
+        }
     }
     
-    func sshManager(_ manager: SSHManager, didReceiveError text: String) {
-        appendOutput(text, type: .error)
+    nonisolated func sshManager(_ manager: SSHManager, didReceiveError text: String) {
+        Task { @MainActor in
+            self.appendOutput(text, type: .error)
+        }
     }
 }
 
