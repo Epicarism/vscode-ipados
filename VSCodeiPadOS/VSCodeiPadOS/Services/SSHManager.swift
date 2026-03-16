@@ -280,12 +280,15 @@ class SSHManager: @unchecked Sendable {
             private let lock = NSLock()
             private var _stdout = ""
             private var _stderr = ""
+            private var _exitCode: Int?
             
             var stdout: String { lock.withLock { _stdout } }
             var stderr: String { lock.withLock { _stderr } }
+            var exitCode: Int? { lock.withLock { _exitCode } }
             
             func appendStdout(_ text: String) { lock.withLock { _stdout += text } }
             func appendStderr(_ text: String) { lock.withLock { _stderr += text } }
+            func setExitCode(_ code: Int) { lock.withLock { _exitCode = code } }
         }
         
         let collector = OutputCollector()
@@ -311,18 +314,59 @@ class SSHManager: @unchecked Sendable {
         
         // Execute the command
         let execRequest = SSHChannelRequestEvent.ExecRequest(
-            command: command,
+            command: "\(command); echo __EXIT_CODE_MARKER__$?",
             wantReply: true
         )
         try await childChannel.triggerUserOutboundEvent(execRequest).get()
         
-        // Wait for channel to close (command completion)
-        try await childChannel.closeFuture.get()
+        // Wait for channel to close with timeout
+        let isTimedOut: Bool
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await childChannel.closeFuture.get()
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    throw SSHClientError.timeout
+                }
+                try await group.next()
+                group.cancelAll()
+            }
+            isTimedOut = false
+        } catch is SSHClientError {
+            isTimedOut = true
+            try? await childChannel.close()
+        }
+        
+        // Parse exit code from marker in stdout
+        var stdout = collector.stdout
+        var parsedExitCode = 0
+        if let markerRange = stdout.range(of: "__EXIT_CODE_MARKER__") {
+            let codeStr = String(stdout[markerRange.upperBound...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            parsedExitCode = Int(codeStr) ?? 0
+            // Remove the marker and everything after it from stdout
+            stdout = String(stdout[..<markerRange.lowerBound])
+            // Remove trailing newline left by the echo
+            if stdout.hasSuffix("\n") {
+                stdout = String(stdout.dropLast())
+            }
+        }
+        
+        if isTimedOut {
+            return SSHCommandResult(
+                stdout: stdout,
+                stderr: collector.stderr,
+                exitCode: -1,
+                isTimedOut: true
+            )
+        }
         
         return SSHCommandResult(
-            stdout: collector.stdout,
+            stdout: stdout,
             stderr: collector.stderr,
-            exitCode: 0,
+            exitCode: parsedExitCode,
             isTimedOut: false
         )
     }

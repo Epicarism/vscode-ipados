@@ -13,6 +13,7 @@ final class CodeExecutionService {
     // MARK: - Properties
     
     private var jsRunner: JSRunner?
+    private var currentExecutionTask: Task<Void, Never>?
     private let outputManager = OutputPanelManager.shared
     
     // MARK: - Initialization
@@ -122,12 +123,34 @@ final class CodeExecutionService {
             options: .regularExpression
         )
         
-        // 10. Remove 'enum' declarations (replace with const object pattern later if needed)
-        result = result.replacingOccurrences(
-            of: #"enum\s+\w+\s*\{[^}]*\}"#,
-            with: "",
-            options: .regularExpression
-        )
+        // 10. Convert TypeScript enums to JavaScript const objects
+        // enum Color { Red, Green, Blue } -> const Color = Object.freeze({ Red: 0, Green: 1, Blue: 2 });
+        let enumPattern = try? NSRegularExpression(pattern: #"enum\s+(\w+)\s*\{([^}]*)\}"#)
+        if let enumPattern = enumPattern {
+            let nsResult = result as NSString
+            let matches = enumPattern.matches(in: result, range: NSRange(location: 0, length: nsResult.length))
+            // Process in reverse to preserve indices
+            for match in matches.reversed() {
+                let enumName = nsResult.substring(with: match.range(at: 1))
+                let enumBody = nsResult.substring(with: match.range(at: 2))
+                let members = enumBody.components(separatedBy: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                var jsMembers: [String] = []
+                for (i, member) in members.enumerated() {
+                    let parts = member.components(separatedBy: "=")
+                    let name = parts[0].trimmingCharacters(in: .whitespaces)
+                    if parts.count > 1 {
+                        let val = parts[1].trimmingCharacters(in: .whitespaces)
+                        jsMembers.append("\(name): \(val)")
+                    } else {
+                        jsMembers.append("\(name): \(i)")
+                    }
+                }
+                let replacement = "const \(enumName) = Object.freeze({ \(jsMembers.joined(separator: ", ")) });"
+                result = (result as NSString).replacingCharacters(in: match.range, with: replacement)
+            }
+        }
         
         return result
     }
@@ -219,6 +242,10 @@ final class CodeExecutionService {
     // MARK: - JavaScript Execution
     
     private func executeJavaScript(fileName: String, code: String) {
+        // Cancel any previous execution to prevent race conditions
+        currentExecutionTask?.cancel()
+        jsRunner = nil
+        
         // Switch to JavaScript output channel
         outputManager.selectedChannel = OutputChannel.javascript
         
@@ -228,10 +255,11 @@ final class CodeExecutionService {
         outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
         
         // Create a fresh JSRunner instance
-        jsRunner = JSRunner()
+        let runner = JSRunner()
+        jsRunner = runner
         
         // Set up console handler to capture output
-        jsRunner?.setConsoleHandler { [weak self] message in
+        runner.setConsoleHandler { [weak self] message in
             Task { @MainActor in
                 guard let self = self else { return }
                 
@@ -251,20 +279,21 @@ final class CodeExecutionService {
             }
         }
         
-        // Execute the code asynchronously
-        Task { @MainActor in
+        // Execute the code asynchronously with cancellation support
+        currentExecutionTask = Task { @MainActor in
             let startTime = Date()
             
             do {
-                let runner = self.jsRunner
-                let result = try await runner?.execute(code: code)
+                guard !Task.isCancelled else { return }
+                let result = try await runner.execute(code: code)
+                guard !Task.isCancelled else { return }
                 let duration = Date().timeIntervalSince(startTime)
                 
                 // Show completion separator
                 outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
                 
                 // Show result if it's not undefined
-                if let result = result, !result.isUndefined {
+                if !result.isUndefined {
                     let resultString = formatJSValue(result)
                     outputManager.append("⮐ Result: \(resultString)", to: OutputChannel.javascript)
                 }
@@ -273,12 +302,16 @@ final class CodeExecutionService {
                 outputManager.append("✓ Completed in \(String(format: "%.2f", duration * 1000))ms", to: OutputChannel.javascript)
                 
             } catch {
+                guard !Task.isCancelled else { return }
                 outputManager.append("─────────────────────────────────────", to: OutputChannel.javascript)
                 outputManager.append("✗ Error: \(error.localizedDescription)", to: OutputChannel.javascript, streamType: StreamType.stderr)
             }
             
-            // Clean up runner
-            jsRunner = nil
+            // Clean up runner only if it's still the current one
+            if self.jsRunner === runner {
+                self.jsRunner = nil
+            }
+            self.currentExecutionTask = nil
         }
     }
     

@@ -58,7 +58,33 @@ struct PeekState: Equatable {
 class DiagnosticsService: ObservableObject {
     static let shared = DiagnosticsService()
     
+    /// Per-file diagnostics storage
+    private var diagnosticsByFile: [String: [DiagnosticItem]] = [:]
+    
+    /// All diagnostics across all files (flattened, published for UI)
     @Published var diagnostics: [DiagnosticItem] = []
+    
+    /// Rebuild the flat diagnostics array from per-file storage
+    private func rebuildDiagnostics() {
+        diagnostics = diagnosticsByFile.values.flatMap { $0 }.sorted {
+            if $0.file != $1.file { return $0.file < $1.file }
+            return $0.line < $1.line
+        }
+    }
+    
+    /// Clear diagnostics for a specific file
+    func clearFile(_ filename: String) {
+        diagnosticsByFile.removeValue(forKey: filename)
+        rebuildDiagnostics()
+        NotificationCenter.default.post(name: .diagnosticsUpdated, object: nil, userInfo: ["clear": true])
+    }
+    
+    /// Clear all diagnostics
+    func clearAll() {
+        diagnosticsByFile.removeAll()
+        rebuildDiagnostics()
+        NotificationCenter.default.post(name: .diagnosticsUpdated, object: nil, userInfo: ["clear": true])
+    }
     
     func analyzeFile(content: String, filename: String, filePath: String) {
         var items: [DiagnosticItem] = []
@@ -116,8 +142,15 @@ class DiagnosticsService: ObservableObject {
                     if trimmed.contains("console.log(") {
                         items.append(DiagnosticItem(message: "console.log() statement", file: filename, line: lineNum, column: 1, severity: .info))
                     }
-                    if line.contains("==") && !line.contains("===") && !line.contains("!=") {
-                        items.append(DiagnosticItem(message: "Use === instead of ==", file: filename, line: lineNum, column: 1, severity: .warning))
+                    // Check for == that should be === (but not !==, ===, or inside strings/comments)
+                    if let range = line.range(of: #"(?<![!=])={2}(?!=)"#, options: .regularExpression) {
+                        // Verify it's not inside a string literal (basic check)
+                        let prefix = String(line[line.startIndex..<range.lowerBound])
+                        let singleQuotes = prefix.filter { $0 == "'" }.count
+                        let doubleQuotes = prefix.filter { $0 == "\"" }.count
+                        if singleQuotes % 2 == 0 && doubleQuotes % 2 == 0 {
+                            items.append(DiagnosticItem(message: "Use === instead of ==", file: filename, line: lineNum, column: 1, severity: .warning))
+                        }
                     }
                     if trimmed.contains("eval(") {
                         items.append(DiagnosticItem(message: "eval() is dangerous - avoid using it", file: filename, line: lineNum, column: 1, severity: .error))
@@ -139,11 +172,13 @@ class DiagnosticsService: ObservableObject {
             }
         }
         
-        self.diagnostics = items
+        // Store per-file and rebuild combined list
+        diagnosticsByFile[filename] = items
+        rebuildDiagnostics()
         
         // Post notification for ProblemsView — convert to [[String: Any]] format
-        // that DiagnosticItem(userInfo:) expects
-        let itemsDicts: [[String: Any]] = items.map { item in
+        let allItems = diagnostics
+        let itemsDicts: [[String: Any]] = allItems.map { item in
             [
                 "id": item.id,
                 "message": item.message,
@@ -181,7 +216,7 @@ class EditorCore: ObservableObject {
             UserDefaults.standard.set(editorFontSize, forKey: "fontSize")
         }
     }
-    private var fontSizeObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var fontSizeObserver: NSObjectProtocol?
     @Published var isZenMode = false
     @Published var isFocusMode = false
 
@@ -195,7 +230,7 @@ class EditorCore: ObservableObject {
     // MARK: - Diagnostics Counts
     @Published var diagnosticErrorCount: Int = 0
     @Published var diagnosticWarningCount: Int = 0
-    private var diagnosticsObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var diagnosticsObserver: NSObjectProtocol?
 
     // Snippet picker support
     @Published var showSnippetPicker = false
@@ -237,7 +272,7 @@ class EditorCore: ObservableObject {
 
     /// Track active security-scoped URL access while files are open in tabs.
     /// This avoids losing access after opening a document (common on iPadOS).
-    private var securityScopedAccessCounts: [URL: Int] = [:]
+    private nonisolated(unsafe) var securityScopedAccessCounts: [URL: Int] = [:]
 
     var activeTab: Tab? {
         tabs.first { $0.id == activeTabId }
@@ -341,7 +376,20 @@ class EditorCore: ObservableObject {
     }
 
     deinit {
-        // Observers and security-scoped access are cleaned up automatically
+        // Remove NotificationCenter observers to prevent dangling references
+        if let fontObs = fontSizeObserver {
+            NotificationCenter.default.removeObserver(fontObs)
+        }
+        if let diagObs = diagnosticsObserver {
+            NotificationCenter.default.removeObserver(diagObs)
+        }
+        // Release any remaining security-scoped resources
+        for (url, count) in securityScopedAccessCounts where count > 0 {
+            for _ in 0..<count {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        securityScopedAccessCounts.removeAll()
     }
     
     /// Creates example tabs demonstrating syntax highlighting for all supported languages

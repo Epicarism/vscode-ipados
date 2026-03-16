@@ -118,6 +118,22 @@ struct RemoteExplorerView: View {
                     if remoteFileNavigator.isLoading {
                         ProgressView()
                             .padding()
+                    } else if let error = remoteFileNavigator.errorMessage {
+                        VStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 24))
+                                .foregroundColor(.orange)
+                            Text(error)
+                                .font(.system(size: 12))
+                                .foregroundColor(theme.sidebarForeground.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                            Button("Retry") {
+                                loadRemoteFiles()
+                            }
+                            .font(.system(size: 12))
+                            .foregroundColor(.accentColor)
+                        }
+                        .padding()
                     } else if let rootNode = remoteFileNavigator.rootNode {
                         RemoteFileTreeView(
                             node: rootNode,
@@ -147,12 +163,25 @@ struct RemoteExplorerView: View {
     private func connectToSaved(_ config: SSHConnectionConfig) {
         let terminal = TerminalManager()
         activeTerminal = terminal
+        
+        // Connect and wait for actual connection status
         terminal.connect(to: config)
         
-        // Wait for connection before loading files
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            if terminal.isConnected {
-                loadRemoteFiles()
+        // Monitor connection status with proper async handling
+        Task {
+            // Wait up to 10 seconds for connection
+            for _ in 0..<20 {
+                if terminal.isConnected {
+                    await MainActor.run {
+                        loadRemoteFiles()
+                    }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            }
+            // Connection timeout - let user know
+            await MainActor.run {
+                remoteFileNavigator.errorMessage = "SSH connection timeout after 10 seconds"
             }
         }
     }
@@ -209,34 +238,134 @@ struct SavedConnectionRow: View {
     @Published var rootNode: RemoteFileNode?
     @Published var isLoading = false
     @Published var expandedPaths: Set<String> = []
+    @Published var errorMessage: String?
+    
+    private var sftpManager: SFTPManager?
+    private var terminal: TerminalManager?
     
     func loadFiles(via terminal: TerminalManager) {
-        isLoading = true
+        self.terminal = terminal
         
-        // Execute 'ls -la' to get files (simplified - should use SFTP in production)
-        // For now, create a mock structure
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            self.rootNode = RemoteFileNode(
-                name: "~",
-                path: "/home",
-                isDirectory: true,
-                children: [
-                    RemoteFileNode(name: "projects", path: "/home/projects", isDirectory: true, children: [], size: 0, permissions: "drwxr-xr-x", modificationDate: nil),
-                    RemoteFileNode(name: "documents", path: "/home/documents", isDirectory: true, children: [], size: 0, permissions: "drwxr-xr-x", modificationDate: nil),
-                    RemoteFileNode(name: ".bashrc", path: "/home/.bashrc", isDirectory: false, children: [], size: 256, permissions: "-rw-r--r--", modificationDate: nil),
-                    RemoteFileNode(name: "README.md", path: "/home/README.md", isDirectory: false, children: [], size: 1024, permissions: "-rw-r--r--", modificationDate: nil)
-                ],
-                size: 0,
-                permissions: "drwxr-xr-x",
-                modificationDate: nil
-            )
-            self.isLoading = false
+        // Initialize SFTP manager with SSH connection
+        let ssh = SSHManager.shared
+        guard ssh.isConnected else {
+            errorMessage = "No SSH connection available"
+            return
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        // Create SFTP manager using the existing SSH connection
+        sftpManager = SFTPManager(sshManager: ssh)
+        
+        // List home directory
+        listDirectory(path: "~")
+    }
+    
+    func listDirectory(path: String, parent: RemoteFileNode? = nil) {
+        guard let sftpManager = sftpManager else {
+            errorMessage = "SFTP not initialized"
+            isLoading = false
+            return
+        }
+        
+        sftpManager.listDirectory(path) { [weak self] result in
+            Task { @MainActor in
+                guard let self = self else { return }
+                
+                switch result {
+                case .success(let sftpFiles):
+                    // Convert SFTPFileInfo to RemoteFileNode
+                    let nodes = sftpFiles.map { info in
+                        RemoteFileNode(
+                            name: info.name,
+                            path: info.path,
+                            isDirectory: info.isDirectory,
+                            children: [],
+                            size: info.size,
+                            permissions: info.permissions,
+                            modificationDate: info.modificationDate
+                        )
+                    }
+                    
+                    if var updatedParent = parent {
+                        // Update children of expanded directory
+                        updatedParent.children = nodes
+                    } else {
+                        // Set root node
+                        let rootName = path == "~" ? "~" : (path as NSString).lastPathComponent
+                        self.rootNode = RemoteFileNode(
+                            name: rootName,
+                            path: path,
+                            isDirectory: true,
+                            children: nodes,
+                            size: 0,
+                            permissions: "drwxr-xr-x",
+                            modificationDate: nil
+                        )
+                    }
+                    self.isLoading = false
+                    self.errorMessage = nil
+                    
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    func loadChildrenIfNeeded(for node: RemoteFileNode) {
+        guard node.isDirectory && node.children.isEmpty else { return }
+        listDirectory(path: node.path, parent: node)
+    }
+    
+    func openFile(_ node: RemoteFileNode, editorCore: EditorCore) {
+        guard !node.isDirectory else { return }
+        guard let sftpManager = sftpManager else {
+            errorMessage = "SFTP not initialized"
+            return
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        // Create temporary file URL
+        let tempDir = FileManager.default.temporaryDirectory
+        let localURL = tempDir.appendingPathComponent(node.name)
+        
+        // Download file via SFTP
+        sftpManager.downloadFile(remotePath: node.path, localURL: localURL) { [weak self] result in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.isLoading = false
+                
+                switch result {
+                case .success:
+                    // Open the downloaded file in editor
+                    do {
+                        let content = try String(contentsOf: localURL, encoding: .utf8)
+                        editorCore.addTab(fileName: node.name, content: content)
+                        self.errorMessage = nil
+                    } catch {
+                        self.errorMessage = "Failed to read downloaded file: \(error.localizedDescription)"
+                    }
+                    
+                case .failure(let error):
+                    self.errorMessage = "Download failed: \(error.localizedDescription)"
+                }
+            }
         }
     }
     
     func clearFiles() {
         rootNode = nil
         expandedPaths.removeAll()
+        errorMessage = nil
+        sftpManager?.disconnect()
+        sftpManager = nil
+        terminal = nil
     }
 }
 
@@ -269,8 +398,8 @@ struct RemoteFileTreeView: View {
                 if node.isDirectory {
                     toggleExpanded()
                 } else {
-                    // Open remote file (would need to fetch via SFTP)
-                    print("Open remote file: \(node.path)")
+                    // Open remote file via SFTP download
+                    navigator.openFile(node, editorCore: editorCore)
                 }
             }) {
                 HStack(spacing: 4) {
@@ -319,6 +448,8 @@ struct RemoteFileTreeView: View {
             navigator.expandedPaths.remove(node.path)
         } else {
             navigator.expandedPaths.insert(node.path)
+            // Load children if not already loaded
+            navigator.loadChildrenIfNeeded(for: node)
         }
     }
 }

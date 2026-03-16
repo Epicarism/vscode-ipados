@@ -133,6 +133,9 @@ final class OutputPanelManager: ObservableObject {
 
     // MARK: - Storage
 
+    /// Maximum lines per channel to prevent unbounded memory growth
+    private let maxLinesPerChannel = 5000
+
     private var outputLines: [OutputChannel: [OutputLine]] = [
         .output: [],
         .javascript: [],
@@ -140,6 +143,14 @@ final class OutputPanelManager: ObservableObject {
         .remote: [],
         .debug: []
     ]
+
+    /// Counter that increments on every mutation to trigger SwiftUI updates
+    @Published private var _lineUpdateCounter: Int = 0
+
+    /// Notify SwiftUI that output content changed
+    private func notifyLinesChanged() {
+        _lineUpdateCounter += 1
+    }
 
     // MARK: - Init
 
@@ -173,12 +184,20 @@ final class OutputPanelManager: ObservableObject {
 
         var current = outputLines[channel] ?? []
         current.append(outputLine)
+
+        // Enforce line limit to prevent unbounded memory growth
+        if current.count > maxLinesPerChannel {
+            current.removeFirst(current.count - maxLinesPerChannel)
+        }
+
         outputLines[channel] = current
+        notifyLinesChanged()
     }
 
     /// Clear all lines in a channel
     func clear(_ channel: OutputChannel) {
         outputLines[channel] = []
+        notifyLinesChanged()
     }
 
     // MARK: - Remote Execution
