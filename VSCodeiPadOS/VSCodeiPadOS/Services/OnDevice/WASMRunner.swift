@@ -66,13 +66,13 @@ public struct WASMConfiguration: Sendable {
     /// JavaScript runtime to use
     public var runtime: JavaScriptRuntime
     
-    public enum WASIMode {
+    public enum WASIMode: Sendable {
         case disabled
         case polyfill  // Limited support via polyfills
         case stub      // Stub implementations that log warnings
     }
     
-    public enum JavaScriptRuntime {
+    public enum JavaScriptRuntime: Sendable {
         case wkWebView   // Full WebAssembly support via Safari engine
         case javaScriptCore  // No WebAssembly support (fallback only)
     }
