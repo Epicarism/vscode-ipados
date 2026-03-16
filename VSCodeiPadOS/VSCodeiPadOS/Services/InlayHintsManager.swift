@@ -6,6 +6,7 @@ import Foundation
 /// - Detect simple Swift variable declarations without explicit types.
 /// - Infer basic types from the initializer expression.
 /// - Return hint objects with line/column + a display string (e.g. ": Int").
+@MainActor
 final class InlayHintsManager {
     static let shared = InlayHintsManager()
     private init() {}
