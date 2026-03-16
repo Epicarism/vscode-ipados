@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - RecentFileManager
 
@@ -49,7 +50,7 @@ final class RecentFileManager: ObservableObject {
         // Create a security-scoped bookmark for this URL
         guard let bookmarkData = createBookmark(for: url) else {
             // If bookmark creation fails, skip this URL entirely
-            print("[RecentFileManager] ⚠️ Could not create bookmark for \(url.path)")
+            AppLogger.editor.warning("[RecentFileManager] Could not create bookmark for \(url.path)")
             saveRecentFiles()
             return
         }
@@ -104,11 +105,11 @@ final class RecentFileManager: ObservableObject {
             )
             return data
         } catch {
-            print("[RecentFileManager] ⚠️ bookmarkData failed for \(url.path): \(error)")
+            AppLogger.editor.error("[RecentFileManager] bookmarkData failed for \(url.path): \(error)")
             return nil
         }
     }
-
+    
     /// Resolve bookmark data back into a `URL` and start accessing the
     /// security-scoped resource.
     private func resolveBookmark(_ data: Data) -> URL? {
@@ -142,7 +143,7 @@ final class RecentFileManager: ObservableObject {
 
             return url
         } catch {
-            print("[RecentFileManager] ⚠️ resolveBookmark failed: \(error)")
+            AppLogger.editor.error("[RecentFileManager] resolveBookmark failed: \(error)")
             return nil
         }
     }

@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import os
 
 // MARK: - Parsed Tool Call
 
@@ -48,9 +49,9 @@ class ToolCallParser {
         let unique = deduplicateToolCalls(results)
         
         if unique.isEmpty {
-            print("[ToolCallParser] No tool calls found in response")
+            AppLogger.editor.debug("[ToolCallParser] No tool calls found in response")
         } else {
-            print("[ToolCallParser] Found \(unique.count) tool call(s)")
+            AppLogger.editor.debug("[ToolCallParser] Found \(unique.count) tool call(s)")
         }
         
         return unique
@@ -220,13 +221,13 @@ class ToolCallParser {
         
         // Validate it's a known tool
         guard AITool(rawValue: toolName) != nil else {
-            print("[ToolCallParser] Unknown tool: \(toolName)")
+            AppLogger.editor.warning("[ToolCallParser] Unknown tool: \(toolName)")
             return nil
         }
         
         let arguments = json["arguments"] as? [String: Any] ?? [:]
         
-        print("[ToolCallParser] Parsed: \(toolName) with args: \(arguments)")
+        AppLogger.editor.debug("[ToolCallParser] Parsed: \(toolName) with args: \(arguments)")
         
         return ParsedToolCall(toolName: toolName, arguments: arguments, rawJSON: jsonStr)
     }

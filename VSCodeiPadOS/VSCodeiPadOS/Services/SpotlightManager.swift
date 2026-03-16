@@ -1,4 +1,5 @@
 import Foundation
+import os
 import CoreSpotlight
 // import MobileCoreServices  // DEAD: unused - only import line, no API usage
 import UniformTypeIdentifiers
@@ -66,9 +67,9 @@ class SpotlightManager {
         // Index the item
         searchableIndex.indexSearchableItems([searchableItem]) { error in
             if let error = error {
-                print("Spotlight indexing error: \(error.localizedDescription)")
+                AppLogger.editor.error("Spotlight indexing error: \(error.localizedDescription)")
             } else {
-                print("Successfully indexed file: \(fileName)")
+                AppLogger.editor.debug("Successfully indexed file: \(fileName)")
             }
         }
     }
@@ -89,9 +90,9 @@ class SpotlightManager {
         let uniqueIdentifier = url.path
         searchableIndex.deleteSearchableItems(withIdentifiers: [uniqueIdentifier]) { error in
             if let error = error {
-                print("Error removing from Spotlight index: \(error.localizedDescription)")
+                AppLogger.editor.error("Error removing from Spotlight index: \(error.localizedDescription)")
             } else {
-                print("Successfully removed from index: \(url.lastPathComponent)")
+                AppLogger.editor.debug("Successfully removed from index: \(url.lastPathComponent)")
             }
         }
     }
@@ -100,9 +101,9 @@ class SpotlightManager {
     func clearAllIndexes() {
         searchableIndex.deleteSearchableItems(withDomainIdentifiers: [domainIdentifier]) { error in
             if let error = error {
-                print("Error clearing Spotlight indexes: \(error.localizedDescription)")
+                AppLogger.editor.error("Error clearing Spotlight indexes: \(error.localizedDescription)")
             } else {
-                print("Successfully cleared all Spotlight indexes")
+                AppLogger.editor.debug("Successfully cleared all Spotlight indexes")
             }
         }
     }

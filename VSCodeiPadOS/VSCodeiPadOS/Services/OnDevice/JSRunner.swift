@@ -1,5 +1,6 @@
 import JavaScriptCore
 import Foundation
+import os
 
 // MARK: - Console Protocol
 /**
@@ -91,7 +92,7 @@ enum JSRunnerError: Error, LocalizedError {
  *
  * // Set up console handler
  * runner.setConsoleHandler { message in
- *     print("JS Console: \(message)")
+ *     AppLogger.editor.debug("JS Console: \(message)")
  * }
  *
  * // Expose a native function
@@ -107,9 +108,9 @@ enum JSRunnerError: Error, LocalizedError {
  * // Execute JavaScript
  * do {
  *     let result = try await runner.execute(code: "nativeAdd(5, 3)")
- *     print("Result: \(result)") // Result: 8
+ *     AppLogger.editor.debug("Result: \(result)") // Result: 8
  * } catch {
- *     print("Error: \(error)")
+ *     AppLogger.editor.error("Error: \(error)")
  * }
  * ```
  */
@@ -306,19 +307,19 @@ class JSRunner {
      * do {
      *     // Simple arithmetic
      *     let result = try await runner.execute(code: "2 + 2")
-     *     print(result.toInt32()!) // 4
+     *     AppLogger.editor.debug("Result: \(result.toInt32()!)") // 4
      *
      *     // Complex object
      *     let obj = try await runner.execute(code: "({ name: 'Test', value: 42 })")
-     *     print(obj.toDictionary()) // ["name": "Test", "value": 42]
+     *     AppLogger.editor.debug("Object: \(obj.toDictionary())") // ["name": "Test", "value": 42]
      *
      *     // Using native functions
      *     let sum = try await runner.execute(code: "nativeAdd(10, 20)")
-     *     print(sum.toInt32()!) // 30
+     *     AppLogger.editor.debug("Sum: \(sum)") // 30
      * } catch JSRunnerError.executionTimeout {
-     *     print("Script took too long")
+     *     AppLogger.editor.error("Script took too long")
      * } catch {
-     *     print("Execution failed: \(error)")
+     *     AppLogger.editor.error("Execution failed: \(error)")
      * }
      * ```
      */
@@ -567,7 +568,7 @@ extension JSRunner {
          super.setUp()
          runner = JSRunner()
          runner.setConsoleHandler { message in
-             print("Console: \(message)")
+             AppLogger.editor.debug("Console: \(message)")
          }
      }
      
@@ -656,13 +657,13 @@ extension JSRunner {
  }
 
  // Simple playground-style example:
- 
+
  func runExample() async {
      let runner = JSRunner()
      
      // Capture console output
      runner.setConsoleHandler { message in
-         print("📝 \(message)")
+         AppLogger.editor.debug("JS Console: \(message)")
      }
      
      // Expose native Swift function
@@ -679,7 +680,7 @@ extension JSRunner {
      do {
          // Test 1: Basic arithmetic
          let sum = try await runner.executeToInt(code: "10 + 32")
-         print("Sum: \(sum ?? 0)")
+         AppLogger.editor.debug("Sum: \(sum ?? 0)")
          
          // Test 2: Console logging
          try await runner.execute(code: """
@@ -690,7 +691,7 @@ extension JSRunner {
          
          // Test 3: Native function call
          let area = try await runner.executeToDouble(code: "calculateArea(5.5, 10.2)")
-         print("Area: \(area ?? 0)")
+         AppLogger.editor.debug("Area: \(area ?? 0)")
          
          // Test 4: Complex object
          let user = try await runner.executeToDictionary(code: """
@@ -701,10 +702,10 @@ extension JSRunner {
                  roles: ['user', 'admin']
              })
          """)
-         print("User: \(user ?? [:])")
+         AppLogger.editor.debug("User: \(user ?? [:])")
          
      } catch {
-         print("❌ Error: \(error)")
+         AppLogger.editor.error("Error: \(error)")
      }
      
      runner.cleanup()
@@ -712,5 +713,5 @@ extension JSRunner {
 
  // Run the example:
  // Task { await runExample() }
- 
- */
+
+*/

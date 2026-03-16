@@ -162,9 +162,23 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 editorCore.openFile(from: fileURL)
             }
             
-            if let workspacePath = userActivity.userInfo?[WindowActivity.workspacePathKey] as? String {
-                // TODO: Open workspace at path
-                print("Opening workspace: \(workspacePath)")
+            if let workspacePath = userActivity.userInfo?[WindowActivity.workspacePathKey] as? String,
+               !workspacePath.isEmpty {
+                let workspaceURL = URL(fileURLWithPath: workspacePath)
+                let fm = FileManager.default
+                guard fm.fileExists(atPath: workspacePath) else {
+                    print("SceneDelegate: workspace path does not exist: \(workspacePath)")
+                    return
+                }
+                let didStartAccessing = workspaceURL.startAccessingSecurityScopedResource()
+                if didStartAccessing {
+                    defer { workspaceURL.stopAccessingSecurityScopedResource() }
+                }
+                NotificationCenter.default.post(
+                    name: .sceneOpenWorkspace,
+                    object: nil,
+                    userInfo: ["workspaceURL": workspaceURL]
+                )
             }
         }
         
@@ -216,6 +230,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
 }
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    /// Posted by SceneDelegate when a workspace should be opened from a user activity.
+    /// userInfo contains "workspaceURL" (URL) for the workspace root directory.
+    static let sceneOpenWorkspace = Notification.Name("SceneOpenWorkspace")
 
 // MARK: - FocusedSceneKey
 

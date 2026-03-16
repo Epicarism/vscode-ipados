@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import os
 
 // MARK: - Window State
 
@@ -275,7 +276,7 @@ class WindowStateManager: ObservableObject {
             userActivity: activity,
             options: options,
             errorHandler: { error in
-                print("Failed to create new window: \(error.localizedDescription)")
+                AppLogger.editor.error("Failed to create new window: \(error.localizedDescription)")
             }
         )
     }
@@ -287,7 +288,7 @@ class WindowStateManager: ObservableObject {
             scene.session,
             options: nil,
             errorHandler: { error in
-                print("Failed to close window: \(error.localizedDescription)")
+                AppLogger.editor.error("Failed to close window: \(error.localizedDescription)")
             }
         )
     }
