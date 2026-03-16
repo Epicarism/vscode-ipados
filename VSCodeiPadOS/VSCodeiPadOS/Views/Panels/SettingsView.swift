@@ -731,11 +731,11 @@ class SettingsWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, 
     // MARK: - JavaScript Console Capture
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "consoleLog" {
-            AppLogger.editor.debug("[JS Console] \(message.body)")
+            AppLogger.editor.debug("[JS Console] \(String(describing: message.body))")
         } else if message.name == "consoleError" {
-            AppLogger.editor.error("[JS ERROR] \(message.body)")
+            AppLogger.editor.error("[JS ERROR] \(String(describing: message.body))")
         } else if message.name == "vsCodeError" {
-            AppLogger.editor.error("[VS Code Error] \(message.body)")
+            AppLogger.editor.error("[VS Code Error] \(String(describing: message.body))")
         }
     }
     

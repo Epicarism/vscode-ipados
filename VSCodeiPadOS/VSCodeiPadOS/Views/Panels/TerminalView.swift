@@ -572,7 +572,7 @@ class TerminalManager: ObservableObject, Identifiable {
             switch result {
             case .success:
                 // Connection successful - delegate will handle UI update
-                SSHConnectionStore.shared.updateLastUsed(config)
+                Task { @MainActor in SSHConnectionStore.shared.updateLastUsed(config) }
             case .failure(let error):
                 self?.appendOutput("Connection failed: \(error.localizedDescription)", type: .error)
                 self?.isConnecting = false

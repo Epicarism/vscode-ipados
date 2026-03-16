@@ -45,6 +45,7 @@ struct NotificationToast: View {
                 Image(systemName: notification.type.icon)
                     .font(.system(size: 14))
                     .foregroundColor(notification.type.color)
+                    .accessibilityHidden(true)
                 
                 Text(notification.message)
                     .font(.system(size: 13, weight: .medium))
@@ -61,6 +62,8 @@ struct NotificationToast: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss notification")
+                .accessibilityHint("Dismiss this notification")
             }
             
             // Detail text
@@ -100,6 +103,8 @@ struct NotificationToast: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(notification.type.rawValue) notification: \(notification.message)")
         .padding(12)
         .frame(width: 360)
         .background {
@@ -136,6 +141,7 @@ struct NotificationCenterView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)
                     .textCase(.uppercase)
+                    .accessibilityAddTraits(.isHeader)
                 
                 Spacer()
                 
@@ -146,6 +152,7 @@ struct NotificationCenterView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Mark all read")
                     .help("Mark All Read")
                     
                     Button(action: { manager.clearHistory() }) {
@@ -154,6 +161,7 @@ struct NotificationCenterView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear all notifications")
                     .help("Clear All")
                     
                     Button(action: { manager.dismissAll() }) {
@@ -162,6 +170,7 @@ struct NotificationCenterView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss all active notifications")
                     .help("Dismiss All Active")
                 }
             }
@@ -176,9 +185,11 @@ struct NotificationCenterView: View {
                     Image(systemName: "bell.slash")
                         .font(.system(size: 28))
                         .foregroundColor(.secondary.opacity(0.5))
+                        .accessibilityHidden(true)
                     Text("No Notifications")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("No notifications")
                     Spacer()
                 }
             } else {

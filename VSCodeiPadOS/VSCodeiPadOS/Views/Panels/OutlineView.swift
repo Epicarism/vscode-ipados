@@ -76,6 +76,7 @@ struct OutlineView: View {
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -87,6 +88,7 @@ struct OutlineView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Refresh outline")
             .help("Refresh")
         }
         .padding(.horizontal, 12)
@@ -98,10 +100,13 @@ struct OutlineView: View {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .foregroundColor(.secondary)
                 .font(.caption)
+                .accessibilityHidden(true)
 
             TextField("Filter symbols", text: $filterText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
+                .accessibilityLabel("Filter symbols")
+                .accessibilityHint("Type to filter the outline symbols")
 
             if !filterText.isEmpty {
                 Button { filterText = "" } label: {
@@ -134,6 +139,7 @@ struct OutlineView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 28))
                 .foregroundColor(.secondary.opacity(0.6))
+                .accessibilityHidden(true)
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -141,6 +147,8 @@ struct OutlineView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 
     // MARK: - Display items (filter + sort)
@@ -319,18 +327,22 @@ private struct OutlineRow: View {
                     .font(.system(size: 12))
                     .foregroundColor(.primary)
                     .lineLimit(1)
+                    .accessibilityHidden(true)
 
                 Spacer()
 
                 Text("\(item.line)")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(item.type.rawValue) \(item.name), line \(item.line)")
+        .accessibilityHint("Double tap to navigate to this symbol")
         .contextMenu {
             Button("Jump to Line \(item.line)") { onSelect(item) }
             if item.isContainer {

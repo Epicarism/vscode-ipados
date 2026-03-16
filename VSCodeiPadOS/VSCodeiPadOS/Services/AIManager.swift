@@ -259,7 +259,7 @@ final class AIManager: ObservableObject {
     var selectedModel: AIModel {
         get {
             let models = selectedProvider.models
-            return models.first { $0.id == selectedModelId } ?? models.first ?? AIModel(id: "unknown", name: "Unknown")
+            return models.first { $0.id == selectedModelId } ?? models.first ?? AIModel(id: "unknown", name: "Unknown", provider: selectedProvider)
         }
         set { selectedModelId = newValue.id }
     }

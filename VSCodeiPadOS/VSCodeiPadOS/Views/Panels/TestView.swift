@@ -125,7 +125,7 @@ struct TestView: View {
 
     /// Scans the app's documents directory and bundle for Swift test files.
     static func discoverTestFunctions() -> [TestSuite] {
-        var suites: [TestSuite] = []
+        var suites: [String: [String]] = [:]
 
         // Scan the app's documents directory (workspace files)
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -194,7 +194,7 @@ struct TestView: View {
             if let parenRange = trimmed.range(of: "(") {
                 let funcDecl = trimmed[trimmed.startIndex..<parenRange.lowerBound]
                 // Remove "func " prefix and any generic parameters
-                var name = funcDecl
+                var name = String(funcDecl)
                 if name.hasPrefix("func ") {
                     name = String(name.dropFirst(5))
                 }
@@ -206,7 +206,7 @@ struct TestView: View {
                 name = name.trimmingCharacters(in: .whitespaces)
                 if !name.isEmpty && name.hasPrefix("test") {
                     // Skip private/internal access modifiers that got mixed in
-                    foundTests.append(name)
+                    foundTests.append(String(name))
                 }
             }
         }
