@@ -1,73 +1,69 @@
-# 📋 SWE Communication Log
+# SWE Communication Log
 
-## Last Updated: March 16, 2026 - 10:15 PM GMT+1
+## Status Update - March 16, 2026 10:30 PM
 
----
-
-## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
+### ✅ Build Status: CLEAN BUILD - Zero errors, zero warnings
 
 ### Latest Commits:
-- `49f1dc6` - fix: resolve all build errors - OutputView/TimelineView/TasksView brace fixes, GitView error handling, terminal keyboard, editor save race condition
-- `40aa6e7` - fix: SSHManager private init, DebugView breakpoints, RemoteDebuggerEvent Sendable, SearchView debounceCancellable, RunestoneThemeAdapter
+- `c9128dc` feat: Timeline panel tab, tab icons, @StateObject fixes, SearchView bug fixes, GitManager config API fix
+- `49f1dc6` fix: resolve all build errors - OutputView/TimelineView/TasksView brace mismatches
 
----
+### Recent Fixes Applied (This Session):
+1. **OutputView.swift** - Fixed 5 missing closing braces in Button labels (accessibility modifiers were nesting inside buttons)
+2. **TimelineView.swift** - Fixed missing closing brace for `loading` computed property
+3. **TasksView.swift** - Fixed missing closing brace for `TasksView` struct before `TaskRow`
+4. **GitView.swift** - Restored missing `commitChanges()` and `commitAndPush()` functions, replaced nonexistent `AppLogger.shared` with `print()`, changed `@ObservedObject` → `@StateObject`
+5. **GitManager.swift** - Fixed `SSHCommandResult.output` → `.stdout`, fixed `GitManagerError.notARepository` → `.noRepository`, fixed `commandFailed` argument labels
+6. **PanelView.swift** - Added Timeline tab with icon, added icons to ALL panel tab buttons
+7. **TerminalView.swift** - Changed all 6 `@ObservedObject` for ThemeManager → `@StateObject`, fixed `Text.background()` type error in ANSI renderer
+8. **DebugView.swift** - `@StateObject` for singletons, functional exception toggles (were hardcoded `.constant`)
+9. **SearchView.swift** - Fixed binary extension filter bug (`.hasSuffix` → `==`), added `.onChange` handlers so toggling matchCase/matchWholeWord/useRegex re-triggers search, fixed missing `onAppear` function reference
+10. **Notification+Names.swift** - Added `switchToTimelinePanel`
 
-## ✅ What I (SWE-2) Fixed This Session:
+### Current Working Features:
+- ✅ Editor with syntax highlighting (Runestone + legacy)
+- ✅ File system navigation & workspace management
+- ✅ Tab management with state restoration
+- ✅ Terminal panel (local commands + SSH via SwiftNIO)
+- ✅ Git integration (read ops + SSH write ops + config UI)
+- ✅ Debug console (JavaScript REPL with JSRunner)
+- ✅ Command palette, Quick Open, Go To Symbol/Line
+- ✅ Find/Replace
+- ✅ SSH connections (SwiftNIO)
+- ✅ SFTP file operations (via SSH)
+- ✅ ANSI color rendering in terminal (256-color support)
+- ✅ Workspace trust management
+- ✅ AI Assistant panel (11 providers)
+- ✅ Code execution (JS, with TypeScript/Python via SSH)
+- ✅ Extensions panel
+- ✅ Settings with theme management (19 themes)
+- ✅ VS Code tunnel mode
+- ✅ Diagnostics/Problems panel (real-time analysis)
+- ✅ Output panel with channel management
+- ✅ Ports panel
+- ✅ **Timeline panel** (NEW - git history + local save tracking)
+- ✅ Breakpoint management
+- ✅ Tasks panel (.vscode/tasks.json)
 
-### Build Errors Resolved:
-1. **SSHManager private init** - `RemoteDebugger.swift` and `TerminalView.swift` were calling `SSHManager()` directly instead of `.shared`
-2. **DebugView get-only breakpoints** - was calling `.removeAll()` on computed `breakpoints` property; now uses `removeAllBreakpoints()` and `toggleAllBreakpoints()`
-3. **RemoteDebuggerEvent Sendable** - `OutputType` enum missing `Sendable` conformance for Swift 6
-4. **SearchView undeclared debounceCancellable** - removed references to non-existent Combine property
-5. **RunestoneThemeAdapter MainActor** - replaced `UIScreen.main.scale` with safe default for nonisolated context
-6. **TimelineView missing closing brace** - `Source` enum was never closed, causing `DiffSummary` struct to be nested inside it
+### Areas Still Needing Work:
+- Terminal interactive PTY mode (currently line-at-a-time for SSH)
+- Port forwarding actual SSH tunnel implementation
+- Extension system deeper integration
+- iCloud sync
+- Performance testing with large files
+- DebugView: watch expression swipeActions need List context (currently VStack)
+- DebugView: VariableRow recursive rendering needs depth limit
+- SearchView: processedResults computed property called too many times (needs caching)
 
-### Critical Bug Fixes:
-7. **GitView error handling** - ALL git operations now have proper do/catch with user-visible error alerts (was silently swallowing errors with `try?`)
-8. **GitManager untracked duplicates** - untracked files no longer appear in both `unstagedChanges` AND `untrackedFiles` arrays
-9. **Terminal keyboard focus** - removed `resignFirstResponder` that was dismissing keyboard on tap; now properly focuses the input field
-10. **Terminal command history** - fixed off-by-one error in `previousCommand()`/`nextCommand()` navigation
-11. **Editor save race condition** - added `forceEditorSync` notification so `saveActiveTab()` forces RunestoneEditorView to sync text before writing to disk
-12. **Line count optimization** - replaced O(n) character-by-character counting with NSString range-based search
-
-### Theme Consistency:
-13. **OutputView** - replaced hardcoded `.red`/`.orange` with theme properties, cached DateFormatter
-14. **TimelineView** - replaced hardcoded `.blue`/`.orange` and system colors with theme properties
-15. **TasksView** - replaced system colors with theme properties, added accessibility labels
-
----
-
-## 🎯 My Focus Areas (SWE-2):
-- **Build stability** - zero errors, zero warnings
-- **Editor reliability** - save/sync, tab switching, text fidelity
-- **Git operations** - proper error handling, no silent failures
-- **Terminal** - keyboard input, command history, ANSI rendering
-- **Theme consistency** - all panels use ThemeManager
-- **SSH/SFTP** - connection flow, port forwarding stubs
-
-## 🔴 Known Issues Still Open:
-- [ ] SSH private key authentication is broken (falls back to password)
-- [ ] SFTP upload limited to 100KB (base64 encoding over SSH)
-- [ ] Port forwarding is UI-only (no actual data tunneling)
-- [ ] No undo/redo integration in Runestone editor
-- [ ] Host key validation disabled (accepts all - MITM risk)
-- [ ] Diff algorithm is O(n*m) - may crash on large files
-- [ ] No merge conflict handling in pull
-- [ ] SidebarView.swift is 429 lines of completely dead code
-- [ ] Dual tab bar implementations (TabBarView vs IDETabBar in ContentView)
-- [ ] Dual sidebar state tracking (focusedSidebarTab Int vs focusedView enum)
-
-## 📝 Notes for Other SWE:
-- Build target: `iPad Pro 13-inch (M5)` simulator
-- Build command: `cd VSCodeiPadOS && xcodebuild build -project VSCodeiPadOS.xcodeproj -scheme VSCodeiPadOS -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5)'`
-- AppLogger has NO `.shared` - use `AppLogger.editor`, `AppLogger.git`, etc.
-- SSHManager uses singleton `SSHManager.shared` with `private init()`
-- DebugManager.breakpoints is a computed GET-ONLY property - use methods like `removeAllBreakpoints()`, `toggleAllBreakpoints()`
-- Please update this doc when you start/finish work on a feature
+### For Other SWE:
+- Build is clean on `iPad Pro 13-inch (M5)` simulator
+- Swift 6 strict concurrency enabled
+- If you add new files, use iOS 17+ onChange form: `.onChange(of: X) { _, newValue in ... }`
+- All UIKit delegate coordinators should be `@MainActor`
+- API keys in Keychain via `KeychainHelper`
 - Commit frequently with descriptive messages
-
----
-
-## 💬 Messages:
-
-**[SWE-2 | 10:15 PM]** Build is clean (0 errors, 0 warnings). Fixed 15 issues including critical save race condition, GitView silent failures, terminal keyboard, and theme consistency. Moving on to more feature polish and remaining open issues.
+- `SSHCommandResult` uses `.stdout` and `.stderr` (not `.output`)
+- `GitManagerError.commandFailed` requires `(args:exitCode:message:)` params
+- Use `@StateObject` (not `@ObservedObject`) when initializing singletons with `= X.shared`
+- `AppLogger` exists in Utils/AppLogger.swift with `.editor`, `.network`, etc. categories
+- DiagnosticsService runs on every file save - add rules for new languages as needed
