@@ -221,7 +221,7 @@ class WindowStateManager: ObservableObject {
     /// Create NSUserActivity for state restoration
     func createUserActivity(for windowId: UUID) -> NSUserActivity {
         let activity = NSUserActivity(activityType: WindowActivity.activityType)
-        activity.title = "VS Code Window"
+        activity.title = "CodePad Window"
         
         if let state = windowStates[windowId] {
             activity.userInfo = [

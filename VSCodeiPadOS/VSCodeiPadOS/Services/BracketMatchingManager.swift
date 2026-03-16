@@ -3,7 +3,7 @@ import UIKit
 
 /// Manages bracket matching and highlighting for the editor.
 /// Supports: (), [], {}, <> (in certain contexts)
-final class BracketMatchingManager {
+final class BracketMatchingManager: @unchecked Sendable {
     static let shared = BracketMatchingManager()
     private init() {}
     

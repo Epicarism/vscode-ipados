@@ -538,7 +538,7 @@ class TerminalManager: ObservableObject, Identifiable {
     @Published var title: String = "Terminal"
     
     @Published var output: [TerminalLine] = [
-        TerminalLine(text: "VSCode iPadOS Terminal v2.0", type: .system),
+        TerminalLine(text: "CodePad Terminal v2.0", type: .system),
         TerminalLine(text: "Type 'help' for commands or connect via SSH (SwiftNIO).", type: .system),
         TerminalLine(text: "", type: .output)
     ]

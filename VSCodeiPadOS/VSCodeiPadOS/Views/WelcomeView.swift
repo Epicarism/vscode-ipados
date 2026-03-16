@@ -79,7 +79,7 @@ struct WelcomeView: View {
                 .foregroundColor(theme.keyword)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("VSCode for iPadOS")
+                Text("CodePad")
                     .font(.system(size: 26, weight: .semibold, design: .default))
                     .foregroundColor(theme.sidebarForeground)
 
@@ -172,7 +172,7 @@ struct WelcomeView: View {
             actionRow(
                 icon: "book",
                 title: "Documentation",
-                subtitle: "Browse VS Code for iPadOS documentation",
+                subtitle: "Browse CodePad documentation",
                 actionKey: "docs"
             ) {
                 if let url = URL(string: "https://code.visualstudio.com/docs") {

@@ -26,7 +26,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
         
         // Generate or retrieve window ID
-        windowId = session.windowId
+        windowId = UUID()
         
         // Create a new EditorCore instance for this window
         let core = EditorCore()
@@ -35,7 +35,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Create the root view
         let contentView = ContentView()
             .environmentObject(core)
-            .focusedSceneValue(\.menuEditorCore, core)
+            .focusedValue(\.menuEditorCore, core)
             .onAppear {
                 self.restoreWindowState(session: session, connectionOptions: connectionOptions)
             }
@@ -120,7 +120,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func updateWindowTitle() {
         guard let scene = window?.windowScene else { return }
         
-        var title = "VS Code"
+        var title = "CodePad"
         
         if let editorCore = editorCore,
            let activeTab = editorCore.activeTab {
@@ -241,13 +241,13 @@ extension Notification.Name {
     static let sceneOpenWorkspace = Notification.Name("SceneOpenWorkspace")
 }
 
-// MARK: - FocusedSceneKey
+// MARK: - FocusedValueKey
 
-struct MenuEditorCoreKey: FocusedSceneValueKey {
+struct MenuEditorCoreKey: FocusedValueKey {
     typealias Value = EditorCore
 }
 
-extension FocusedSceneValues {
+extension FocusedValues {
     var menuEditorCore: EditorCore? {
         get { self[MenuEditorCoreKey.self] }
         set { self[MenuEditorCoreKey.self] = newValue }

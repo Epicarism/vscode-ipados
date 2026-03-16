@@ -20,7 +20,7 @@ struct ContentView: View {
     @State private var aiPanelWidth: CGFloat = 400
     @State private var selectedSidebarTab = 0
     @State private var pendingTrustURL: URL?
-    @State private var windowTitle: String = "VS Code"
+    @State private var windowTitle: String = "CodePad"
     
     @StateObject private var trustManager = WorkspaceTrustManager.shared
     
@@ -256,11 +256,11 @@ struct ContentView: View {
         if let activeTab = editorCore.activeTab {
             let fileName = activeTab.fileName
             let unsavedIndicator = activeTab.isUnsaved ? "● " : ""
-            windowTitle = "\(unsavedIndicator)\(fileName) - VS Code"
+            windowTitle = "\(unsavedIndicator)\(fileName) - CodePad"
         } else if !editorCore.tabs.isEmpty {
-            windowTitle = "VS Code"
+            windowTitle = "CodePad"
         } else {
-            windowTitle = "Welcome - VS Code"
+            windowTitle = "Welcome - CodePad"
         }
         
         // Notify the app of the title change
@@ -844,7 +844,7 @@ struct IDEWelcomeView: View {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                         .font(.system(size: 64, weight: .thin))
                         .foregroundColor(.accentColor.opacity(0.7))
-                    Text("VS Code for iPadOS")
+                    Text("CodePad")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(theme.editorForeground)
                     Text("Code anywhere. Build anything.")

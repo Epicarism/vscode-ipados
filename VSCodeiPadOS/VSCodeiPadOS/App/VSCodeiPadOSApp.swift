@@ -6,7 +6,7 @@ struct VSCodeiPadOSApp: App {
     @StateObject private var editorCore = EditorCore()
     @State private var showSettings = false
     @State private var showTerminal = false
-    @State private var windowTitle: String = "VS Code"
+    @State private var windowTitle: String = "CodePad"
     
     var body: some Scene {
         WindowGroup {
@@ -291,7 +291,7 @@ struct HelpMenuCommands: Commands {
             
             Divider()
             
-            Button("About VS Code for iPad") {
+            Button("About CodePad") {
                 NotificationCenter.default.post(name: .showAbout, object: nil)
             }
         }

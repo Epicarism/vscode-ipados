@@ -120,7 +120,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func updateWindowTitle() {
         guard let scene = window?.windowScene else { return }
         
-        var title = "VS Code"
+        var title = "CodePad"
         
         if let editorCore = editorCore,
            let activeTab = editorCore.activeTab {
