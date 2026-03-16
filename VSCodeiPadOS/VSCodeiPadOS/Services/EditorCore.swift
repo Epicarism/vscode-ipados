@@ -90,6 +90,13 @@ class EditorCore: ObservableObject {
     @Published var isZenMode = false
     @Published var isFocusMode = false
 
+    // MARK: - Large File Performance
+
+    /// Files with more characters than this threshold are considered "large."
+    /// Syntax highlighting and other expensive features are limited for large files.
+    static let largeFileThreshold = 100_000 // ~100KB in characters
+    @Published var isLargeFile = false
+
     // Snippet picker support
     @Published var showSnippetPicker = false
     @Published var pendingSnippetInsertion: Snippet?
@@ -150,6 +157,25 @@ class EditorCore: ObservableObject {
 
     var activeTabIndex: Int? {
         tabs.firstIndex { $0.id == activeTabId }
+    }
+
+    /// Whether the active file is large enough that expensive features (syntax highlighting,
+    /// code folding, etc.) should be limited. Consumers such as the syntax highlighter should
+    /// check this flag before performing heavy work.
+    var shouldLimitExpensiveFeatures: Bool { isLargeFile }
+
+    /// Updates `isLargeFile` based on the active tab's content length.
+    /// Call whenever the active tab changes or its content is replaced.
+    private func updateLargeFileStatus() {
+        if let tab = activeTab {
+            let wasLarge = isLargeFile
+            isLargeFile = tab.content.count > Self.largeFileThreshold
+            if isLargeFile, !wasLarge {
+                AppLogger.editor.warning("Large file detected: \(tab.fileName) (\(tab.content.count) chars, threshold: \(Self.largeFileThreshold)). Syntax highlighting and other expensive features may be limited.")
+            }
+        } else {
+            isLargeFile = false
+        }
     }
 
     // MARK: - Workspace Persistence Keys
@@ -792,18 +818,21 @@ mod tests {
         // Check if file is already open by URL
         if let url = url, let existingTab = tabs.first(where: { $0.url == url }) {
             activeTabId = existingTab.id
+            updateLargeFileStatus()
             return
         }
         
         // For tabs without URLs (demo/untitled), check by fileName to avoid duplicates
         if url == nil, let existingTab = tabs.first(where: { $0.url == nil && $0.fileName == fileName }) {
             activeTabId = existingTab.id
+            updateLargeFileStatus()
             return
         }
 
         let newTab = Tab(fileName: fileName, content: content, url: url)
         tabs.append(newTab)
         activeTabId = newTab.id
+        updateLargeFileStatus()
     }
 
     func closeTab(id: UUID) {
@@ -820,10 +849,13 @@ mod tests {
         if activeTabId == id {
             if tabs.isEmpty {
                 activeTabId = nil
+                updateLargeFileStatus()
             } else if index >= tabs.count {
                 activeTabId = tabs[tabs.count - 1].id
+                updateLargeFileStatus()
             } else {
                 activeTabId = tabs[index].id
+                updateLargeFileStatus()
             }
         }
     }
@@ -859,18 +891,21 @@ mod tests {
 
     func selectTab(id: UUID) {
         activeTabId = id
+        updateLargeFileStatus()
     }
 
     func nextTab() {
         guard let currentIndex = activeTabIndex, tabs.count > 1 else { return }
         let nextIndex = (currentIndex + 1) % tabs.count
         activeTabId = tabs[nextIndex].id
+        updateLargeFileStatus()
     }
 
     func previousTab() {
         guard let currentIndex = activeTabIndex, tabs.count > 1 else { return }
         let prevIndex = currentIndex == 0 ? tabs.count - 1 : currentIndex - 1
         activeTabId = tabs[prevIndex].id
+        updateLargeFileStatus()
     }
 
     func moveTab(from source: IndexSet, to destination: Int) {
@@ -889,6 +924,7 @@ mod tests {
 
         // Mark dirty for both saved and unsaved-new files.
         tabs[index].isUnsaved = true
+        updateLargeFileStatus()
         
         // Trigger auto-save if enabled
         Task { @MainActor in AutoSaveManager.shared.contentDidChange(tabId: self.tabs[index].id) }
@@ -1563,6 +1599,7 @@ extension EditorCore {
         if activeTabId == nil, let first = tabs.first {
             activeTabId = first.id
         }
+        updateLargeFileStatus()
     }
     
     /// Clear saved workspace state
