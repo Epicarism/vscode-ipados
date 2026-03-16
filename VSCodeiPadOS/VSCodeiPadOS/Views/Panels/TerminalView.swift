@@ -1245,35 +1245,36 @@ struct ANSIText: View {
     }
     
     var body: some View {
-        textWithColors
+        Text(attributedText)
             .font(.system(.body, design: .monospaced))
             .textSelection(.enabled)
     }
     
-    private var textWithColors: Text {
+    private var attributedText: AttributedString {
         let segments = parseANSI(text)
-        var result = Text("")
+        var result = AttributedString()
+        let defaultFG = themeManager.currentTheme.editorForeground
+        
         for segment in segments {
-            var part = Text(segment.text)
-            if let color = segment.color {
-                part = part.foregroundColor(color)
-            } else {
-                part = part.foregroundColor(themeManager.currentTheme.editorForeground)
-            }
+            var attr = AttributedString(segment.text)
+            attr.foregroundColor = segment.color ?? defaultFG
+            
             if segment.bold {
-                part = part.bold()
+                attr.font = .system(.body, design: .monospaced).bold()
             }
             if segment.italic {
-                part = part.italic()
+                attr.font = (attr.font ?? .system(.body, design: .monospaced)).italic()
             }
             if segment.underline {
-                part = part.underline()
+                attr.underlineStyle = .single
             }
-            // Note: Text.background() returns some View, not Text,
-            // so background colors cannot be applied in Text concatenation.
-            // Background colors are handled at the line level instead.
-            result = result + part
+            if let bgColor = segment.backgroundColor {
+                attr.backgroundColor = bgColor
+            }
+            
+            result.append(attr)
         }
+        
         return result
     }
     
