@@ -252,7 +252,7 @@
 		8014 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		8016 /* NotificationToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToastView.swift; sourceTree = "<group>"; };
 		8018 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
-		9002 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		9002 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -269,6 +269,7 @@
 		4001 /* VSCodeiPadOS */ = {
 			isa = PBXGroup;
 			children = (
+				9002 /* AppLogger.swift */,
 				2001 /* ContentView.swift */,
 				2099 /* Assets.xcassets */,
 				2100 /* test.wasm */,
@@ -333,7 +334,6 @@
 		4006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				9002 /* AppLogger.swift */,
 				2019 /* AutocompleteManager.swift */,
 				2022 /* CodeFoldingManager.swift */,
 				2023 /* EditorCore.swift */,
