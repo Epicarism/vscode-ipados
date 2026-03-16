@@ -575,9 +575,11 @@ extension TerminalTab: Equatable {}
                 // Connection successful - delegate will handle UI update
                 Task { @MainActor in SSHConnectionStore.shared.updateLastUsed(config) }
             case .failure(let error):
-                self?.appendOutput("Connection failed: \(error.localizedDescription)", type: .error)
-                self?.isConnecting = false
-                self?.connectionStatus = "Connection failed"
+                Task { @MainActor in
+                    self?.appendOutput("Connection failed: \(error.localizedDescription)", type: .error)
+                    self?.isConnecting = false
+                    self?.connectionStatus = "Connection failed"
+                }
             }
         }
     }

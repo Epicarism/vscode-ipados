@@ -137,27 +137,24 @@ struct TabItemView: View {
                 Spacer()
 
                 ZStack {
-                    if tab.isUnsaved {
+                    if tab.isUnsaved && !isHovering && !isActive {
                         Circle()
                             .fill(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
                             .frame(width: 8, height: 8)
-                            .opacity(isHovering ? 0 : 1)
                     }
 
-                    if isHovering || !tab.isUnsaved {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
-                                .frame(width: 16, height: 16)
-                                .background(Color.black.opacity(0.1))
-                                .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
-                        .opacity(isHovering ? 1 : 0)
-                        .accessibilityLabel("Close tab \(tab.fileName)")
-                        .accessibilityHint("Closes this tab")
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
+                            .frame(width: 16, height: 16)
+                            .background(Color.black.opacity(0.1))
+                            .cornerRadius(4)
                     }
+                    .buttonStyle(.plain)
+                    .opacity(isActive ? 1.0 : (isHovering ? 1.0 : (tab.isUnsaved ? 0 : 0.4)))
+                    .accessibilityLabel("Close tab \(tab.fileName)")
+                    .accessibilityHint("Closes this tab")
                 }
                 .frame(width: 16, height: 16)
             }

@@ -329,6 +329,10 @@ struct ContentView: View {
             DebugView()
         case 4:
             RemoteExplorerView(editorCore: editorCore)
+        case 5:
+            ExtensionsPanel()
+        case 6:
+            TestView()
         default:
             IDESidebarFiles(editorCore: editorCore, fileNavigator: fileNavigator, showFolderPicker: $showingFolderPicker, theme: theme)
         }

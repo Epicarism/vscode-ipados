@@ -91,7 +91,7 @@ class SFTPManager: @unchecked Sendable {
     
     // MARK: - Connection
     
-    func connect(config: SSHConnectionConfig, completion: @escaping (Result<Void, Error>) -> Void) {
+    func connect(config: SSHConnectionConfig, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         sshManager = SSHManager()
         sshManager?.connect(config: config) { [weak self] result in
             switch result {

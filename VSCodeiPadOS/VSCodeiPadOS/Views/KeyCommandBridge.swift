@@ -1,24 +1,44 @@
 import UIKit
 import SwiftUI
 
+/// UIViewController that registers hardware keyboard shortcuts via UIKeyCommand.
+/// These shortcuts post centralized Notification.Name constants (from Notification+Names.swift)
+/// so that ContentView and other subscribers can respond.
 class KeyCommandController: UIViewController {
     
     override var canBecomeFirstResponder: Bool { true }
     
     override var keyCommands: [UIKeyCommand]? {
         let defs: [(String, String, UIKeyModifierFlags, Selector)] = [
+            // MARK: - General
             ("Command Palette", "p", [.command, .shift], #selector(cmdPalette)),
             ("AI Assistant", "a", [.command, .shift], #selector(cmdAIAssistant)),
-            ("Toggle Terminal", "j", [.command], #selector(cmdToggleTerminal)),
-            ("Toggle Sidebar", "b", [.command], #selector(cmdToggleSidebar)),
             ("Quick Open", "p", [.command], #selector(cmdQuickOpen)),
             ("New File", "n", [.command], #selector(cmdNewFile)),
             ("Save", "s", [.command], #selector(cmdSave)),
+            ("Save All", "s", [.command, .alternate], #selector(cmdSaveAll)),
             ("Close Tab", "w", [.command], #selector(cmdCloseTab)),
-            ("Find", "f", [.command], #selector(cmdFind)),
-            ("Go to Line", "g", [.control], #selector(cmdGoToLine)),
+            
+            // MARK: - View
+            ("Toggle Sidebar", "b", [.command], #selector(cmdToggleSidebar)),
+            ("Toggle Terminal", "j", [.command], #selector(cmdToggleTerminal)),
             ("Zoom In", "=", [.command], #selector(cmdZoomIn)),
             ("Zoom Out", "-", [.command], #selector(cmdZoomOut)),
+            
+            // MARK: - Search
+            ("Find", "f", [.command], #selector(cmdFind)),
+            ("Replace", "f", [.command, .alternate], #selector(cmdShowReplace)),
+            
+            // MARK: - Navigation
+            ("Go to Line", "g", [.control], #selector(cmdGoToLine)),
+            ("Go to Symbol", "o", [.command, .shift], #selector(cmdGoToSymbol)),
+            ("Go to Definition", "\r", [.command], #selector(cmdGoToDefinition)),
+            ("Go Back", "[", [.control], #selector(cmdGoBack)),
+            ("Go Forward", "]", [.control], #selector(cmdGoForward)),
+            
+            // MARK: - Multi-Cursor
+            ("Add Cursor Above", UIKeyCommand.inputUpArrow, [.command, .alternate], #selector(cmdAddCursorAbove)),
+            ("Add Cursor Below", UIKeyCommand.inputDownArrow, [.command, .alternate], #selector(cmdAddCursorBelow)),
         ]
         return defs.map { (title, input, mods, action) in
             let cmd = UIKeyCommand(title: title, action: action, input: input, modifierFlags: mods)
@@ -27,44 +47,86 @@ class KeyCommandController: UIViewController {
         }
     }
     
+    // MARK: - General
+    
     @objc func cmdPalette() {
-        NotificationCenter.default.post(name: .init("ShowCommandPalette"), object: nil)
+        NotificationCenter.default.post(name: .showCommandPalette, object: nil)
     }
     @objc func cmdAIAssistant() {
-        NotificationCenter.default.post(name: .init("ShowAIAssistant"), object: nil)
-    }
-    @objc func cmdToggleTerminal() {
-        NotificationCenter.default.post(name: .init("ToggleTerminal"), object: nil)
-    }
-    @objc func cmdToggleSidebar() {
-        NotificationCenter.default.post(name: .init("ToggleSidebar"), object: nil)
+        NotificationCenter.default.post(name: .showAIAssistant, object: nil)
     }
     @objc func cmdQuickOpen() {
-        NotificationCenter.default.post(name: .init("ShowQuickOpen"), object: nil)
+        NotificationCenter.default.post(name: .showQuickOpen, object: nil)
     }
     @objc func cmdNewFile() {
-        NotificationCenter.default.post(name: .init("NewFile"), object: nil)
+        NotificationCenter.default.post(name: .newFile, object: nil)
     }
     @objc func cmdSave() {
-        NotificationCenter.default.post(name: .init("SaveFile"), object: nil)
+        NotificationCenter.default.post(name: .saveFile, object: nil)
+    }
+    @objc func cmdSaveAll() {
+        NotificationCenter.default.post(name: .saveAllFiles, object: nil)
     }
     @objc func cmdCloseTab() {
-        NotificationCenter.default.post(name: .init("CloseTab"), object: nil)
+        NotificationCenter.default.post(name: .closeTab, object: nil)
     }
-    @objc func cmdFind() {
-        NotificationCenter.default.post(name: .init("ShowFind"), object: nil)
+    
+    // MARK: - View
+    
+    @objc func cmdToggleSidebar() {
+        NotificationCenter.default.post(name: .toggleSidebar, object: nil)
     }
-    @objc func cmdGoToLine() {
-        NotificationCenter.default.post(name: .init("ShowGoToLine"), object: nil)
+    @objc func cmdToggleTerminal() {
+        NotificationCenter.default.post(name: .toggleTerminal, object: nil)
     }
     @objc func cmdZoomIn() {
-        NotificationCenter.default.post(name: .init("ZoomIn"), object: nil)
+        NotificationCenter.default.post(name: .zoomIn, object: nil)
     }
     @objc func cmdZoomOut() {
-        NotificationCenter.default.post(name: .init("ZoomOut"), object: nil)
+        NotificationCenter.default.post(name: .zoomOut, object: nil)
+    }
+    
+    // MARK: - Search
+    
+    @objc func cmdFind() {
+        NotificationCenter.default.post(name: .showFind, object: nil)
+    }
+    @objc func cmdShowReplace() {
+        NotificationCenter.default.post(name: .showReplace, object: nil)
+    }
+    
+    // MARK: - Navigation
+    
+    @objc func cmdGoToLine() {
+        NotificationCenter.default.post(name: .showGoToLine, object: nil)
+    }
+    @objc func cmdGoToSymbol() {
+        NotificationCenter.default.post(name: .showGoToSymbol, object: nil)
+    }
+    @objc func cmdGoToDefinition() {
+        NotificationCenter.default.post(name: .goToDefinition, object: nil)
+    }
+    @objc func cmdGoBack() {
+        NotificationCenter.default.post(name: .goBack, object: nil)
+    }
+    @objc func cmdGoForward() {
+        NotificationCenter.default.post(name: .goForward, object: nil)
+    }
+    
+    // MARK: - Multi-Cursor
+    
+    @objc func cmdAddCursorAbove() {
+        NotificationCenter.default.post(name: .addCursorAbove, object: nil)
+    }
+    @objc func cmdAddCursorBelow() {
+        NotificationCenter.default.post(name: .addCursorBelow, object: nil)
     }
 }
 
+// MARK: - SwiftUI Bridge
+
+/// Wraps the entire SwiftUI view hierarchy inside a KeyCommandController
+/// so that UIKeyCommand shortcuts are available app-wide.
 struct KeyCommandBridge<Content: View>: UIViewControllerRepresentable {
     let content: Content
     
