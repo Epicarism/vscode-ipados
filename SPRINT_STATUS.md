@@ -1,8 +1,8 @@
 # 🏃 Sprint Status — Production Readiness
 
-**Last Updated:** March 16, 2026 02:50 GMT+1  
+**Last Updated:** March 16, 2026 03:00 GMT+1  
 **Updated By:** Claude (AI SWE)  
-**Branch:** `main` (50+ commits ahead of origin)  
+**Branch:** `main` (~55 commits ahead of origin)  
 **Other SWEs:** Please update this file when you pick up or complete tasks.
 
 ---
@@ -37,7 +37,11 @@
 | 24 | Fixed 42 deprecated API calls across codebase | Multiple files |
 | 25 | Implemented SceneDelegate workspace open (replaced no-op "New Window") | `SceneDelegate.swift`, `VSCodeiPadOSApp.swift` |
 | 26 | Removed dead code from ContentView (reduced bloat) | `ContentView.swift` |
-| 27 | Print-to-logger migration (ongoing — LocalLLMService, FileSystemNavigator done) | Multiple files |
+| 27 | ~~Print-to-logger migration~~ (123→0 bare `print()` calls) | Multiple files |
+| 28 | ErrorParser safeRegex (guard against nil/crash patterns) | `Utils/ErrorParser.swift` |
+| 29 | Deleted `PythonRunnerAlt` dead code | `OnDevice/PythonRunnerAlt.swift` (removed) |
+| 30 | Fixed Terminal Esc button not working | Terminal view |
+| 31 | Configured Stage Manager support | `Info.plist`, scene manifest |
 
 ---
 
@@ -49,10 +53,10 @@
 | 2 | ~~Duplicate/dead files~~ | — | ✅ Done | Claude |
 | 3 | ~~README wrong project name~~ | `README.md` | ✅ Done | Claude |
 | 4 | ~~Force unwrap crashes~~ | `AIAgentTools`, `ThemeManager`, `EditorCore` | ✅ Done | Claude |
-| 5 | Swift version mismatch | `Package.swift` (5.9) vs `project.pbxproj` (5.0) | 🔴 TODO | — |
+| 5 | ~~Swift version mismatch~~ | `Package.swift` (5.9) vs `project.pbxproj` (6.0) | ✅ Done | Claude |
 | 6 | No entitlements file | Missing `.entitlements` for file access | 🔴 TODO | — |
 | 7 | ~~Missing `PrivacyInfo.xcprivacy`~~ | Required for App Store since 2024 | ✅ Done | Claude |
-| 8 | AI Stop button non-functional | `AIManager.swift`, `AIAssistantView.swift` | 🟠 TODO | — |
+| 8 | ~~AI Stop button non-functional~~ | `AIManager.swift`, `AIAssistantView.swift` | ✅ Done | Claude |
 | 9 | ~~"New Window" menu command is no-op~~ | `SceneDelegate.swift`, `VSCodeiPadOSApp.swift` | ✅ Done | Claude |
 | 10 | ~~30+ hardcoded `NSNotification.Name` strings~~ | Throughout codebase | ✅ Done (36 constants) | Claude |
 | 11 | Git diverged from origin | Need `git pull --rebase` | ⚠️ Manual | — |
@@ -94,12 +98,12 @@
 | Theme System (19 themes) | ✅ 100% | Dark/light/custom |
 | Keyboard Shortcuts | ✅ 100% | Full UIKeyCommand + menu system |
 | Syntax Highlighting | ✅ 100% | 20+ languages via Tree-sitter |
-| Multi-Window / Stage Manager | ✅ 100% | Complete |
+| Multi-Window / Stage Manager | ✅ 100% | Complete, configured |
 | Command Palette | ✅ 100% | Now with search filtering |
 | Quick Open | ✅ 100% | Now with search filtering |
 | On-Device LLM (MLX) | 🟡 80% | Nanbeige working, needs conversation history |
 | Native Git | 🟡 70% | Reader done, write ops stub |
-| AI Assistant (cloud) | 🟡 60% | 11 providers, needs cancel support |
+| AI Assistant (cloud) | 🟡 80% | 11 providers, cancel support added |
 | Extension System | 🟡 30% | Basic framework only |
 | SSH/SFTP | 🔴 5% | All stubs, feature-flagged off |
 | iCloud Sync | 🔴 0% | Feature-flagged off |
@@ -128,7 +132,7 @@ xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
 ```
 
 ### Git Status
-- Local `main` is **39 commits ahead** of `origin/main`
+- Local `main` is **~55 commits ahead** of `origin/main`
 - Origin has 1 divergent commit (`6b71943 chore: verify email linkage`)
 - **Need to reconcile before push** — suggest `git pull --rebase origin main`
 
