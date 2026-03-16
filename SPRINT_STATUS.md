@@ -1,8 +1,8 @@
 # 🏃 Sprint Status — Production Readiness
 
-**Last Updated:** March 16, 2026 04:00 GMT+1  
+**Last Updated:** March 16, 2026 06:45 GMT+1  
 **Updated By:** Claude (AI SWE)  
-**Branch:** `main` (82 commits ahead of origin)  
+**Branch:** `main` (150+ commits ahead of origin)  
 **Other SWEs:** Please update this file when you pick up or complete tasks.
 
 ---
@@ -71,6 +71,9 @@
 | 58 | About screen with app info, version, features list | `AboutView.swift` |
 | 59 | Status bar version indicator | `StatusBarView.swift` |
 | 60 | WelcomeView CodePad branding + version badge | `WelcomeView.swift` |
+| 61 | Fix force unwrap crashes (SceneDelegate, GitHubAuth, MockRunners) + wire StatusBar diagnostics | `SceneDelegate.swift`, `GitHubAuthManager.swift`, `MockRunners.swift`, `StatusBarView.swift` |
+| 62 | VoiceOver accessibility: GoToLineView (field + buttons), NotificationToastView (8 elements), OutlineView (header, filter, rows) | `GoToLineView.swift`, `NotificationToastView.swift`, `OutlineView.swift` |
+| 63 | SPM package resolution fix (mlx-swift submodule cleanup) | DerivedData cleanup |
 
 ---
 
@@ -110,7 +113,7 @@
 | # | Issue | Status | Owner |
 |---|-------|--------|-------|
 | 22 | App Store metadata & screenshots | 🔵 TODO | — |
-| 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView, TerminalView, SearchView, StatusBar, ContentView tabs, AIAssistant, TestView, GitView done) | Claude |
+| 23 | Accessibility audit (VoiceOver) | ✅ Done (SidebarView, WelcomeView, TerminalView, SearchView, StatusBar, ContentView tabs, AIAssistant, TestView, GitView, GoToLineView, NotificationToastView, OutlineView done) | Claude |
 | 24 | Performance audit (large files) | ✅ Done (100K threshold, visible-range highlighting, isLargeFile flag) | Claude |
 | 25 | ~~CI/CD pipeline (GitHub Actions)~~ | ✅ Done (build + test + lint workflow) | Claude |
 | 26 | ~~App icon finalized~~ | ✅ Done (1024x1024 PNG verified) | Claude |
@@ -162,11 +165,11 @@ open VSCodeiPadOS/VSCodeiPadOS.xcodeproj
 # CLI build:
 xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
   -scheme VSCodeiPadOS \
-  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5)'
 ```
 
 ### Git Status
-- Local `main` is **~144 commits ahead** of `origin/main`
+- Local `main` is **~150 commits ahead** of `origin/main`
 - Origin has 1 divergent commit (`6b71943 chore: verify email linkage`)
 - **Need to reconcile before push** — suggest `git pull --rebase origin main`
 

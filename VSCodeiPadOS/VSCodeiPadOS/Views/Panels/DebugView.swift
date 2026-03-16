@@ -41,19 +41,19 @@ struct DebugView: View {
                         .background(Color.green.opacity(0.1))
                         .cornerRadius(4)
                 }
-                .accessibilityLabel("Start debugging")
-                .accessibilityHint("Double tap to start debug session")
                 .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel("Start debugging")
+                .accessibilityHint("Double tap to start or continue debugging")
                 
                 Button(action: {}) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
-                .accessibilityLabel("Debug options")
-                .accessibilityHint("Double tap for more debug options")
                 .buttonStyle(PlainButtonStyle())
                 .padding(.leading, 8)
+                .accessibilityLabel("More debug options")
+                .accessibilityHint("Double tap to open additional debug settings")
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -72,6 +72,8 @@ struct DebugView: View {
                     } label: {
                         SectionHeader(title: "VARIABLES")
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Variables section, \(isVariablesExpanded ? "expanded" : "collapsed")")
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
                     
@@ -94,6 +96,7 @@ struct DebugView: View {
                                     Image(systemName: "eye")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
+                                        .accessibilityHidden(true)
                                     Text(watch.expression)
                                         .font(.system(size: 12, design: .monospaced))
                                         .foregroundColor(.primary)
@@ -107,6 +110,8 @@ struct DebugView: View {
                                 }
                                 .padding(.vertical, 4)
                                 .padding(.leading, 12)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("Watch: \(watch.expression), value: \(watch.value)")
                             }
                             
                             if isAddingWatch {
@@ -114,6 +119,7 @@ struct DebugView: View {
                                     Image(systemName: "eye")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
+                                        .accessibilityHidden(true)
                                     TextField("Expression...", text: $newWatchExpression, onCommit: {
                                         if !newWatchExpression.isEmpty {
                                             watchExpressions.append(WatchExpression(expression: newWatchExpression, value: "undefined"))
@@ -126,6 +132,7 @@ struct DebugView: View {
                                     .padding(4)
                                     .background(Color(UIColor.systemGray6))
                                     .cornerRadius(4)
+                                    .accessibilityLabel("New watch expression")
                                 }
                                 .padding(.vertical, 4)
                                 .padding(.leading, 12)
@@ -136,6 +143,7 @@ struct DebugView: View {
                             }) {
                                 HStack {
                                     Image(systemName: "plus")
+                                        .accessibilityHidden(true)
                                     Text("Add Expression")
                                 }
                                 .font(.caption)
@@ -158,13 +166,19 @@ struct DebugView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                             .opacity(isWatchExpanded ? 1 : 0)
+                            .accessibilityLabel("Add watch expression")
+                            .accessibilityHint("Double tap to add a new watch expression")
                         }
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Watch section, \(isWatchExpanded ? "expanded" : "collapsed")")
                     .padding(.horizontal, 8)
                 }
             }
         }
         .background(Color(UIColor.systemBackground))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Run and Debug panel")
     }
 }
 
@@ -194,6 +208,9 @@ struct VariableRow: View {
                             withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
                         }
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("\(variable.name), \(children.count) children, \(isExpanded ? "expanded" : "collapsed")")
+                        .accessibilityHint("Double tap to \(isExpanded ? "collapse" : "expand")")
+                        .accessibilityAddTraits(.isButton)
                 } else {
                     Spacer().frame(width: 16)
                 }
@@ -213,6 +230,8 @@ struct VariableRow: View {
                 Spacer()
             }
             .padding(.vertical, 2)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("\(variable.name): \(variable.value)")
             
             if isExpanded, let children = variable.children {
                 ForEach(children) { child in

@@ -97,4 +97,30 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
     }
+    
+    // MARK: - App Lifecycle
+    
+    func applicationWillTerminate(_ application: UIApplication) {
+        AppLogger.editor.info("App will terminate — saving all window states")
+        // Last-chance save for all connected scenes
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene,
+                  let sceneDelegate = windowScene.delegate as? SceneDelegate else { continue }
+            sceneDelegate.saveWindowState()
+        }
+    }
+    
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        AppLogger.editor.warning("Memory warning received — posting notification for cache cleanup")
+        NotificationCenter.default.post(name: .didReceiveMemoryWarning, object: nil)
+    }
+    
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        // Save state for all scenes when app enters background
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene,
+                  let sceneDelegate = windowScene.delegate as? SceneDelegate else { continue }
+            sceneDelegate.saveWindowState()
+        }
+    }
 }

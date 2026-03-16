@@ -25,8 +25,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
         
-        // Generate or retrieve window ID
-        windowId = UUID()
+        // Restore or generate window ID (persist in session.userInfo for state restoration)
+        if let savedId = session.userInfo?["windowId"] as? String,
+           let restored = UUID(uuidString: savedId) {
+            windowId = restored
+        } else {
+            let newId = UUID()
+            windowId = newId
+            session.userInfo = (session.userInfo ?? [:])
+            session.userInfo?["windowId"] = newId.uuidString
+        }
         
         // Create a new EditorCore instance for this window
         let core = EditorCore()
@@ -93,8 +101,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     
     func sceneDidEnterBackground(_ scene: UIScene) {
-        // Save state when entering background
+        // Save state with background task to ensure completion
+        let app = UIApplication.shared
+        var bgTask = UIBackgroundTaskIdentifier.invalid
+        bgTask = app.beginBackgroundTask(withName: "SaveWindowState") {
+            app.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
         saveWindowState()
+        app.endBackgroundTask(bgTask)
+        bgTask = .invalid
     }
     
     // MARK: - State Restoration
@@ -146,10 +162,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let editorCore = editorCore else { return }
         
         // Start accessing security-scoped resource if needed
-        let didStartAccessing = url.startAccessingSecurityScopedResource()
-        if didStartAccessing {
-            defer { url.stopAccessingSecurityScopedResource() }
-        }
+        // Note: Don't stop accessing in defer — openFile stores a bookmark
+        // and EditorCore manages the resource lifecycle
+        _ = url.startAccessingSecurityScopedResource()
         
         // Open the file
         editorCore.openFile(from: url)
@@ -196,9 +211,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     // MARK: - Window State Persistence
     
-    private func saveWindowState() {
+    func saveWindowState() {
         guard let windowId = windowId,
-              let editorCore = editorCore else { return }
+              let editorCore = editorCore else {
+            AppLogger.editor.debug("SceneDelegate: Cannot save window state — missing windowId or editorCore")
+            return
+        }
+        
+        // Persist windowId in session for future restoration
+        if let session = window?.windowScene?.session {
+            if session.userInfo == nil { session.userInfo = [:] }
+            session.userInfo?["windowId"] = windowId.uuidString
+        }
         
         WindowStateManager.shared.captureState(
             from: editorCore,

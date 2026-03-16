@@ -159,4 +159,9 @@ extension Notification.Name {
 
     /// A file was auto-saved.
     static let autoSaved = Notification.Name("AutoSaved")
+
+    // MARK: - System
+
+    /// App received a memory warning — views should release caches.
+    static let didReceiveMemoryWarning = Notification.Name("AppDidReceiveMemoryWarning")
 }

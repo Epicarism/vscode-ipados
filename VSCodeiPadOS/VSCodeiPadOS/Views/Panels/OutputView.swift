@@ -35,11 +35,13 @@ struct OutputLineView: View {
                 .font(.system(size: 8))
                 .foregroundColor(.blue)
                 .frame(width: 12)
+                .accessibilityHidden(true)
         case .stderr:
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 8))
                 .foregroundColor(.orange)
                 .frame(width: 12)
+                .accessibilityHidden(true)
         }
     }
     
@@ -120,6 +122,7 @@ struct RemoteProgressView: View {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .purple))
                         .scaleEffect(0.8)
+                        .accessibilityHidden(true)
                     
                     VStack(alignment: .leading, spacing: 2) {
                         if let command = outputManager.remoteExecutionStatus.command {
@@ -168,6 +171,8 @@ struct RemoteProgressView: View {
                     Spacer()
                 }
             )
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Remote execution in progress")
         }
     }
 }
@@ -183,10 +188,12 @@ struct OutputSearchBar: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             
             TextField("Search output...", text: $localQuery)
                 .font(.system(size: 12))
                 .textFieldStyle(.plain)
+                .accessibilityLabel("Search output")
                 .onChange(of: localQuery) { newValue in
                     outputManager.setSearchQuery(newValue)
                 }
@@ -201,6 +208,8 @@ struct OutputSearchBar: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+                .accessibilityHint("Double tap to clear the search text and reset filter")
             }
             
             let stats = outputManager.filterStats(for: outputManager.selectedChannel)
@@ -208,6 +217,7 @@ struct OutputSearchBar: View {
                 Text("\(stats.filtered)/\(stats.total)")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
+                    .accessibilityLabel("\(stats.filtered) of \(stats.total) output lines visible")
             }
         }
         .padding(.horizontal, 8)
@@ -246,6 +256,8 @@ struct OutputView: View {
             outputBody
         }
         .background(Color(UIColor.systemBackground))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Output panel")
     }
 
     private var header: some View {
@@ -266,6 +278,8 @@ struct OutputView: View {
                             }
                         }
                     }
+                    .accessibilityLabel(channel.rawValue)
+                    .accessibilityHint("Double tap to switch to \(channel.rawValue) output")
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -284,6 +298,8 @@ struct OutputView: View {
                 .background(Color(UIColor.tertiarySystemFill))
                 .cornerRadius(4)
             }
+            .accessibilityLabel("Output channel: \(outputManager.selectedChannel.rawValue)")
+            .accessibilityHint("Double tap to select an output channel")
             
             Spacer()
             
@@ -300,7 +316,8 @@ struct OutputView: View {
                     .font(.system(size: 12))
                     .foregroundColor(showingSearchBar ? .blue : .secondary)
             }
-            .help("Search in output")
+            .accessibilityLabel("Search in output")
+            .accessibilityHint("Double tap to \(showingSearchBar ? "hide" : "show") the output search bar")
             
             // Word wrap toggle
             Button(action: {
@@ -310,7 +327,8 @@ struct OutputView: View {
                     .font(.system(size: 12))
                     .foregroundColor(outputManager.wordWrapEnabled ? .blue : .secondary)
             }
-            .help("Toggle word wrap")
+            .accessibilityLabel("Toggle word wrap, currently \(outputManager.wordWrapEnabled ? "on" : "off")")
+            .accessibilityHint("Double tap to toggle word wrap")
             
             // Timestamp toggle
             Button(action: {
@@ -320,7 +338,8 @@ struct OutputView: View {
                     .font(.system(size: 12))
                     .foregroundColor(outputManager.showTimestamps ? .blue : .secondary)
             }
-            .help("Show timestamps")
+            .accessibilityLabel("Toggle timestamps, currently \(outputManager.showTimestamps ? "on" : "off")")
+            .accessibilityHint("Double tap to show or hide timestamps")
             
             // Auto-scroll toggle
             Button(action: {
@@ -330,10 +349,12 @@ struct OutputView: View {
                     .font(.system(size: 12))
                     .foregroundColor(outputManager.isAutoScrollEnabled ? .blue : .secondary)
             }
-            .help("Auto-scroll")
+            .accessibilityLabel("Toggle auto-scroll, currently \(outputManager.isAutoScrollEnabled ? "on" : "off")")
+            .accessibilityHint("Double tap to toggle auto-scroll to latest output")
             
             Divider()
                 .frame(height: 16)
+                .accessibilityHidden(true)
             
             // Clear button
             Button(action: { outputManager.clear(outputManager.selectedChannel) }) {
@@ -341,7 +362,8 @@ struct OutputView: View {
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
-            .help("Clear Output")
+            .accessibilityLabel("Clear output")
+            .accessibilityHint("Double tap to clear all output in the current channel")
         }
         .padding(6)
         .background(Color(UIColor.secondarySystemBackground))

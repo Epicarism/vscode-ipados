@@ -162,6 +162,20 @@ struct ContentView: View {
                     
                     StatusBarView(editorCore: editorCore)
                 }
+                .onDrop(of: [.fileURL, .url, .text, .data], isTargeted: nil) { providers in
+                    for provider in providers {
+                        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, _ in
+                                guard let data = data as? Data,
+                                      let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                                DispatchQueue.main.async {
+                                    editorCore.openFile(from: url)
+                                }
+                            }
+                        }
+                    }
+                    return true
+                }
             }
             
             if showTerminal {
