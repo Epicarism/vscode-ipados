@@ -132,7 +132,7 @@ typealias GitStatusEntry = GitFileChange
 // MARK: - Git Manager
 
 @MainActor
-class GitManager: ObservableObject {
+final class GitManager: ObservableObject {
     static let shared = GitManager()
     
     // MARK: - Published State

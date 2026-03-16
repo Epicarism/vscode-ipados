@@ -66,7 +66,7 @@ enum ExtensionFilter: String, CaseIterable {
 // MARK: - Extension Manager
 
 @MainActor
-class ExtensionManager: ObservableObject {
+final class ExtensionManager: ObservableObject {
     static let shared = ExtensionManager()
     
     @Published var installedExtensions: [IDEExtension] = []

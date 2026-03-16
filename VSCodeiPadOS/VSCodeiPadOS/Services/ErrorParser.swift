@@ -1093,14 +1093,15 @@ extension ErrorParser {
     
     /// Test all parsers with new ParsedError format
     static func runParsedErrorTests() -> [String: [ParsedError]] {
+        let parser = ErrorParser()
         return [
-            "Python": parsePythonError(output: samplePythonError),
-            "Node.js": parseNodeError(output: sampleNodeJSError),
-            "Swift": parseSwiftError(output: sampleSwiftError),
-            "Go": parseGoErrorsToParsedErrors(sampleGoError),
-            "Ruby": parseRubyErrorsToParsedErrors(sampleRubyError),
-            "GCC": parseGccError(output: sampleGCCError),
-            "Rust": parseRustError(output: sampleRustError)
+            "Python": parser.parseErrorsToParsedErrors(from: samplePythonError, language: .python),
+            "Node.js": parser.parseErrorsToParsedErrors(from: sampleNodeJSError, language: .nodeJS),
+            "Swift": parser.parseErrorsToParsedErrors(from: sampleSwiftError, language: .swift),
+            "Go": parser.parseErrorsToParsedErrors(from: sampleGoError, language: .go),
+            "Ruby": parser.parseErrorsToParsedErrors(from: sampleRubyError, language: .ruby),
+            "GCC": parser.parseErrorsToParsedErrors(from: sampleGCCError, language: .gcc),
+            "Rust": parser.parseErrorsToParsedErrors(from: sampleRustError, language: .rust)
         ]
     }
     

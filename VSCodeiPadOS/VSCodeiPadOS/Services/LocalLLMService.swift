@@ -38,7 +38,7 @@ typealias MLXChatSession = MLXLMCommon.ChatSession
 // MARK: - Local LLM Service
 
 @MainActor
-class LocalLLMService: ObservableObject {
+final class LocalLLMService: ObservableObject {
     static let shared = LocalLLMService()
     
     private let logger = Logger(

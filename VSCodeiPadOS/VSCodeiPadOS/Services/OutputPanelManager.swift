@@ -76,7 +76,7 @@ struct RemoteExecutionStatus {
 
 /// Manages output panel state and content for multiple channels
 @MainActor
-class OutputPanelManager: ObservableObject {
+final class OutputPanelManager: ObservableObject {
     static let shared = OutputPanelManager()
     
     // MARK: - Published Properties

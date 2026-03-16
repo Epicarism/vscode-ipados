@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension Color {
     init(hex: String) {
@@ -24,5 +25,30 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+// MARK: - Color to Hex String
+
+extension Color {
+    /// Convert a SwiftUI Color back to a hex string (e.g. "#FF5733")
+    func toHex() -> String? {
+        let uic = UIColor(self)
+        guard let components = uic.cgColor.components, components.count >= 3 else {
+            return nil
+        }
+        let r = Float(components[0])
+        let g = Float(components[1])
+        let b = Float(components[2])
+        var a = Float(1.0)
+        if components.count >= 4 {
+            a = Float(components[3])
+        }
+        
+        if a != 1.0 {
+            return String(format: "#%02lX%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255), lroundf(a * 255))
+        } else {
+            return String(format: "#%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
+        }
     }
 }

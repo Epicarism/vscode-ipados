@@ -88,7 +88,7 @@ struct NotificationAction: Identifiable, Equatable {
 // MARK: - Notification Manager
 
 @MainActor
-class NotificationManager: ObservableObject {
+final class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     
     /// Currently visible toast notifications (max 3 shown)

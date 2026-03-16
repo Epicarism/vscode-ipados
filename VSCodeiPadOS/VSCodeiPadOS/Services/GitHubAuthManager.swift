@@ -72,7 +72,7 @@ enum GitHubAuthError: Error, LocalizedError {
 // MARK: - GitHub Auth Manager
 
 @MainActor
-class GitHubAuthManager: ObservableObject {
+final class GitHubAuthManager: ObservableObject {
     static let shared = GitHubAuthManager()
     
     // ═══════════════════════════════════════════════════════════════════════════════

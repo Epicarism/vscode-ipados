@@ -130,7 +130,7 @@ enum RemoteSupportedLanguage: String, CaseIterable, Sendable {
 // MARK: - Remote Runner
 
 @MainActor
-class RemoteRunner: ObservableObject {
+final class RemoteRunner: ObservableObject {
     
     // MARK: - Published Properties
     

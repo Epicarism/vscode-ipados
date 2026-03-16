@@ -38,9 +38,9 @@
 - **File:** `Services/GitManager.swift`
 - **Status:** TODO
 
-### INFRA-001: Add CI/CD Pipeline
+### ~~INFRA-001: Add CI/CD Pipeline~~
 - **Description:** GitHub Actions for build, test, lint
-- **Status:** TODO
+- **Status:** ✅ DONE
 
 ---
 
@@ -106,3 +106,4 @@
 | Create BACKLOG.md, PROGRESS.md, AGENTS.md | Mar 16 | Claude Agent |
 | BUG-009: Wired syntax highlighter to ThemeManager colors | Mar 16 | Claude Agent |
 | POLISH: VoiceOver labels on TerminalView (8 buttons) + SearchView (4 hints) | Mar 16 | Claude Agent |
+| SECURITY: API keys migrated from UserDefaults to iOS Keychain | Mar 16 | Claude Agent |

@@ -131,7 +131,7 @@ enum ProgrammingLanguage: String, Codable, CaseIterable, Identifiable {
 // MARK: - View Model
 
 @MainActor
-class RunConfigViewModel: ObservableObject {
+final class RunConfigViewModel: ObservableObject {
     @Published var currentConfig: RunConfiguration
     @Published var savedPresets: [RunConfiguration] = []
     @Published var newArgText: String = ""
