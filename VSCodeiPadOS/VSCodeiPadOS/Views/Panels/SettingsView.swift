@@ -453,7 +453,7 @@ struct SettingsDetailView: View {
     private func shouldShow(category: SettingsView.SettingsCategory) -> Bool {
         if !searchText.isEmpty {
             if category == .editor {
-                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Line Numbers")
+                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Line Numbers") || matchesSearch("Trim Whitespace") || matchesSearch("Final Newline")
             }
             if category == .workbench {
                 return matchesSearch("Theme")
@@ -719,7 +719,7 @@ struct ConnectedModeSettingsSection: View {
 
 // MARK: - VS Code WebView (WKWebView with JS debugging)
 
-import WebKit
+// WebKit already imported at top of file
 
 class VSCodeWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var parent: VSCodeWebView
