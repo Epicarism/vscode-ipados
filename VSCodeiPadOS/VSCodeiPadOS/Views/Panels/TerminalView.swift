@@ -330,7 +330,7 @@ struct SingleTerminalView: View {
                     .foregroundColor(themeManager.currentTheme.editorForeground)
                     .accentColor(themeManager.currentTheme.cursor)
                     .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
+                    .autocorrectionDisabled()
                     .focused($isInputFocused)
                     .onSubmit { executeCommand() }
                     .padding(8)
@@ -801,7 +801,7 @@ struct SSHConnectionView: View {
                     
                     TextField("Host", text: $host)
                         .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
+                        .autocorrectionDisabled()
                         .keyboardType(.URL)
                     
                     TextField("Port", text: $port)
@@ -809,7 +809,7 @@ struct SSHConnectionView: View {
                     
                     TextField("Username", text: $username)
                         .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
+                        .autocorrectionDisabled()
                 }
                 
                 Section(header: Text("Authentication")) {

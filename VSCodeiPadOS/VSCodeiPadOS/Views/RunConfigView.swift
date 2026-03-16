@@ -558,7 +558,7 @@ struct RunConfigView: View {
             // Save new preset
             HStack {
                 TextField("Preset name", text: $viewModel.presetNameText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                 
                 Button(action: viewModel.savePreset) {
                     Label("Save", systemImage: "square.and.arrow.down")
@@ -586,7 +586,7 @@ struct RunConfigView: View {
             // Add new argument
             HStack {
                 TextField("Add argument...", text: $viewModel.newArgText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                 
                 Button(action: viewModel.addArgument) {
                     Image(systemName: "plus.circle.fill")
@@ -627,14 +627,14 @@ struct RunConfigView: View {
             // Add new env var
             HStack {
                 TextField("KEY", text: $viewModel.newEnvKey)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                     .frame(width: 120)
                 
                 Text("=")
                     .foregroundColor(.secondary)
                 
                 TextField("value", text: $viewModel.newEnvValue)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                 
                 Button(action: viewModel.addEnvironmentVariable) {
                     Image(systemName: "plus.circle.fill")
@@ -754,7 +754,7 @@ struct RunConfigView: View {
                 Spacer()
             }
             TextField("main", text: $viewModel.currentConfig.languageOptions.wasmFunction)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
             
             // Arguments
@@ -764,7 +764,7 @@ struct RunConfigView: View {
                 Spacer()
             }
             TextField("e.g., 5, 3, 2.5", text: $viewModel.currentConfig.languageOptions.wasmArgs)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
             
             Text("Supports integers and floating point numbers")
@@ -905,7 +905,7 @@ struct RemotePathPickerView: View {
                 Section(header: Text("Current Path")) {
                     HStack {
                         TextField("Path", text: $currentPath)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .textFieldStyle(.roundedBorder)
                             .font(.system(.body, design: .monospaced))
                         
                         Button(action: { goBack() }) {

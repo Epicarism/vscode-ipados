@@ -122,14 +122,14 @@ class LocalLLMService: ObservableObject {
         guard let url = Bundle.main.url(forResource: "LocalModels", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let config = try? JSONDecoder().decode(LocalModelsConfig.self, from: data) else {
-            print("[LocalLLM] Failed to load LocalModels.json, using defaults")
+            AppLogger.ai.error("Failed to load LocalModels.json, using defaults")
             setupDefaultModels()
             return
         }
         
         availableModels = config.models
         currentModelId = config.defaultModelId
-        print("[LocalLLM] Loaded \(config.models.count) models from config")
+        AppLogger.ai.info("Loaded \(config.models.count) models from config")
     }
     
     private func setupDefaultModels() {
@@ -322,13 +322,13 @@ class LocalLLMService: ObservableObject {
         // Fix non-standard tokenizer classes that swift-transformers doesn't recognize
         if tokenizerClass == "TokenizersBackend" {
             json["tokenizer_class"] = "PreTrainedTokenizerFast"
-            print("[LocalLLM] Patched tokenizer_class: \(tokenizerClass) -> PreTrainedTokenizerFast")
+            AppLogger.ai.info("Patched tokenizer_class: \(tokenizerClass) -> PreTrainedTokenizerFast")
             needsWrite = true
         }
         
         // Nanbeige: SIMPLE template - MLX Swift can't handle complex Jinja (namespace, slicing, etc)
         let isNanbeige = url.path.lowercased().contains("nanbeige")
-        print("[LocalLLM] patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
+        AppLogger.ai.debug("patchTokenizerConfig: path=\(url.path), isNanbeige=\(isNanbeige)")
         
         if isNanbeige {
             // Use standard ChatML format - proven to work with swift-jinja
@@ -342,10 +342,10 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
 {% endif %}
 """
             let existingTemplate = json["chat_template"] as? String
-            print("[LocalLLM] Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
+            AppLogger.ai.debug("Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
             
             json["chat_template"] = chatmlTemplate
-            print("[LocalLLM] Set Nanbeige to ChatML format")
+            AppLogger.ai.info("Set Nanbeige to ChatML format")
             needsWrite = true
         }
         
@@ -361,7 +361,7 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         modelConfig = nil
         isModelLoaded = false
         statusMessage = "Model not loaded"
-        print("[LocalLLM] Model unloaded")
+        AppLogger.ai.info("Model unloaded")
     }
     
     /// Clear all cached models to force re-download with fixed templates
@@ -374,11 +374,11 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
             do {
                 if FileManager.default.fileExists(atPath: hubCache.path) {
                     try FileManager.default.removeItem(at: hubCache)
-                    print("[LocalLLM] Cleared model cache at \(hubCache.path)")
+                    AppLogger.ai.info("Cleared model cache at \(hubCache.path)")
                     statusMessage = "Cache cleared - models will re-download"
                 }
             } catch {
-                print("[LocalLLM] Failed to clear cache: \(error)")
+                AppLogger.ai.error("Failed to clear cache: \(error)")
                 statusMessage = "Failed to clear cache"
             }
         }
@@ -514,13 +514,13 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
             } else {
                 // Model put EVERYTHING in <think> tags with no actual response
                 // Extract what's INSIDE the think tags as the response
-                print("[LocalLLM] ⚠️ Model output was entirely in <think> tags, extracting content...")
+                AppLogger.ai.warning("Model output was entirely in think tags, extracting content...")
                 let extractPattern = #"<think>([\s\S]*?)</think>"#
                 if let extractRegex = try? NSRegularExpression(pattern: extractPattern, options: []),
                    let match = extractRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                    let contentRange = Range(match.range(at: 1), in: text) {
                     result = String(text[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    print("[LocalLLM] Extracted \(result.count) chars from think block")
+                    AppLogger.ai.debug("Extracted \(result.count) chars from think block")
                 }
             }
         }

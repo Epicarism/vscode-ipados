@@ -128,7 +128,7 @@ class GitHubAuthManager: ObservableObject {
                 try await fetchUser(token: token)
             } catch {
                 // Token might be expired/revoked
-                print("[GitHubAuth] Failed to fetch user with stored token: \(error)")
+                AppLogger.git.error("Failed to fetch user with stored token: \(error)")
                 // Don't logout - token might still work for API calls
                 // User can manually logout if needed
             }
@@ -173,8 +173,8 @@ class GitHubAuthManager: ObservableObject {
             let deviceCode = try decoder.decode(DeviceCodeResponse.self, from: data)
             self.deviceCodeResponse = deviceCode
             
-            print("[GitHubAuth] Device code received. User code: \(deviceCode.userCode)")
-            print("[GitHubAuth] Verification URL: \(deviceCode.verificationUri)")
+            AppLogger.git.info("Device code received. User code: \(deviceCode.userCode)")
+            AppLogger.git.debug("Verification URL: \(deviceCode.verificationUri)")
             
             // Automatically open the verification URL in Safari
             if let verifyURL = URL(string: deviceCode.verificationUri) {
@@ -227,7 +227,7 @@ class GitHubAuthManager: ObservableObject {
                     
                     try? await fetchUser(token: token)
                     
-                    print("[GitHubAuth] Successfully authenticated!")
+                    AppLogger.git.info("Successfully authenticated!")
                     
                     // Notify other parts of the app
                     NotificationCenter.default.post(
@@ -355,7 +355,7 @@ class GitHubAuthManager: ObservableObject {
             userInfo: ["authenticated": false]
         )
         
-        print("[GitHubAuth] Logged out")
+        AppLogger.git.info("Logged out")
     }
     
     // MARK: - Cancel Login

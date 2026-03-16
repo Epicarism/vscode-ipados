@@ -13,7 +13,7 @@ struct GoToLineView: View {
                 
                 TextField("Line number", text: $lineNumberText)
                     .keyboardType(.numberPad)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
                 
                 HStack(spacing: 20) {

@@ -440,7 +440,7 @@ struct FindReplaceView: View {
                 
                 // Search field
                 TextField("Find", text: $viewModel.searchQuery)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .textFieldStyle(.roundedBorder)
                     .focused($searchFieldFocused)
                     .onSubmit {
                         viewModel.performSearch()
@@ -497,7 +497,7 @@ struct FindReplaceView: View {
                     
                     // Replace field
                     TextField("Replace", text: $viewModel.replaceQuery)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .textFieldStyle(.roundedBorder)
                     
                     // Replace buttons
                     Button("Replace", action: viewModel.replaceCurrent)

@@ -98,8 +98,8 @@ struct DebugConsoleView: View {
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundColor(theme.editorForeground)
                 .accentColor(theme.cursor)
-                .disableAutocorrection(true)
-                .autocapitalization(.none)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
                 .onSubmit {
                     submit()
                 }

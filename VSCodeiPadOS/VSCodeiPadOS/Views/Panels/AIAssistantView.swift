@@ -674,8 +674,8 @@ struct AISettingsView: View {
                         
                         SecureField("sk-...", text: $aiManager.openAIKey)
                             .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -688,8 +688,8 @@ struct AISettingsView: View {
                         
                         SecureField("sk-ant-...", text: $aiManager.anthropicKey)
                             .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -702,8 +702,8 @@ struct AISettingsView: View {
                         
                         SecureField("AIza...", text: $aiManager.googleKey)
                             .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -715,8 +715,8 @@ struct AISettingsView: View {
                         .foregroundColor(.secondary)
                         SecureField("sk-...", text: $aiManager.kimiKey)
                             .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -728,8 +728,8 @@ struct AISettingsView: View {
                         .foregroundColor(.secondary)
                         SecureField("...", text: $aiManager.glmKey)
                             .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                 }
                 
@@ -742,8 +742,8 @@ struct AISettingsView: View {
                         
                         TextField("http://localhost:11434", text: $aiManager.ollamaHost)
                             .textFieldStyle(.roundedBorder)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                     
                     Text("Run Ollama on your Mac and connect over WiFi")
@@ -761,9 +761,9 @@ struct AISettingsView: View {
                             get: { UserDefaults.standard.string(forKey: "hfToken") ?? "" },
                             set: { UserDefaults.standard.set($0, forKey: "hfToken") }
                         ))
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                         Text("Required for some gated models like Nanbeige2")
                             .font(.caption)
                             .foregroundColor(.secondary)

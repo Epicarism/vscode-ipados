@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os
 
 // MARK: - AI Provider Enum
 
@@ -403,15 +404,15 @@ class AIManager: ObservableObject {
                 (selectedModel.id.contains("0.6b") || selectedModel.id.contains("1.7b") || selectedModel.id.contains("3b") || selectedModel.id.contains("4b"))
             
             if let executor = toolExecutor {
-                print("[AIManager] sendMessage: attempting tool-aware request")
+                AppLogger.ai.debug("sendMessage: attempting tool-aware request")
                 do {
                     response = try await makeToolAwareRequest(messages: currentSession.messages, context: context, toolExecutor: executor)
-                    print("[AIManager] sendMessage: tool-aware response length=\(response.count)")
+                    AppLogger.ai.debug("sendMessage: tool-aware response length=\(response.count)")
                 } catch {
                     // Small local models are now allowed to use tools, but they can still fail.
                     // Fall back to plain local streaming instead of hard failing the request.
                     if selectedProvider == .localMLX && isSmallLocalModel {
-                        print("[AIManager] sendMessage: small local model tool path failed, falling back to no-tools streaming: \(error)")
+                        AppLogger.ai.error("sendMessage: small local model tool path failed, falling back to no-tools streaming: \(error)")
                         let localSystemOverride = buildSmallLocalNoToolsSystemPrompt(context: context)
                         response = try await callLocalMLXStreaming(
                             messages: currentSession.messages,
@@ -425,12 +426,12 @@ class AIManager: ObservableObject {
                 }
             } else if selectedProvider == .localMLX {
                 if isSmallLocalModel {
-                    print("[AIManager] sendMessage: small model detected, skipping tools")
+                    AppLogger.ai.debug("sendMessage: small model detected, skipping tools")
                 }
-                print("[AIManager] sendMessage: using LocalMLX streaming")
+                AppLogger.ai.debug("sendMessage: using LocalMLX streaming")
                 let localSystemOverride: String?
                 if isSmallLocalModel && toolExecutor != nil {
-                    print("[AIManager] sendMessage: small local model has tools disabled for stability; using explicit no-tools prompt")
+                    AppLogger.ai.debug("sendMessage: small local model has tools disabled for stability; using explicit no-tools prompt")
                     localSystemOverride = buildSmallLocalNoToolsSystemPrompt(context: context)
                 } else {
                     localSystemOverride = nil
@@ -444,7 +445,7 @@ class AIManager: ObservableObject {
             } else {
                 response = try await makeAPIRequest(messages: currentSession.messages, context: context, agentMode: false)
             }
-            print("[AIManager] sendMessage: final response length=\(response.count), preview='\(response.prefix(100))'")
+            AppLogger.ai.debug("sendMessage: final response length=\(response.count), preview='\(response.prefix(100))'")
             let assistantMessage = ChatMessage(role: .assistant, content: response, codeBlocks: extractCodeBlocks(from: response))
             currentSession.messages.append(assistantMessage)
             updateSession()
@@ -734,18 +735,18 @@ class AIManager: ObservableObject {
         let originalUserRequest = messages.last(where: { $0.role == .user })?.content ?? ""
         
         for _ in 0..<maxToolRounds {
-            print("[AIManager] callWithTextBasedTools: calling makeAPIRequest round...")
+            AppLogger.ai.debug("callWithTextBasedTools: calling makeAPIRequest round...")
             let response = try await makeAPIRequest(messages: conversationMessages, context: nil, agentMode: false, systemOverride: systemPrompt)
-            print("[AIManager] callWithTextBasedTools: got response length=\(response.count)")
-            print("[AIManager] callWithTextBasedTools: response preview='\(response.prefix(200))'...")
+            AppLogger.ai.debug("callWithTextBasedTools: got response length=\(response.count)")
+            AppLogger.ai.debug("callWithTextBasedTools: response preview='\(response.prefix(200))'...")
             
             // Parse tool calls using the universal parser
             let parsedTools = ToolCallParser.parse(response)
-            print("[AIManager] callWithTextBasedTools: parsed \(parsedTools.count) tool calls")
+            AppLogger.ai.debug("callWithTextBasedTools: parsed \(parsedTools.count) tool calls")
             
             if parsedTools.isEmpty {
                 // No tool calls found — return the response as-is
-                print("[AIManager] callWithTextBasedTools: no tools, returning response")
+                AppLogger.ai.debug("callWithTextBasedTools: no tools, returning response")
                 return response
             }
             
@@ -770,7 +771,7 @@ class AIManager: ObservableObject {
                     assistantToolResponse: response,
                     toolResults: toolResults
                 )
-                print("[AIManager] callWithTextBasedTools: local MLX finalization prompt length=\(toolResultsPrompt.count)")
+                AppLogger.ai.debug("callWithTextBasedTools: local MLX finalization prompt length=\(toolResultsPrompt.count)")
                 return try await makeAPIRequest(
                     messages: [ChatMessage(role: .user, content: toolResultsPrompt)],
                     context: nil,
@@ -1214,14 +1215,14 @@ Use the EXACT filename shown in the file list. Examples:
         
         // Auto-load model if not loaded (pass selected model ID from UI)
         if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
-            print("[AIManager] Loading local model: \(selectedModel.id)")
-            print("[AIManager] Available models: \(localLLM.availableModels.map { $0.id })")
+            AppLogger.ai.debug("Loading local model: \(selectedModel.id)")
+            AppLogger.ai.debug("Available models: \(localLLM.availableModels.map { $0.id })")
             await localLLM.loadModel(modelId: selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
             let errorMsg = "Failed to load local model '\(selectedModel.id)'. Status: \(localLLM.statusMessage)"
-            print("[AIManager] \(errorMsg)")
+            AppLogger.ai.error("\(errorMsg)")
             throw AIError.apiError(errorMsg)
         }
         
@@ -1233,10 +1234,10 @@ Use the EXACT filename shown in the file list. Examples:
         }
         
         do {
-            print("[AIManager] callLocalMLX: calling localLLM.chat()...")
+            AppLogger.ai.debug("callLocalMLX: calling localLLM.chat()...")
             let response = try await localLLM.chat(messages: chatMessages, systemPrompt: systemPrompt)
-            print("[AIManager] callLocalMLX: got response length=\(response.count)")
-            print("[AIManager] callLocalMLX: response='\(response.prefix(300))'...")
+            AppLogger.ai.debug("callLocalMLX: got response length=\(response.count)")
+            AppLogger.ai.debug("callLocalMLX: response='\(response.prefix(300))'...")
             
             // Update streamingResponse so UI shows something (even though not truly streaming)
             await MainActor.run {
@@ -1261,14 +1262,14 @@ Use the EXACT filename shown in the file list. Examples:
         
         // Auto-load model if not loaded (pass selected model ID from UI)
         if !localLLM.isModelLoaded || localLLM.currentModelId != selectedModel.id {
-            print("[AIManager] Loading local model (streaming): \(selectedModel.id)")
-            print("[AIManager] Available models: \(localLLM.availableModels.map { $0.id })")
+            AppLogger.ai.debug("Loading local model (streaming): \(selectedModel.id)")
+            AppLogger.ai.debug("Available models: \(localLLM.availableModels.map { $0.id })")
             await localLLM.loadModel(modelId: selectedModel.id)
         }
         
         guard localLLM.isModelLoaded else {
             let errorMsg = "Failed to load local model '\(selectedModel.id)'. Status: \(localLLM.statusMessage)"
-            print("[AIManager] \(errorMsg)")
+            AppLogger.ai.error("\(errorMsg)")
             throw AIError.apiError(errorMsg)
         }
         
@@ -1281,9 +1282,9 @@ Use the EXACT filename shown in the file list. Examples:
         
         do {
             // Use streaming chat
-            print("[AIManager] Creating chatStream for Local MLX...")
+            AppLogger.ai.debug("Creating chatStream for Local MLX...")
             let stream = localLLM.chatStream(messages: chatMessages, systemPrompt: systemPrompt)
-            print("[AIManager] chatStream created, starting iteration...")
+            AppLogger.ai.debug("chatStream created, starting iteration...")
             
             var fullResponse = ""
             // Incremental think-tag stripping state
@@ -1294,7 +1295,7 @@ Use the EXACT filename shown in the file list. Examples:
             for try await chunk in stream {
                 chunkCount += 1
                 if chunkCount <= 3 {
-                    print("[AIManager] Received chunk \(chunkCount): '\(chunk.prefix(30))'")
+                    AppLogger.ai.debug("Received chunk \(chunkCount): '\(chunk.prefix(30))'")
                 }
                 fullResponse += chunk
             
@@ -1360,13 +1361,13 @@ Use the EXACT filename shown in the file list. Examples:
                 }
             }
             
-            print("[AIManager] ✅ Stream complete: \(chunkCount) chunks, fullResponse=\(fullResponse.count) chars")
+            AppLogger.ai.debug("✅ Stream complete: \(chunkCount) chunks, fullResponse=\(fullResponse.count) chars")
             // Return the clean display text (what was streamed to the UI)
             let finalResponse = sanitizeLocalModelText(streamingResponse, fallbackRaw: fullResponse)
-            print("[AIManager] Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(streamingResponse.count) chars")
+            AppLogger.ai.debug("Returning: finalResponse=\(finalResponse.count) chars, streamingResponse=\(streamingResponse.count) chars")
             return finalResponse
         } catch {
-            print("[AIManager] ❌ LocalMLX streaming error: \(error)")
+            AppLogger.ai.error("❌ LocalMLX streaming error: \(error)")
             if isOutOfMemoryError(error) {
                 // Free memory for next attempt.
                 localLLM.unloadModel()

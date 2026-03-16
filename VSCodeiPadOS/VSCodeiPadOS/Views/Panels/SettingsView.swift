@@ -129,7 +129,7 @@ struct AddTunnelSheet: View {
                     
                     TextField("URL", text: $url, prompt: Text(selectedType.placeholder))
                         .textContentType(.URL)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                 }
                 
@@ -239,7 +239,7 @@ struct SettingsView: View {
                     }
                 }
                 .navigationTitle("Settings")
-                .listStyle(SidebarListStyle())
+                .listStyle(.sidebar)
                 
                 // Initial detail view
                 SettingsDetailView(category: .editor, searchText: searchText, themeManager: themeManager)
