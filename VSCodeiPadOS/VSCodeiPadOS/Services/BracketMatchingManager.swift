@@ -230,7 +230,6 @@ final class BracketMatchingManager: @unchecked Sendable {
     private func findOpeningBracket(in chars: [Character], from startIndex: Int, type: BracketType) -> Int? {
         var depth = 1
         var inString = false
-        var stringChar: Character = "\""
         
         // For backward search, we need a simpler approach since escape sequences are tricky
         // We'll do a basic scan that handles most common cases
@@ -244,7 +243,6 @@ final class BracketMatchingManager: @unchecked Sendable {
                     continue
                 }
                 inString = !inString
-                stringChar = char
                 continue
             }
             
