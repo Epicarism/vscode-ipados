@@ -574,7 +574,7 @@ extension TerminalTab: Equatable {}
     private var currentConfig: SSHConnectionConfig?
     private var commandHistory: [String] = []
     private var historyIndex = 0
-    private var currentDirectory: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    private var currentDirectory: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
     
     func clear() {
         output = []
@@ -758,7 +758,7 @@ extension TerminalTab: Equatable {}
                 } else if arg == ".." {
                     targetPath = currentDirectory.deletingLastPathComponent()
                 } else if arg == "~" {
-                    targetPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    targetPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
                 } else {
                     targetPath = currentDirectory.appendingPathComponent(arg)
                 }
@@ -784,7 +784,7 @@ extension TerminalTab: Equatable {}
             
         case "cd":
             guard parts.count > 1 else {
-                currentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                currentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
                 appendOutput(currentDirectory.path, type: .output)
                 return
             }
@@ -793,7 +793,7 @@ extension TerminalTab: Equatable {}
             if arg == ".." {
                 targetPath = currentDirectory.deletingLastPathComponent()
             } else if arg == "~" {
-                targetPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                targetPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
             } else if arg.hasPrefix("/") {
                 targetPath = URL(fileURLWithPath: arg)
             } else {

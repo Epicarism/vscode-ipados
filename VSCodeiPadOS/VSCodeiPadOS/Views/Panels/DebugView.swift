@@ -335,7 +335,7 @@ struct DebugView: View {
                     .padding(.leading, 12)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Watch: \(watch.expression), value: \(watch.value)")
-                    .swipeActions(edge: .trailing) {
+                    .contextMenu {
                         Button(role: .destructive) {
                             debugManager.removeWatchExpression(id: watch.id)
                         } label: {
@@ -368,20 +368,21 @@ struct DebugView: View {
                     .padding(.leading, 12)
                 }
                 
-                Button(action: { isAddingWatch = true }) {
-                    HStack {
-                        Image(systemName: "plus")
-                            .accessibilityHidden(true)
-                        Text("Add Expression")
+                if !isAddingWatch {
+                    Button(action: { isAddingWatch = true }) {
+                        HStack {
+                            Image(systemName: "plus")
+                                .accessibilityHidden(true)
+                            Text("Add Expression")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.vertical, 4)
+                        .padding(.leading, 12)
                     }
-                    .font(.caption)
-                    .foregroundColor(.blue)
-                    .padding(.vertical, 4)
-                    .padding(.leading, 12)
+                    .accessibilityLabel("Add watch expression")
+                    .accessibilityHint("Double tap to add a new watch expression")
                 }
-                .accessibilityLabel("Add watch expression")
-                .accessibilityHint("Double tap to add a new watch expression")
-                .opacity(isAddingWatch ? 0 : 1)
             }
         } label: {
             HStack {
