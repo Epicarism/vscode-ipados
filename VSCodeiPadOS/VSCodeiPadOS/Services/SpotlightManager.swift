@@ -5,7 +5,7 @@ import CoreSpotlight
 import UniformTypeIdentifiers
 
 /// Manages CoreSpotlight indexing for opened files
-class SpotlightManager {
+class SpotlightManager: @unchecked Sendable {
     static let shared = SpotlightManager()
     
     private let searchableIndex = CSSearchableIndex.default()

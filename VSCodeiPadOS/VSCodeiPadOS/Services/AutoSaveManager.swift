@@ -185,5 +185,5 @@ final class AutoSaveManager: ObservableObject {
 // MARK: - Notification Extension
 
 extension NSNotification.Name {
-    static let autoSaved = .autoSaved
+    static let autoSaved = NSNotification.Name("AutoSaveManager.autoSaved")
 }
