@@ -128,11 +128,8 @@ final class DebugManager: ObservableObject {
     /// Active JSRunner instance for the current debug session (used by console eval).
     private var activeJSRunner: JSRunner?
 
-    /// Tracks whether all breakpoints are globally disabled via toggleAllBreakpoints().
-    private var allBreakpointsDisabled: Bool = false
-
-    /// Backup of breakpoints when they are globally disabled.
-    private var disabledBreakpointsBackup: [String: Set<Int>] = [:]
+    /// Tracks whether all breakpoints are globally enabled/disabled via toggleAllBreakpoints().
+    @Published var allBreakpointsEnabled = true
 
     // MARK: - Convenience views of state (for UI plumbing)
 
@@ -193,9 +190,7 @@ final class DebugManager: ObservableObject {
                     let resultString = result.toString() ?? "undefined"
                     await MainActor.run { [weak self] in
                         guard let self else { return }
-                        if !resultString.isEmpty && resultString != "undefined" {
-                            self.consoleEntries.append(ConsoleEntry(message: resultString, kind: .output))
-                        }
+                        self.consoleEntries.append(ConsoleEntry(message: resultString, kind: .output))
                     }
                 } catch {
                     await MainActor.run { [weak self] in
@@ -204,7 +199,7 @@ final class DebugManager: ObservableObject {
                 }
             }
         case .stopped:
-            consoleEntries.append(ConsoleEntry(message: "No active debug session", kind: .warning))
+            consoleEntries.append(ConsoleEntry(message: "No active debug session", kind: .system))
         }
     }
     
@@ -294,6 +289,7 @@ final class DebugManager: ObservableObject {
     }
 
     func breakpoints(in file: String) -> [Breakpoint] {
+        guard allBreakpointsEnabled else { return [] }
         let fileId = canonicalFileId(file)
         let lines = breakpointsByFile[fileId] ?? []
         return lines.sorted().map { Breakpoint(file: fileId, line: $0) }
@@ -536,26 +532,12 @@ final class DebugManager: ObservableObject {
     }
 
     func toggleAllBreakpoints() {
-        if allBreakpoints.isEmpty {
-            return
-        }
-        if allBreakpointsDisabled {
-            // Re-enable: restore from backup
-            allBreakpointsDisabled = false
-            breakpointsByFile = disabledBreakpointsBackup
-            disabledBreakpointsBackup = [:]
-        } else {
-            // Disable: backup current breakpoints then clear
-            allBreakpointsDisabled = true
-            disabledBreakpointsBackup = breakpointsByFile
-            breakpointsByFile = [:]
-        }
+        allBreakpointsEnabled.toggle()
     }
 
     func removeAllBreakpoints() {
         breakpointsByFile = [:]
-        allBreakpointsDisabled = false
-        disabledBreakpointsBackup = [:]
+        allBreakpointsEnabled = true
     }
 
     func toggleBreakpoint(_ id: String) {

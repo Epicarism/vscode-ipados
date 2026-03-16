@@ -8,6 +8,93 @@ class KeyCommandController: UIViewController {
     
     override var canBecomeFirstResponder: Bool { true }
     
+    // When no child (e.g. editor text view) is first responder, this controller
+    // must claim first responder so that UIKeyCommand shortcuts (Cmd+Shift+P, etc.)
+    // work globally from any state — not just when the editor has focus.
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Listen for app foregrounding so we can reclaim first responder
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        // Reclaim first responder when keyboard hides (text view resigned first responder).
+        // This covers dismissing overlays like Command Palette, Quick Open, Find, etc.
+        // where the search TextField resigns and the keyboard disappears.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scheduleFirstResponderReclaim),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+        // Reclaim when any text view ends editing (covers UIKit text view dismissals)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scheduleFirstResponderReclaim),
+            name: UITextView.textDidEndEditingNotification,
+            object: nil
+        )
+        // Reclaim when any text field ends editing (covers SwiftUI TextField dismissals)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scheduleFirstResponderReclaim),
+            name: UITextField.textDidEndEditingNotification,
+            object: nil
+        )
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        reclaimFirstResponderIfNeeded()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Reclaim on layout changes — covers cases where SwiftUI restructuring
+        // (overlay dismissals, tab switches, panel toggles) leaves no first responder.
+        reclaimFirstResponderIfNeeded()
+    }
+    
+    /// Called when the app returns to foreground. Reclaim first responder
+    /// if no child view has taken it, so global shortcuts work immediately.
+    @objc private func appDidBecomeActive() {
+        reclaimFirstResponderIfNeeded()
+    }
+    
+    /// Called when keyboard hides or text editing ends. Delayed to let the
+    /// resign operation complete before we attempt to reclaim.
+    @objc private func scheduleFirstResponderReclaim() {
+        DispatchQueue.main.async { [weak self] in
+            self?.reclaimFirstResponderIfNeeded()
+        }
+    }
+    
+    /// Attempt to become first responder only if no descendant view is
+    /// already first responder. The editor text view naturally takes first
+    /// responder when tapped; when it resigns, we reclaim.
+    private func reclaimFirstResponderIfNeeded() {
+        guard !isFirstResponder else { return }
+        // Only claim if no descendant view currently holds first responder.
+        // Walk the view hierarchy (not just immediate subviews) since the editor
+        // text view may be nested several levels deep inside UIHostingController.
+        let childIsFirstResponder = containsFirstResponder(in: view)
+        if !childIsFirstResponder {
+            becomeFirstResponder()
+        }
+    }
+    
+    /// Recursively check if any subview in the hierarchy is first responder.
+    private func containsFirstResponder(in view: UIView) -> Bool {
+        if view.isFirstResponder { return true }
+        for subview in view.subviews {
+            if containsFirstResponder(in: subview) { return true }
+        }
+        return false
+    }
+    
     override var keyCommands: [UIKeyCommand]? {
         let defs: [(String, String, UIKeyModifierFlags, Selector)] = [
             // MARK: - General
@@ -148,6 +235,10 @@ struct KeyCommandBridge<Content: View>: UIViewControllerRepresentable {
             host.view.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor),
         ])
         host.didMove(toParent: controller)
+        // Become first responder immediately so global key commands work from launch
+        DispatchQueue.main.async {
+            controller.becomeFirstResponder()
+        }
         return controller
     }
     

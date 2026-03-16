@@ -23,6 +23,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
 struct PanelView: View {
     @Binding var isVisible: Bool
     @Binding var height: CGFloat
+    @FocusState.Binding var terminalFocused: Bool
     @State private var selectedTab: PanelTab = .terminal
     @State private var isMaximized: Bool = false
     @State private var previousHeight: CGFloat = 200
@@ -101,7 +102,7 @@ struct PanelView: View {
                 case .output:
                     OutputView()
                 case .terminal:
-                    TerminalView()
+                    TerminalView(terminalFocused: $terminalFocused)
                 case .debugConsole:
                     DebugConsoleView()
                 case .ports:
@@ -125,6 +126,23 @@ struct PanelView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToProblemsPanel)) { _ in
             selectedTab = .problems
+        }
+        .onChange(of: isVisible) { _, newValue in
+            if !newValue {
+                terminalFocused = false
+            }
+        }
+        .onChange(of: terminalFocused) { _, isFocused in
+            if isFocused {
+                // Force the editor to resign first responder so keyboard input
+                // goes exclusively to the terminal, not to both simultaneously.
+                DispatchQueue.main.async {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
+            }
         }
     }
 }

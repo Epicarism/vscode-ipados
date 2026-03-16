@@ -152,17 +152,17 @@ struct ViewMenuCommands: Commands {
             Button("Command Palette") {
                 NotificationCenter.default.post(name: .showCommandPalette, object: nil)
             }
-            // Shortcut Cmd+Shift+P handled by AppDelegate.buildMenu
+            .keyboardShortcut("p", modifiers: [.command, .shift])
             
             Button("Toggle Terminal") {
                 NotificationCenter.default.post(name: .toggleTerminal, object: nil)
             }
-            // Shortcut Cmd+J handled by AppDelegate.buildMenu
+            .keyboardShortcut("j", modifiers: .command)
             
             Button("AI Assistant") {
                 NotificationCenter.default.post(name: .showAIAssistant, object: nil)
             }
-            // Shortcut Cmd+Shift+A handled by AppDelegate.buildMenu
+            .keyboardShortcut("a", modifiers: [.command, .shift])
             
             Divider()
             

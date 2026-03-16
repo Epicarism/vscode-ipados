@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var aiPanelWidth: CGFloat = 400
     // sidebar tab now synced via editorCore.focusedSidebarTab (not local @State)
     @State private var pendingTrustURL: URL?
+    @FocusState private var isTerminalFocused: Bool
     @State private var windowTitle: String = "CodePad"
     
     @StateObject private var trustManager = WorkspaceTrustManager.shared
@@ -253,8 +254,9 @@ struct ContentView: View {
                     IDETabBar(editorCore: editorCore, theme: theme)
                     
                     if let tab = editorCore.activeTab {
-                        IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
+                        IDEEditorView(editorCore: editorCore, tab: tab, theme: theme, isTerminalFocused: Binding(get: { isTerminalFocused }, set: { isTerminalFocused = $0 }))
                             .id(tab.id)
+                            .allowsHitTesting(!isTerminalFocused)
                     } else {
                         IDEWelcomeView(editorCore: editorCore, showFolderPicker: $showingFolderPicker, theme: theme)
                     }
@@ -278,7 +280,21 @@ struct ContentView: View {
             }
             
             if showTerminal {
-                PanelView(isVisible: $showTerminal, height: $terminalHeight)
+                PanelView(isVisible: $showTerminal, height: $terminalHeight, terminalFocused: $isTerminalFocused)
+            }
+        }
+        .onChange(of: isTerminalFocused) { _, newValue in
+            if newValue {
+                // Terminal gained focus — resign any UIKit first responder (editor).
+                // Use async to let SwiftUI's own focus transition complete first,
+                // then resign lingering UIKit responders. The terminal's SwiftUI
+                // TextField will reclaim first responder on the next key event.
+                DispatchQueue.main.async {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
             }
         }
     }
@@ -591,6 +607,7 @@ struct IDEEditorView: View {
     @ObservedObject var editorCore: EditorCore
     let tab: Tab
     let theme: Theme
+    var isTerminalFocused: Binding<Bool>? = nil
     
     /// Feature flag for Runestone editor - uses centralized FeatureFlags
     private var useRunestoneEditor: Bool { FeatureFlags.useRunestoneEditor }
@@ -610,7 +627,7 @@ struct IDEEditorView: View {
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
-    // Code folding removed - will use VS Code tunnel for real folding
+    @ObservedObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
     
     // MARK: - Shared Autocomplete Handlers
@@ -649,7 +666,7 @@ struct IDEEditorView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
-                    // Simple line numbers gutter (folding/breakpoints removed)
+                    // Line numbers gutter with code folding indicators
                     if lineNumbersStyle != "off" {
                         LineNumbers(
                             totalLines: totalLines,
@@ -657,9 +674,11 @@ struct IDEEditorView: View {
                             scrollOffset: scrollOffset,
                             lineHeight: lineHeight,
                             requestedLineSelection: $requestedLineSelection,
-                            theme: theme
+                            theme: theme,
+                            foldingManager: foldingManager,
+                            filePath: tab.url?.path
                         )
-                        .frame(width: 44)
+                        .frame(width: 58)
                         .background(theme.sidebarBackground.opacity(0.5))
                     }
                     
@@ -675,7 +694,7 @@ struct IDEEditorView: View {
                                     currentLineNumber: $currentLineNumber,
                                     currentColumn: $currentColumn,
                                     cursorIndex: $cursorIndex,
-                                    isActive: true,
+                                    isActive: isTerminalFocused?.wrappedValue != true,
                                     fontSize: editorCore.editorFontSize,
                                     onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
                                     onDismissAutocomplete: { self.handleDismissAutocomplete() }
@@ -693,7 +712,7 @@ struct IDEEditorView: View {
                                     currentColumn: $currentColumn,
                                     cursorIndex: $cursorIndex,
                                     lineHeight: $lineHeight,
-                                    isActive: true,
+                                    isActive: isTerminalFocused?.wrappedValue != true,
                                     fontSize: editorCore.editorFontSize,
                                     requestedLineSelection: $requestedLineSelection,
                                     requestedCursorIndex: $requestedCursorIndex,
@@ -707,7 +726,7 @@ struct IDEEditorView: View {
                             editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
-                            // Folding removed - using VS Code tunnel for real folding
+                            foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
                         }
                         .onChange(of: cursorIndex) { _, newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
@@ -782,11 +801,11 @@ struct IDEEditorView: View {
         }
         .onAppear {
             text = tab.content
-            // Folding detection removed
+            foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
         }
         .onChange(of: tab.id) { _, _ in
             text = tab.content
-            // Folding detection removed
+            foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
         }
         .onChange(of: currentLineNumber) { _, line in
             editorCore.cursorPosition = CursorPosition(line: line, column: currentColumn)
@@ -814,7 +833,7 @@ struct IDEEditorView: View {
     // Autocomplete insertion is handled by AutocompleteManager.acceptSuggestion(...)
 }
 
-// MARK: - Line Numbers (Simple)
+// MARK: - Line Numbers with Code Folding
 
 struct LineNumbers: View {
     let totalLines: Int
@@ -823,29 +842,114 @@ struct LineNumbers: View {
     let lineHeight: CGFloat
     @Binding var requestedLineSelection: Int?
     let theme: Theme
+    var foldingManager: CodeFoldingManager? = nil
+    var filePath: String? = nil
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .trailing, spacing: 0) {
-                ForEach(0..<totalLines, id: \.self) { lineIndex in
-                    Text(displayText(for: lineIndex))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(lineIndex + 1 == currentLine ? theme.lineNumberActive : theme.lineNumber)
-                        .frame(height: lineHeight)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, 4)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            requestedLineSelection = lineIndex
-                        }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(visibleLineIndices, id: \.self) { lineIndex in
+                    lineRow(for: lineIndex)
                 }
             }
             .padding(.top, 8)
             .offset(y: -scrollOffset)
         }
         .scrollDisabled(true)
+    }
+
+    // Compute visible lines, skipping those hidden by folds
+    private var visibleLineIndices: [Int] {
+        var indices: [Int] = []
+        var skipUntil: Int? = nil
+        for i in 0..<totalLines {
+            if let skip = skipUntil {
+                if i <= skip {
+                    continue
+                } else {
+                    skipUntil = nil
+                }
+            }
+            indices.append(i)
+            // If this line starts a folded region, skip to endLine
+            if let fm = foldingManager, let region = fm.getRegion(at: i), region.isFolded {
+                skipUntil = region.endLine
+            }
+        }
+        return indices
+    }
+
+    @ViewBuilder
+    private func lineRow(for lineIndex: Int) -> some View {
+        let isFoldable = foldingManager?.isFoldable(line: lineIndex) ?? false
+        let isFolded = foldingManager?.isRegionFolded(at: lineIndex) ?? false
+        let foldType = foldingManager?.getRegion(at: lineIndex)?.type
+        let region = foldingManager?.getRegion(at: lineIndex)
+
+        HStack(spacing: 0) {
+            // Fold indicator button
+            if isFoldable {
+                Button(action: {
+                    foldingManager?.toggleFold(at: lineIndex)
+                }) {
+                    ZStack {
+                        if let type = foldType {
+                            Text(type.icon)
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(.blue.opacity(0.6))
+                        }
+                        Image(systemName: isFolded ? "chevron.right" : "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(.primary.opacity(0.6))
+                    }
+                    .frame(width: 16, height: lineHeight)
+                    .background(isFolded ? Color.secondary.opacity(0.15) : Color.clear)
+                    .cornerRadius(3)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                Color.clear
+                    .frame(width: 16, height: lineHeight)
+            }
+
+            // Folded placeholder line showing "..." when region is collapsed
+            if isFolded, let region = region {
+                HStack(spacing: 4) {
+                    Text(displayText(for: lineIndex))
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(theme.lineNumberActive)
+                    Text("⋯")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
+                    if let label = region.label {
+                        Text(label)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer()
+                }
+                .frame(height: lineHeight)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    foldingManager?.toggleFold(at: lineIndex)
+                }
+            } else {
+                Text(displayText(for: lineIndex))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(lineIndex + 1 == currentLine ? theme.lineNumberActive : theme.lineNumber)
+                    .frame(height: lineHeight)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        requestedLineSelection = lineIndex
+                    }
+            }
+        }
     }
 
     private func displayText(for lineIndex: Int) -> String {

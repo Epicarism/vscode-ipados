@@ -10,6 +10,8 @@ struct SidebarView: View {
     @Binding var showTerminal: Bool
     @Binding var showFolderPicker: Bool
     var theme: Theme = ThemeManager.shared.currentTheme
+    @State private var showCommitAlert: Bool = false
+    @State private var commitMessage: String = ""
     
     var body: some View {
         HStack(spacing: 0) {
@@ -57,8 +59,18 @@ struct SidebarView: View {
                 }
             }
         }
+        .alert("Commit Changes", isPresented: $showCommitAlert) {
+            TextField("Commit message", text: $commitMessage)
+            Button("Commit", role: nil) {
+                guard !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                Task { try? await GitManager.shared.commit(message: commitMessage) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enter a message for this commit.")
+        }
     }
-    
+
     // Dynamic Title based on selection
     private var sidebarTitle: String {
         switch selectedTab {
@@ -117,9 +129,60 @@ struct SidebarView: View {
                 .accessibilityHint("Double tap to collapse all expanded folders")
                 .help("Collapse All Folders")
             }
+        } else if selectedTab == 2 {
+            HStack(spacing: 12) {
+                Button(action: {
+                    Task { await GitManager.shared.refresh() }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .accessibilityLabel("Refresh Source Control")
+                .accessibilityHint("Double tap to refresh git status")
+                .help("Refresh")
+
+                Button(action: {
+                    commitMessage = ""
+                    showCommitAlert = true
+                }) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .accessibilityLabel("Commit Changes")
+                .accessibilityHint("Double tap to commit staged changes")
+                .help("Commit")
+
+                Menu {
+                    Button(action: {
+                        Task { try? await GitManager.shared.pull() }
+                    }) {
+                        Label("Pull", systemImage: "arrow.down.circle")
+                    }
+                    Button(action: {
+                        Task { try? await GitManager.shared.push() }
+                    }) {
+                        Label("Push", systemImage: "arrow.up.circle")
+                    }
+                    Divider()
+                    Button(action: {
+                        Task { try? await GitManager.shared.stashPush(message: nil) }
+                    }) {
+                        Label("Stash", systemImage: "tray.and.arrow.down")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .accessibilityLabel("More Source Control Actions")
+                .accessibilityHint("Double tap to see pull, push, and stash options")
+                .help("More Actions...")
+            }
         }
     }
-    
+
     // Content Switching
     @ViewBuilder
     private var sidebarContent: some View {

@@ -8,6 +8,7 @@ import Foundation
 struct TerminalView: View {
     @StateObject private var workspace = TerminalWorkspace.shared
     @ObservedObject private var themeManager = ThemeManager.shared
+    @FocusState.Binding var terminalFocused: Bool
     @State private var showConnectionSheet = false
 
     var body: some View {
@@ -140,7 +141,8 @@ struct TerminalView: View {
                             terminal: terminal,
                             isActive: true,
                             onActivate: { workspace.setActivePane(terminal.id, in: tab.id) },
-                            onKill: { workspace.killActive() }
+                            onKill: { workspace.killActive() },
+                            terminalFocused: $terminalFocused
                         )
                     } else {
                         HStack(spacing: 0) {
@@ -149,7 +151,8 @@ struct TerminalView: View {
                                     terminal: pane,
                                     isActive: tab.activePaneId == pane.id,
                                     onActivate: { workspace.setActivePane(pane.id, in: tab.id) },
-                                    onKill: { workspace.killActive() }
+                                    onKill: { workspace.killActive() },
+                                    terminalFocused: $terminalFocused
                                 )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -270,6 +273,7 @@ struct SingleTerminalView: View {
     var isActive: Bool
     var onActivate: () -> Void
     var onKill: () -> Void
+    @FocusState.Binding var terminalFocused: Bool
 
     @ObservedObject private var themeManager = ThemeManager.shared
     @FocusState private var isInputFocused: Bool
@@ -330,7 +334,14 @@ struct SingleTerminalView: View {
             }
             .onTapGesture {
                 onActivate()
-                isInputFocused = true
+                terminalFocused = true
+                // Force the editor to resign first responder on tap
+                DispatchQueue.main.async {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
             }
 
             // Input Area
@@ -378,7 +389,25 @@ struct SingleTerminalView: View {
         )
         .onAppear {
             if isActive {
-                isInputFocused = true
+                terminalFocused = true
+            }
+        }
+        .onChange(of: isInputFocused) { _, newValue in
+            if newValue {
+                terminalFocused = true
+                // Force the editor to resign first responder so keyboard input
+                // goes exclusively to the terminal.
+                DispatchQueue.main.async {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
+                }
+            }
+        }
+        .onChange(of: terminalFocused) { _, newValue in
+            if !newValue {
+                isInputFocused = false
             }
         }
     }
