@@ -109,12 +109,13 @@ struct GitView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(canCommit ? Color.accentColor : Color.gray.opacity(0.3))
-                        .foregroundColor(.white)
+                        .background(canCommit && !isOperationInProgress ? Color.accentColor : Color.gray.opacity(0.3))
+                        .foregroundColor(canCommit ? theme.editorBackground : theme.editorForeground.opacity(0.5))
                         .cornerRadius(6)
                     }
-                    .disabled(!canCommit)
+                    .disabled(!canCommit || isOperationInProgress)
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: .command)
                     
                     Menu {
                         Button(action: { stageAll() }) {
@@ -234,6 +235,7 @@ struct GitView: View {
                 }
                 .font(.system(size: 11))
                 .buttonStyle(.plain)
+                .disabled(isOperationInProgress)
                 
                 Button(action: pushChanges) {
                     HStack(spacing: 4) {
@@ -247,12 +249,14 @@ struct GitView: View {
                 }
                 .font(.system(size: 11))
                 .buttonStyle(.plain)
+                .disabled(isOperationInProgress)
                 
                 Button(action: fetchChanges) {
                     Image(systemName: "arrow.triangle.2.circlepath")
                 }
                 .font(.system(size: 11))
                 .buttonStyle(.plain)
+                .disabled(isOperationInProgress)
                 
                 Spacer()
             }
@@ -496,6 +500,8 @@ struct BranchPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var newBranchName = ""
     @State private var showCreateBranch = false
+    @State private var branchError: String?
+    @State private var showBranchError = false
     
     var localBranches: [GitBranch] {
         gitManager.branches.filter { !$0.isRemote }
@@ -568,17 +574,23 @@ struct BranchPickerSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-        }
+            .alert("Branch Error", isPresented: $showBranchError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(branchError ?? "An unknown error occurred")
+            }
     }
     
     private func checkout(_ branch: String) {
         Task {
             do {
                 try await gitManager.checkout(branch: branch)
+                await MainActor.run { dismiss() }
             } catch {
-                print("[GitView] Checkout failed: \(error.localizedDescription)")
-            }
-            await MainActor.run { dismiss() }
+                await MainActor.run {
+                    branchError = error.localizedDescription
+                    showBranchError = true
+                }
         }
     }
     
@@ -587,14 +599,16 @@ struct BranchPickerSheet: View {
         Task {
             do {
                 try await gitManager.createBranch(name: newBranchName)
+                await MainActor.run {
+                    newBranchName = ""
+                    showCreateBranch = false
+                    dismiss()
+                }
             } catch {
-                print("[GitView] Create branch failed: \(error.localizedDescription)")
-            }
-            await MainActor.run {
-                newBranchName = ""
-                showCreateBranch = false
-                dismiss()
-            }
+                await MainActor.run {
+                    branchError = error.localizedDescription
+                    showBranchError = true
+                }
         }
     }
 }
@@ -632,7 +646,7 @@ struct GitConfigSheet: View {
                         TextField("Email", text: $editingEmail)
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                     }
                 }

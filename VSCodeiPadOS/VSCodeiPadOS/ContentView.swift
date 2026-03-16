@@ -21,7 +21,7 @@ struct ContentView: View {
     // sidebar tab now synced via editorCore.focusedSidebarTab (not local @State)
     @State private var pendingTrustURL: URL?
     @FocusState private var isTerminalFocused: Bool
-    @State private var windowTitle: String = "CodePad"
+
     
     @StateObject private var trustManager = WorkspaceTrustManager.shared
     
@@ -385,24 +385,7 @@ struct ContentView: View {
         editorCore.saveWorkspaceBookmark(url)
     }
     
-    private func updateWindowTitle() {
-        if let activeTab = editorCore.activeTab {
-            let fileName = activeTab.fileName
-            let unsavedIndicator = activeTab.isUnsaved ? "● " : ""
-            windowTitle = "\(unsavedIndicator)\(fileName) - CodePad"
-        } else if !editorCore.tabs.isEmpty {
-            windowTitle = "CodePad"
-        } else {
-            windowTitle = "Welcome - CodePad"
-        }
-        
-        // Notify the app of the title change
-        NotificationCenter.default.post(
-            name: .windowTitleDidChange,
-            object: nil,
-            userInfo: ["title": windowTitle]
-        )
-    }
+
     
     @ViewBuilder
     private var sidebarContent: some View {
@@ -414,10 +397,9 @@ struct ContentView: View {
                 SearchView(
                     onResultSelected: { filePath, lineNumber in
                         // Open file and go to line
-                        if let url = URL(fileURLWithPath: filePath) as URL? {
-                            editorCore.openFile(from: url)
-                            editorCore.requestedGoToLine = lineNumber
-                        }
+                        let url = URL(fileURLWithPath: filePath)
+                        editorCore.openFile(from: url)
+                        editorCore.requestedGoToLine = lineNumber
                     },
                     rootURL: rootURL
                 )
@@ -1293,79 +1275,7 @@ struct IDESaveAsPicker: UIViewControllerRepresentable {
 }
 
 
-// MARK: - Local Code Execution
 
-extension ContentView {
-    /// Run the bundled test.wasm sample
-    func runSampleWASM() async {
-        // Find the bundled test.wasm
-        guard let wasmURL = Bundle.main.url(forResource: "test", withExtension: "wasm") else {
-            await MainActor.run {
-                showTerminal = true
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: test.wasm not found in bundle\n"])
-            }
-            return
-        }
-        
-        await MainActor.run {
-            showTerminal = true
-            NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
-            NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "▶ Running bundled WASM: test.wasm\n─────────────────────────────────────\n"])
-        }
-        
-        do {
-            let config = WASMConfiguration.default
-            let runner = try WASMRunner(configuration: config)
-            
-            try await runner.load(from: wasmURL)
-            await MainActor.run {
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "✓ Module loaded\n"])
-            }
-            
-            // Call main() which returns 42
-            let result = try await runner.execute(function: "main", args: [])
-            
-            await MainActor.run {
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
-            }
-            
-            await runner.unload()
-        } catch {
-            await MainActor.run {
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
-            }
-        }
-    }
-    
-    /// Run JavaScript code using JSRunner
-    func runJavaScript(code: String, fileName: String) async {
-        await MainActor.run {
-            showTerminal = true
-            NotificationCenter.default.post(name: .switchToOutputPanel, object: nil)
-            NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "▶ Running JavaScript: \(fileName)\n─────────────────────────────────────\n"])
-        }
-        
-        let runner = JSRunner()
-        
-        // Capture console output
-        runner.setConsoleHandler { message in
-            Task { @MainActor in
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "\(message)\n"])
-            }
-        }
-        
-        do {
-            let result = try await runner.execute(code: code)
-            await MainActor.run {
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "─────────────────────────────────────\n⮐ Result: \(result)\n✓ Completed\n"])
-            }
-        } catch {
-            await MainActor.run {
-                NotificationCenter.default.post(name: .appendOutput, object: nil, userInfo: ["text": "❌ Error: \(error.localizedDescription)\n"])
-            }
-        }
-    }
-}
 
 // MARK: - Preview
 
