@@ -123,10 +123,10 @@ struct ContentView: View {
         func body(content: Content) -> some View {
             content
                 .onChange(of: editorCore.showFilePicker) { _, show in showingDocumentPicker = show }
-                .onChange(of: editorCore.activeTab?.fileName) { _ in updateTitle() }
-                .onChange(of: editorCore.tabs.count) { _ in updateTitle() }
-                .onChange(of: editorCore.activeTabId) { _ in updateTitle() }
-                .onChange(of: editorCore.activeTab?.isUnsaved) { _ in updateTitle() }
+                .onChange(of: editorCore.activeTab?.fileName) { _, _ in updateTitle() }
+                .onChange(of: editorCore.tabs.count) { _, _ in updateTitle() }
+                .onChange(of: editorCore.activeTabId) { _, _ in updateTitle() }
+                .onChange(of: editorCore.activeTab?.isUnsaved) { _, _ in updateTitle() }
                 .onAppear {
                     editorCore.fileNavigator = fileNavigator
                     updateTitle()
@@ -144,7 +144,7 @@ struct ContentView: View {
                         if accessing { url.stopAccessingSecurityScopedResource() }
                     }
                 }
-                .onChange(of: editorCore.tabs.map { $0.id }) { _ in
+                .onChange(of: editorCore.tabs.map { $0.id }) { _, _ in
                     editorCore.saveOpenTabPaths()
                 }
         }
@@ -784,7 +784,7 @@ struct IDEEditorView: View {
             text = tab.content
             // Folding detection removed
         }
-        .onChange(of: tab.id) { _ in
+        .onChange(of: tab.id) { _, _ in
             text = tab.content
             // Folding detection removed
         }

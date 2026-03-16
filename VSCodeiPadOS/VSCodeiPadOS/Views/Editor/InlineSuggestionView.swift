@@ -84,10 +84,10 @@ struct InlineSuggestionView: View {
         .onAppear {
             updateVisibility()
         }
-        .onChange(of: ghostText) { _ in
+        .onChange(of: ghostText) { _, _ in
             updateVisibility()
         }
-        .onChange(of: suggestionManager.currentSuggestion) { _ in
+        .onChange(of: suggestionManager.currentSuggestion) { _, _ in
             updateVisibility()
         }
     }

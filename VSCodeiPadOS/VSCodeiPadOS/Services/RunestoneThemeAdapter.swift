@@ -13,7 +13,7 @@ import Runestone
 
 /// A Runestone Theme implementation that adapts our app's Theme struct
 /// to Runestone's expected theme protocol for syntax highlighting.
-final class VSCodeRunestoneTheme: Runestone.Theme {
+@MainActor final class VSCodeRunestoneTheme: Runestone.Theme {
     
     // MARK: - Properties
     

@@ -739,7 +739,7 @@ struct GoToDefinitionPicker: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .onChange(of: selectedIndex) { newIndex in
+                .onChange(of: selectedIndex) { _, newIndex in
                     withAnimation(.easeInOut(duration: 0.1)) {
                         proxy.scrollTo(newIndex, anchor: .center)
                     }

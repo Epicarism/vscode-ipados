@@ -614,13 +614,14 @@ final class TasksManager: ObservableObject {
 
         isRunning = true
         runningTaskLabel = task.label
+        let rootURL = workspaceRootURL
 
         // Perform in the background.
         DispatchQueue.global(qos: .userInitiated).async {
             let start = Date()
 
             do {
-                try Self.runWithProcess(task: task, workspaceRootURL: self.workspaceRootURL) { chunk in
+                try Self.runWithProcess(task: task, workspaceRootURL: rootURL) { chunk in
                     Task { @MainActor in
                         TaskOutputPanelManager.shared.append(chunk, to: .tasks)
                     }

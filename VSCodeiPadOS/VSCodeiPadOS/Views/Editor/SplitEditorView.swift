@@ -592,10 +592,10 @@ struct PaneEditorView: View {
                     editorCore: editorCore,
                     requestedLineSelection: $requestedLineSelection
                 )
-                .onChange(of: text) { newValue in
+                .onChange(of: text) { _, newValue in
                     pane.updateTabContent(newValue)
                 }
-                .onChange(of: scrollOffset) { newOffset in
+                .onChange(of: scrollOffset) { _, newOffset in
                     // Track latest scroll offset for this pane, and sync if enabled.
                     if abs(pane.scrollOffset - newOffset) > 0.5 {
                         pane.scrollOffset = newOffset
