@@ -66,6 +66,11 @@
 | 53 | 14 new file type UTIs for broader document support | `Info.plist` |
 | 54 | Memory leak fixes: weak delegate, dismantleUIView, [weak self] closures | `RunnerSelector.swift`, `SettingsView.swift`, `FileSystemNavigator.swift` |
 | 55 | Polished empty states for SearchView and GitView | `SearchView.swift`, `GitView.swift` |
+| 56 | CrashReporter utility (catches uncaught exceptions, persists logs) | `AppLogger.swift`, `AppDelegate.swift` |
+| 57 | AI rate limiting (2-second debounce between API calls) | `AIManager.swift` |
+| 58 | About screen with app info, version, features list | `AboutView.swift` |
+| 59 | Status bar version indicator | `StatusBarView.swift` |
+| 60 | WelcomeView CodePad branding + version badge | `WelcomeView.swift` |
 
 ---
 
