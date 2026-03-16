@@ -499,11 +499,15 @@ struct DebugView: View {
             .padding(.vertical, 4)
     }
     
-    private func convertToDebugVariable(_ variable: DebugManager.Variable) -> DebugVariable {
-        DebugVariable(
+    private func convertToDebugVariable(_ variable: DebugManager.Variable, depth: Int = 0) -> DebugVariable {
+        let childDepth = depth + 1
+        let convertedChildren: [DebugVariable]? = (variable.children.isEmpty || depth >= 10)
+            ? nil
+            : variable.children.map { convertToDebugVariable($0, depth: childDepth) }
+        return DebugVariable(
             name: variable.name,
             value: variable.value,
-            children: variable.children.isEmpty ? nil : variable.children.map { convertToDebugVariable($0) }
+            children: convertedChildren
         )
     }
     
@@ -632,7 +636,7 @@ struct DebugToolbarButton: View {
 struct VariableRow: View {
     let variable: DebugVariable
     let theme: Theme
-    @State private var isExpanded: Bool = false
+    var depth: Int = 0
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -671,9 +675,9 @@ struct VariableRow: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("\(variable.name): \(variable.value)")
             
-            if isExpanded, let children = variable.children {
+            if isExpanded, let children = variable.children, depth < 10 {
                 ForEach(children) { child in
-                    VariableRow(variable: child, theme: theme)
+                    VariableRow(variable: child, theme: theme, depth: depth + 1)
                         .padding(.leading, 16)
                 }
             }
