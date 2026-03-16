@@ -793,8 +793,7 @@ class ErrorHighlighter {
         highlightViews.removeAll()
         
         // Reset text view attributes if applicable
-        if let textView = view as? UITextView {
-            let text = textView.text
+        if let textView = view as? UITextView, let text = textView.text {
             textView.attributedText = NSAttributedString(string: text)
         }
     }
@@ -802,10 +801,9 @@ class ErrorHighlighter {
     // MARK: - Private Methods
     
     private func highlightInTextView(_ textView: UITextView, errors: [ErrorLocation]) {
-        guard !errors.isEmpty else { return }
+        guard !errors.isEmpty, let text = textView.text else { return }
         
-        let attributedText = NSMutableAttributedString(string: textView.text)
-        let text = textView.text
+        let attributedText = NSMutableAttributedString(string: text)
         
         // Set default attributes
         let fullRange = NSRange(location: 0, length: text.count)
