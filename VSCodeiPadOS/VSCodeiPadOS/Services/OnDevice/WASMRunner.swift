@@ -50,7 +50,7 @@ public enum WASMError: Error, LocalizedError {
 // MARK: - Configuration
 
 /// Configuration for WASM execution environment
-public struct WASMConfiguration {
+public struct WASMConfiguration: Sendable {
     /// Memory limit in bytes (default: 128 MB)
     public var memoryLimit: UInt64
     
@@ -511,9 +511,7 @@ public final class WASMRunner: NSObject {
     }
     
     deinit {
-        Task { @MainActor in
-            destroy()
-        }
+        // Note: cleanup handled by ARC
     }
     
     // MARK: - Private Helpers

@@ -184,7 +184,7 @@ public actor CodeAnalyzer {
     // MARK: - Initialization
     
     private init() {
-        initializePatterns()
+        Task { await self.initializePatterns() }
     }
     
     // MARK: - Public API

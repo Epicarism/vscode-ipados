@@ -31,13 +31,15 @@ final class NSAttributedStringSyntaxHighlighter {
     // MARK: - Colors
 
     private struct ColorScheme {
-        static let keyword = UIColor.systemBlue
-        static let type = UIColor.systemCyan
-        static let string = UIColor.systemOrange
-        static let comment = UIColor.systemGray
-        static let number = UIColor.systemGreen
-        static let function = UIColor.systemYellow
-        static let defaultText = UIColor.label
+        // Theme-aware colors: read from ThemeManager at call time
+        // so syntax highlighting always matches the active theme.
+        static var keyword: UIColor { UIColor(ThemeManager.shared.currentTheme.keyword) }
+        static var type: UIColor { UIColor(ThemeManager.shared.currentTheme.type) }
+        static var string: UIColor { UIColor(ThemeManager.shared.currentTheme.string) }
+        static var comment: UIColor { UIColor(ThemeManager.shared.currentTheme.comment) }
+        static var number: UIColor { UIColor(ThemeManager.shared.currentTheme.number) }
+        static var function: UIColor { UIColor(ThemeManager.shared.currentTheme.function) }
+        static var defaultText: UIColor { UIColor(ThemeManager.shared.currentTheme.editorForeground) }
     }
 
     // MARK: - Public API

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Python-specific runner for executing Python code via SSH
-struct PythonRunner: Runner {
+class PythonRunner: Runner {
     let name = "Python"
     let supportedExtensions = ["py", "pyw", "pyi"]
     let languageId = "python"
