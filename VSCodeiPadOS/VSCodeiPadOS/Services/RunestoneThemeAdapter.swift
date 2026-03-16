@@ -13,7 +13,7 @@ import Runestone
 
 /// A Runestone Theme implementation that adapts our app's Theme struct
 /// to Runestone's expected theme protocol for syntax highlighting.
-@MainActor final class VSCodeRunestoneTheme: Runestone.Theme {
+final class VSCodeRunestoneTheme: Runestone.Theme {
     
     // MARK: - Properties
     
@@ -39,7 +39,7 @@ import Runestone
     }
     
     var gutterHairlineWidth: CGFloat {
-        1.0 / UIScreen.main.scale
+        1.0 / 3.0  // Approximate retina scale without MainActor UIScreen access
     }
     
     var lineNumberColor: UIColor {

@@ -246,28 +246,23 @@ class EditorCore: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            let clearFlag = notification.userInfo?["clear"] as? Bool
-            let diagnosticItems = notification.userInfo?["diagnostics"] as? [[String: Any]]
-            let singleItem = notification.userInfo as? [String: Any]
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if let clear = clearFlag, clear {
-                    self.diagnosticErrorCount = 0
-                    self.diagnosticWarningCount = 0
-                } else if let items = diagnosticItems {
-                    let diagnostics = items.compactMap { DiagnosticItem(userInfo: $0) }
-                    self.diagnosticErrorCount = diagnostics.filter { $0.severity == .error }.count
-                    self.diagnosticWarningCount = diagnostics.filter { $0.severity == .warning }.count
-                } else if let item = singleItem, item["message"] != nil {
-                    // Single diagnostic appended — recalculate would need full list,
-                    // so just increment based on severity
-                    if let severityRaw = item["severity"] as? String,
-                       let severity = DiagnosticSeverity(rawValue: severityRaw) {
-                        switch severity {
-                        case .error: self.diagnosticErrorCount += 1
-                        case .warning: self.diagnosticWarningCount += 1
-                        case .info: break
-                        }
+            guard let self else { return }
+            let userInfo = notification.userInfo
+            if let clear = userInfo?["clear"] as? Bool, clear {
+                self.diagnosticErrorCount = 0
+                self.diagnosticWarningCount = 0
+            } else if let items = userInfo?["diagnostics"] as? [[String: Any]] {
+                let diagnostics = items.compactMap { DiagnosticItem(userInfo: $0) }
+                self.diagnosticErrorCount = diagnostics.filter { $0.severity == .error }.count
+                self.diagnosticWarningCount = diagnostics.filter { $0.severity == .warning }.count
+            } else if let item = userInfo as? [String: Any], item["message"] != nil {
+                // Single diagnostic appended — increment based on severity
+                if let severityRaw = item["severity"] as? String,
+                   let severity = DiagnosticSeverity(rawValue: severityRaw) {
+                    switch severity {
+                    case .error: self.diagnosticErrorCount += 1
+                    case .warning: self.diagnosticWarningCount += 1
+                    case .info: break
                     }
                 }
             }
