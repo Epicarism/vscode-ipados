@@ -132,7 +132,18 @@ struct DebugView: View {
             .accessibilityLabel("Start debugging")
             .accessibilityHint("Double tap to start or continue debugging")
             
-            Button(action: {}) {
+            Menu {
+                Button(action: { debugManager.removeAllBreakpoints() }) {
+                    Label("Clear All Breakpoints", systemImage: "xmark.circle")
+                }
+                Button(action: { debugManager.toggleAllBreakpoints() }) {
+                    Label(allBreakpointsEnabled ? "Disable All Breakpoints" : "Enable All Breakpoints", systemImage: allBreakpointsEnabled ? "circle.slash" : "circle")
+                }
+                Divider()
+                Button(action: { debugManager.play() }) {
+                    Label("Exception Breakpoints", systemImage: "bolt.trianglefilled")
+                }
+            } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)

@@ -27,7 +27,33 @@ struct TestView: View {
                 .accessibilityHint("Double tap to scan workspace for test functions")
                 .buttonStyle(PlainButtonStyle())
 
-                Button(action: {}) {
+                Menu {
+                    Button(action: {
+                        testSuites = testSuites.sorted { $0.name < $1.name }
+                    }) {
+                        Label("Sort by Name", systemImage: "textformat.abc")
+                    }
+                    Button(action: {
+                        for i in testSuites.indices {
+                            testSuites[i].tests.removeAll { $0.status == .success }
+                        }
+                    }) {
+                        Label("Show Passed", systemImage: "checkmark.circle")
+                    }
+                    Button(action: {
+                        for i in testSuites.indices {
+                            testSuites[i].tests.removeAll { $0.status == .failure }
+                        }
+                    }) {
+                        Label("Show Failed", systemImage: "xmark.circle")
+                    }
+                    Divider()
+                    Button(action: {
+                        scanWorkspaceForTests()
+                    }) {
+                        Label("Collapse All", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)

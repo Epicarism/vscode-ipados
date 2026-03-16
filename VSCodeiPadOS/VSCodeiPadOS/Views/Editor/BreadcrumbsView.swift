@@ -40,7 +40,16 @@ struct BreadcrumbsView: View {
                     .accessibilityLabel("Navigate to \(component)")
                     .accessibilityHint("Navigate to folder/file name")
                     .onTapGesture {
-                        // Handle navigation
+                        if isLast {
+                            return
+                        }
+                        let dirPath = "/" + pathComponents[...index].joined(separator: "/")
+                        UIPasteboard.general.string = dirPath
+                        NotificationCenter.default.post(
+                            name: Notification.Name("navigateToDirectory"),
+                            object: nil,
+                            userInfo: ["path": dirPath]
+                        )
                     }
                     
                     // Separator

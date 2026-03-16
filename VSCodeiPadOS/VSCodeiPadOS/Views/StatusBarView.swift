@@ -74,6 +74,7 @@ struct StatusBarView: View {
                 }
                 .accessibilityLabel("Git branch: \(git.currentBranch)")
                 .accessibilityHint("Double tap to show Git actions")
+                .accessibilityIdentifier("statusBar.branch")
             }
 
             // SSH Connection Status
@@ -87,29 +88,50 @@ struct StatusBarView: View {
             let errorCount = editorCore.diagnosticErrorCount
             let warningCount = editorCore.diagnosticWarningCount
 
-            StatusBarItem(
-                text: "\(errorCount)",
-                icon: "xmark.circle.fill",
-                theme: theme
-            ) {
-                editorCore.focusedView = .explorer
-                editorCore.focusedSidebarTab = 0
-                withAnimation { editorCore.showSidebar = true }
-            }
-            .accessibilityLabel("Errors, \(errorCount)")
-            .accessibilityHint("Double tap to view errors")
+            if errorCount == 0 && warningCount == 0 {
+                StatusBarItem(
+                    text: "",
+                    icon: "checkmark.circle.fill",
+                    theme: theme
+                ) {
+                    editorCore.focusedView = .explorer
+                    editorCore.focusedSidebarTab = 0
+                    withAnimation { editorCore.showSidebar = true }
+                }
+                .accessibilityLabel("No problems")
+                .accessibilityHint("Double tap to view problems panel")
+                .foregroundColor(.green)
+            } else {
+                if errorCount > 0 {
+                    StatusBarItem(
+                        text: "\(errorCount)",
+                        icon: "xmark.circle.fill",
+                        theme: theme
+                    ) {
+                        editorCore.focusedView = .explorer
+                        editorCore.focusedSidebarTab = 0
+                        withAnimation { editorCore.showSidebar = true }
+                    }
+                    .accessibilityLabel("Errors, \(errorCount)")
+                    .accessibilityHint("Double tap to view errors")
+                    .accessibilityIdentifier("statusBar.errors")
+                }
 
-            StatusBarItem(
-                text: "\(warningCount)",
-                icon: "exclamationmark.triangle.fill",
-                theme: theme
-            ) {
-                editorCore.focusedView = .explorer
-                editorCore.focusedSidebarTab = 0
-                withAnimation { editorCore.showSidebar = true }
+                if warningCount > 0 {
+                    StatusBarItem(
+                        text: "\(warningCount)",
+                        icon: "exclamationmark.triangle.fill",
+                        theme: theme
+                    ) {
+                        editorCore.focusedView = .explorer
+                        editorCore.focusedSidebarTab = 0
+                        withAnimation { editorCore.showSidebar = true }
+                    }
+                    .accessibilityLabel("Warnings, \(warningCount)")
+                    .accessibilityHint("Double tap to view warnings")
+                    .accessibilityIdentifier("statusBar.warnings")
+                }
             }
-            .accessibilityLabel("Warnings, \(warningCount)")
-            .accessibilityHint("Double tap to view warnings")
         }
     }
 
@@ -140,6 +162,7 @@ struct StatusBarView: View {
             }
             .accessibilityLabel("Line \(editorCore.cursorPosition.line + 1), Column \(editorCore.cursorPosition.column + 1)")
             .accessibilityHint("Double tap to go to line")
+            .accessibilityIdentifier("statusBar.cursorPosition")
 
             // Indentation (Spaces / Tab size)
             Menu {
@@ -168,6 +191,7 @@ struct StatusBarView: View {
             }
             .accessibilityLabel("File Encoding: \(encoding)")
             .accessibilityHint("Double tap to change file encoding")
+            .accessibilityIdentifier("statusBar.encoding")
 
             // EOL
             Menu {
@@ -202,6 +226,7 @@ struct StatusBarView: View {
                 }
                 .accessibilityLabel("Language Mode: \(tab.language.displayName)")
                 .accessibilityHint("Double tap to change language mode")
+                .accessibilityIdentifier("statusBar.language")
             }
 
             // Notification bell with unread badge
@@ -212,6 +237,7 @@ struct StatusBarView: View {
                 }
                 .accessibilityLabel("Notifications\(notifications.unreadCount > 0 ? ", \(notifications.unreadCount) unread" : "")")
                 .accessibilityHint("Double tap to show notifications")
+                .accessibilityIdentifier("statusBar.notifications")
                 if notifications.unreadCount > 0 {
                     Text("\(min(notifications.unreadCount, 99))")
                         .font(.system(size: 8, weight: .bold))

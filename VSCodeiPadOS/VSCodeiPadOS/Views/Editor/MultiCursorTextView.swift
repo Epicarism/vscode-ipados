@@ -54,8 +54,10 @@ class MultiCursorTextView: UITextView {
 
     private func setupCursorBlinking() {
         blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.cursorVisible.toggle()
-            self?.updateCursorVisibility()
+            Task { @MainActor in
+                self?.cursorVisible.toggle()
+                self?.updateCursorVisibility()
+            }
         }
     }
 

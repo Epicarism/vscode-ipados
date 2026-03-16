@@ -192,7 +192,24 @@ struct IDEActivityBar: View {
             
             // Bottom Group
             Group {
-                ActivityBarButton(icon: "person.circle", title: "Accounts") {}
+                Menu {
+                    Button(action: { /* Sign in with GitHub - placeholder */ }) {
+                        Label("Sign in with GitHub...", systemImage: "person.crop.circle.badge.questionmark")
+                    }
+                    Button(action: { /* Manage Trusted Extensions - placeholder */ }) {
+                        Label("Manage Trusted Extensions", systemImage: "shield.lefthalf.filled")
+                    }
+                } label: {
+                    Image(systemName: "person.circle")
+                        .font(.system(size: 20, weight: .light))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50, height: 50)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Accounts")
+                .accessibilityLabel("Accounts")
+                .accessibilityHint("Double tap to manage accounts")
                 ActivityBarButton(icon: "gear", title: "Manage") {
                     showSettings = true
                 }

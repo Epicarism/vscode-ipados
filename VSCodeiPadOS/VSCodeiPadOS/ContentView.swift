@@ -41,6 +41,14 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
             .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
             .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
+            .onReceive(NotificationCenter.default.publisher(for: .showReplace)) { _ in editorCore.showSearch = true }
+            .onReceive(NotificationCenter.default.publisher(for: .saveAllFiles)) { _ in editorCore.saveAllTabs() }
+            .onReceive(NotificationCenter.default.publisher(for: .goToDefinition)) { _ in editorCore.goToDefinitionAtCursor() }
+            .onReceive(NotificationCenter.default.publisher(for: .goBack)) { _ in editorCore.navigateBack() }
+            .onReceive(NotificationCenter.default.publisher(for: .goForward)) { _ in editorCore.navigateForward() }
+            .onReceive(NotificationCenter.default.publisher(for: .addCursorAbove)) { _ in editorCore.addCursorAbove() }
+            .onReceive(NotificationCenter.default.publisher(for: .addCursorBelow)) { _ in editorCore.addCursorBelow() }
+            .onReceive(NotificationCenter.default.publisher(for: .showSettings)) { _ in showSettings = true }
             .environmentObject(themeManager)
             .environmentObject(editorCore)
     }

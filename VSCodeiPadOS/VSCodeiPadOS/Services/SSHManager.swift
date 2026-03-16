@@ -132,7 +132,7 @@ final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationDelegate 
 
 // MARK: - SSH Shell Handler
 
-final class ShellDataHandler: ChannelDuplexHandler {
+final class ShellDataHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
     typealias InboundOut = ByteBuffer
     typealias OutboundIn = ByteBuffer
@@ -169,7 +169,7 @@ final class ShellDataHandler: ChannelDuplexHandler {
 // MARK: - SSH Manager (Real Implementation)
 
 class SSHManager: @unchecked Sendable {
-    nonisolated(unsafe) static let shared = SSHManager()
+    static let shared = SSHManager()
     
     weak var delegate: SSHManagerDelegate?
     

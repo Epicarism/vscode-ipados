@@ -165,7 +165,7 @@ struct PortsView: View {
             .accessibilityLabel("Add port")
             .accessibilityHint("Double tap to add a new forwarded port")
             
-            Button(action: {}) {
+            Button(action: { portManager.objectWillChange.send() }) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)
