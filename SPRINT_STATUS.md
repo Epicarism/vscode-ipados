@@ -1,6 +1,6 @@
 # 🏃 Sprint Status — Production Readiness
 
-**Last Updated:** March 16, 2026 02:05 GMT+1  
+**Last Updated:** March 16, 2026 02:30 GMT+1  
 **Updated By:** Claude (AI SWE)  
 **Branch:** `main` (39 commits ahead of origin)  
 **Other SWEs:** Please update this file when you pick up or complete tasks.
@@ -31,6 +31,13 @@
 | 18 | `.gitignore` already had all needed entries ✓ | `.gitignore` |
 | 19 | Removed all `.DS_Store` files | (filesystem) |
 | 20 | Created project communication docs | `SPRINT_STATUS.md`, `BACKLOG.md`, `PROGRESS.md` |
+| 21 | Created `PrivacyInfo.xcprivacy` for App Store compliance | `PrivacyInfo.xcprivacy` |
+| 22 | Created 36 notification constants (replaced hardcoded strings) | `Constants/NotificationConstants.swift` |
+| 23 | Fully rewritten README with accurate project info | `README.md` |
+| 24 | Fixed 42 deprecated API calls across codebase | Multiple files |
+| 25 | Implemented SceneDelegate workspace open (replaced no-op "New Window") | `SceneDelegate.swift`, `VSCodeiPadOSApp.swift` |
+| 26 | Removed dead code from ContentView (reduced bloat) | `ContentView.swift` |
+| 27 | Print-to-logger migration (ongoing — LocalLLMService, FileSystemNavigator done) | Multiple files |
 
 ---
 
@@ -44,10 +51,10 @@
 | 4 | ~~Force unwrap crashes~~ | `AIAgentTools`, `ThemeManager`, `EditorCore` | ✅ Done | Claude |
 | 5 | Swift version mismatch | `Package.swift` (5.9) vs `project.pbxproj` (5.0) | 🔴 TODO | — |
 | 6 | No entitlements file | Missing `.entitlements` for file access | 🔴 TODO | — |
-| 7 | Missing `PrivacyInfo.xcprivacy` | Required for App Store since 2024 | 🔴 TODO | — |
+| 7 | ~~Missing `PrivacyInfo.xcprivacy`~~ | Required for App Store since 2024 | ✅ Done | Claude |
 | 8 | AI Stop button non-functional | `AIManager.swift`, `AIAssistantView.swift` | 🟠 TODO | — |
-| 9 | "New Window" menu command is no-op | `VSCodeiPadOSApp.swift` | 🟠 TODO | — |
-| 10 | 30+ hardcoded `NSNotification.Name` strings | Throughout codebase | 🟠 TODO | — |
+| 9 | ~~"New Window" menu command is no-op~~ | `SceneDelegate.swift`, `VSCodeiPadOSApp.swift` | ✅ Done | Claude |
+| 10 | ~~30+ hardcoded `NSNotification.Name` strings~~ | Throughout codebase | ✅ Done (36 constants) | Claude |
 | 11 | Git diverged from origin | Need `git pull --rebase` | ⚠️ Manual | — |
 
 ## 🟡 Medium Issues (Should Fix)
@@ -59,7 +66,7 @@
 | 14 | PythonRunner Pyodide not implemented | `OnDevice/PythonRunner.swift` | 🔵 Deferred | — |
 | 15 | Find References not implemented | `SyntaxHighlightingTextView.swift:866` | 🔵 Deferred | — |
 | 16 | Format Document not implemented | `SyntaxHighlightingTextView.swift:878` | 🔵 Deferred | — |
-| 17 | ContentView.swift is 1395 lines | Needs decomposition | 🔵 Deferred | — |
+| 17 | ~~ContentView.swift is 1395 lines~~ — dead code removed, decomposed | `ContentView.swift` | 🟡 In Progress | Claude |
 | 18 | EditorCore.swift is 1570 lines | Needs decomposition | 🔵 Deferred | — |
 | 19 | ErrorParserTests.swift won't compile | API mismatch with actual ErrorParser | 🟡 TODO | — |
 | 20 | IDEAIAssistant uses fake canned responses | `ContentView.swift` lines 1148-1174 | 🟡 TODO | — |
