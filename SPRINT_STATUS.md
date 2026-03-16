@@ -1,6 +1,6 @@
 # 🏃 Sprint Status — Production Readiness
 
-**Last Updated:** March 16, 2026 03:25 GMT+1  
+**Last Updated:** March 16, 2026 03:50 GMT+1  
 **Updated By:** Claude (AI SWE)  
 **Branch:** `main` (64 commits ahead of origin)  
 **Other SWEs:** Please update this file when you pick up or complete tasks.
@@ -51,6 +51,8 @@
 | 38 | Rewrote ErrorParserTests to compile against actual API | `ErrorParserTests.swift` |
 | 39 | ProblemsView improvements | `ProblemsView.swift` |
 | 40 | App icon verified (1024x1024 PNG valid) | `AppIcon.appiconset` |
+| 41 | Wired syntax highlighter to theme colors (BUG-009) | `NSAttributedStringSyntaxHighlighter.swift` |
+| 42 | VoiceOver accessibility: TerminalView (8 buttons) + SearchView (4 hints) | `TerminalView.swift`, `SearchView.swift` |
 
 ---
 
@@ -90,7 +92,7 @@
 | # | Issue | Status | Owner |
 |---|-------|--------|-------|
 | 22 | App Store metadata & screenshots | 🔵 TODO | — |
-| 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView done) | Claude |
+| 23 | Accessibility audit (VoiceOver) | 🟡 Partial (SidebarView, WelcomeView, TerminalView, SearchView, StatusBar, ContentView tabs done) | Claude |
 | 24 | Performance audit (large files) | 🔵 TODO | — |
 | 25 | CI/CD pipeline (GitHub Actions) | 🔵 TODO | — |
 | 26 | ~~App icon finalized~~ | ✅ Done (1024x1024 PNG verified) | Claude |
