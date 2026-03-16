@@ -252,6 +252,8 @@ struct IDEActivityBar: View {
     @Binding var selectedTab: Int
     @Binding var showSettings: Bool
     @Binding var showTerminal: Bool
+    @State private var showGitHubLogin = false
+    @ObservedObject private var gitManager = GitManager.shared
     
     var body: some View {
         VStack(spacing: 0) {
@@ -259,7 +261,19 @@ struct IDEActivityBar: View {
             Group {
                 ActivityBarIcon(icon: "doc.on.doc", title: "Explorer", index: 0, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.explorer")
                 ActivityBarIcon(icon: "magnifyingglass", title: "Search", index: 1, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.search")
-                ActivityBarIcon(icon: "arrow.triangle.branch", title: "Source Control", index: 2, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.sourceControl")
+                ZStack(alignment: .topTrailing) {
+                    ActivityBarIcon(icon: "arrow.triangle.branch", title: "Source Control", index: 2, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.sourceControl")
+                    let gitChangeCount = gitManager.stagedChanges.count + gitManager.unstagedChanges.count + gitManager.untrackedFiles.count
+                    if gitChangeCount > 0 {
+                        Text("\(gitChangeCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(4)
+                            .background(Color.accentColor)
+                            .clipShape(Circle())
+                            .offset(x: 4, y: -4)
+                    }
+                }
                 ActivityBarIcon(icon: "play.fill", title: "Run and Debug", index: 3, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.runAndDebug")
                 ActivityBarIcon(icon: "server.rack", title: "Remote Explorer", index: 4, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.remoteExplorer")
                 ActivityBarIcon(icon: "square.grid.2x2", title: "Extensions", index: 5, selectedTab: $selectedTab, editorCore: editorCore, accessibilityID: "activityBar.extensions")
@@ -271,10 +285,10 @@ struct IDEActivityBar: View {
             // Bottom Group
             Group {
                 Menu {
-                    Button(action: { /* TODO: Implement GitHub OAuth sign-in (future feature) */ }) {
+                    Button(action: { showGitHubLogin = true }) {
                         Label("Sign in with GitHub...", systemImage: "person.crop.circle.badge.questionmark")
                     }
-                    Button(action: { /* Manage Trusted Extensions - placeholder */ }) {
+                    Button(action: { selectedTab = 5 }) {
                         Label("Manage Trusted Extensions", systemImage: "shield.lefthalf.filled")
                     }
                 } label: {
@@ -297,6 +311,9 @@ struct IDEActivityBar: View {
         .frame(width: 50)
         .background(Color(UIColor.secondarySystemBackground).opacity(0.8)) // Darker shade for activity bar
         .border(width: 1, edges: [.trailing], color: Color(UIColor.separator))
+        .sheet(isPresented: $showGitHubLogin) {
+            GitHubLoginView()
+        }
     }
 }
 

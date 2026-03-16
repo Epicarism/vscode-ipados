@@ -100,11 +100,13 @@ final class InlineSuggestionManager: ObservableObject {
     struct TextChangeEvent: Equatable {
         let content: String
         let position: CursorPosition
+        let fileName: String?
         let timestamp: Date
         
         static func == (lhs: TextChangeEvent, rhs: TextChangeEvent) -> Bool {
             lhs.content == rhs.content &&
-            lhs.position == rhs.position
+            lhs.position == rhs.position &&
+            lhs.fileName == rhs.fileName
         }
     }
     
@@ -115,6 +117,57 @@ final class InlineSuggestionManager: ObservableObject {
         let cursorPosition: CursorPosition
         let language: String?
     }
+    
+    // MARK: - File Extension to Language Mapping
+    
+    /// Maps common file extensions to language identifiers used by suggestion services.
+    private static let fileExtensionToLanguage: [String: String] = [
+        "swift":  "swift",
+        "js":     "javascript",
+        "jsx":    "javascript",
+        "ts":     "typescript",
+        "tsx":    "typescript",
+        "py":     "python",
+        "rb":     "ruby",
+        "go":     "go",
+        "rs":     "rust",
+        "c":      "c",
+        "h":      "c",
+        "cpp":    "cpp",
+        "cc":     "cpp",
+        "cxx":    "cpp",
+        "hpp":    "cpp",
+        "java":   "java",
+        "kt":     "kotlin",
+        "kts":    "kotlin",
+        "scala":  "scala",
+        "cs":     "csharp",
+        "php":    "php",
+        "html":   "html",
+        "htm":    "html",
+        "css":    "css",
+        "scss":   "scss",
+        "less":   "less",
+        "json":   "json",
+        "xml":    "xml",
+        "yaml":   "yaml",
+        "yml":    "yaml",
+        "md":     "markdown",
+        "sh":     "shell",
+        "bash":   "shell",
+        "zsh":    "shell",
+        "sql":    "sql",
+        "r":      "r",
+        "lua":    "lua",
+        "dart":   "dart",
+        "vue":    "vue",
+        "svelte": "svelte",
+        "zig":    "zig",
+        "toml":   "toml",
+        "ini":    "ini",
+        "dockerfile": "dockerfile",
+        "makefile":   "makefile"
+    ]
     
     // MARK: - Initialization
     
@@ -140,7 +193,8 @@ final class InlineSuggestionManager: ObservableObject {
     /// - Parameters:
     ///   - content: The full text content of the document.
     ///   - position: The current cursor position.
-    func requestSuggestion(for content: String, at position: CursorPosition) {
+    ///   - fileName: The file name (used for language detection via extension). Defaults to nil.
+    func requestSuggestion(for content: String, at position: CursorPosition, fileName: String? = nil) {
         // CRITICAL: Cancel any in-flight request immediately on new keystroke
         // This prevents stale suggestions from appearing when user types quickly
         cancelPendingRequest()
@@ -152,6 +206,7 @@ final class InlineSuggestionManager: ObservableObject {
         let event = TextChangeEvent(
             content: content,
             position: position,
+            fileName: fileName,
             timestamp: Date()
         )
         
@@ -255,7 +310,7 @@ final class InlineSuggestionManager: ObservableObject {
             // Only proceed if we have meaningful content to get suggestions for
             .filter { [weak self] event in
                 guard let self = self else { return false }
-                let context = self.extractContext(from: event.content, at: event.position)
+                let context = self.extractContext(from: event.content, at: event.position, fileName: event.fileName)
                 return self.shouldRequestSuggestion(context: context)
             }
             
@@ -267,7 +322,7 @@ final class InlineSuggestionManager: ObservableObject {
                     return Just(nil).eraseToAnyPublisher()
                 }
                 
-                let context = self.extractContext(from: event.content, at: event.position)
+                let context = self.extractContext(from: event.content, at: event.position, fileName: event.fileName)
                 return self.createFetchPublisher(for: context)
             }
             // Ensure we receive on main thread for UI updates
@@ -338,7 +393,11 @@ final class InlineSuggestionManager: ObservableObject {
 
     
     /// Extracts context information from the content at the given position.
-    private func extractContext(from content: String, at position: CursorPosition) -> SuggestionContext {
+    /// - Parameters:
+    ///   - content: The full text content of the document.
+    ///   - position: The cursor position within the document.
+    ///   - fileName: The file name, used to detect the language via its extension.
+    private func extractContext(from content: String, at position: CursorPosition, fileName: String? = nil) -> SuggestionContext {
         let lines = content.components(separatedBy: .newlines)
         
         // Get current line
@@ -349,8 +408,8 @@ final class InlineSuggestionManager: ObservableObject {
         let precedingLines = lines.prefix(currentLineIndex)
         let precedingCode = precedingLines.joined(separator: "\n")
         
-        // Detect language from file extension or content (placeholder)
-        let language = detectLanguage(from: content)
+        // Detect language from file extension
+        let language = detectLanguage(from: fileName)
         
         return SuggestionContext(
             currentLine: currentLine,
@@ -360,21 +419,47 @@ final class InlineSuggestionManager: ObservableObject {
         )
     }
     
-    /// Detects the programming language from content.
-    /// This is a simple placeholder implementation.
-    private func detectLanguage(from content: String) -> String? {
-        // Basic heuristics for language detection
-        // In a real implementation, this would use file extension or more sophisticated detection
-        
-        if content.contains("import Swift") || content.contains("func ") && content.contains("->") {
-            return "swift"
-        } else if content.contains("function") || content.contains("const ") || content.contains("let ") {
-            return "javascript"
-        } else if content.contains("def ") || content.contains("import ") && content.contains("AppLogger.editor.debug(") {
-            return "python"
+    /// Detects the programming language from a file name using its extension.
+    ///
+    /// Uses a static mapping of file extensions to language identifiers.
+    /// Handles edge cases like dotfiles (`.gitignore`), `Makefile`, and `Dockerfile`
+    /// which have no typical extension.
+    ///
+    /// - Parameter fileName: The file name (e.g. `"MyViewController.swift"`), or nil.
+    /// - Returns: The detected language identifier, or nil if it cannot be determined.
+    private func detectLanguage(from fileName: String?) -> String? {
+        guard let fileName = fileName, !fileName.isEmpty else {
+            return nil
         }
         
-        return nil
+        // Handle special filenames without extensions (e.g. Makefile, Dockerfile)
+        let lowercasedName = fileName.lowercased()
+        if Self.fileExtensionToLanguage.keys.contains(lowercasedName) {
+            return Self.fileExtensionToLanguage[lowercasedName]
+        }
+        
+        // Extract the file extension (the part after the last dot)
+        guard let dotIndex = fileName.lastIndex(of: ".") else {
+            return nil
+        }
+        let ext = String(fileName[fileName.index(after: dotIndex)...]).lowercased()
+        
+        // Empty extension (e.g. filename ends with a dot)
+        guard !ext.isEmpty else {
+            return nil
+        }
+        
+        // For dotfiles like `.gitignore`, the "name" is the part after the dot
+        // e.g. ".gitignore" → extension would be "gitignore" which won't match,
+        // so we also try treating the full filename (minus leading dot) as the extension
+        if fileName.hasPrefix(".") {
+            let dotfileName = String(fileName.dropFirst()).lowercased()
+            if let language = Self.fileExtensionToLanguage[dotfileName] {
+                return language
+            }
+        }
+        
+        return Self.fileExtensionToLanguage[ext]
     }
     
     /// Determines if a suggestion should be requested based on context.

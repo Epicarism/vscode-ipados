@@ -1,5 +1,4 @@
 import os
-// import UniformTypeIdentifiers  // DEAD: unused - no UTType references in file
 import SwiftUI
 
 // MARK: - Navigation Location
@@ -28,28 +27,7 @@ enum SidebarPanel {
     }
 }
 
-// MARK: - Terminal Session Stub
-struct TerminalSession: Identifiable {
-    let id: UUID
-    var title: String
-    var output: String
-    
-    init(id: UUID = UUID(), title: String = "Terminal", output: String = "") {
-        self.id = id
-        self.title = title
-        self.output = output
-    }
-}
-
-// MARK: - Debug State Stubs
-struct DebugSessionState {
-    var isPaused: Bool = false
-    var currentLine: Int?
-    var currentFile: String?
-    var callStack: [String] = []
-    var variables: [String: String] = [:]
-}
-
+// MARK: - Debug Breakpoint
 struct DebugBreakpoint: Identifiable, Equatable {
     let id: UUID
     var file: String
@@ -223,7 +201,7 @@ class EditorCore: ObservableObject {
     @Published var showSnippetPicker = false
     @Published var pendingSnippetInsertion: Snippet?
     @Published var showSaveAsDialog = false
-    var saveAsContent: String = ""
+    @Published var saveAsContent: String = ""
 
     // Cursor tracking
     @Published var cursorPosition = CursorPosition()
@@ -241,22 +219,10 @@ class EditorCore: ObservableObject {
 
     // UI Panel state
     @Published var showPanel = false
-    @Published var showRenameSymbol = false
     @Published var showKeyboardShortcuts = false
     @Published var focusedSidebarTab = 0
 
-    // Terminal state
-    @Published var terminalSessions: [TerminalSession] = []
-    @Published var activeTerminalId: UUID?
-    @Published var isTerminalMaximized: Bool = false
-    @Published var terminalPanelHeight: CGFloat = 200
-
     // Debug state
-    @Published var isDebugging: Bool = false
-    @Published var isRunning: Bool = false
-    @Published var canStartDebugging: Bool = true
-    @Published var showAddConfiguration: Bool = false
-    @Published var debugSessionState: DebugSessionState?
     @Published var breakpoints: [DebugBreakpoint] = []
 
     // Focused sidebar panel
@@ -1377,11 +1343,6 @@ mod tests {
         }
     }
 
-    func renameSymbol() {
-        showRenameSymbol.toggle()
-    }
-
-    // NOTE:
     // goToDefinitionAtCursor(), peekDefinitionAtCursor(), navigateBack(), and navigateForward()
     // are implemented in an EditorCore extension in Services/NavigationManager.swift.
 
