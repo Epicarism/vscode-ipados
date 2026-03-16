@@ -76,10 +76,10 @@ enum AITool: String, CaseIterable, Codable {
         var required: [String] = []
         
         for param in parameters {
-            let name = param["name"] as! String
+            let name = param["name"] as? String ?? ""
             properties[name] = [
-                "type": param["type"] as! String,
-                "description": param["description"] as! String
+                "type": param["type"] as? String ?? "string",
+                "description": param["description"] as? String ?? ""
             ]
             if param["required"] as? Bool == true {
                 required.append(name)
@@ -107,10 +107,10 @@ enum AITool: String, CaseIterable, Codable {
         var required: [String] = []
         
         for param in parameters {
-            let name = param["name"] as! String
+            let name = param["name"] as? String ?? ""
             properties[name] = [
-                "type": param["type"] as! String,
-                "description": param["description"] as! String
+                "type": param["type"] as? String ?? "string",
+                "description": param["description"] as? String ?? ""
             ]
             if param["required"] as? Bool == true {
                 required.append(name)

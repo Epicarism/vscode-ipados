@@ -904,7 +904,8 @@ struct IDEWelcomeView: View {
                         } else {
                             ForEach(recentFiles.recentFiles.prefix(8), id: \.absoluteString) { url in
                                 Button(action: {
-                                    editorCore.addTab(fileName: url.lastPathComponent, content: "", url: url)
+                                    let content = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                                    editorCore.addTab(fileName: url.lastPathComponent, content: content, url: url)
                                 }) {
                                     HStack(spacing: 8) {
                                         Image(systemName: url.hasDirectoryPath ? "folder.fill" : "doc.fill")
@@ -1058,14 +1059,30 @@ struct IDECommandPalette: View {
             Divider()
             ScrollView {
                 VStack(spacing: 0) {
-                    CommandRow(icon: "doc.badge.plus", name: "New File", shortcut: "⌘N") { editorCore.addTab(); editorCore.showCommandPalette = false }
-                    CommandRow(icon: "folder", name: "Open File", shortcut: "⌘O") { editorCore.showFilePicker = true; editorCore.showCommandPalette = false }
-                    CommandRow(icon: "square.and.arrow.down", name: "Save File", shortcut: "⌘S") { editorCore.saveActiveTab(); editorCore.showCommandPalette = false }
-                    CommandRow(icon: "sidebar.left", name: "Toggle Sidebar", shortcut: "⌘B") { editorCore.toggleSidebar(); editorCore.showCommandPalette = false }
-                    CommandRow(icon: "brain", name: "AI Assistant", shortcut: "⌘⇧A") { editorCore.showAIAssistant = true; editorCore.showCommandPalette = false }
-                    CommandRow(icon: "terminal", name: "Toggle Terminal", shortcut: "⌘`") { showTerminal.toggle(); editorCore.showCommandPalette = false }
-                    CommandRow(icon: "gear", name: "Settings", shortcut: "⌘,") { showSettings = true; editorCore.showCommandPalette = false }
-                    CommandRow(icon: "number", name: "Go to Line", shortcut: "⌘G") { editorCore.showGoToLine = true; editorCore.showCommandPalette = false }
+                    let allCommands: [(icon: String, name: String, shortcut: String, action: () -> Void)] = [
+                        ("doc.badge.plus", "New File", "⌘N", { editorCore.addTab(); editorCore.showCommandPalette = false }),
+                        ("folder", "Open File", "⌘O", { editorCore.showFilePicker = true; editorCore.showCommandPalette = false }),
+                        ("square.and.arrow.down", "Save File", "⌘S", { editorCore.saveActiveTab(); editorCore.showCommandPalette = false }),
+                        ("sidebar.left", "Toggle Sidebar", "⌘B", { editorCore.toggleSidebar(); editorCore.showCommandPalette = false }),
+                        ("brain", "AI Assistant", "⌘⇧A", { editorCore.showAIAssistant = true; editorCore.showCommandPalette = false }),
+                        ("terminal", "Toggle Terminal", "⌘`", { showTerminal.toggle(); editorCore.showCommandPalette = false }),
+                        ("gear", "Settings", "⌘,", { showSettings = true; editorCore.showCommandPalette = false }),
+                        ("number", "Go to Line", "⌘G", { editorCore.showGoToLine = true; editorCore.showCommandPalette = false }),
+                        ("magnifyingglass", "Find in Files", "⌘⇧F", { editorCore.showSearch = true; editorCore.showCommandPalette = false }),
+                        ("arrow.uturn.backward", "Undo", "⌘Z", { NotificationCenter.default.post(name: .init("Undo"), object: nil); editorCore.showCommandPalette = false }),
+                        ("arrow.uturn.forward", "Redo", "⌘⇧Z", { NotificationCenter.default.post(name: .init("Redo"), object: nil); editorCore.showCommandPalette = false }),
+                        ("paintbrush", "Change Theme", "", { NotificationCenter.default.post(name: .init("ShowSettings"), object: nil); editorCore.showCommandPalette = false }),
+                        ("keyboard", "Keyboard Shortcuts", "", { editorCore.showKeyboardShortcuts = true; editorCore.showCommandPalette = false })
+                    ]
+                    let filtered = searchText.isEmpty ? allCommands : allCommands.filter { $0.name.localizedCaseInsensitiveContains(searchText) || $0.shortcut.contains(searchText) }
+                    ForEach(Array(filtered.enumerated()), id: \.offset) { _, cmd in
+                        CommandRow(icon: cmd.icon, name: cmd.name, shortcut: cmd.shortcut, action: cmd.action)
+                    }
+                    if filtered.isEmpty {
+                        Text("No matching commands")
+                            .foregroundColor(.secondary)
+                            .padding()
+                    }
                 }.padding(.vertical, 8)
             }
         }.frame(width: 500, height: 400).background(Color(UIColor.systemBackground)).cornerRadius(12).shadow(radius: 20)
@@ -1101,11 +1118,18 @@ struct IDEQuickOpen: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(editorCore.tabs) { tab in
-                        QuickOpenRow(name: tab.fileName, path: "") {
+                    let filteredTabs = searchText.isEmpty ? editorCore.tabs : editorCore.tabs.filter { $0.fileName.localizedCaseInsensitiveContains(searchText) }
+                    ForEach(filteredTabs) { tab in
+                        QuickOpenRow(name: tab.fileName, path: tab.url?.deletingLastPathComponent().path ?? "") {
                             editorCore.selectTab(id: tab.id)
                             editorCore.showQuickOpen = false
                         }
+                    }
+                    if filteredTabs.isEmpty && !searchText.isEmpty {
+                        Text("No matching files")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 13))
+                            .padding()
                     }
                 }
             }.frame(maxHeight: 350)

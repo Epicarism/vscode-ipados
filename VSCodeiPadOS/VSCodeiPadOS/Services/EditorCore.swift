@@ -197,6 +197,7 @@ class EditorCore: ObservableObject {
         if let fontSizeObserver {
             NotificationCenter.default.removeObserver(fontSizeObserver)
         }
+        releaseAllSecurityScopedAccess()
     }
     
     /// Creates example tabs demonstrating syntax highlighting for all supported languages
@@ -995,6 +996,21 @@ mod tests {
         return false
     }
 
+    /// Release a previously retained security-scoped access for the given URL.
+    /// Decrements the retain count and calls ``stopAccessingSecurityScopedResource()`` when it reaches 0.
+    func releaseSecurityScopedAccess(for url: URL) {
+        releaseSecurityScopedAccess(to: url)
+    }
+
+    /// Release ALL security-scoped resources. Safe to call multiple times.
+    /// Intended for app termination cleanup.
+    func releaseAllSecurityScopedAccess() {
+        for url in securityScopedAccessCounts.keys {
+            url.stopAccessingSecurityScopedResource()
+        }
+        securityScopedAccessCounts.removeAll()
+    }
+
     private func releaseSecurityScopedAccess(to url: URL) {
         guard let count = securityScopedAccessCounts[url] else { return }
         if count <= 1 {
@@ -1378,9 +1394,10 @@ mod tests {
 
     /// Find word boundaries at a given position
     func findWordAtPosition(_ position: Int, in text: String) -> NSRange? {
-        guard position >= 0 && position <= text.count else { return nil }
-
         let nsText = text as NSString
+        // Use nsText.length (UTF-16) consistently since we work with NSRange
+        guard position >= 0, position <= nsText.length else { return nil }
+
         let wordCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
 
         // Find start of word
@@ -1405,10 +1422,7 @@ mod tests {
             }
         }
 
-        if start == end {
-            return nil
-        }
-
+        guard start < end else { return nil }
         return NSRange(location: start, length: end - start)
     }
 
@@ -1484,11 +1498,31 @@ extension EditorCore {
     }
     
     /// Save current open tab paths for restoration
+    /// Uses relative paths from workspace root to handle duplicate filenames in different directories
     func saveOpenTabPaths() {
-        let paths = tabs.compactMap { $0.url?.lastPathComponent }
+        let workspaceURL = restoreWorkspaceURL()
+        let paths: [String] = tabs.compactMap { tab in
+            guard let url = tab.url else { return nil }
+            if let workspace = workspaceURL {
+                // Save relative path from workspace root
+                let workspacePath = workspace.path.hasSuffix("/") ? workspace.path : workspace.path + "/"
+                if url.path.hasPrefix(workspacePath) {
+                    return String(url.path.dropFirst(workspacePath.count))
+                }
+            }
+            // Fallback to filename only
+            return url.lastPathComponent
+        }
         UserDefaults.standard.set(paths, forKey: Self.lastOpenTabPathsKey)
-        if let activeTab = activeTab {
-            UserDefaults.standard.set(activeTab.url?.lastPathComponent, forKey: Self.lastActiveTabPathKey)
+        if let activeTab = activeTab, let url = activeTab.url {
+            if let workspace = workspaceURL {
+                let workspacePath = workspace.path.hasSuffix("/") ? workspace.path : workspace.path + "/"
+                if url.path.hasPrefix(workspacePath) {
+                    UserDefaults.standard.set(String(url.path.dropFirst(workspacePath.count)), forKey: Self.lastActiveTabPathKey)
+                    return
+                }
+            }
+            UserDefaults.standard.set(url.lastPathComponent, forKey: Self.lastActiveTabPathKey)
         }
     }
     
@@ -1499,33 +1533,18 @@ extension EditorCore {
         
         let activeTabPath = UserDefaults.standard.string(forKey: Self.lastActiveTabPathKey)
         
-        // Find files in workspace matching saved names
-        let fileManager = FileManager.default
-        guard let enumerator = fileManager.enumerator(
-            at: workspaceURL,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return }
-        
-        var fileMap: [String: URL] = [:]
-        while let fileURL = enumerator.nextObject() as? URL {
-            let name = fileURL.lastPathComponent
-            if savedPaths.contains(name) {
-                fileMap[name] = fileURL
-            }
-        }
-        
-        // Open matched files
+        // Try to resolve each saved path relative to workspace
         for path in savedPaths {
-            if let url = fileMap[path] {
-                if let content = try? String(contentsOf: url, encoding: .utf8) {
+            let fileURL = workspaceURL.appendingPathComponent(path)
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                if let content = try? String(contentsOf: fileURL, encoding: .utf8) {
                     let tab = Tab(
-                        fileName: url.lastPathComponent,
+                        fileName: fileURL.lastPathComponent,
                         content: content,
-                        url: url
+                        url: fileURL
                     )
                     tabs.append(tab)
-                    if url.lastPathComponent == activeTabPath {
+                    if path == activeTabPath {
                         activeTabId = tab.id
                     }
                 }

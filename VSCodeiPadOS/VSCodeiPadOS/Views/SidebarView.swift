@@ -231,6 +231,9 @@ struct ActivityBarIcon: View {
         .buttonStyle(PlainButtonStyle())
         .help(title)
         .accessibilityIdentifier(accessibilityID)
+        .accessibilityLabel("\(title) panel")
+        .accessibilityHint(isSelected && editorCore.showSidebar ? "Double tap to hide the \(title) panel" : "Double tap to show the \(title) panel")
+        .accessibilityAddTraits(isSelected && editorCore.showSidebar ? [.isSelected, .isButton] : .isButton)
     }
 }
 
@@ -249,6 +252,8 @@ struct ActivityBarButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .help(title)
+        .accessibilityLabel("\(title)")
+        .accessibilityHint("Double tap to \(title.lowercased())")
     }
 }
 

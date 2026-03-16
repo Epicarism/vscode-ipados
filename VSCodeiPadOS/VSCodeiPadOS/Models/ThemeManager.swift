@@ -32,7 +32,7 @@ class ThemeManager: ObservableObject {
     func nextTheme() {
         let themes = Theme.allThemes
         guard let currentIndex = themes.firstIndex(where: { $0.id == currentTheme.id }) else {
-            switchTheme(to: themes.first!)
+            switchTheme(to: themes.first ?? .darkPlus)
             return
         }
         let nextIndex = (currentIndex + 1) % themes.count
@@ -43,7 +43,7 @@ class ThemeManager: ObservableObject {
     func previousTheme() {
         let themes = Theme.allThemes
         guard let currentIndex = themes.firstIndex(where: { $0.id == currentTheme.id }) else {
-            switchTheme(to: themes.first!)
+            switchTheme(to: themes.first ?? .darkPlus)
             return
         }
         let prevIndex = currentIndex == 0 ? themes.count - 1 : currentIndex - 1

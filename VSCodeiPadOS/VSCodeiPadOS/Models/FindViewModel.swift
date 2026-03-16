@@ -52,6 +52,11 @@ final class FindViewModel: ObservableObject {
     @Published var useRegex: Bool = false
     @Published var searchInSelection: Bool = false
 
+    // Replace-all confirmation (workspace scope)
+    @Published var showReplaceAllConfirmation = false
+    @Published var pendingReplaceAllCount = 0
+    @Published var pendingReplaceAllFileCount = 0
+
     // Search scope
     @Published var searchScope: SearchScope = .currentFile
 
@@ -175,7 +180,56 @@ final class FindViewModel: ObservableObject {
     }
 
     /// Replaces all occurrences in the chosen scope.
+    /// For workspace scope, shows confirmation first.
     func replaceAll() {
+        guard isReplaceMode, let core = editorCore, let regex = buildRegex()
+        else { return }
+
+        guard searchScope == .workspace else {
+            executeReplaceAll()
+            return
+        }
+        prepareReplaceAll()
+    }
+
+    /// Tallies workspace matches, sets pending counts, and presents the confirmation.
+    private func prepareReplaceAll() {
+        guard let core = editorCore, let regex = buildRegex() else { return }
+
+        var urls: [URL] = []
+        if let tree = core.fileNavigator?.fileTree {
+            urls = collectFileURLs(from: tree)
+        }
+
+        var totalMatches = 0
+        var affectedFiles = 0
+        for url in urls {
+            let content: String
+            if let tabIndex = core.tabs.firstIndex(where: { $0.url == url }) {
+                content = core.tabs[tabIndex].content
+            } else if let diskContent = try? String(contentsOf: url, encoding: .utf8) {
+                content = diskContent
+            } else {
+                continue
+            }
+            let count = regex.numberOfMatches(
+                in: content,
+                options: [],
+                range: NSRange(location: 0, length: (content as NSString).length)
+            )
+            if count > 0 {
+                totalMatches += count
+                affectedFiles += 1
+            }
+        }
+
+        pendingReplaceAllCount = totalMatches
+        pendingReplaceAllFileCount = affectedFiles
+        showReplaceAllConfirmation = true
+    }
+
+    /// Actually performs the replacement (called after user confirms or for non-workspace scopes).
+    func executeReplaceAll() {
         guard isReplaceMode,
               let core = editorCore,
               let regex = buildRegex()
@@ -243,6 +297,7 @@ final class FindViewModel: ObservableObject {
             }
         }
 
+        showReplaceAllConfirmation = false
         performSearch()
     }
 
@@ -448,7 +503,7 @@ struct FindReplaceView: View {
                     Button("Replace", action: viewModel.replaceCurrent)
                         .disabled(viewModel.searchResults.isEmpty)
                     
-                    Button("Replace All", action: viewModel.replaceAll)
+                    Button(viewModel.searchScope == .workspace ? "Replace All\u{2026}" : "Replace All", action: viewModel.replaceAll)
                         .disabled(viewModel.searchResults.isEmpty)
                 }
                 .padding(.horizontal, 8)
@@ -470,6 +525,16 @@ struct FindReplaceView: View {
         }
         .onChange(of: viewModel.useRegex) { _ in
             viewModel.performSearch()
+        }
+        .alert("Replace All?", isPresented: $viewModel.showReplaceAllConfirmation) {
+            Button("Cancel", role: .cancel) {
+                viewModel.showReplaceAllConfirmation = false
+            }
+            Button("Replace All", role: .destructive) {
+                viewModel.executeReplaceAll()
+            }
+        } message: {
+            Text("Replace \(viewModel.pendingReplaceAllCount) occurrence\(viewModel.pendingReplaceAllCount == 1 ? "" : "s") in \(viewModel.pendingReplaceAllFileCount) file\(viewModel.pendingReplaceAllFileCount == 1 ? "" : "s")?")
         }
     }
 }

@@ -141,7 +141,7 @@ final class FileSystemNavigator: ObservableObject {
             do {
                 try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: false, attributes: nil)
             } catch {
-                print("Error creating folder at \(folderURL): \(error)")
+                AppLogger.fileSystem.error("Error creating folder at \(folderURL): \(error)")
             }
 
             DispatchQueue.main.async { self.refreshFileTree() }
@@ -226,7 +226,7 @@ final class FileSystemNavigator: ObservableObject {
             }
             return true
         } catch {
-            print("Error moving item from \(source) to \(destination): \(error)")
+            AppLogger.fileSystem.error("Error moving item from \(source) to \(destination): \(error)")
             return false
         }
     }
@@ -250,7 +250,7 @@ final class FileSystemNavigator: ObservableObject {
             try FileManager.default.removeItem(at: url) // works for files and directories
             success = true
         } catch {
-            print("Error deleting item at \(url): \(error)")
+            AppLogger.fileSystem.error("Error deleting item at \(url): \(error)")
             success = false
         }
 
@@ -280,7 +280,7 @@ final class FileSystemNavigator: ObservableObject {
                 return FileTreeNode(url: url, name: name, isDirectory: false, children: [])
             }
         } catch {
-            print("Error building file tree at \(url): \(error)")
+            AppLogger.fileSystem.error("Error building file tree at \(url): \(error)")
             return nil
         }
     }

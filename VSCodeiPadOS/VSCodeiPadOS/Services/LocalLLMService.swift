@@ -193,6 +193,8 @@ class LocalLLMService: ObservableObject {
         let targetId = modelId ?? currentModelId
         
         guard let config = availableModels.first(where: { $0.id == targetId }) else {
+            logger.error("Model not found: '\(targetId, privacy: .public)'")
+            logger.debug("Available model IDs: \(self.availableModels.map { $0.id }.joined(separator: ", "), privacy: .public)")
             statusMessage = "Model not found: \(targetId)"
             return
         }
@@ -252,18 +254,25 @@ class LocalLLMService: ObservableObject {
             isModelLoaded = true
             isDownloading = false
             statusMessage = "\(config.name) ready"
-            print("[LocalLLM] Model loaded: \(config.repo)")
+            logger.info("Model loaded: \(config.repo, privacy: .public)")
             
         } catch {
             isDownloading = false
-            print("[LocalLLM] Load failed for \(config.repo): \(error)")
+            let errorStr = String(describing: error)
+            logger.error("Load failed for \(config.repo, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            
+            // Check for common HuggingFace errors
+            if errorStr.contains("401") || errorStr.contains("403") || errorStr.contains("unauthorized") || errorStr.contains("gated") {
+                logger.warning("Auth error detected. HF Token set: \(!self.hfToken.isEmpty, privacy: .public)")
+                statusMessage = "Auth error - check HF token in settings"
+            }
             
             // Auto-fallback: try next model in the list
             if let currentIndex = availableModels.firstIndex(where: { $0.id == targetId }) {
                 let nextIndex = availableModels.index(after: currentIndex)
                 if nextIndex < availableModels.endIndex {
                     let fallback = availableModels[nextIndex]
-                    print("[LocalLLM] Trying fallback: \(fallback.name)")
+                    logger.info("Trying fallback model: \(fallback.name, privacy: .public)")
                     statusMessage = "Trying \(fallback.name)..."
                     currentModelId = fallback.id
                     await loadModel(modelId: fallback.id)
@@ -395,17 +404,19 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         defer { isGenerating = false }
         
         let system = systemPrompt ?? defaultSystemPrompt
-        print("[LocalLLM] chat() systemPrompt length: \(system.count) chars")
-        print("[LocalLLM] chat() systemPrompt preview: \(system.prefix(200))...")
+        logger.debug("chat() systemPrompt length: \(system.count, privacy: .public)")
         let session = MLXChatSession(container, instructions: system, generateParameters: generateParams)
         
         // Get last user message only
         let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
+        logger.debug("chat() user message: '\(String(lastUserMessage.prefix(100)), privacy: .public)'")
         
         let response = try await session.respond(to: lastUserMessage)
+        logger.debug("chat() raw response length: \(response.count, privacy: .public)")
         
         // Strip thinking tags
         let cleaned = stripThinkingTags(response)
+        logger.debug("chat() cleaned response length: \(cleaned.count, privacy: .public)")
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
@@ -429,21 +440,34 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                 
                 do {
                     let system = systemPrompt ?? self.defaultSystemPrompt
+                    self.logger.debug("chatStream starting with systemPrompt length: \(system.count, privacy: .public)")
+                    
                     let session = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
+                    self.logger.debug("MLXChatSession created")
                     
                     // Get last user message only
                     let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
                     
                     // Stream response
+                    var chunkCount = 0
+                    var totalChars = 0
+                    self.logger.debug("Starting streamResponse...")
                     for try await chunk in session.streamResponse(to: lastUserMessage) {
+                        chunkCount += 1
+                        totalChars += chunk.count
+                        if chunkCount <= 3 {
+                            self.logger.debug("Chunk \(chunkCount, privacy: .public): '\(String(chunk.prefix(50)), privacy: .public)'")
+                        }
                         if !chunk.isEmpty {
                             self.currentResponse += chunk
                             continuation.yield(chunk)
                         }
                     }
+                    self.logger.info("Stream finished: \(chunkCount, privacy: .public) chunks, \(totalChars, privacy: .public) chars total")
                     
                     continuation.finish()
                 } catch {
+                    self.logger.error("chatStream error: \(error.localizedDescription, privacy: .public)")
                     continuation.finish(throwing: error)
                 }
                 
@@ -473,14 +497,32 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
     private func stripThinkingTags(_ text: String) -> String {
         var result = text
         
-        // Remove complete <think>...</think> blocks (including multiline)
+        // First, try to extract content AFTER </think> tags (the actual response)
+        // If model outputs: <think>reasoning</think>actual response
+        // We want: actual response
         let thinkPattern = #"<think>[\s\S]*?</think>"#
         if let regex = try? NSRegularExpression(pattern: thinkPattern, options: []) {
-            result = regex.stringByReplacingMatches(
+            let stripped = regex.stringByReplacingMatches(
                 in: result,
                 range: NSRange(result.startIndex..., in: result),
                 withTemplate: ""
-            )
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // If stripping leaves us with content, use it
+            if !stripped.isEmpty {
+                result = stripped
+            } else {
+                // Model put EVERYTHING in <think> tags with no actual response
+                // Extract what's INSIDE the think tags as the response
+                print("[LocalLLM] ⚠️ Model output was entirely in <think> tags, extracting content...")
+                let extractPattern = #"<think>([\s\S]*?)</think>"#
+                if let extractRegex = try? NSRegularExpression(pattern: extractPattern, options: []),
+                   let match = extractRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                   let contentRange = Range(match.range(at: 1), in: text) {
+                    result = String(text[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    print("[LocalLLM] Extracted \(result.count) chars from think block")
+                }
+            }
         }
         
         // Remove incomplete opening <think> tag at end (partial streaming)
@@ -492,6 +534,7 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         
         // Remove stray </think> tags
         result = result.replacingOccurrences(of: "</think>", with: "")
+        result = result.replacingOccurrences(of: "<think>", with: "")
         
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }

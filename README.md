@@ -50,18 +50,18 @@ A **native Swift/SwiftUI** code editor that brings the full VSCode experience to
 
 ## Project Status
 
-See [BACKLOG.md](./BACKLOG.md) for current tasks.
+See [STATUS.md](./STATUS.md) for current project status.  
+See [BACKLOG.md](./BACKLOG.md) for task backlog.  
 See [PROGRESS.md](./PROGRESS.md) for completed work.
-See [AGENTS.md](./AGENTS.md) for agent activity log.
 
 ## Building
 
 ```bash
 # Open in Xcode
-open VSCodeiPad.xcodeproj
+open VSCodeiPadOS/VSCodeiPadOS.xcodeproj
 
 # Or build from command line
-xcodebuild -project VSCodeiPad.xcodeproj -scheme VSCodeiPad -destination 'platform=iOS Simulator,name=iPad Pro (12.9-inch)'
+xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj -scheme VSCodeiPadOS -destination 'platform=iOS Simulator,name=iPad Pro (12.9-inch)'
 ```
 
 ## License
