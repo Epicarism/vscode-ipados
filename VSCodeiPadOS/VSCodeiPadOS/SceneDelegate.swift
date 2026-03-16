@@ -237,6 +237,7 @@ extension Notification.Name {
     /// Posted by SceneDelegate when a workspace should be opened from a user activity.
     /// userInfo contains "workspaceURL" (URL) for the workspace root directory.
     static let sceneOpenWorkspace = Notification.Name("SceneOpenWorkspace")
+}
 
 // MARK: - FocusedSceneKey
 
