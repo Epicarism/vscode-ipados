@@ -1,4 +1,5 @@
 //
+import os
 //  RunestoneEditorView.swift
 //  VSCodeiPadOS
 //
@@ -594,11 +595,11 @@ class RunestoneEditorTheme: Runestone.Theme {
         let highlightName = rawHighlightName.lowercased()
         
         // Debug: Log ALL highlight names to console (ENABLED FOR DEBUGGING)
-        print("🎨 HIGHLIGHT: '\(rawHighlightName)' -> ", terminator: "")
+        AppLogger.editor.debug("HIGHLIGHT: '\(rawHighlightName)' -> ", terminator: "")
         
         // Keywords
         if highlightName.contains("keyword") {
-            print("keyword (blue)")
+            AppLogger.editor.debug("keyword (blue)")
             return _keywordColor
         }
         
@@ -608,20 +609,20 @@ class RunestoneEditorTheme: Runestone.Theme {
         if highlightName.hasPrefix("string.special") ||
            highlightName.contains("label") ||
            highlightName.contains("property.definition") {
-            print("key/label (light blue)")
+            AppLogger.editor.debug("key/label (light blue)")
             return _variableColor  // Light blue #9CDCFE for keys
         }
         
         // Strings - but NOT if it's JUST "string" (let specific matches win)
         // Only color strings that are clearly values, not potential keys
         if highlightName.contains("string") {
-            print("string (orange)")
+            AppLogger.editor.debug("string (orange)")
             return _stringColor  // Orange #CE9178 for string values
         }
         
         // Numbers and constants
         if highlightName.contains("number") || highlightName == "constant.numeric" {
-            print("number (green)")
+            AppLogger.editor.debug("number (green)")
             return _numberColor
         }
         
@@ -684,7 +685,7 @@ class RunestoneEditorTheme: Runestone.Theme {
         }
         
         // Default: use standard text color
-        print("nil (default)")
+        AppLogger.editor.debug("nil (default)")
         return nil
     }
     

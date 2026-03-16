@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 import SwiftUI
 import WebKit
 
@@ -702,21 +703,21 @@ class VSCodeWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     // MARK: - JavaScript Console Capture
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "consoleLog" {
-            print("[JS Console] \(message.body)")
+            AppLogger.editor.debug("[JS Console] \(message.body)")
         } else if message.name == "consoleError" {
-            print("[JS ERROR] \(message.body)")
+            AppLogger.editor.error("[JS ERROR] \(message.body)")
         } else if message.name == "vsCodeError" {
-            print("[VS Code Error] \(message.body)")
+            AppLogger.editor.error("[VS Code Error] \(message.body)")
         }
     }
     
     // MARK: - Navigation Delegate
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        print("[WebView] Started loading: \(webView.url?.absoluteString ?? "unknown")")
+        AppLogger.editor.debug("[WebView] Started loading: \(webView.url?.absoluteString ?? "unknown")")
     }
     
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        print("[WebView] Finished loading: \(webView.url?.absoluteString ?? "unknown")")
+        AppLogger.editor.debug("[WebView] Finished loading: \(webView.url?.absoluteString ?? "unknown")")
         // Inject error catcher after page loads
         let errorCatcher = """
         window.onerror = function(msg, url, line, col, error) {
@@ -735,27 +736,27 @@ class VSCodeWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WK
     }
     
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        print("[WebView] Navigation failed: \(error.localizedDescription)")
+        AppLogger.editor.debug("[WebView] Navigation failed: \(error.localizedDescription)")
     }
     
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        print("[WebView] Provisional navigation failed: \(error.localizedDescription)")
+        AppLogger.editor.debug("[WebView] Provisional navigation failed: \(error.localizedDescription)")
     }
     
     // MARK: - UI Delegate (handle alerts, confirms, prompts)
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        print("[JS Alert] \(message)")
+        AppLogger.editor.debug("[JS Alert] \(message)")
         completionHandler()
     }
     
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        print("[JS Confirm] \(message)")
+        AppLogger.editor.debug("[JS Confirm] \(message)")
         completionHandler(true)
     }
     
     // Handle new window requests (popups) - open in same webview
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        print("[WebView] Popup requested: \(navigationAction.request.url?.absoluteString ?? "unknown")")
+        AppLogger.editor.debug("[WebView] Popup requested: \(navigationAction.request.url?.absoluteString ?? "unknown")")
         // Load popup URL in same webview instead of blocking
         if let url = navigationAction.request.url {
             webView.load(URLRequest(url: url))
@@ -832,7 +833,7 @@ struct VSCodeWebView: UIViewRepresentable {
         webView.customUserAgent = "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
         
         // Load the URL
-        print("[WebView] Loading: \(url.absoluteString)")
+        AppLogger.editor.debug("[WebView] Loading: \(url.absoluteString)")
         webView.load(URLRequest(url: url))
         
         return webView

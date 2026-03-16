@@ -144,8 +144,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let editorCore = editorCore else { return }
         
         // Start accessing security-scoped resource if needed
-        let _ = url.startAccessingSecurityScopedResource()
-        defer { url.stopAccessingSecurityScopedResource() }
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        if didStartAccessing {
+            defer { url.stopAccessingSecurityScopedResource() }
+        }
         
         // Open the file
         editorCore.openFile(from: url)

@@ -1,6 +1,7 @@
 import Foundation
 import WebKit
 import JavaScriptCore
+import os
 
 // MARK: - Errors
 
@@ -192,7 +193,7 @@ public final class WASMRunner: NSObject {
         webView.loadHTMLString("<html><body></body></html>", baseURL: nil)
         
         if configuration.enableDebugLogging {
-            print("[WASMRunner] WebView initialized")
+            AppLogger.editor.debug("[WASMRunner] WebView initialized")
         }
     }
     
@@ -252,7 +253,7 @@ public final class WASMRunner: NSObject {
             self.moduleLoaded = true
             
             if configuration.enableDebugLogging {
-                print("[WASMRunner] Module '\(moduleName)' loaded successfully")
+                AppLogger.editor.debug("[WASMRunner] Module '\(moduleName)' loaded successfully")
             }
         } else {
             let errorMessage = dict["error"] as? String ?? "Unknown error"
@@ -308,7 +309,7 @@ public final class WASMRunner: NSObject {
                     // Get the exported function
                     const fn = instance.exports['\(function)'];
                     if (typeof fn !== 'function') {
-                        throw new Error('Function \'\(function)\' not found or not a function');
+                        throw new Error('Function \'\'\(function)\' not found or not a function');
                     }
                     
                     // Parse arguments
@@ -395,7 +396,7 @@ public final class WASMRunner: NSObject {
         _ = try await executeJavaScript(registerScript, in: webView)
         
         if configuration.enableDebugLogging {
-            print("[WASMRunner] Host function '\(name)' registered")
+            AppLogger.editor.debug("[WASMRunner] Host function '\(name)' registered")
         }
     }
     
@@ -460,13 +461,13 @@ public final class WASMRunner: NSObject {
             _ = try await executeJavaScript(wasiStubScript, in: webView)
             
             if configuration.enableDebugLogging {
-                print("[WASMRunner] WASI stub configured")
+                AppLogger.editor.debug("[WASMRunner] WASI stub configured")
             }
             
         case .polyfill:
             // Would require loading external polyfill library
             if configuration.enableDebugLogging {
-                print("[WASMRunner] WASI polyfill mode - external polyfill required")
+                AppLogger.editor.debug("[WASMRunner] WASI polyfill mode - external polyfill required")
             }
         }
     }
@@ -492,7 +493,7 @@ public final class WASMRunner: NSObject {
         moduleLoaded = false
         
         if configuration.enableDebugLogging {
-            print("[WASMRunner] Module unloaded")
+            AppLogger.editor.debug("[WASMRunner] Module unloaded")
         }
     }
     
@@ -505,7 +506,7 @@ public final class WASMRunner: NSObject {
         hostFunctions.removeAll()
         
         if configuration.enableDebugLogging {
-            print("[WASMRunner] Destroyed")
+            AppLogger.editor.debug("[WASMRunner] Destroyed")
         }
     }
     
@@ -563,7 +564,7 @@ extension WASMRunner: WKScriptMessageHandler {
             }
         default:
             if configuration.enableDebugLogging {
-                print("[WASMRunner] Unknown message type: \(type)")
+                AppLogger.editor.debug("[WASMRunner] Unknown message type: \(type)")
             }
         }
     }
@@ -641,7 +642,7 @@ try await runner.load(wasmData: wasmData)
 
 // Call an exported function
 let result = try await runner.execute(function: "add", args: [5, 3])
-print("Result: \(result)") // Prints: 8
+AppLogger.editor.debug("Result: \(result)") // Prints: 8
 
 // Clean up
 await runner.unload()
@@ -674,7 +675,7 @@ let runner = try WASMRunner()
 
 // Expose a native function to WASM
 try await runner.exposeHostFunction(name: "log") { args in
-    print("WASM Log: \(args)")
+    AppLogger.editor.debug("WASM Log: \(args)")
     return 0
 }
 
@@ -692,11 +693,11 @@ do {
 } catch let error as WASMError {
     switch error {
     case .moduleCompilationFailed(let reason):
-        print("Compilation failed: \(reason)")
+        AppLogger.editor.error("Compilation failed: \(reason)")
     case .executionTimeout(let seconds):
-        print("Timeout after \(seconds) seconds")
+        AppLogger.editor.error("Timeout after \(seconds) seconds")
     default:
-        print("WASM Error: \(error.localizedDescription)")
+        AppLogger.editor.error("WASM Error: \(error.localizedDescription)")
     }
 }
 ```
