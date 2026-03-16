@@ -641,10 +641,10 @@ extension EditorCore {
     /// Parse and index the current active tab
     func indexActiveTab() {
         guard let tab = activeTab else { return }
-        let navigationManager = NavigationManager.shared
 
         // NavigationManager is @MainActor; indexActiveTab can be called from non-isolated contexts.
         Task { @MainActor in
+            let navigationManager = NavigationManager.shared
             navigationManager.parseAndIndexFile(
                 content: tab.content,
                 file: tab.url?.path ?? tab.fileName,

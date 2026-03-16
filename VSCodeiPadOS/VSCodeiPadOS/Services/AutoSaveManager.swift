@@ -182,8 +182,4 @@ final class AutoSaveManager: ObservableObject {
     }
 }
 
-// MARK: - Notification Extension
-
-extension NSNotification.Name {
-    static let autoSaved = NSNotification.Name("AutoSaveManager.autoSaved")
-}
+// MARK: - Notifications (defined in Notification+Names.swift)
