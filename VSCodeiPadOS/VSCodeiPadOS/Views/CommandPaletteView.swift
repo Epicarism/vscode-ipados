@@ -137,10 +137,6 @@ struct CommandPaletteView: View {
             Command(name: "Show Command Palette", shortcut: "⌘⇧P", icon: "command", category: .view) {
                 dismiss()
             },
-            Command(name: "Quick Open", shortcut: "⌘P", icon: "magnifyingglass", category: .view) {
-                editorCore.showQuickOpen = true
-                dismiss()
-            },
 
             // Go Commands
             Command(name: "Go to File", shortcut: "⌘P", icon: "doc.text.magnifyingglass", category: .go) {
@@ -256,7 +252,10 @@ struct CommandPaletteView: View {
         // Prefix matches rank first, then other substring matches.
         let prefixMatches = allCommands.filter { $0.name.lowercased().hasPrefix(query) }
         let containsMatches = allCommands.filter {
-            $0.name.lowercased().contains(query) && !$0.name.lowercased().hasPrefix(query)
+            !$0.name.lowercased().hasPrefix(query) &&
+            ($0.name.lowercased().contains(query) ||
+             $0.shortcut.lowercased().contains(query) ||
+             $0.category.rawValue.lowercased().contains(query))
         }
 
         return prefixMatches + containsMatches
@@ -383,8 +382,8 @@ struct CommandPaletteView: View {
             selectedIndex = 0
         }
         .modifier(KeyboardNavigationModifier(
-            onUp: { if selectedIndex > 0 { selectedIndex -= 1 } },
-            onDown: { if selectedIndex < filteredCommands.count - 1 { selectedIndex += 1 } },
+            onUp: { guard !filteredCommands.isEmpty else { return }; selectedIndex = (selectedIndex - 1 + filteredCommands.count) % filteredCommands.count },
+            onDown: { guard !filteredCommands.isEmpty else { return }; selectedIndex = (selectedIndex + 1) % filteredCommands.count },
             onEscape: { dismiss() }
         ))
     }

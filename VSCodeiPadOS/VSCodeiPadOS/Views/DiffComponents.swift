@@ -98,7 +98,7 @@ struct DiffBuilder {
         if m == 0 { return old.map { .delete($0) } }
 
         // Optimization (b): Size limit guard — fall back for very large files
-        if n * m > 2_500_000 {
+        if n * m >= 2_500_000 {
             return old.map { _DiffEdit.delete($0) } + new.map { _DiffEdit.insert($0) }
         }
 
