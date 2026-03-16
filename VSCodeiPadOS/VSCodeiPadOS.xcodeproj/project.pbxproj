@@ -144,15 +144,12 @@
 		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
 		A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */; };
 		A5B5365FE7897DB66FFCF462 /* FoldingLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */; };
-		A98A310BC3D5D18B40194571 /* SFTPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 171C91E00F87228803CDB1DD /* SFTPManager.swift */; };
 		BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885F3C3B4438947AA7802BF5 /* Codicon.swift */; };
 		BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76695AA95638C9192E12E05E /* WindowStateManager.swift */; };
-		CCAF5453C0F54271A96F81C8 /* RemoteRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B06DD76A4067F87F1441E8D /* RemoteRunner.swift */; };
 		D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */; };
 		D0940CDBF3BE2C1681C37A94 /* SyntaxHighlightingTextView_Update.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */; };
 		D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301258073261580A471BF74C /* VSCodeTunnelView.swift */; };
 		D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBE91AB571E62605847001D /* RemoteDebugger.swift */; };
-		DA028286E4A33FB60DBDF812 /* SSHGitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF086617008172C344E5466E /* SSHGitClient.swift */; };
 		E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA35FC9065D549599858CE86 /* CommandPaletteView.swift */; };
 /* End PBXBuildFile section */
 
@@ -161,7 +158,6 @@
 		14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorBoundaryView.swift; path = Views/ErrorBoundaryView.swift; sourceTree = "<group>"; };
 		15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorParser.swift; path = Services/ErrorParser.swift; sourceTree = "<group>"; };
 		161CE6C43626812282CD4694 /* SuggestionCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SuggestionCache.swift; path = Services/SuggestionCache.swift; sourceTree = "<group>"; };
-		171C91E00F87228803CDB1DD /* SFTPManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SFTPManager.swift; path = Services/SFTPManager.swift; sourceTree = "<group>"; };
 		2001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2002 /* VSCodeiPadOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VSCodeiPadOSApp.swift; sourceTree = "<group>"; };
 		2003 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
@@ -276,7 +272,6 @@
 		33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ModifierTapGestureRecognizer.swift; path = Views/Editor/ModifierTapGestureRecognizer.swift; sourceTree = "<group>"; };
 		4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WelcomeView.swift; path = Views/WelcomeView.swift; sourceTree = "<group>"; };
 		59E70842EC260BF4AA42344E /* Array+Safe.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Array+Safe.swift"; path = "Extensions/Array+Safe.swift"; sourceTree = "<group>"; };
-		6B06DD76A4067F87F1441E8D /* RemoteRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteRunner.swift; path = Services/RemoteRunner.swift; sourceTree = "<group>"; };
 		76695AA95638C9192E12E05E /* WindowStateManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WindowStateManager.swift; path = Services/WindowStateManager.swift; sourceTree = "<group>"; };
 		7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MergeConflictView.swift; path = Views/Editor/MergeConflictView.swift; sourceTree = "<group>"; };
 		7C2305D4B39C54469E738C61 /* LoadingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LoadingView.swift; path = Views/LoadingView.swift; sourceTree = "<group>"; };
@@ -304,7 +299,6 @@
 		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
 		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
 		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
-		FF086617008172C344E5466E /* SSHGitClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SSHGitClient.swift; path = Services/NativeGit/SSHGitClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -359,10 +353,7 @@
 				7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */,
 				33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */,
 				AEBE91AB571E62605847001D /* RemoteDebugger.swift */,
-				6B06DD76A4067F87F1441E8D /* RemoteRunner.swift */,
 				FE15C63C875548573754E1A7 /* RunConfigView.swift */,
-				171C91E00F87228803CDB1DD /* SFTPManager.swift */,
-				FF086617008172C344E5466E /* SSHGitClient.swift */,
 				161CE6C43626812282CD4694 /* SuggestionCache.swift */,
 				9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */,
 				301258073261580A471BF74C /* VSCodeTunnelView.swift */,
@@ -824,10 +815,7 @@
 				D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */,
 				8CA403766E4C8AC0F3AE0195 /* ModifierTapGestureRecognizer.swift in Sources */,
 				D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */,
-				CCAF5453C0F54271A96F81C8 /* RemoteRunner.swift in Sources */,
 				16AE4B084CAA297D994F0E3F /* RunConfigView.swift in Sources */,
-				A98A310BC3D5D18B40194571 /* SFTPManager.swift in Sources */,
-				DA028286E4A33FB60DBDF812 /* SSHGitClient.swift in Sources */,
 				8F09852A2FAFCCDE9BF57E1B /* SuggestionCache.swift in Sources */,
 				D0940CDBF3BE2C1681C37A94 /* SyntaxHighlightingTextView_Update.swift in Sources */,
 				D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */,
