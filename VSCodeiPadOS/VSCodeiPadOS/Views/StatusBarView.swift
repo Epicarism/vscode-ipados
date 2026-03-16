@@ -3,7 +3,7 @@ import SwiftUI
 struct StatusBarView: View {
     @ObservedObject var editorCore: EditorCore
     @ObservedObject var themeManager = ThemeManager.shared
-    @ObservedObject private var git = GitManager.shared
+    @StateObject private var git = GitManager.shared
 
     // Sheet / popover state
     @State private var showGitSheet = false
