@@ -104,7 +104,7 @@ struct TestView: View {
 
     /// Scans the app's documents directory and bundle for Swift test files.
     static func discoverTestFunctions() -> [TestSuite] {
-        var suites: [TestSuite] = [:String, [String]]()
+        var suites: [TestSuite] = []
 
         // Scan the app's documents directory (workspace files)
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first

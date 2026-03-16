@@ -185,13 +185,13 @@ struct MarkdownPreviewView: View {
             var result = [];
             var i = 0;
             while (i < lines.length) {
-                if (lines[i].match(/^\|(.+)\|$/) && i + 1 < lines.length && lines[i + 1].match(/^\|[\s\\-:|]+\|$/)) {
-                    var headerLine = lines[i].replace(/^\|/, '').replace(/\|$/, '').split('|').map(function(s) { return s.trim(); });
+                if (lines[i].match(/^\\|(.+)\\|$/) && i + 1 < lines.length && lines[i + 1].match(/^\\|[\\s\\\\-:|]+\\|$/)) {
+                    var headerLine = lines[i].replace(/^\\|/, '').replace(/\\|$/, '').split('|').map(function(s) { return s.trim(); });
                     i++;
                     i++; // skip separator
                     var rows = [];
-                    while (i < lines.length && lines[i].match(/^\|(.+)\|$/)) {
-                        var cells = lines[i].replace(/^\|/, '').replace(/\|$/, '').split('|').map(function(s) { return s.trim(); });
+                    while (i < lines.length && lines[i].match(/^\\|(.+)\\|$/)) {
+                        var cells = lines[i].replace(/^\\|/, '').replace(/\\|$/, '').split('|').map(function(s) { return s.trim(); });
                         rows.push(cells);
                         i++;
                     }
