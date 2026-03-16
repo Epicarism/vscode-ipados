@@ -122,7 +122,6 @@
 		351ADC4052ACAADD4536971C /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE814C21BB995B940748C92 /* KeychainHelper.swift */; };
 		35BF151D49904BC89A3FC364 /* InlineSuggestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */; };
 		43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */; };
-		4745DF982F59D018D819AE60 /* FileDragModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 858D08F90B4DD92ABD76A9CE /* FileDragModifier.swift */; };
 		5AC9E5FE66317900502462CC /* BracketMatchingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDF346FA8697F71C1802A47 /* BracketMatchingManager.swift */; };
 		5C78C87974CA648FB14CBC80 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2305D4B39C54469E738C61 /* LoadingView.swift */; };
 		7513892E59B691367EFC56EB /* ErrorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */; };
@@ -143,7 +142,6 @@
 		9101 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9102 /* AppLogger.swift */; };
 		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
 		A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */; };
-		A5B5365FE7897DB66FFCF462 /* FoldingLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */; };
 		BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885F3C3B4438947AA7802BF5 /* Codicon.swift */; };
 		BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76695AA95638C9192E12E05E /* WindowStateManager.swift */; };
 		D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */; };
@@ -283,7 +281,6 @@
 		8016 /* NotificationToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToastView.swift; sourceTree = "<group>"; };
 		8018 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
 		8021 /* AutoSaveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveManager.swift; sourceTree = "<group>"; };
-		858D08F90B4DD92ABD76A9CE /* FileDragModifier.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FileDragModifier.swift; path = Utils/FileDragModifier.swift; sourceTree = "<group>"; };
 		885F3C3B4438947AA7802BF5 /* Codicon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Codicon.swift; path = Utils/Codicon.swift; sourceTree = "<group>"; };
 		896596632F3B9FAB005B984D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		896596662F3B9FAB005B984D /* TreeSitterLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterLanguages.swift; sourceTree = "<group>"; };
@@ -295,7 +292,6 @@
 		9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionView.swift; path = Views/Editor/InlineSuggestionView.swift; sourceTree = "<group>"; };
 		9D51F41DF514FB289AECDEE6 /* SyntaxHighlightingTextView_Update.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightingTextView_Update.swift; path = Views/Editor/SyntaxHighlightingTextView_Update.swift; sourceTree = "<group>"; };
 		AEBE91AB571E62605847001D /* RemoteDebugger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteDebugger.swift; path = Services/RemoteDebugger.swift; sourceTree = "<group>"; };
-		AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FoldingLayoutManager.swift; path = Views/Editor/FoldingLayoutManager.swift; sourceTree = "<group>"; };
 		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
 		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
 		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
@@ -343,8 +339,6 @@
 				FA35FC9065D549599858CE86 /* CommandPaletteView.swift */,
 				14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */,
 				15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */,
-				858D08F90B4DD92ABD76A9CE /* FileDragModifier.swift */,
-				AF80DAD43EE7821D648B2395 /* FoldingLayoutManager.swift */,
 				2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */,
 				01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */,
 				9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */,
@@ -805,8 +799,6 @@
 				E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */,
 				861AF3F49041DDA8E3DFE5A1 /* ErrorBoundaryView.swift in Sources */,
 				7513892E59B691367EFC56EB /* ErrorParser.swift in Sources */,
-				4745DF982F59D018D819AE60 /* FileDragModifier.swift in Sources */,
-				A5B5365FE7897DB66FFCF462 /* FoldingLayoutManager.swift in Sources */,
 				A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */,
 				35BF151D49904BC89A3FC364 /* InlineSuggestionManager.swift in Sources */,
 				19EC15A0E8DDCB0CDC307F95 /* InlineSuggestionView.swift in Sources */,

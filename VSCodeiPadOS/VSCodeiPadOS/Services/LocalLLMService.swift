@@ -56,6 +56,10 @@ final class LocalLLMService: ObservableObject {
     @Published var availableModels: [LocalModelConfig] = []
     @Published var currentModelId: String = ""
     @Published var isGenerating = false
+    @Published var didTruncateContext = false
+    
+    // Context window tracking
+    private var approximateTokenCount: Int = 0
     
     // HuggingFace token for gated models (stored in Keychain)
     @Published var hfToken: String = "" {
@@ -364,6 +368,7 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         modelContainer = nil
         chatSession = nil
         modelConfig = nil
+        approximateTokenCount = 0
         isModelLoaded = false
         statusMessage = "Model not loaded"
         AppLogger.ai.info("Model unloaded")
@@ -394,6 +399,30 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         await loadModel(modelId: modelId)
     }
     
+    // MARK: - Context Window Management
+    
+    /// Check if the approximate token count exceeds 75% of the context window.
+    /// If so, reset the session to avoid quality degradation from truncation.
+    private func checkAndTruncateIfNeeded() {
+        let contextLength = modelConfig?.contextLength ?? 32768
+        let threshold = contextLength * 3 / 4
+        if approximateTokenCount > threshold {
+            logger.warning(
+                "Context window approaching limit: ~\(self.approximateTokenCount, privacy: .public) tokens / \(contextLength, privacy: .public) max. Resetting session."
+            )
+            resetChat()
+            approximateTokenCount = 0
+            didTruncateContext = true
+        }
+    }
+    
+    /// Returns the approximate context window usage as a percentage (0.0 to 1.0+).
+    public func contextUsagePercent() -> Double {
+        let contextLength = modelConfig?.contextLength ?? 32768
+        guard contextLength > 0 else { return 0 }
+        return Double(approximateTokenCount) / Double(contextLength)
+    }
+    
     // MARK: - Chat Interface (non-streaming)
 
     func chat(messages: [(role: String, content: String)], systemPrompt: String? = nil) async throws -> String {
@@ -407,6 +436,9 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         
         isGenerating = true
         defer { isGenerating = false }
+        
+        // Check context window before processing this message
+        checkAndTruncateIfNeeded()
         
         let system = systemPrompt ?? defaultSystemPrompt
         logger.debug("chat() systemPrompt length: \(system.count, privacy: .public)")
@@ -426,6 +458,10 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
         
         let response = try await session.respond(to: lastUserMessage)
         logger.debug("chat() raw response length: \(response.count, privacy: .public)")
+        
+        // Estimate tokens from this exchange (rough 4 chars per token)
+        approximateTokenCount += (lastUserMessage.count + response.count) / 4
+        logger.debug("Approximate token count after chat(): ~\(self.approximateTokenCount, privacy: .public)")
         
         // Strip thinking tags
         let cleaned = stripThinkingTags(response)
@@ -455,6 +491,9 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                     let system = systemPrompt ?? self.defaultSystemPrompt
                     self.logger.debug("chatStream starting with systemPrompt length: \(system.count, privacy: .public)")
                     
+                    // Check context window before processing this message
+                    self.checkAndTruncateIfNeeded()
+                    
                     // Reuse existing chat session for conversation continuity
                     if self.chatSession == nil {
                         self.chatSession = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
@@ -467,6 +506,9 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                     
                     // Get last user message only
                     let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
+                    
+                    // Track tokens for the user message
+                    self.approximateTokenCount += lastUserMessage.count / 4
                     
                     // Stream response
                     var chunkCount = 0
@@ -484,6 +526,10 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
                         }
                     }
                     self.logger.info("Stream finished: \(chunkCount, privacy: .public) chunks, \(totalChars, privacy: .public) chars total")
+                    
+                    // Estimate tokens from streamed response
+                    self.approximateTokenCount += totalChars / 4
+                    self.logger.debug("Approximate token count after chatStream(): ~\(self.approximateTokenCount, privacy: .public)")
                     
                     continuation.finish()
                 } catch {
@@ -512,15 +558,11 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
     
     // MARK: - Think Tag Filtering
     
-    /// Strip <think>...</think> blocks from model output
-    /// These are chain-of-thought tags used by reasoning models (DeepSeek, Qwen thinking, etc.)
-    private func stripThinkingTags(_ text: String) -> String {
+    /// Strip  SwiftUI..., Error>) in
         var result = text
         
-        // First, try to extract content AFTER </think> tags (the actual response)
-        // If model outputs: <think>reasoning</think>actual response
-        // We want: actual response
-        let thinkPattern = #"<think>[\s\S]*?</think>"#
+        // First, try to extract content AFTER  Swift assistant model output
+        // If model outputs: <think chain-of-thought>"#
         if let regex = try? NSRegularExpression(pattern: thinkPattern, options: []) {
             let stripped = regex.stringByReplacingMatches(
                 in: result,
@@ -532,10 +574,8 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
             if !stripped.isEmpty {
                 result = stripped
             } else {
-                // Model put EVERYTHING in <think> tags with no actual response
-                // Extract what's INSIDE the think tags as the response
-                AppLogger.ai.warning("Model output was entirely in think tags, extracting content...")
-                let extractPattern = #"<think>([\s\S]*?)</think>"#
+                // Model put EVERYTHING in <think tags, then: extracting content...")
+                let extractPattern = #" SwiftUI
                 if let extractRegex = try? NSRegularExpression(pattern: extractPattern, options: []),
                    let match = extractRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
                    let contentRange = Range(match.range(at: 1), in: text) {
@@ -545,24 +585,275 @@ You are a helpful coding assistant. Always respond in English.<|im_end|>
             }
         }
         
-        // Remove incomplete opening <think> tag at end (partial streaming)
-        if let range = result.range(of: "<think>") {
-            if !result[range.upperBound...].contains("</think>") {
+        // Remove incomplete opening <think tag at end (partial streaming)
+        if let range = result.range(of: "<think") {
+            if !result[range.upperBound...].contains("</think") {
                 result = String(result[..<range.lowerBound])
             }
         }
         
-        // Remove stray </think> tags
-        result = result.replacingOccurrences(of: "</think>", with: "")
-        result = result.replacingOccurrences(of: "<think>", with: "")
+        // Remove stray  result = result.replacingOccurrences(of: "", with: "")
+        result = result.replacingOccurrences(of: " SwiftUI <|im_end|>"#
+            let existingTemplate = json["chat_template"] as? String
+            AppLogger.ai.debug("Nanbeige existing: \(existingTemplate?.prefix(50) ?? "nil")")
+            
+            json["chat_template"] = chatmlTemplate
+            AppLogger.ai.info("Set Nanbeige to ChatML format")
+            needsWrite = true
+        }
+        
+        if needsWrite {
+            let patched = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+            try patched.write(to: url)
+        }
+    }
+    
+    func unloadModel() {
+        modelContainer = nil
+        chatSession = nil
+        modelConfig = nil
+        approximateTokenCount = 0
+        isModelLoaded = false
+        statusMessage = "Model not loaded"
+        AppLogger.ai.info("Model unloaded")
+    }
+    
+    /// Clear all cached models to force re-download with fixed templates
+    func clearModelCache() {
+        unloadModel()
+        
+        // Clear HuggingFace Hub cache in Caches directory
+        if let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let hubCache = cachesDir.appendingPathComponent("huggingface")
+            do {
+                if FileManager.default.fileExists(atPath: hubCache.path) {
+                    try FileManager.default.removeItem(at: hubCache)
+                    AppLogger.ai.info("Cleared model cache at \(hubCache.path)")
+                    statusMessage = "Cache cleared - models will re-download"
+                }
+            } catch {
+                AppLogger.ai.error("Failed to clear cache: \(error)")
+                statusMessage = "Failed to clear cache"
+            }
+        }
+    }
+
+    func switchModel(to modelId: String) async {
+        unloadModel()
+        await loadModel(modelId: modelId)
+    }
+    
+    // MARK: - Context Window Management
+    
+    /// Check if the approximate token count exceeds 75% of the context window.
+    /// If so, reset the session to avoid quality degradation from truncation.
+    private func checkAndTruncateIfNeeded() {
+        let contextLength = modelConfig?.contextLength ?? 32768
+        let threshold = contextLength * 3 / 4
+        if approximateTokenCount > threshold {
+            logger.warning(
+                "Context window approaching limit: ~\(self.approximateTokenCount, privacy: .public) tokens / \(contextLength, privacy: .public) max. Resetting session."
+            )
+            resetChat()
+            approximateTokenCount = 0
+            didTruncateContext = true
+        }
+    }
+    
+    /// Returns the approximate context window usage as a percentage (0.0 to 1.0+).
+    public func contextUsagePercent() -> Double {
+        let contextLength = modelConfig?.contextLength ?? 32768
+        guard contextLength > 0 else { return 0 }
+        return Double(approximateTokenCount) / Double(contextLength)
+    }
+    
+    // MARK: - Chat Interface (non-streaming)
+
+    func chat(messages: [(role: String, content: String)], systemPrompt: String? = nil) async throws -> String {
+        guard isModelLoaded, let container = modelContainer else {
+            throw LocalLLMError.modelNotLoaded
+        }
+        
+        guard !isGenerating else {
+            throw LocalLLMError.alreadyGenerating
+        }
+        
+        isGenerating = true
+        defer { isGenerating = false }
+        
+        // Check context window before processing this message
+        checkAndTruncateIfNeeded()
+        
+        let system = systemPrompt ?? defaultSystemPrompt
+        logger.debug("chat() systemPrompt length: \(system.count, privacy: .public)")
+        
+        // Reuse existing chat session for conversation continuity
+        // Only create new session if none exists
+        if chatSession == nil {
+            chatSession = MLXChatSession(container, instructions: system, generateParameters: generateParams)
+        }
+        guard let session = chatSession else {
+            throw LocalLLMError.modelNotLoaded
+        }
+        
+        // Get last user message only
+        let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
+        logger.debug("chat() user message: '\(String(lastUserMessage.prefix(100)), privacy: .public)'")
+        
+        let response = try await session.respond(to: lastUserMessage)
+        logger.debug("chat() raw response length: \(response.count, privacy: .public)")
+        
+        // Estimate tokens from this exchange (rough 4 chars per token)
+        approximateTokenCount += (lastUserMessage.count + response.count) / 4
+        logger.debug("Approximate token count after chat(): ~\(self.approximateTokenCount, privacy: .public)")
+        
+        // Strip thinking tags
+        let cleaned = stripThinkingTags(response)
+        logger.debug("chat() cleaned response length: \(cleaned.count, privacy: .public)")
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    // MARK: - Streaming Chat (for UI)
+    
+    func chatStream(messages: [(role: String, content: String)], systemPrompt: String? = nil) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task { @MainActor in
+                guard self.isModelLoaded, let container = self.modelContainer else {
+                    continuation.finish(throwing: LocalLLMError.modelNotLoaded)
+                    return
+                }
+                
+                guard !self.isGenerating else {
+                    continuation.finish(throwing: LocalLLMError.alreadyGenerating)
+                    return
+                }
+                
+                self.isGenerating = true
+                self.currentResponse = ""
+                
+                do {
+                    let system = systemPrompt ?? self.defaultSystemPrompt
+                    self.logger.debug("chatStream starting with systemPrompt length: \(system.count, privacy: .public)")
+                    
+                    // Check context window before processing this message
+                    self.checkAndTruncateIfNeeded()
+                    
+                    // Reuse existing chat session for conversation continuity
+                    if self.chatSession == nil {
+                        self.chatSession = MLXChatSession(container, instructions: system, generateParameters: self.generateParams)
+                    }
+                    guard let session = self.chatSession else {
+                        continuation.finish(throwing: LocalLLMError.modelNotLoaded)
+                        return
+                    }
+                    self.logger.debug("Using existing MLXChatSession")
+                    
+                    // Get last user message only
+                    let lastUserMessage = messages.last(where: { $0.role == "user" })?.content ?? ""
+                    
+                    // Track tokens for the user message
+                    self.approximateTokenCount += lastUserMessage.count / 4
+                    
+                    // Stream response
+                    var chunkCount = 0
+                    var totalChars = 0
+                    self.logger.debug("Starting streamResponse...")
+                    for try await chunk in session.streamResponse(to: lastUserMessage) {
+                        chunkCount += 1
+                        totalChars += chunk.count
+                        if chunkCount <= 3 {
+                            self.logger.debug("Chunk \(chunkCount, privacy: .public): '\(String(chunk.prefix(50)), privacy: .public)'")
+                        }
+                        if !chunk.isEmpty {
+                            self.currentResponse += chunk
+                            continuation.yield(chunk)
+                        }
+                    }
+                    self.logger.info("Stream finished: \(chunkCount, privacy: .public) chunks, \(totalChars, privacy: .public) chars total")
+                    
+                    // Estimate tokens from streamed response
+                    self.approximateTokenCount += totalChars / 4
+                    self.logger.debug("Approximate token count after chatStream(): ~\(self.approximateTokenCount, privacy: .public)")
+                    
+                    continuation.finish()
+                } catch {
+                    self.logger.error("chatStream error: \(error.localizedDescription, privacy: .public)")
+                    continuation.finish(throwing: error)
+                }
+                
+                self.isGenerating = false
+                self.currentResponse = ""
+            }
+        }
+    }
+    
+    // MARK: - Memory Estimation
+    
+    func estimateMemoryUsage() -> Int {
+        return modelConfig?.estimatedMemoryMB ?? 0
+    }
+    
+    func canFitInMemory(modelId: String, availableMemoryMB: Int) -> Bool {
+        guard let config = availableModels.first(where: { $0.id == modelId }) else {
+            return false
+        }
+        return config.estimatedMemoryMB <= availableMemoryMB
+    }
+    
+    // MARK: - Think Tag Filtering
+    
+    /// Strip <think...</think blocks from model output
+    /// These are chain-of-thought tags used by reasoning models (DeepSeek, Qwen thinking, etc.)
+    private func stripThinkingTags(_ text: String) -> String {
+        var result = text
+        
+        // First, try to extract content AFTER </think tags (the actual response)
+        // If model outputs: <think reasoning</think actual response
+        // We want: actual response
+        let thinkPattern = #"<think[\s\S]*?</think"#
+        if let regex = try? NSRegularExpression(pattern: thinkPattern, options: []) {
+            let stripped = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: ""
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // If stripping leaves us with content, use it
+            if !stripped.isEmpty {
+                result = stripped
+            } else {
+                // Model put EVERYTHING in <think tags with no actual response
+                // Extract what's INSIDE the think tags as the response
+                AppLogger.ai.warning("Model output was entirely in think tags, extracting content...")
+                let extractPattern = #"<think([\s\S]*?)</think"#
+                if let extractRegex = try? NSRegularExpression(pattern: extractPattern, options: []),
+                   let match = extractRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                   let contentRange = Range(match.range(at: 1), in: text) {
+                    result = String(text[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    AppLogger.ai.debug("Extracted \(result.count) chars from think block")
+                }
+            }
+        }
+        
+        // Remove incomplete opening <think tag at end (partial streaming)
+        if let range = result.range(of: "<think") {
+            if !result[range.upperBound...].contains("</think") {
+                result = String(result[..<range.lowerBound])
+            }
+        }
+        
+        // Remove stray  result = result.replacingOccurrences(of: "", with: "")
+        result = result.replacingOccurrences(of: "<think", with: "")
         
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+    
     // MARK: - Reset Chat Context
     
     func resetChat() {
         guard let container = modelContainer else { return }
         chatSession = MLXChatSession(container, instructions: defaultSystemPrompt, generateParameters: generateParams)
+        approximateTokenCount = 0
     }
 }
 
