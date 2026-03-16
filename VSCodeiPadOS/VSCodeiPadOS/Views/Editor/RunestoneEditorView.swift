@@ -341,7 +341,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
             self.lastFontSize = parent.fontSize
-            self.lastThemeId = ThemeManager.shared.currentTheme.id
+            self.lastThemeId = ""  // Will be set on first update from MainActor
             self.lastFilename = parent.filename
         }
         

@@ -58,6 +58,9 @@
 | 45 | ProblemsView header with error/warning count badges | `ProblemsView.swift` |
 | 46 | VoiceOver: AIAssistantView (6 buttons + input), TestView (rescan + empty state) | `AIAssistantView.swift`, `TestView.swift` |
 | 47 | API keys migrated from UserDefaults to iOS Keychain | `KeychainHelper.swift`, `AIManager.swift`, `AppDelegate.swift` |
+| 48 | Eliminated 10 crash points (URL force-unwraps, dict force-unwraps, array bounds) | `AIManager.swift`, `OutputView.swift`, `TasksManager.swift`, `NavigationManager.swift`, `CodeAnalyzer.swift` |
+| 49 | LocalLLMService: conversation history fix (reuse MLXChatSession) + HF token to Keychain | `LocalLLMService.swift` |
+| 50 | SettingsView: search filter fix, duplicate import cleanup | `SettingsView.swift` |
 
 ---
 
@@ -117,9 +120,9 @@
 | Multi-Window / Stage Manager | ✅ 100% | Complete, configured |
 | Command Palette | ✅ 100% | Now with search filtering |
 | Quick Open | ✅ 100% | Now with search filtering |
-| On-Device LLM (MLX) | 🟡 80% | Nanbeige working, needs conversation history |
+| On-Device LLM (MLX) | ✅ 90% | Nanbeige working, conversation history fixed, HF token in Keychain |
 | Native Git | 🟡 70% | Reader done, write ops stub |
-| AI Assistant (cloud) | ✅ 90% | 11 providers, cancel, conversation history, Keychain API keys |
+| AI Assistant (cloud) | ✅ 95% | 11 providers, cancel, history, Keychain keys, crash-safe URL handling |
 | Extension System | 🟡 30% | Basic framework only |
 | SSH/SFTP | 🔴 5% | All stubs, feature-flagged off |
 | iCloud Sync | 🔴 0% | Feature-flagged off |
