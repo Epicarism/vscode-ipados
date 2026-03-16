@@ -132,11 +132,12 @@ struct SearchView: View {
     @State private var searchHistory: [String] = []
     @State private var showHistory: Bool = false
     
+    @State private var cachedResults: [FileSearchResult] = []
 
     // MARK: - Computed Properties
     
-    /// Returns the filtered, sorted, and limited results
-    var processedResults: [FileSearchResult] {
+    /// Recompute and cache the filtered, sorted, and limited results
+    private func recomputeProcessedResults() {
         var filtered = rawResults
         
         // 1. Filter by binary files
@@ -172,16 +173,17 @@ struct SearchView: View {
             filtered = Array(filtered.prefix(maxCount))
         }
         
-        return filtered
+        cachedResults = filtered
+        navigationItems = buildNavigationItems()
     }
     
     /// Group results by directory if enabled
     var groupedResults: [(key: String, results: [FileSearchResult])] {
         if groupByDirectory {
-            let grouped = Dictionary(grouping: processedResults) { $0.directory }
+            let grouped = Dictionary(grouping: cachedResults) { $0.directory }
             return grouped.sorted { $0.key < $1.key }.map { (key: $0.key, results: $0.value) }
         } else {
-            return [(key: "", results: processedResults)]
+            return [(key: "", results: cachedResults)]
         }
     }
     
@@ -199,7 +201,7 @@ struct SearchView: View {
     /// Builds the flat list of navigation items from results
     private func buildNavigationItems() -> [SearchNavigationItem] {
         var items: [SearchNavigationItem] = []
-        let results = processedResults
+        let results = cachedResults
         for (fileIndex, fileResult) in results.enumerated() {
             for (matchIndex, match) in fileResult.matches.enumerated() {
                 items.append(SearchNavigationItem(
@@ -271,7 +273,7 @@ struct SearchView: View {
     /// Opens the currently selected result
     private func openSelectedResult() {
         guard let selected = selectedNavigationItem else { return }
-        let results = processedResults
+        let results = cachedResults
         guard selected.fileIndex < results.count else { return }
         let fileResult = results[selected.fileIndex]
         guard selected.matchIndex < fileResult.matches.count else { return }
@@ -305,8 +307,26 @@ struct SearchView: View {
                 searchManager.clearResults()
             }
         }
-        .onChange(of: processedResults) { _, _ in
-            navigationItems = buildNavigationItems()
+        .onChange(of: searchManager.results.count) { _, _ in
+            recomputeProcessedResults()
+        }
+        .onChange(of: searchManager.isSearching) { _, newValue in
+            if !newValue { recomputeProcessedResults() }
+        }
+        .onChange(of: sortOption) { _, _ in
+            recomputeProcessedResults()
+        }
+        .onChange(of: sortAscending) { _, _ in
+            recomputeProcessedResults()
+        }
+        .onChange(of: selectedExtensions) { _, _ in
+            recomputeProcessedResults()
+        }
+        .onChange(of: excludeBinaryFiles) { _, _ in
+            recomputeProcessedResults()
+        }
+        .onChange(of: resultLimit) { _, _ in
+            recomputeProcessedResults()
         }
         .onChange(of: matchCase) { _, _ in
             if searchText.count >= 2 { debouncedSearch() }
@@ -658,7 +678,7 @@ struct SearchView: View {
     private var resultsSection: some View {
         if searchText.isEmpty && !searchManager.isSearching {
             initialSearchState
-        } else if processedResults.isEmpty && !searchText.isEmpty && !searchManager.isSearching {
+        } else if cachedResults.isEmpty && !searchText.isEmpty && !searchManager.isSearching {
             noResultsView
         } else {
             resultsListSection
@@ -717,7 +737,7 @@ struct SearchView: View {
     private var resultsListSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             SearchResultsHeader(
-                resultCount: processedResults.count,
+                resultCount: cachedResults.count,
                 totalCount: rawResults.count,
                 sortOption: $sortOption,
                 sortAscending: $sortAscending,
@@ -768,7 +788,7 @@ struct SearchView: View {
     
     @ViewBuilder
     private var flatResultsList: some View {
-        ForEach(Array(processedResults.enumerated()), id: \.element.id) { fileIndex, fileResult in
+        ForEach(Array(cachedResults.enumerated()), id: \.element.id) { fileIndex, fileResult in
             FileResultRow(
                 fileResult: fileResult,
                 fileIndex: fileIndex,

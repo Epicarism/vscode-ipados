@@ -267,7 +267,7 @@ final class RunConfigViewModel: ObservableObject {
         }
         
         // For other languages, use remote runner
-        guard remoteRunner != nil else {
+        guard let runner = remoteRunner else {
             alertMessage = "RemoteRunner not configured"
             showSaveAlert = true
             isExecuting = false
@@ -275,7 +275,7 @@ final class RunConfigViewModel: ObservableObject {
         }
         
         do {
-            let result = try await remoteRunner!.execute(
+            let result = try await runner.execute(
                 filePath: filePath,
                 configuration: currentConfig
             )
@@ -440,7 +440,7 @@ final class RunConfigViewModel: ObservableObject {
 
 // MARK: - RemoteRunner Protocol
 
-protocol RemoteRunner {
+protocol RemoteRunner: Sendable {
     func execute(filePath: String?, configuration: RunConfiguration) async throws -> ExecutionResult
 }
 

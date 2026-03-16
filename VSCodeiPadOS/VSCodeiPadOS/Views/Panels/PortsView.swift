@@ -490,7 +490,7 @@ struct PortsView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.editorForeground.opacity(0.7))
                     
-                    Text("Forward a port to access a running process\nfrom your local machine.")
+                    Text("Detect listening ports on a remote server\nor track ports for your project.")
                         .font(.system(size: 12))
                         .foregroundColor(theme.comment)
                         .multilineTextAlignment(.center)
@@ -556,9 +556,9 @@ struct PortRowView: View {
             // Status dot + Port number
             HStack(spacing: 6) {
                 Circle()
-                    .fill(port.isActive ? Color.green : Color.red)
+                    .fill(port.origin == .auto ? Color.orange : (port.isActive ? Color.green : Color.red))
                     .frame(width: 6, height: 6)
-                    .accessibilityLabel(port.isActive ? "Active" : "Inactive")
+                    .accessibilityLabel(port.origin == .auto ? "Detected" : (port.isActive ? "Active" : "Inactive"))
                 
                 Text("\(port.port)")
                     .font(.system(size: 12, design: .monospaced))
@@ -572,12 +572,21 @@ struct PortRowView: View {
                 .foregroundColor(theme.comment)
                 .frame(width: 65, alignment: .leading)
             
-            // Local Address
-            Text(port.localURL)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.accentColor)
-                .lineLimit(1)
-                .frame(minWidth: 120, alignment: .leading)
+            // Local Address / Status
+            if port.origin == .auto {
+                Text("Detected on remote")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.comment.opacity(0.7))
+                    .italic()
+                    .lineLimit(1)
+                    .frame(minWidth: 120, alignment: .leading)
+            } else {
+                Text(port.localURL)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                    .lineLimit(1)
+                    .frame(minWidth: 120, alignment: .leading)
+            }
             
             // Origin
             Text(port.origin.rawValue)
@@ -603,8 +612,14 @@ struct PortRowView: View {
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .contextMenu {
-            Button(action: { portManager.copyLocalAddress(id: port.id) }) {
-                Label("Copy Local Address", systemImage: "doc.on.doc")
+            Button(action: {
+                if port.origin == .auto {
+                    UIPasteboard.general.string = "\(port.port)"
+                } else {
+                    portManager.copyLocalAddress(id: port.id)
+                }
+            }) {
+                Label(port.origin == .auto ? "Copy Port Number" : "Copy Local Address", systemImage: "doc.on.doc")
             }
             
             Button(action: { UIPasteboard.general.string = "\(port.port)" }) {

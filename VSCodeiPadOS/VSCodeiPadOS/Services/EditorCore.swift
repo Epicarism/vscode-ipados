@@ -183,7 +183,7 @@ class EditorCore: ObservableObject {
     @Published var showSidebar = true
     @Published var sidebarWidth: CGFloat = 250
     @Published var showFilePicker = false
-    @Published var searchText = ""
+    // searchText removed - was dead @Published property
     @Published var showSearch = false
     @Published var showCommandPalette = false
     @Published var showQuickOpen = false
@@ -235,12 +235,12 @@ class EditorCore: ObservableObject {
     @Published var requestedGoToLine: Int?
 
     // UI Panel state
-    @Published var showPanel = false
+    // showPanel removed - was write-only @Published property
     @Published var showKeyboardShortcuts = false
     @Published var focusedSidebarTab = 0
 
     // Debug state
-    @Published var breakpoints: [DebugBreakpoint] = []
+    // breakpoints removed - debug breakpoints handled by DebugManager
 
     // Reference to file navigator for workspace search
     weak var fileNavigator: FileSystemNavigator?
@@ -1342,9 +1342,8 @@ mod tests {
     }
 
     func togglePanel() {
-        withAnimation(.spring(response: 0.3)) {
-            showPanel.toggle()
-        }
+        // Panel visibility is managed by ContentView's showTerminal state
+        NotificationCenter.default.post(name: .toggleTerminal, object: nil)
     }
 
     func addSelectionToNextFindMatch() {

@@ -236,11 +236,7 @@ struct LocalSaveEntry: Identifiable, Hashable, Sendable {
     }
 }
 
-// MARK: - Notification Names
 
-extension Notification.Name {
-    static let fileSaved = Notification.Name("com.codepad.fileSaved")
-}
 
 // MARK: - View Model
 
@@ -278,8 +274,18 @@ final class TimelineViewModel: ObservableObject {
         // Default to GitTimelineProvider for real git data
         self.provider = provider ?? GitTimelineProvider()
         
-        // Listen for file save notifications
-        NotificationCenter.default.publisher(for: .fileSaved)
+        // Listen for file save notifications (both manual and auto-save)
+        NotificationCenter.default.publisher(for: .saveFile)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self else { return }
+                if let savedPath = notification.userInfo?["filePath"] as? String {
+                    self.recordLocalSave(filePath: savedPath)
+                }
+            }
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: .autoSaved)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 guard let self = self else { return }

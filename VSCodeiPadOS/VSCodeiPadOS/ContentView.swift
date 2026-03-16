@@ -1026,7 +1026,7 @@ struct IDEWelcomeView: View {
                             editorCore.showSidebar = true
                         }
                         WelcomeLink(icon: "network", title: "Connect to SSH Host...", shortcut: nil, theme: theme) {
-                            editorCore.showPanel = true
+                            // Show terminal panel for SSH connection
                             NotificationCenter.default.post(name: .toggleTerminal, object: nil)
                         }
                     }
