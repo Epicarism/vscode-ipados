@@ -309,7 +309,7 @@ public final class WASMRunner: NSObject {
                     // Get the exported function
                     const fn = instance.exports['\(function)'];
                     if (typeof fn !== 'function') {
-                        throw new Error('Function \'\'\(function)\' not found or not a function');
+                        throw new Error('Function "' + '\(function)' + '" not found or not a function');
                     }
                     
                     // Parse arguments
