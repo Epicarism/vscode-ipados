@@ -1107,6 +1107,7 @@ struct SearchResultsHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Collapse All")
+            .accessibilityHint("Double tap to collapse all search result groups")
             
             Button(action: onExpandAll) {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -1114,6 +1115,7 @@ struct SearchResultsHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Expand All")
+            .accessibilityHint("Double tap to expand all search result groups")
             
             Button(action: { showFilters.toggle() }) {
                 Image(systemName: "line.3.horizontal.decrease.circle")
@@ -1122,6 +1124,7 @@ struct SearchResultsHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Toggle Filters")
+            .accessibilityHint("Double tap to show or hide search filters")
         }
     }
     
@@ -1158,6 +1161,7 @@ struct SearchResultsHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(sortAscending ? "Ascending" : "Descending")
+            .accessibilityHint("Double tap to toggle sort direction")
             
             Spacer()
         }
