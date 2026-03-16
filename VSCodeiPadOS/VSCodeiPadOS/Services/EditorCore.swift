@@ -891,7 +891,7 @@ mod tests {
         tabs[index].isUnsaved = true
         
         // Trigger auto-save if enabled
-        AutoSaveManager.shared.contentDidChange(tabId: tabs[index].id)
+        Task { @MainActor in AutoSaveManager.shared.contentDidChange(tabId: self.tabs[index].id) }
     }
 
     func saveActiveTab() {

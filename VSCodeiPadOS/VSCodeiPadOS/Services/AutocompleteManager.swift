@@ -349,8 +349,3 @@ final class AutocompleteManager: ObservableObject {
 
 // MARK: - Safe Array Access
 
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}
