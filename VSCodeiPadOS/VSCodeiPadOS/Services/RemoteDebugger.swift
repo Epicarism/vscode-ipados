@@ -292,7 +292,7 @@ final class RemoteDebugger: ObservableObject {
     func disconnect() async {
         // Send quit command if connected
         if state.isActive {
-            let quitCmd = debuggerType == .lldb ? "quit" : "quit"
+            let quitCmd = "quit"
             try? await sendCommand(quitCmd)
         }
         
@@ -559,7 +559,7 @@ final class RemoteDebugger: ObservableObject {
             throw RemoteDebuggerError.invalidState
         }
         
-        let command = debuggerType == .lldb ? "continue" : "continue"
+        let command = "continue"
         
         state = .running
         emitEvent(.stateChanged(.running))
@@ -570,7 +570,7 @@ final class RemoteDebugger: ObservableObject {
     
     /// Run the program from the beginning
     func run() async throws {
-        let command = debuggerType == .lldb ? "run" : "run"
+        let command = "run"
         
         state = .running
         emitEvent(.stateChanged(.running))
@@ -585,7 +585,7 @@ final class RemoteDebugger: ObservableObject {
             throw RemoteDebuggerError.invalidState
         }
         
-        let command = debuggerType == .lldb ? "next" : "next"
+        let command = "next"
         
         state = .running
         emitEvent(.stateChanged(.running))
@@ -603,7 +603,7 @@ final class RemoteDebugger: ObservableObject {
             throw RemoteDebuggerError.invalidState
         }
         
-        let command = debuggerType == .lldb ? "step" : "step"
+        let command = "step"
         
         state = .running
         emitEvent(.stateChanged(.running))
@@ -620,7 +620,7 @@ final class RemoteDebugger: ObservableObject {
             throw RemoteDebuggerError.invalidState
         }
         
-        let command = debuggerType == .lldb ? "finish" : "finish"
+        let command = "finish"
         
         state = .running
         emitEvent(.stateChanged(.running))

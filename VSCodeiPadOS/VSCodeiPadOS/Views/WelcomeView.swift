@@ -198,6 +198,8 @@ struct WelcomeView: View {
         }
         .tint(theme.statusBarBackground)
         .toggleStyle(.switch)
+        .accessibilityLabel("Show Welcome on Startup")
+        .accessibilityHint("Double tap to toggle whether this page shows on launch")
     }
 
     // MARK: - Action Row (reusable button-like row)
@@ -250,6 +252,8 @@ struct WelcomeView: View {
         .onHover { hovering in
             hoveredAction = hovering ? actionKey : nil
         }
+        .accessibilityLabel(title)
+        .accessibilityHint("Double tap to \(subtitle)")
     }
 }
 
