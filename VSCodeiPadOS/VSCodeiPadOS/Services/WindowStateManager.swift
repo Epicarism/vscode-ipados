@@ -87,7 +87,7 @@ struct WindowActivity {
 // MARK: - Window State Manager
 
 /// Singleton manager for multi-window state persistence
-class WindowStateManager: ObservableObject {
+class WindowStateManager: ObservableObject, @unchecked Sendable {
     static let shared = WindowStateManager()
     
     @Published private(set) var windowStates: [UUID: WindowState] = [:]

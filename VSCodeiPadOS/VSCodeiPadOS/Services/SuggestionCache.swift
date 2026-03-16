@@ -20,7 +20,7 @@ private final class CacheEntry {
 
 /// Thread-safe LRU cache for inline code suggestions with TTL expiration
 /// Maximum 100 entries, 5 minute expiration
-final class SuggestionCache {
+final class SuggestionCache: @unchecked Sendable {
     // MARK: - Constants
     
     static let maxEntries = 100
