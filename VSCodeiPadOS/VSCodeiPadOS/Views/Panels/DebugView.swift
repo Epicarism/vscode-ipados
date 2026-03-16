@@ -41,6 +41,8 @@ struct DebugView: View {
                         .background(Color.green.opacity(0.1))
                         .cornerRadius(4)
                 }
+                .accessibilityLabel("Start debugging")
+                .accessibilityHint("Double tap to start debug session")
                 .buttonStyle(PlainButtonStyle())
                 
                 Button(action: {}) {
@@ -48,6 +50,8 @@ struct DebugView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                 }
+                .accessibilityLabel("Debug options")
+                .accessibilityHint("Double tap for more debug options")
                 .buttonStyle(PlainButtonStyle())
                 .padding(.leading, 8)
             }
@@ -139,6 +143,8 @@ struct DebugView: View {
                                 .padding(.vertical, 4)
                                 .padding(.leading, 12)
                             }
+                            .accessibilityLabel("Add watch expression")
+                            .accessibilityHint("Double tap to add a new watch expression")
                             .opacity(isAddingWatch ? 0 : 1)
                         }
                     } label: {
