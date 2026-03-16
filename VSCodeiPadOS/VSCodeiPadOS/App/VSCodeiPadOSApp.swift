@@ -57,7 +57,11 @@ struct FileMenuCommands: Commands {
             .keyboardShortcut("n", modifiers: .command)
             
             Button("New Window") {
-                // Request new window via UIKit
+                UIApplication.shared.requestSceneSessionActivation(
+                    nil, userActivity: nil, options: nil, errorHandler: { error in
+                        AppLogger.editor.error("Failed to create new window: \(error)")
+                    }
+                )
             }
             .keyboardShortcut("n", modifiers: [.command, .option])
         }

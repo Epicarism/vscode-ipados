@@ -71,13 +71,24 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // MARK: - Stage Manager Optimization
     
     private func configureStageManager() {
-        // Enable Stage Manager optimizations for iPadOS 26+
+        guard UIApplication.shared.supportsMultipleScenes else { return }
+        
         if #available(iOS 16.0, *) {
-            // Configure scene resizing behavior
-            // This allows windows to properly resize in Stage Manager
-            
-            // Note: These are hints to the system that help optimize
-            // the app's behavior in Stage Manager
+            // Configure preferred scene sizes for Stage Manager
+            for scene in UIApplication.shared.connectedScenes {
+                guard let windowScene = scene as? UIWindowScene else { continue }
+                
+                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: .all
+                )
+                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                    AppLogger.editor.error("Stage Manager geometry update failed: \(error)")
+                }
+                
+                // Set minimum size for Stage Manager windows
+                windowScene.sizeRestrictions?.minimumSize = CGSize(width: 768, height: 600)
+                windowScene.sizeRestrictions?.maximumSize = CGSize(width: 2732, height: 2048)
+            }
         }
     }
 }

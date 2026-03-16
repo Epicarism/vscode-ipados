@@ -329,7 +329,7 @@ struct SingleTerminalView: View {
                     .font(.system(.body, design: .monospaced))
                     .foregroundColor(themeManager.currentTheme.editorForeground)
                     .accentColor(themeManager.currentTheme.cursor)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
                     .focused($isInputFocused)
                     .onSubmit { executeCommand() }
@@ -341,7 +341,7 @@ struct SingleTerminalView: View {
             if isInputFocused {
                 HStack(spacing: 12) {
                     Button("Tab") { terminal.sendTab() }
-                    Button("Esc") { /* handle esc */ }
+                    Button("Esc") { terminal.sendEscape() }
                     Button("Ctrl+C") { terminal.sendInterrupt() }
                         .foregroundColor(.red)
                     Spacer()
@@ -797,10 +797,10 @@ struct SSHConnectionView: View {
                 // New Connection Section
                 Section(header: Text("New Connection")) {
                     TextField("Connection Name (optional)", text: $connectionName)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                     
                     TextField("Host", text: $host)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                         .keyboardType(.URL)
                     
@@ -808,7 +808,7 @@ struct SSHConnectionView: View {
                         .keyboardType(.numberPad)
                     
                     TextField("Username", text: $username)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                 }
                 

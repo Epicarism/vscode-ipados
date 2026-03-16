@@ -1,6 +1,6 @@
 # VSCode iPadOS — Backlog
 
-> **Last updated:** March 16, 2026 by Claude Agent  
+> **Last updated:** March 16, 2026 by Claude Agent (Session 2)  
 > **Other SWEs:** Please update this file when you pick up or complete tasks.  
 > **Priority:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low
 
@@ -10,73 +10,44 @@
 
 ### BUG-001: AI Stop/Cancel Button Non-Functional
 - **File:** `Services/AIManager.swift`, `Views/Panels/AIAssistantView.swift`
-- **Issue:** Stop button shows during streaming but has no cancel logic. Users can't stop AI generation.
+- **Issue:** Stop button shows during streaming but has no cancel logic.
 - **Fix:** Add `URLSessionTask.cancel()` and `AsyncStream` cancellation support.
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
+- **Status:** TODO
 
 ### BUG-002: "New Window" Menu Command is No-Op
 - **File:** `App/VSCodeiPadOSApp.swift` (line 59-61)
-- **Issue:** The "New Window" menu item handler body is empty. No actual window creation.
+- **Issue:** The "New Window" menu item handler body is empty.
 - **Fix:** Implement `UIApplication.shared.requestSceneSessionActivation(nil, ...)`
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### BUG-003: SceneDelegate is Dead Code
-- **File:** `App/SceneDelegate.swift`
-- **Issue:** SwiftUI `WindowGroup` bypasses UIKit SceneDelegate. Lifecycle methods never execute.
-- **Fix:** Either wire it up via Info.plist scene config or remove it and move logic to SwiftUI lifecycle.
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### BUG-004: WindowStateManager Has No Persistence
-- **File:** `Services/WindowStateManager.swift`
-- **Issue:** All window state is in-memory only. Lost on app termination.
-- **Fix:** Add UserDefaults or file-based persistence.
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
+- **Status:** TODO
 
 ### BUG-005: Security-Scoped Resource Edge Case
 - **File:** `Services/EditorCore.swift` (line 1015)
-- **Issue:** `startAccessingSecurityScopedResource()` may return false but file is still readable. Currently documented as known issue.
-- **Status:** ⚠️ KNOWN — workaround in place (don't early-return on false)
-
-### BUG-006: Hardcoded Notification Strings
-- **Files:** Throughout `Views/`, `App/VSCodeiPadOSApp.swift`, `ContentView.swift`
-- **Issue:** 30+ raw `NSNotification.Name("...")` strings scattered across codebase. Typo-prone.
-- **Fix:** Centralize into `Notification.Name` extension constants.
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### CONFIG-001: README References Wrong Project Name
-- **File:** `README.md`
-- **Issue:** Says `VSCodeiPad.xcodeproj` but actual name is `VSCodeiPadOS.xcodeproj`
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### CONFIG-002: Swift Version Mismatch
-- **File:** `Package.swift` vs `project.pbxproj`
-- **Issue:** Package.swift says swift-tools-version 5.9, pbxproj says SWIFT_VERSION = 5.0
-- **Status:** ⏳ TODO
+- **Issue:** `startAccessingSecurityScopedResource()` may return false but file is still readable.
+- **Status:** KNOWN - workaround in place
 
 ---
 
 ## 🟠 High Priority
 
-### FEAT-001: Notification Constants System
-- **Description:** Create `Extensions/Notification+Names.swift` with all app notification names as constants.
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### FEAT-002: AI Streaming Cancellation
-- **Description:** Full cancel support for all AI providers (URLSession tasks, AsyncStream).
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### CLEANUP-001: Remove Dead Backup Files
-- **Files:** `Services/ThemeManager.swift.bak`, `Commands/AppCommands.swift.bak`, `Services/RunnerSelector.existing.swift`
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
-### CLEANUP-002: Remove/Fix Duplicate SceneDelegate
-- **Files:** `App/SceneDelegate.swift` vs `SceneDelegate.swift` (root of VSCodeiPadOS/VSCodeiPadOS/)
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
-
 ### POLISH-001: configureStageManager() Implementation
 - **File:** `App/AppDelegate.swift` (line 73-82)
 - **Issue:** Empty no-op stub for Stage Manager configuration.
-- **Status:** 🔧 IN PROGRESS (Claude Agent - Mar 16)
+- **Status:** TODO
+
+### BUG-007: ProblemsView Uses Hardcoded Mock Data
+- **File:** `Views/Panels/ProblemsView.swift`
+- **Issue:** All problems are hardcoded. No connection to real diagnostics.
+- **Status:** TODO
+
+### BUG-008: TestView Test Execution is Fake
+- **File:** `Views/Panels/TestView.swift`
+- **Issue:** `Bool.random()` used for test pass/fail.
+- **Status:** TODO
+
+### BUG-009: Syntax Highlighter Ignores Themes
+- **File:** `Extensions/NSAttributedStringSyntaxHighlighter.swift`
+- **Issue:** Hardcoded UIColor. Ignores ThemeManager entirely.
+- **Status:** TODO
 
 ---
 
@@ -84,31 +55,31 @@
 
 ### FEAT-003: Find References in Editor
 - **File:** `Views/Editor/SyntaxHighlightingTextView.swift` (line 866)
-- **Issue:** TODO - find references functionality not implemented
-- **Status:** ⏳ TODO
+- **Status:** TODO
 
 ### FEAT-004: Format Document
 - **File:** `Views/Editor/SyntaxHighlightingTextView.swift` (line 878)
-- **Issue:** TODO - format document functionality not implemented
-- **Status:** ⏳ TODO
-
-### FEAT-005: Python On-Device Execution (Pyodide)
-- **File:** `Services/OnDevice/PythonRunner.swift`
-- **Issue:** 3 TODOs - Pyodide loading, execution, remote execution all unimplemented
-- **Status:** ⏳ TODO
+- **Status:** TODO
 
 ### FEAT-006: Git Pull/Push via GitHub API
 - **File:** `Services/GitManager.swift`
-- **Issue:** Pull and push are stubs awaiting GitHubAPIClient integration
-- **Status:** ⏳ TODO
+- **Status:** TODO
 
 ### INFRA-001: Add CI/CD Pipeline
 - **Description:** GitHub Actions for build, test, lint
-- **Status:** ⏳ TODO
+- **Status:** TODO
 
 ### INFRA-002: Add Entitlements File
-- **Description:** Needed for iCloud sync, SSH, and file access capabilities
-- **Status:** ⏳ TODO
+- **Description:** Needed for iCloud sync, SSH, file access
+- **Status:** TODO
+
+### BUG-010: MarkdownPreview Requires Internet (CDN)
+- **File:** `Views/Panels/MarkdownPreviewView.swift`
+- **Status:** TODO
+
+### BUG-011: TerminalView Esc Button is No-Op
+- **File:** `Views/Panels/TerminalView.swift`
+- **Status:** TODO
 
 ---
 
@@ -116,36 +87,57 @@
 
 ### FEAT-007: SSH Manager Implementation
 - **File:** `Services/SSHManager.swift` (13 TODOs)
-- **Issue:** Entire file is stub. All methods need SwiftNIO SSH implementation.
-- **Status:** ⏳ TODO (blocked on feature flag `enableSSH`)
+- **Status:** TODO (blocked on enableSSH flag)
 
 ### FEAT-008: SFTP Implementation
 - **File:** `Services/SFTPManager.swift`
-- **Issue:** Workaround for missing SwiftNIO SSH SFTP subsystem
-- **Status:** ⏳ TODO
+- **Status:** TODO
 
 ### CLEANUP-003: Consolidate Hex Color Utilities
-- **Files:** `Theme.swift` has `Theme.hex()`, `Color+Hex.swift` has `Color(hex:)`
-- **Issue:** Two hex-to-Color implementations. Should consolidate.
-- **Status:** ⏳ TODO
+- **Files:** `Theme.swift` vs `Color+Hex.swift`
+- **Status:** TODO
 
 ### CLEANUP-004: Unused Feature Flags
 - **File:** `FeatureFlags.swift`
-- **Issue:** `enableSSH`, `enableiCloudSync`, `enableRemoteExecution`, `enableDebugger` are defined but never referenced in code.
-- **Status:** ⏳ TODO
+- **Status:** TODO
 
 ### CLEANUP-005: Int.uuid Conversion Safety
-- **File:** `App/AppDelegate.swift` (lines 100-114)
-- **Issue:** Unsafe Int-to-UUID conversion may cause collisions. Swift Hasher is non-deterministic.
-- **Status:** ⏳ TODO
+- **File:** `App/AppDelegate.swift`
+- **Status:** TODO
+
+### CLEANUP-006: Split Large Files
+- ContentView.swift (1357 lines), EditorCore.swift (1576 lines)
+- SettingsView.swift (963 lines), TerminalView.swift (981 lines)
+- SearchView.swift (1240 lines)
+- **Status:** TODO
+
+### BUG-012: RemoteDebugger Tautological Ternaries
+- **File:** `Services/RemoteDebugger.swift` (6 locations)
+- **Status:** TODO
 
 ---
 
 ## Completed
 
 | Task | Date | By |
-|------|------|----|
+|------|------|----|  
+| BUG-003: Delete dead SceneDelegate.swift | Mar 16 | Claude Agent |
+| BUG-004: WindowStateManager persistence | Mar 16 | Claude Agent |
+| BUG-006: Centralize ALL notification strings (40+) | Mar 16 | Claude Agent |
+| CONFIG-001: README wrong project name | Mar 16 | Claude Agent |
+| CONFIG-002: Swift version 5.0 to 6.0 | Mar 16 | Claude Agent |
+| FEAT-001: Notification+Names.swift constants | Mar 16 | Claude Agent |
+| CLEANUP-001: Remove dead backup files | Mar 16 | Claude Agent |
+| CLEANUP-002: Remove duplicate SceneDelegate | Mar 16 | Claude Agent |
+| FIX: ErrorParser try! to safeRegex (22 instances) | Mar 16 | Claude Agent |
+| FIX: Duplicate fetchSuggestion in InlineSuggestionManager | Mar 16 | Claude Agent |
+| FIX: IDETabItem missing closing brace | Mar 16 | Claude Agent |
+| FIX: Duplicate StatusBarItem line | Mar 16 | Claude Agent |
+| FIX: Delete PythonRunnerAlt.swift duplicate | Mar 16 | Claude Agent |
+| FIX: Delete PythonRunner.swift (OnDevice/) dead code | Mar 16 | Claude Agent |
+| POLISH: Accessibility labels on tabs + status bar | Mar 16 | Claude Agent |
+| POLISH: print() to AppLogger in EditorCore | Mar 16 | Claude Agent |
+| Added PrivacyInfo.xcprivacy privacy manifest | Mar 16 | Claude Agent |
+| Consolidated file icon logic (3 copies to 1) | Mar 16 | Claude Agent |
 | Truncate 135MB error log | Mar 16 | Claude Agent |
-| Create BACKLOG.md | Mar 16 | Claude Agent |
-| Create PROGRESS.md | Mar 16 | Claude Agent |
-| Create AGENTS.md | Mar 16 | Claude Agent |
+| Create BACKLOG.md, PROGRESS.md, AGENTS.md | Mar 16 | Claude Agent |

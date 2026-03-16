@@ -137,7 +137,8 @@ struct AIAssistantView: View {
                 userInput: $userInput,
                 isInputFocused: _isInputFocused,
                 isLoading: aiManager.isLoading,
-                onSend: sendMessage
+                onSend: sendMessage,
+                onStop: { aiManager.cancelStreaming() }
             )
         }
         .background(Color(UIColor.systemBackground))
@@ -597,6 +598,7 @@ struct ChatInputArea: View {
     @FocusState var isInputFocused: Bool
     let isLoading: Bool
     let onSend: () -> Void
+    let onStop: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
@@ -611,7 +613,7 @@ struct ChatInputArea: View {
                     if !isLoading { onSend() }
                 }
             
-            Button(action: onSend) {
+            Button(action: { isLoading ? onStop() : onSend() }) {
                 Image(systemName: isLoading ? "stop.circle.fill" : "paperplane.fill")
                     .font(.system(size: 24))
                     .foregroundColor(userInput.isEmpty && !isLoading ? .gray : .accentColor)

@@ -236,6 +236,9 @@ class AIManager: ObservableObject {
     @Published var error: String?
     @Published var streamingResponse = ""
     
+    /// The currently running AI request task, used for cancellation.
+    private var currentStreamingTask: Task<Void, Never>?
+
     /// Maximum number of tool-call rounds before forcing a text response
     private let maxToolRounds = 5
     
@@ -257,6 +260,26 @@ class AIManager: ObservableObject {
             createNewSession()
         } else {
             currentSession = sessions[0]
+        }
+    }
+    
+    // MARK: - Streaming Cancellation
+    
+    /// Cancel the currently running AI streaming request.
+    func cancelStreaming() {
+        currentStreamingTask?.cancel()
+        currentStreamingTask = nil
+        isLoading = false
+        if !streamingResponse.isEmpty {
+            // Save whatever was streamed so far as a partial response
+            let partialMessage = ChatMessage(
+                role: .assistant,
+                content: streamingResponse + "\n\n*[Generation cancelled]*",
+                codeBlocks: extractCodeBlocks(from: streamingResponse)
+            )
+            currentSession.messages.append(partialMessage)
+            updateSession()
+            streamingResponse = ""
         }
     }
     
