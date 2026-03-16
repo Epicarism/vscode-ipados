@@ -259,7 +259,7 @@ struct SettingsDetailView: View {
     let searchText: String
     @ObservedObject var themeManager: ThemeManager
 
-    @StateObject private var aiManager = AIManager()
+    @StateObject private var aiManager = AIManager.shared
     @State private var showAISettings = false
     
     @AppStorage("fontSize") private var fontSize: Double = 14
@@ -795,7 +795,6 @@ class SettingsWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, 
 
 struct SettingsWebView: UIViewRepresentable {
     let url: URL
-    let onDismiss: () -> Void
     
     func makeCoordinator() -> SettingsWebViewCoordinator {
         SettingsWebViewCoordinator(self)
@@ -868,7 +867,9 @@ struct SettingsWebView: UIViewRepresentable {
     }
     
     func updateUIView(_ webView: WKWebView, context: Context) {
-        // Only reload if URL changed significantly
+        if webView.url != url {
+            webView.load(URLRequest(url: url))
+        }
     }
     
     static func dismantleUIView(_ webView: WKWebView, coordinator: SettingsWebViewCoordinator) {

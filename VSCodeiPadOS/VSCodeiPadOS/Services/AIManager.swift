@@ -264,6 +264,8 @@ final class AIManager: ObservableObject {
         set { selectedModelId = newValue.id }
     }
     
+    static let shared = AIManager()
+
     init() {
         // Load API keys from Keychain into @Published properties
         let kc = KeychainHelper.shared
