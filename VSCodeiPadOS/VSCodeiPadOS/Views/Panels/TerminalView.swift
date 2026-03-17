@@ -629,6 +629,7 @@ extension TerminalTab: Equatable {}
     var ansiBold = false
     var ansiItalic = false
     var ansiUnderline = false
+    var ansiReverseVideo = false
     
     func clear() {
         output = []
@@ -1108,7 +1109,8 @@ extension TerminalTab: Equatable {}
                         initialBgColor: ansiBgColor,
                         initialBold: ansiBold,
                         initialItalic: ansiItalic,
-                        initialUnderline: ansiUnderline
+                        initialUnderline: ansiUnderline,
+                        initialReverseVideo: ansiReverseVideo
                     )
                     // Update persistent state with final state from parsing
                     ansiColor = result.finalColor
@@ -1116,6 +1118,7 @@ extension TerminalTab: Equatable {}
                     ansiBold = result.finalBold
                     ansiItalic = result.finalItalic
                     ansiUnderline = result.finalUnderline
+                    ansiReverseVideo = result.finalReverseVideo
                     // Store pre-parsed segments
                     self.output.append(TerminalLine(text: line, type: type, isANSI: true, segments: result.segments))
                 } else {
@@ -1599,8 +1602,9 @@ struct ANSIText: View {
             initialBgColor: Color? = nil,
             initialBold: Bool = false,
             initialItalic: Bool = false,
-            initialUnderline: Bool = false
-        ) -> (segments: [ANSISegment], finalColor: Color?, finalBgColor: Color?, finalBold: Bool, finalItalic: Bool, finalUnderline: Bool) {
+            initialUnderline: Bool = false,
+            initialReverseVideo: Bool = false
+        ) -> (segments: [ANSISegment], finalColor: Color?, finalBgColor: Color?, finalBold: Bool, finalItalic: Bool, finalUnderline: Bool, finalReverseVideo: Bool) {
             // First strip OSC sequences (terminal title changes, etc.)
             let cleanedInput = oscRegex?.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: "") ?? input
             
@@ -1610,11 +1614,11 @@ struct ANSIText: View {
             var bold = initialBold
             var italic = initialItalic
             var underline = initialUnderline
-            var reverseVideo = false
+            var reverseVideo = initialReverseVideo
             guard let regex = ansiRegex else {
                 // Fallback: return plain text as single segment with current state
                 return ([ANSISegment(text: cleanedInput, color: currentColor, backgroundColor: currentBackgroundColor, bold: bold, italic: italic, underline: underline)],
-                        currentColor, currentBackgroundColor, bold, italic, underline)
+                        currentColor, currentBackgroundColor, bold, italic, underline, reverseVideo)
             }
             
             let nsInput = cleanedInput as NSString
@@ -1755,7 +1759,7 @@ struct ANSIText: View {
                 segments.append(ANSISegment(text: stripped.isEmpty ? " " : stripped, color: initialColor, backgroundColor: initialBgColor, bold: initialBold, italic: initialItalic, underline: initialUnderline))
             }
             
-            return (segments, currentColor, currentBackgroundColor, bold, italic, underline)
+            return (segments, currentColor, currentBackgroundColor, bold, italic, underline, reverseVideo)
         }
         
         /// Static version of colorForANSI for use in static parseANSIWithState

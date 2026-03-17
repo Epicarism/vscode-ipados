@@ -196,15 +196,15 @@ struct StatusBarView: View {
             .accessibilityLabel("Indentation: \(insertSpaces ? "Spaces" : "Tabs"), size \(tabSize)")
             .accessibilityHint("Double tap to change indentation settings")
 
-            // Encoding
+            // Encoding (from active tab's fileEncoding)
             Menu {
                 ForEach(["UTF-8", "UTF-16", "ASCII", "ISO-8859-1", "Windows-1252", "Shift_JIS", "EUC-KR", "GB2312"], id: \.self) { enc in
                     Button(encoding == enc ? "✓ \(enc)" : "  \(enc)") { encoding = enc }
                 }
             } label: {
-                StatusBarLabel(text: encoding, theme: theme)
+                StatusBarLabel(text: editorCore.activeTab?.stringEncoding.displayName ?? encoding, theme: theme)
             }
-            .accessibilityLabel("File Encoding: \(encoding)")
+            .accessibilityLabel("File Encoding: \(editorCore.activeTab?.stringEncoding.displayName ?? encoding)")
             .accessibilityHint("Double tap to change file encoding")
             .accessibilityIdentifier("statusBar.encoding")
 

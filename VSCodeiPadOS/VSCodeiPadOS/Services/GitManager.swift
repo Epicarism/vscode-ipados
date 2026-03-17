@@ -5,6 +5,27 @@
 //  Git Manager - hybrid local/SSH implementation
 //
 
+// MARK: - Merge Conflict Notification Name
+
+extension Notification.Name {
+    /// Posted when a `git pull` or `git merge` encounters merge conflicts.
+    /// The `userInfo` dictionary contains the key `"conflictedFiles"` with
+    /// an `[String]` value listing the affected file paths.
+    static let gitMergeConflictsDetected = Notification.Name("GitMergeConflictsDetected")
+}
+
+// MARK: - Merge Conflict Resolution
+
+/// Describes how a single conflicted file should be resolved.
+enum MergeConflictResolution {
+    /// Keep the version from the current branch (HEAD / "ours").
+    case ours
+    /// Keep the version from the incoming branch ("theirs").
+    case theirs
+    /// Open the file in the editor so the user can manually resolve markers.
+    case manual
+}
+
 import SwiftUI
 import Combine
 
@@ -158,6 +179,8 @@ final class GitManager: ObservableObject {
     @Published var lastError: String?
     @Published var aheadCount: Int = 0
     @Published var behindCount: Int = 0
+    /// Files currently in a merge-conflict state (updated after pull/merge).
+    @Published var mergeConflicts: [String] = []
 
     var totalChanges: Int {
         stagedChanges.count + unstagedChanges.count + untrackedFiles.count
@@ -201,6 +224,7 @@ final class GitManager: ObservableObject {
         untrackedFiles = []
         recentCommits = []
         stashes = []
+        mergeConflicts = []
         lastError = nil
     }
     
@@ -527,6 +551,20 @@ final class GitManager: ObservableObject {
             }
             let mergeResult = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git merge 'origin/\(branch.shellEscaped)'", timeout: 60)
             if mergeResult.exitCode != 0 {
+                // Check whether the failure is due to merge conflicts.
+                let combinedOutput = mergeResult.stdout + "\n" + mergeResult.stderr
+                if combinedOutput.contains("CONFLICT") || combinedOutput.contains("Automatic merge failed") {
+                    let conflictedFiles = parseConflictedFiles(from: combinedOutput)
+                    mergeConflicts = conflictedFiles
+                    // Notify the UI so it can present a conflict-resolution dialog.
+                    NotificationCenter.default.post(
+                        name: .gitMergeConflictsDetected,
+                        object: self,
+                        userInfo: ["conflictedFiles": conflictedFiles]
+                    )
+                    await refresh()
+                    return
+                }
                 throw GitManagerError.commandFailed(
                     args: "merge origin/\(branch)",
                     exitCode: mergeResult.exitCode,
@@ -836,12 +874,120 @@ final class GitManager: ObservableObject {
         return true
     }
     
-    // MARK: - Missing Functionality TODOs
+    // MARK: - Merge Conflict Resolution
     
-    // TODO: Merge conflict detection and resolution
-    // - Detect when repository is in merge conflict state
-    // - List conflicted files with theirs/ours/both options
-    // - Provide resolveConflict(file:resolution:) method
+    /// Parse conflicted file paths from `git merge` / `git pull` output.
+    ///
+    /// Git reports conflicts in the form:
+    /// ```
+    /// CONFLICT (content): Merge conflict in path/to/file.swift
+    /// CONFLICT (modify/delete): path/to/other.swift deleted in theirs
+    /// ```
+    private func parseConflictedFiles(from output: String) -> [String] {
+        var files: [String] = []
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("CONFLICT") else { continue }
+            // Format: "CONFLICT (<type>): <details> in <path>" or
+            //         "CONFLICT (<type>): <path> <action>"
+            // Try to extract the path after the last " in " if present.
+            if let inRange = trimmed.range(of: " in ", options: .backwards) {
+                let path = String(trimmed[inRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if !path.isEmpty {
+                    files.append(path)
+                }
+            } else {
+                // Fallback: take everything after the closing paren + ": "
+                if let parenClose = trimmed.range(of: "):") {
+                    let remainder = String(trimmed[parenClose.upperBound...])
+                        .trimmingCharacters(in: .whitespaces)
+                    // Extract just the first token (the path)
+                    let path = remainder.components(separatedBy: .whitespaces).first ?? remainder
+                    if !path.isEmpty {
+                        files.append(path)
+                    }
+                }
+            }
+        }
+        return files
+    }
+
+    /// Resolve a merge conflict for the given file.
+    ///
+    /// - Parameters:
+    ///   - file: Path of the conflicted file relative to the repository root.
+    ///   - resolution: Strategy to apply (`ours`, `theirs`, or `manual`).
+    ///
+    /// For `manual` resolution the method does **not** modify the file;
+    /// it posts an `.openFile` notification so the UI can open the file
+    /// in the editor for the user to resolve conflict markers by hand.
+    func resolveConflict(file: String, resolution: MergeConflictResolution) async throws {
+        guard let dir = workingDirectory?.path else {
+            throw GitManagerError.noRepository
+        }
+
+        let ssh = SSHManager.shared
+
+        switch resolution {
+        case .ours:
+            guard ssh.isConnected else {
+                throw GitManagerError.sshNotConnected
+            }
+            let result = try await ssh.executeCommand(
+                "cd '\(dir.shellEscaped)' && git checkout --ours '\(file.shellEscaped)'",
+                timeout: 30
+            )
+            guard result.exitCode == 0 else {
+                throw GitManagerError.commandFailed(
+                    args: "checkout --ours \(file)",
+                    exitCode: result.exitCode,
+                    message: result.stderr
+                )
+            }
+            // Stage the resolved file so git knows the conflict is resolved.
+            let stageResult = try await ssh.executeCommand(
+                "cd '\(dir.shellEscaped)' && git add '\(file.shellEscaped)'",
+                timeout: 30
+            )
+            _ = stageResult // staging failure is non-critical
+
+        case .theirs:
+            guard ssh.isConnected else {
+                throw GitManagerError.sshNotConnected
+            }
+            let result = try await ssh.executeCommand(
+                "cd '\(dir.shellEscaped)' && git checkout --theirs '\(file.shellEscaped)'",
+                timeout: 30
+            )
+            guard result.exitCode == 0 else {
+                throw GitManagerError.commandFailed(
+                    args: "checkout --theirs \(file)",
+                    exitCode: result.exitCode,
+                    message: result.stderr
+                )
+            }
+            let stageResult = try await ssh.executeCommand(
+                "cd '\(dir.shellEscaped)' && git add '\(file.shellEscaped)'",
+                timeout: 30
+            )
+            _ = stageResult
+
+        case .manual:
+            // Open the file in the editor for the user to resolve conflict markers.
+            NotificationCenter.default.post(
+                name: .openFile,
+                object: nil,
+                userInfo: ["path": file]
+            )
+            return
+        }
+
+        // Remove the file from the tracked conflict list.
+        mergeConflicts.removeAll { $0 == file }
+        await refresh()
+    }
+    
+    // MARK: - Missing Functionality TODOs
     
     // TODO: Git blame/annotate
     // - func blame(file: String) async throws -> [BlameLine]

@@ -46,7 +46,7 @@ struct OutputLineView: View {
     
     @ViewBuilder
     private var contentView: some View {
-        if line.isAnsiFormatted, let attributes = line.ansiAttributes {
+        if let attributes = line.ansiAttributes, !attributes.isEmpty {
             // Render with ANSI colors
             ansiAttributedText(attributes: attributes)
         } else {
@@ -79,7 +79,13 @@ struct OutputLineView: View {
     
     /// Creates SwiftUI AttributedString from ANSI attributes
     private func ansiAttributedText(attributes: [NSRange: [NSAttributedString.Key: Any]]) -> some View {
+        // Start with the default monospaced font and theme foreground color
+        let defaultFont = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        
         var result = AttributedString(line.text)
+        // Set the base style for the entire string so unstyled portions use theme colors
+        result.font = .init(defaultFont)
+        result.foregroundColor = theme.editorForeground
         
         for (range, attrs) in attributes {
             guard let swiftRange = Range(range, in: line.text) else { continue }
@@ -89,21 +95,26 @@ struct OutputLineView: View {
             
             var container = AttributeContainer()
             
+            // Only override color if the ANSI sequence explicitly set one
             if let uiColor = attrs[.foregroundColor] as? UIColor {
                 container.foregroundColor = Color(uiColor)
             }
             if let uiBgColor = attrs[.backgroundColor] as? UIColor {
                 container.backgroundColor = Color(uiBgColor)
             }
+            // Preserve custom fonts (e.g. bold from ANSI SGR code 1)
             if let uiFont = attrs[.font] as? UIFont {
                 container.font = Font(uiFont)
             }
+            // Apply underline style if present
+            if let underlineRaw = attrs[.underlineStyle] as? Int {
+                container.underlineStyle = NSUnderlineStyle(rawValue: underlineRaw)
+            }
             
-            result[attrRange].setAttributes(container)
+            result[attrRange].mergeAttributes(container, mergePolicy: .keepNew)
         }
         
         return Text(result)
-            .font(.system(size: 12, design: .monospaced))
             .lineLimit(wordWrap ? nil : 1)
     }
 }
@@ -183,6 +194,8 @@ struct OutputSearchBar: View {
     @StateObject var outputManager = OutputPanelManager.shared
     @StateObject var themeManager = ThemeManager.shared
     @State private var localQuery: String = ""
+    @FocusState private var isSearchFocused: Bool
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
@@ -193,6 +206,7 @@ struct OutputSearchBar: View {
             TextField("Search output...", text: $localQuery)
                 .font(.system(size: 12))
                 .textFieldStyle(.plain)
+                .focused($isSearchFocused)
                 .accessibilityLabel("Search output")
                 .onChange(of: localQuery) { _, newValue in
                     outputManager.setSearchQuery(newValue)
@@ -227,7 +241,7 @@ struct OutputSearchBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(themeManager.currentTheme.tabBarBackground)
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -263,7 +277,7 @@ struct LogLevelFilterView: View {
                     .background(
                         isSelected ? level.color.opacity(0.15) : Color.clear
                     )
-                    .cornerRadius(4)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
                 .disabled(count == 0)
                 .accessibilityLabel("\(level.rawValue): \(count) entries")
@@ -286,6 +300,59 @@ struct LogLevelFilterView: View {
     }
 }
 
+// MARK: - Empty State View
+
+private struct OutputEmptyStateView: View {
+    let channel: OutputChannel
+    let isFiltered: Bool
+    let theme: Theme
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: iconName)
+                .font(.system(size: 36))
+                .foregroundColor(theme.comment.opacity(0.6))
+            
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.editorForeground.opacity(0.6))
+            
+            Text(subtitle)
+                .font(.system(size: 12))
+                .foregroundColor(theme.comment.opacity(0.5))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var iconName: String {
+        if isFiltered {
+            return "magnifyingglass"
+        }
+        switch channel {
+        case .output: return "terminal"
+        case .javascript: return "chevron.left.forwardslash.chevron.right"
+        case .python: return "number"
+        case .remote: return "network"
+        case .debug: return "ladybug"
+        }
+    }
+    
+    private var title: String {
+        if isFiltered {
+            return "No matching output"
+        }
+        return "No output yet"
+    }
+    
+    private var subtitle: String {
+        if isFiltered {
+            return "Try adjusting your search or log level filter"
+        }
+        return "Output from \(channel.rawValue) tasks will appear here"
+    }
+}
+
 // MARK: - Main Output View
 
 struct OutputView: View {
@@ -293,8 +360,15 @@ struct OutputView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var showingSearchBar: Bool = false
     @State private var showingLogLevelFilter: Bool = false
+    @State private var showCopyConfirmation: Bool = false
 
     private var theme: Theme { themeManager.currentTheme }
+    
+    /// Whether the current view is actively filtered
+    private var isFiltered: Bool {
+        !outputManager.searchQuery.isEmpty ||
+        outputManager.selectedLogLevels.count != LogLevel.allCases.count
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -335,7 +409,9 @@ struct OutputView: View {
             Menu {
                 ForEach(OutputChannel.allCases) { channel in
                     Button(action: {
-                        outputManager.selectedChannel = channel
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            outputManager.selectedChannel = channel
+                        }
                     }) {
                         HStack {
                             Image(systemName: channel.icon)
@@ -365,7 +441,7 @@ struct OutputView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(theme.tabBarBackground)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             .accessibilityLabel("Output channel: \(outputManager.selectedChannel.rawValue)")
             .accessibilityHint("Double tap to select an output channel")
@@ -427,7 +503,7 @@ struct OutputView: View {
             Button(action: {
                 outputManager.toggleAutoScroll()
             }) {
-                Image(systemName: outputManager.isAutoScrollEnabled ? "lock.open.fill" : "lock")
+                Image(systemName: outputManager.isAutoScrollEnabled ? "arrow.down.circle.fill" : "arrow.down.circle")
                     .font(.system(size: 12))
                     .foregroundColor(outputManager.isAutoScrollEnabled ? theme.keyword : theme.comment)
             }
@@ -439,18 +515,34 @@ struct OutputView: View {
                 .accessibilityHidden(true)
             
             // Copy button
-            Button(action: { 
+            Button(action: {
                 outputManager.copyToClipboard(channel: outputManager.selectedChannel)
+                showCopyConfirmation = true
+                // Hide confirmation after 2 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    showCopyConfirmation = false
+                }
             }) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 12))
-                    .foregroundColor(theme.comment)
+                HStack(spacing: 4) {
+                    Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 12))
+                        .foregroundColor(showCopyConfirmation ? .green : theme.comment)
+                    if showCopyConfirmation {
+                        Text("Copied")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+                    }
+                }
             }
             .accessibilityLabel("Copy output")
             .accessibilityHint("Double tap to copy all output to clipboard")
             
             // Clear button
-            Button(action: { outputManager.clear(outputManager.selectedChannel) }) {
+            Button(action: { 
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    outputManager.clear(outputManager.selectedChannel)
+                }
+            }) {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
                     .foregroundColor(theme.comment)
@@ -475,43 +567,44 @@ struct OutputView: View {
         let channel = outputManager.selectedChannel
         let lines = outputManager.lines(for: channel)
 
-        return ScrollViewReader { proxy in
-            ScrollView {
-                if lines.isEmpty {
-                    VStack {
-                        Spacer()
-                        Text("No output yet")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        ForEach(lines) { line in
-                            OutputLineView(
-                                line: line,
-                                showTimestamp: outputManager.showTimestamps,
-                                wordWrap: outputManager.wordWrapEnabled,
-                                theme: theme
-                            )
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
+        return Group {
+            if lines.isEmpty {
+                OutputEmptyStateView(
+                    channel: channel,
+                    isFiltered: isFiltered,
+                    theme: theme
+                )
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 1) {
+                            ForEach(lines) { line in
+                                OutputLineView(
+                                    line: line,
+                                    showTimestamp: outputManager.showTimestamps,
+                                    wordWrap: outputManager.wordWrapEnabled,
+                                    theme: theme
+                                )
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                            }
                         }
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical, 4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .onChange(of: lines.count) { _, _ in
-                guard !lines.isEmpty && outputManager.isAutoScrollEnabled else { return }
-                withAnimation(.easeOut(duration: 0.1)) {
-                    if let lastLine = lines.last {
-                        proxy.scrollTo(lastLine.id, anchor: .bottom)
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: lines.count) { _, _ in
+                        guard !lines.isEmpty && outputManager.isAutoScrollEnabled else { return }
+                        withAnimation(.easeOut(duration: 0.1)) {
+                            if let lastLine = lines.last {
+                                proxy.scrollTo(lastLine.id, anchor: .bottom)
+                            }
+                        }
                     }
                 }
             }
         }
+        .background(theme.editorBackground)
     }
 }
 

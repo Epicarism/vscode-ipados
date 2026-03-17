@@ -57,7 +57,7 @@ final class DebugManager: ObservableObject {
 
         var fileName: String { (file as NSString).lastPathComponent }
         var lineNumber: Int { displayLine }
-        var condition: String? { nil }
+        var condition: String? = nil
     }
 
     struct Variable: Identifiable, Hashable {
@@ -116,6 +116,12 @@ final class DebugManager: ObservableObject {
 
     /// Breakpoints by file identifier (typically URL path, otherwise fileName).
     @Published private(set) var breakpointsByFile: [String: Set<Int>] = [:]
+    
+    /// Breakpoint enabled states by composite id ("file::line")
+    @Published private(set) var breakpointEnabledStates: [String: Bool] = [:]
+    
+    /// Breakpoint conditions by composite id ("file::line")
+    @Published private(set) var breakpointConditions: [String: String] = [:]
 
     @Published var watchExpressions: [WatchExpression] = []
     @Published var variables: [Variable] = []
@@ -153,7 +159,13 @@ final class DebugManager: ObservableObject {
         var allBreakpoints: [Breakpoint] {
             breakpointsByFile
                 .flatMap { (file, lines) in
-                    lines.map { Breakpoint(file: file, line: $0) }
+                    lines.map { line in
+                        let id = "\(file)::\(line)"
+                        var bp = Breakpoint(file: file, line: line)
+                        bp.isEnabled = breakpointEnabledStates[id] ?? true
+                        bp.condition = breakpointConditions[id]
+                        return bp
+                    }
                 }
                 .sorted {
                     if $0.file == $1.file { return $0.line < $1.line }
@@ -313,6 +325,10 @@ final class DebugManager: ObservableObject {
 
             if wasPresent {
                 set.remove(line)
+                // Clean up state dictionaries when removing breakpoint
+                let id = "\(fileId)::\(line)"
+                breakpointEnabledStates.removeValue(forKey: id)
+                breakpointConditions.removeValue(forKey: id)
             } else {
                 set.insert(line)
             }
@@ -379,6 +395,11 @@ final class DebugManager: ObservableObject {
             guard var set = dict[fileId] else { return }
 
             set.remove(line)
+            // Clean up state dictionaries when removing breakpoint
+            let id = "\(fileId)::\(line)"
+            breakpointEnabledStates.removeValue(forKey: id)
+            breakpointConditions.removeValue(forKey: id)
+            
             if set.isEmpty {
                 dict.removeValue(forKey: fileId)
             } else {
@@ -832,6 +853,8 @@ final class DebugManager: ObservableObject {
             let count = allBreakpoints.count
             let oldBreakpoints = breakpointsByFile
             breakpointsByFile = [:]
+            breakpointEnabledStates = [:]
+            breakpointConditions = [:]
             allBreakpointsEnabled = true
 
             // Remove all breakpoints from remote debugger if connected
@@ -874,6 +897,55 @@ final class DebugManager: ObservableObject {
             let parts = id.components(separatedBy: "::")
             guard parts.count == 2, let line = Int(parts[1]) else { return }
             removeBreakpoint(file: parts[0], line: line)
+        }
+        
+        /// Toggle the enabled state of a breakpoint by its composite id string ("file::line").
+        func toggleBreakpointEnabled(id: String) {
+            let parts = id.components(separatedBy: "::")
+            guard parts.count == 2, let line = Int(parts[1]) else { return }
+            let file = parts[0]
+            
+            // Only toggle if the breakpoint exists
+            guard hasBreakpoint(file: file, line: line) else { return }
+            
+            let currentState = breakpointEnabledStates[id] ?? true
+            breakpointEnabledStates[id] = !currentState
+            
+            let newState = !currentState
+            let shortName = (file as NSString).lastPathComponent
+            consoleEntries.append(ConsoleEntry(
+                message: "Breakpoint at \(shortName):\(line + 1) \(newState ? "enabled" : "disabled")",
+                kind: .system
+            ))
+        }
+        
+        /// Set the condition for a breakpoint by its composite id string ("file::line").
+        func setBreakpointCondition(id: String, condition: String?) {
+            let parts = id.components(separatedBy: "::")
+            guard parts.count == 2, let line = Int(parts[1]) else { return }
+            let file = parts[0]
+            
+            // Only set condition if the breakpoint exists
+            guard hasBreakpoint(file: file, line: line) else { return }
+            
+            if let condition = condition, !condition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                breakpointConditions[id] = condition
+            } else {
+                breakpointConditions.removeValue(forKey: id)
+            }
+            
+            let shortName = (file as NSString).lastPathComponent
+            if let cond = condition, !cond.isEmpty {
+                consoleEntries.append(ConsoleEntry(
+                    message: "Breakpoint at \(shortName):\(line + 1) condition set to: \(cond)",
+                    kind: .system
+                ))
+            } else {
+                consoleEntries.append(ConsoleEntry(
+                    message: "Breakpoint at \(shortName):\(line + 1) condition removed",
+                    kind: .system
+                ))
+            }
         }
 
     private func advanceTopFrameLine(by delta: Int) {

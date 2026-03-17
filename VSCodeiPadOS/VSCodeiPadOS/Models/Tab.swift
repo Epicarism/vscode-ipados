@@ -257,3 +257,32 @@ enum CodeLanguage: String, CaseIterable, Codable {
         }
     }
 }
+// MARK: - String.Encoding Display Name
+
+extension String.Encoding {
+    /// Human-readable display name for common text encodings (like VS Code's status bar).
+    var displayName: String {
+        switch self {
+        case .utf8: return "UTF-8"
+        case .utf16: return "UTF-16"
+        case .utf16LittleEndian: return "UTF-16 LE"
+        case .utf16BigEndian: return "UTF-16 BE"
+        case .utf32: return "UTF-32"
+        case .utf32LittleEndian: return "UTF-32 LE"
+        case .utf32BigEndian: return "UTF-32 BE"
+        case .isoLatin1: return "ISO 8859-1"
+        case .isoLatin2: return "ISO 8859-2"
+        case .ascii: return "ASCII"
+        case .nextstep: return "NextStep"
+        case .japaneseEUC: return "EUC-JP"
+        case .shiftJIS: return "Shift_JIS"
+        case .nonLossyASCII: return "Non-lossy ASCII"
+        default:
+            let cfEncoding = CFStringEncoding(rawValue)
+            if let name = CFStringGetNameOfEncoding(cfEncoding) {
+                return String(name)
+            }
+            return "Unknown"
+        }
+    }
+}
