@@ -46,7 +46,11 @@ struct GitHubLoginView: View {
             
             Button(action: {
                 Task {
-                    try? await authManager.startDeviceFlow()
+                    do {
+                        try await authManager.startDeviceFlow()
+                    } catch {
+                        authManager.errorMessage = error.localizedDescription
+                    }
                 }
             }) {
                 HStack(spacing: 8) {

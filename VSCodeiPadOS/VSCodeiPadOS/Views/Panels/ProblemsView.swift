@@ -142,9 +142,9 @@ struct ProblemRowView: View {
     
     private func color(for severity: DiagnosticSeverity) -> Color {
         switch severity {
-        case .error: return .red
-        case .warning: return .orange
-        case .info: return .blue
+        case .error: return theme.errorForeground
+        case .warning: return theme.warningForeground
+        case .info: return theme.infoForeground
         }
     }
 }
@@ -188,7 +188,7 @@ struct FileGroupView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: 9))
-                                    .foregroundColor(.red)
+                                    .foregroundColor(theme.errorForeground)
                                 Text("\(errorCount)")
                                     .font(.system(size: 10))
                                     .foregroundColor(theme.comment)
@@ -198,7 +198,7 @@ struct FileGroupView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .font(.system(size: 9))
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(theme.warningForeground)
                                 Text("\(warningCount)")
                                     .font(.system(size: 10))
                                     .foregroundColor(theme.comment)
@@ -288,7 +288,7 @@ struct ProblemsView: View {
                         if errors > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.red)
+                                    .foregroundColor(theme.errorForeground)
                                     .font(.system(size: 10))
                                 Text("\(errors)")
                                     .font(.system(size: 11))
@@ -300,7 +300,7 @@ struct ProblemsView: View {
                         if warnings > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(theme.warningForeground)
                                     .font(.system(size: 10))
                                 Text("\(warnings)")
                                     .font(.system(size: 11))
@@ -312,7 +312,7 @@ struct ProblemsView: View {
                         if infos > 0 {
                             HStack(spacing: 3) {
                                 Image(systemName: "info.circle.fill")
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(theme.infoForeground)
                                     .font(.system(size: 10))
                                 Text("\(infos)")
                                     .font(.system(size: 11))
@@ -384,7 +384,7 @@ struct ProblemsView: View {
                         }) {
                             Text("Reset")
                                 .font(.system(size: 10))
-                                .foregroundColor(.blue)
+                                .foregroundColor(theme.infoForeground)
                         }
                     }
                 }
@@ -459,9 +459,9 @@ struct ProblemsView: View {
 
     private func color(for severity: DiagnosticSeverity) -> Color {
         switch severity {
-        case .error: return .red
-        case .warning: return .orange
-        case .info: return .blue
+        case .error: return theme.errorForeground
+        case .warning: return theme.warningForeground
+        case .info: return theme.infoForeground
         }
     }
 }

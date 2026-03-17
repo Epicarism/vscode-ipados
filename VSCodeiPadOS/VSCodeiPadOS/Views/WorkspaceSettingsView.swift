@@ -173,7 +173,7 @@ struct WorkspaceSettingsView: View {
             // Ensure we reflect whatever is currently loaded.
             draft = workspaceManager.workspaceSettings
         }
-        .onChange(of: workspaceManager.workspaceSettings) { newValue in
+        .onChange(of: workspaceManager.workspaceSettings) { _, newValue in
             // Keep the editor in sync with reloads / workspace changes.
             draft = newValue
         }

@@ -629,7 +629,7 @@ private struct GoToSymbolKeyboardModifier: ViewModifier {
 
 #Preview {
     ZStack {
-        Color.black.opacity(0.5)
+        ThemeManager.shared.currentTheme.overlayColor
         GoToSymbolView(
             editorCore: EditorCore(),
             onGoToLine: { _ in }

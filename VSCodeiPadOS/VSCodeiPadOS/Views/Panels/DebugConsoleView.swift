@@ -44,7 +44,7 @@ struct DebugConsoleEntryView: View {
                         Button(action: { isExpanded.toggle() }) {
                             Text(isExpanded ? "Show less" : "Show more...")
                                 .font(.system(size: 10))
-                                .foregroundColor(Color(UIColor.systemBlue))
+                                .foregroundColor(theme.infoForeground)
                         }
                     }
                     
@@ -67,9 +67,9 @@ struct DebugConsoleEntryView: View {
         switch entry.kind {
         case .input: return theme.keyword
         case .output: return theme.comment
-        case .error: return Color(UIColor.systemRed)
-        case .warning: return Color(UIColor.systemOrange)
-        case .info: return Color(UIColor.systemBlue)
+        case .error: return theme.errorForeground
+        case .warning: return theme.warningForeground
+        case .info: return theme.infoForeground
         case .system: return theme.comment.opacity(0.7)
         }
     }
@@ -81,11 +81,11 @@ struct DebugConsoleEntryView: View {
         case .output:
             return theme.editorForeground.opacity(0.9)
         case .error:
-            return Color(UIColor.systemRed)
+            return theme.errorForeground
         case .warning:
-            return Color(UIColor.systemOrange)
+            return theme.warningForeground
         case .info:
-            return Color(UIColor.systemBlue)
+            return theme.infoForeground
         case .system:
             return theme.comment
         }

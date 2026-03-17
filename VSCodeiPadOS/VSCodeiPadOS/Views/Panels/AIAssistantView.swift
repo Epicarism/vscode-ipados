@@ -99,7 +99,7 @@ struct AIAssistantView: View {
                                 Spacer()
                             }
                             .padding()
-                            .background(Color(UIColor.systemRed).opacity(0.1))
+                            .background(ThemeManager.shared.currentTheme.errorBackground)
                             .cornerRadius(8)
                             .padding(.horizontal)
                         }
@@ -496,13 +496,13 @@ struct CodeBlockView: View {
                     .padding(12)
                     .textSelection(.enabled)
             }
-            .background(Color.black.opacity(0.8))
+            .background(ThemeManager.shared.currentTheme.overlayColor)
             .foregroundColor(.white)
         }
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(ThemeManager.shared.currentTheme.border, lineWidth: 1)
         )
     }
 }

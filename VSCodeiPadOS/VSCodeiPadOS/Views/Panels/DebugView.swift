@@ -679,13 +679,13 @@ struct DebugView: View {
     private func colorForConsoleKind(_ kind: DebugManager.ConsoleEntry.Kind) -> Color {
         switch kind {
         case .error:
-            return Color.red
+            return theme.errorForeground
         case .warning:
-            return Color.orange
+            return theme.warningForeground
         case .output:
-            return Color.green
+            return theme.successForeground
         case .input:
-            return Color(UIColor.systemBlue)
+            return theme.infoForeground
         case .system:
             return Color.gray
         case .info:

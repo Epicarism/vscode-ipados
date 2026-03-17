@@ -60,8 +60,8 @@ struct OutputLineView: View {
     
     private var textColor: Color {
         switch line.logLevel {
-        case .error: return Color(UIColor.systemRed)
-        case .warning: return Color(UIColor.systemOrange)
+        case .error: return theme.errorForeground
+        case .warning: return theme.warningForeground
         case .debug: return theme.comment
         case .info: return theme.editorForeground
         }

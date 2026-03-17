@@ -398,7 +398,7 @@ struct CommandPaletteView: View {
 
 #Preview {
     ZStack {
-        Color.black.opacity(0.5)
+        ThemeManager.shared.currentTheme.overlayColor
         CommandPaletteView(
             editorCore: EditorCore(),
             showSettings: .constant(false),

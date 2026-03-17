@@ -157,7 +157,7 @@ struct ErrorBoundaryView<Content: View>: View {
             // ── Icon ───────────────────────────────────────────
             Image(systemName: errorIcon)
                 .font(.system(size: 48, weight: .light))
-                .foregroundStyle(theme.isDark ? Color(hex: "#F48771") : Color(hex: "#D32F2F"))
+                .foregroundStyle(theme.errorForeground)
                 .symbolEffect(.pulse, options: .repeating, isActive: true)
 
             // ── Title ──────────────────────────────────────────

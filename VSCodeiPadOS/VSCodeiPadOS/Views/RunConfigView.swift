@@ -144,7 +144,7 @@ final class RunConfigViewModel: ObservableObject {
     @Published var executionOutput: String = ""
     
     private let presetsKey = "runConfigurationPresets"
-    nonisolated(unsafe) private var remoteRunner: RemoteRunner?
+    private var remoteRunner: RemoteRunner?
     
     init(remoteRunner: RemoteRunner? = nil) {
         self.remoteRunner = remoteRunner
@@ -239,8 +239,11 @@ final class RunConfigViewModel: ObservableObject {
     }
     
     private func savePresetsToStorage() {
-        if let encoded = try? JSONEncoder().encode(savedPresets) {
+        do {
+            let encoded = try JSONEncoder().encode(savedPresets)
             UserDefaults.standard.set(encoded, forKey: presetsKey)
+        } catch {
+            AppLogger.general.error("Failed to encode run configuration presets: \(error.localizedDescription)")
         }
     }
     

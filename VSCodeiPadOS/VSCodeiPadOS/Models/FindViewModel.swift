@@ -443,7 +443,7 @@ struct SearchResult: Identifiable {
             pattern = NSRegularExpression.escapedPattern(for: searchQuery)
         }
 
-        let finalPattern = isWholeWord ? "\\b\(pattern)\\b" : pattern
+        let finalPattern = (isWholeWord && !useRegex) ? "\\b\(pattern)\\b" : pattern
         let options: NSRegularExpression.Options = isCaseSensitive ? [] : [.caseInsensitive]
 
         do {

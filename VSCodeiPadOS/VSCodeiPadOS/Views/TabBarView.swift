@@ -48,7 +48,7 @@ struct TabBarView: View {
                     .accessibilityHint("Double tap to open a new editor tab")
                 }
                 .padding(.leading, 1)
-                .onChange(of: activeTabId) { newId in
+                .onChange(of: activeTabId) { _, newId in
                     if let id = newId {
                         withAnimation {
                             scrollProxy.scrollTo(id, anchor: .center)

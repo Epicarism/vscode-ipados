@@ -133,7 +133,7 @@ struct GitView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(canCommit && !isOperationInProgress ? Color.accentColor : Color.gray.opacity(0.3))
+                        .background(canCommit && !isOperationInProgress ? Color.accentColor : theme.border.opacity(0.5))
                         .foregroundColor(canCommit ? theme.editorBackground : theme.editorForeground.opacity(0.5))
                         .cornerRadius(6)
                     }
@@ -253,14 +253,14 @@ struct GitView: View {
             if let error = gitManager.error {
                 HStack {
                     Image(systemName: "exclamationmark.triangle")
-                        .foregroundColor(Color(UIColor.systemRed))
+                        .foregroundColor(theme.errorForeground)
                     Text(error)
                         .font(.system(size: 10))
-                        .foregroundColor(Color(UIColor.systemRed))
+                        .foregroundColor(theme.errorForeground)
                         .lineLimit(2)
                 }
                 .padding(8)
-                .background(Color(UIColor.systemRed).opacity(0.1))
+                .background(theme.errorBackground)
                 .cornerRadius(6)
                 .padding(.horizontal, 12)
                 .accessibilityElement(children: .combine)
@@ -419,7 +419,7 @@ struct GitView: View {
                 Button(action: { unstageFile(entry.path) }) {
                     Image(systemName: "minus")
                         .font(.system(size: 10))
-                        .foregroundColor(Color(UIColor.systemRed))
+                        .foregroundColor(theme.errorForeground)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Unstage \(entry.path.components(separatedBy: "/").last ?? entry.path)")

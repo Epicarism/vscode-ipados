@@ -288,6 +288,7 @@ struct InlineDiffView: View {
 
 struct InlineDiffLineView: View {
     let line: DiffLine
+    @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -316,9 +317,9 @@ struct InlineDiffLineView: View {
     
     var backgroundColor: Color {
         switch line.type {
-        case .addition: return Color.green.opacity(0.15)
-        case .deletion: return Color.red.opacity(0.15)
-        case .header: return Color.blue.opacity(0.1)
+        case .addition: return themeManager.currentTheme.diffAddedBackground
+        case .deletion: return themeManager.currentTheme.diffRemovedBackground
+        case .header: return themeManager.currentTheme.diffHeaderBackground
         case .context: return Color.clear
         }
     }
@@ -346,6 +347,7 @@ struct SideBySideDiffView: View {
 
 struct SideBySideDiffLineView: View {
     let line: DiffLine
+    @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         HStack(spacing: 0) {
@@ -397,13 +399,13 @@ struct SideBySideDiffLineView: View {
     }
     
     var leftBackgroundColor: Color {
-        if line.type == .deletion { return Color.red.opacity(0.15) }
+        if line.type == .deletion { return themeManager.currentTheme.diffRemovedBackground }
         if line.type == .addition { return Color(UIColor.systemGray6) }
         return Color.clear
     }
     
     var rightBackgroundColor: Color {
-        if line.type == .addition { return Color.green.opacity(0.15) }
+        if line.type == .addition { return themeManager.currentTheme.diffAddedBackground }
         if line.type == .deletion { return Color(UIColor.systemGray6) }
         return Color.clear
     }
@@ -413,6 +415,7 @@ struct SideBySideDiffLineView: View {
 
 struct HunkHeaderView: View {
     let text: String
+    @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         Text(text)
@@ -420,8 +423,8 @@ struct HunkHeaderView: View {
             .padding(.vertical, 4)
             .padding(.horizontal)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.blue.opacity(0.1))
-            .foregroundColor(.blue)
+            .background(themeManager.currentTheme.diffHeaderBackground)
+            .foregroundColor(themeManager.currentTheme.infoForeground)
     }
 }
 

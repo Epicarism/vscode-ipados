@@ -147,7 +147,7 @@ final class PortForwardingManager: ObservableObject {
         
         guard port.origin == .user else { return }
         
-        Task { @MainActor [weak self] in
+        Task { @MainActor in
             do {
                 try await SSHManager.shared.cancelPortForward(localPort: port.port)
             } catch {
@@ -291,7 +291,6 @@ final class PortForwardingManager: ObservableObject {
         
         // Get existing auto-detected ports for comparison
         let existingAutoPorts = forwardedPorts.filter { $0.origin == .auto }
-        let existingAutoPortNumbers = Set(existingAutoPorts.map { $0.port })
         
         // Create new auto-detected ports
         var newAutoPorts: [ForwardedPort] = []
@@ -689,7 +688,7 @@ struct PortRowView: View {
                         portManager.stopForwarding(id: port.id)
                     } else {
                         Task {
-                            await portManager.startForwarding(id: port.id)
+                            portManager.startForwarding(id: port.id)
                         }
                     }
                 } label: {

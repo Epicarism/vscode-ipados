@@ -328,7 +328,7 @@ struct SettingsDetailView: View {
                         }
                         .accessibilityHint("Choose how line numbers are displayed")
                         // Sync with boolean for backward compatibility
-                        .onChange(of: lineNumbersStyle) { newValue in
+                        .onChange(of: lineNumbersStyle) { _, newValue in
                             showLineNumbers = (newValue != "off")
                         }
                     }
