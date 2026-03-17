@@ -262,10 +262,15 @@ final class GitManager: ObservableObject {
                     if let packedRefPath = workingDirectory?.appendingPathComponent(".git/packed-refs"),
                        let packedContent = try? String(contentsOf: packedRefPath, encoding: .utf8) {
                         for line in packedContent.components(separatedBy: .newlines) {
-                            if line.hasPrefix("refs/remotes/\(tracking.name)") {
-                                remoteSHA = line.components(separatedBy: .whitespaces).first
+                            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+                            guard !trimmedLine.isEmpty, !trimmedLine.hasPrefix("#") else { continue }
+                            let parts = trimmedLine.components(separatedBy: .whitespaces)
+                            // packed-refs format: <sha> <refname>
+                            guard parts.count >= 2 else { continue }
+                            if parts[1] == "refs/remotes/\(tracking.name)" {
+                                remoteSHA = parts[0]
                                 break
-                            }
+                        }
                         }
                     }
                 }
@@ -424,9 +429,9 @@ final class GitManager: ObservableObject {
             throw GitManagerError.noRepository
         }
         
-        // Validate branch name to prevent path traversal
-        guard !branch.contains("..") else {
-            throw GitManagerError.commandFailed(args: "checkout", exitCode: 1, message: "Invalid branch name")
+        // Validate branch name to prevent path traversal and corruption
+        guard isValidBranchName(branch) else {
+            throw GitManagerError.commandFailed(args: "checkout", exitCode: 1, message: "Invalid branch name: contains forbidden characters")
         }
         
         let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(branch)")
@@ -709,8 +714,8 @@ final class GitManager: ObservableObject {
         // Fallback: try SSH if connected
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let escapedKey = key.shellEscaped
-            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git config \(escapedKey)", timeout: 10)
+            guard isValidGitConfigKey(key) else { return nil }
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git config '\(key.shellEscaped)'", timeout: 10)
             if result.exitCode == 0 {
                 let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
                 return value.isEmpty ? nil : value
@@ -725,9 +730,10 @@ final class GitManager: ObservableObject {
         // Try SSH first for real git config
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let escapedKey = key.shellEscaped
-            let escapedValue = value.shellEscaped
-            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git config \(escapedKey) '\(escapedValue)'", timeout: 10)
+            guard isValidGitConfigKey(key) else {
+                throw GitManagerError.commandFailed(args: "config", exitCode: 1, message: "Invalid config key: only alphanumeric, dots, and dashes allowed")
+            }
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git config '\(key.shellEscaped)' '\(value.shellEscaped)'", timeout: 10)
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "config \(key)", exitCode: result.exitCode, message: result.stderr)
             }
@@ -796,6 +802,40 @@ final class GitManager: ObservableObject {
         return lastError
     }
     
+    // MARK: - Validation Helpers
+    
+    /// Validate a git config key contains only safe characters (alphanumeric, dots, dashes, underscores).
+    private func isValidGitConfigKey(_ key: String) -> Bool {
+        guard !key.isEmpty else { return false }
+        // Git config keys are in the format section.key or section.subsection.key
+        // Only allow: letters, digits, dots, dashes, underscores
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_"))
+        return key.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+    
+    /// Validate a git branch name according to git-check-ref-format rules.
+    private func isValidBranchName(_ name: String) -> Bool {
+        guard !name.isEmpty else { return false }
+        // Reject dangerous characters and patterns
+        let forbidden: [String] = ["..", "~", "^", ":", "\\", " ", "\t", "\n", "\r", "\0", "@{", "??", "*"]
+        for pattern in forbidden {
+            if name.contains(pattern) { return false }
+        }
+        // Must not start or end with dot, slash, or dash
+        if name.hasPrefix(".") || name.hasSuffix(".") { return false }
+        if name.hasPrefix("/") || name.hasSuffix("/") { return false }
+        if name.hasPrefix("-") { return false }
+        // Must not contain consecutive slashes
+        if name.contains("//") { return false }
+        // Must not end with .lock
+        if name.hasSuffix(".lock") { return false }
+        // Must not contain control characters
+        for scalar in name.unicodeScalars {
+            if scalar.value < 0x20 || scalar.value == 0x7F { return false }
+        }
+        return true
+    }
+    
     // MARK: - Missing Functionality TODOs
     
     // TODO: Merge conflict detection and resolution
@@ -820,8 +860,4 @@ final class GitManager: ObservableObject {
     // TODO: Cherry-pick
     // - func cherryPick(sha: String) async throws
     // - Apply changes from a specific commit to current branch
-    
-    // TODO: Branch name validation
-    // - Validate branch names don't contain path traversal (e.g., "../..")
-    // - Validate branch names are valid git ref names
 }

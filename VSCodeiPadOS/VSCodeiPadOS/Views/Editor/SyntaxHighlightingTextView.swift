@@ -798,15 +798,15 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 
             let selectedRange = textView.selectedRange
 
-            // NOTE: We intentionally do NOT manipulate undoManager.disableUndoRegistration/enableUndoRegistration
-            // here. UITextView's internal undo manager state machine is fragile and can crash with
-            // "enableUndoRegistration may only be invoked with matching call to disableUndoRegistration"
-            // when attributedText assignment triggers internal undo callbacks.
-            // 
-            // Instead, we let the system handle undo naturally. The trade-off is that syntax highlighting
-            // changes might add noise to the undo stack, but this is preferable to crashing.
-            
-            textView.attributedText = attributedText
+            // Apply highlighting directly to textStorage to avoid polluting the undo stack.
+            // Using textStorage.beginEditing()/endEditing() with attribute changes doesn't
+            // register undo operations, unlike setting textView.attributedText.
+            let textStorage = textView.textStorage
+            textStorage.beginEditing()
+            attributedText.enumerateAttributes(in: NSRange(location: 0, length: attributedText.length), options: []) { attrs, range, _ in
+                textStorage.setAttributes(attrs, range: range)
+            }
+            textStorage.endEditing()
             textView.selectedRange = selectedRange
 
             // Set typing attributes so newly typed characters have correct base styling
@@ -884,6 +884,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             guard let selectedRange = textView.selectedTextRange else { return }
             let text = textView.text ?? ""
             
+            // Determine comment prefix based on file language
+            let commentPrefix = commentPrefixForFilename(parent.filename)
+            
             // Get the current line range
             if let lineRange = textView.tokenizer.rangeEnclosingPosition(selectedRange.start, with: .paragraph, inDirection: UITextDirection(rawValue: 1)) {
                 let location = textView.offset(from: textView.beginningOfDocument, to: lineRange.start)
@@ -894,26 +897,60 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     let lineText = (text as NSString).substring(with: nsRange)
                     let trimmed = lineText.trimmingCharacters(in: .whitespaces)
                     
-                    // Check if line starts with a comment
-                    let isCommented = trimmed.hasPrefix("//") || trimmed.hasPrefix("#") || trimmed.hasPrefix("/*")
+                    // Check if line starts with the language-appropriate comment prefix
+                    let isCommented = trimmed.hasPrefix(commentPrefix)
                     
                     // Toggle comment
                     var newLineText: String
                     if isCommented {
-                        // Remove comment
-                        newLineText = lineText.replacingOccurrences(of: "//", with: "").replacingOccurrences(of: "#", with: "", options: .anchored)
+                        // Remove comment prefix (first occurrence only)
+                        if let range = lineText.range(of: commentPrefix) {
+                            newLineText = lineText.replacingCharacters(in: range, with: "")
+                            // Also remove one trailing space if present after the prefix
+                            if newLineText.hasPrefix(" "), lineText.hasPrefix(commentPrefix + " ") == false {
+                                // Don't remove space if there wasn't one
+                            }
+                        } else {
+                            newLineText = lineText
+                        }
                     } else {
-                        // Add comment (use // for most languages)
-                        newLineText = "//" + lineText
+                        // Add comment prefix with a space
+                        newLineText = commentPrefix + " " + lineText
                     }
                     
-                    // Replace the line
+                    // Replace the line with undo support
+                    textView.undoManager?.beginUndoGrouping()
                     let textStorage = textView.textStorage
                     textStorage.replaceCharacters(in: nsRange, with: newLineText)
+                    textView.undoManager?.endUndoGrouping()
                     
                     // Update parent binding
                     parent.text = textView.text
                 }
+            }
+        }
+        
+        /// Returns the correct single-line comment prefix for the given filename.
+        private func commentPrefixForFilename(_ filename: String) -> String {
+            let ext = (filename as NSString).pathExtension.lowercased()
+            switch ext {
+            case "py", "pyw", "rb", "sh", "bash", "zsh", "fish", "yaml", "yml", "toml", "r", "pl", "pm":
+                return "#"
+            case "lua", "sql", "hs":
+                return "--"
+            case "html", "xml", "svg":
+                return "<!--" // Note: block comment, but best single-line approximation
+            case "css", "scss", "less":
+                return "/*" // CSS doesn't have single-line comments
+            case "bat", "cmd":
+                return "REM"
+            case "vim":
+                return "\""
+            case "lisp", "clj", "cljs", "el":
+                return ";"
+            default:
+                // Swift, JS, TS, C, C++, Java, Kotlin, Rust, Go, etc.
+                return "//"
             }
         }
         

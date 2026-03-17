@@ -69,7 +69,10 @@ enum ExtensionFilter: String, CaseIterable {
 final class ExtensionManager: ObservableObject {
     static let shared = ExtensionManager()
     
-    @Published var installedExtensions: [IDEExtension] = []
+    /// Computed list of installed extensions from catalog.
+    var installedExtensions: [IDEExtension] {
+        catalogExtensions.filter { $0.isInstalled }
+    }
     @Published var catalogExtensions: [IDEExtension] = []
     @Published var searchText: String = ""
     @Published var selectedFilter: ExtensionFilter = .installed
@@ -80,7 +83,7 @@ final class ExtensionManager: ObservableObject {
     
     private let installedKey = "installedExtensionIds"
     
-    init() {
+    private init() {
         loadCatalog()
         loadInstalledState()
     }
@@ -130,7 +133,15 @@ final class ExtensionManager: ObservableObject {
         operationInProgress = extension_.id
         lastError = nil
         
-        if let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) {
+        guard let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) else {
+            lastError = .installFailed(extension_.displayName)
+            operationInProgress = nil
+            return
+        }
+        
+        // Simulate brief async loading
+        Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
             catalogExtensions[index].isInstalled = true
             catalogExtensions[index].isEnabled = true
             saveInstalledState()
@@ -139,9 +150,8 @@ final class ExtensionManager: ObservableObject {
                 object: nil,
                 userInfo: ["extension": extension_.displayName]
             )
+            operationInProgress = nil
         }
-        
-        operationInProgress = nil
     }
     
     func uninstall(_ extension_: IDEExtension) {
@@ -150,7 +160,15 @@ final class ExtensionManager: ObservableObject {
         operationInProgress = extension_.id
         lastError = nil
         
-        if let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) {
+        guard let index = catalogExtensions.firstIndex(where: { $0.id == extension_.id }) else {
+            lastError = .uninstallFailed(extension_.displayName)
+            operationInProgress = nil
+            return
+        }
+        
+        // Simulate brief async unloading
+        Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
             catalogExtensions[index].isInstalled = false
             catalogExtensions[index].isEnabled = false
             saveInstalledState()
@@ -159,9 +177,8 @@ final class ExtensionManager: ObservableObject {
                 object: nil,
                 userInfo: ["extension": extension_.displayName]
             )
+            operationInProgress = nil
         }
-        
-        operationInProgress = nil
     }
     
     func toggleEnabled(_ extension_: IDEExtension) {

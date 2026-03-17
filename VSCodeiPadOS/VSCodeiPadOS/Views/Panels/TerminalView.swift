@@ -920,31 +920,31 @@ extension TerminalTab: Equatable {}
             }
             
         case "cp":
-            let allParts = command.split(separator: " ")
-            guard allParts.count >= 3 else {
+            let cpParts = command.split(separator: " ", maxSplits: 3)
+            guard cpParts.count >= 3 else {
                 appendOutput("cp: usage: cp <source> <destination>", type: .error)
                 return
             }
-            let src = currentDirectory.appendingPathComponent(String(allParts[1]))
-            let dst = currentDirectory.appendingPathComponent(String(allParts[2]))
+            let src = currentDirectory.appendingPathComponent(String(cpParts[1]))
+            let dst = currentDirectory.appendingPathComponent(String(cpParts[2]))
             do {
                 try FileManager.default.copyItem(at: src, to: dst)
-                appendOutput("Copied \(allParts[1]) → \(allParts[2])", type: .output)
+                appendOutput("Copied \(cpParts[1]) → \(cpParts[2])", type: .output)
             } catch {
                 appendOutput("cp: \(error.localizedDescription)", type: .error)
             }
             
         case "mv":
-            let allParts = command.split(separator: " ")
-            guard allParts.count >= 3 else {
+            let mvParts = command.split(separator: " ", maxSplits: 3)
+            guard mvParts.count >= 3 else {
                 appendOutput("mv: usage: mv <source> <destination>", type: .error)
                 return
             }
-            let src = currentDirectory.appendingPathComponent(String(allParts[1]))
-            let dst = currentDirectory.appendingPathComponent(String(allParts[2]))
+            let src = currentDirectory.appendingPathComponent(String(mvParts[1]))
+            let dst = currentDirectory.appendingPathComponent(String(mvParts[2]))
             do {
                 try FileManager.default.moveItem(at: src, to: dst)
-                appendOutput("Moved \(allParts[1]) → \(allParts[2])", type: .output)
+                appendOutput("Moved \(mvParts[1]) → \(mvParts[2])", type: .output)
             } catch {
                 appendOutput("mv: \(error.localizedDescription)", type: .error)
             }
@@ -1364,11 +1364,12 @@ struct ANSIText: View {
             var attr = AttributedString(segment.text)
             attr.foregroundColor = segment.color ?? defaultFG
             
-            if segment.bold {
+            if segment.bold && segment.italic {
+                attr.font = .system(.body, design: .monospaced).bold().italic()
+            } else if segment.bold {
                 attr.font = .system(.body, design: .monospaced).bold()
-            }
-            if segment.italic {
-                attr.font = (attr.font ?? .system(.body, design: .monospaced)).italic()
+            } else if segment.italic {
+                attr.font = .system(.body, design: .monospaced).italic()
             }
             if segment.underline {
                 attr.underlineStyle = .single

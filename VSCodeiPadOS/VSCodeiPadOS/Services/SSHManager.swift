@@ -53,6 +53,7 @@ enum SSHClientError: Error, LocalizedError {
     case invalidPrivateKey
     case commandFailed(String)
     case notImplemented
+    case portForwardFailed(String)
     
     var errorDescription: String? {
         switch self {
@@ -65,6 +66,7 @@ enum SSHClientError: Error, LocalizedError {
         case .invalidPrivateKey: return "Invalid private key format"
         case .commandFailed(let reason): return "Command execution failed: \(reason)"
         case .notImplemented: return "SSH feature not yet implemented"
+        case .portForwardFailed(let reason): return "Port forwarding failed: \(reason)"
         }
     }
 }
@@ -270,9 +272,14 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     }
     
     func disconnect() {
-        // Set isConnected = false synchronously BEFORE clearing channels
-        // to prevent race where isConnected=true but channels are nil
-        isConnected = false
+        // Close all active port forward listeners before tearing down the connection
+        tunnelLock.withLock {
+            for (_, tunnel) in activeTunnels {
+                tunnel.listenerChannel?.close(mode: .all, promise: nil)
+                tunnel.isActive = false
+            }
+            activeTunnels.removeAll()
+        }
         
         shellChannel?.close(mode: .all, promise: nil)
         channel?.close(mode: .all, promise: nil)
@@ -284,8 +291,10 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         let delegate = self.delegate
         DispatchQueue.main.async {
+            self.isConnected = false
             self.currentConfig = nil
             delegate?.sshManagerDidDisconnect(self, error: nil)
+            NotificationCenter.default.post(name: .sshDidDisconnect, object: nil)
         }
     }
 
@@ -531,27 +540,89 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     private var activeTunnels: [Int: SSHPortForwardTunnel] = [:]
     private let tunnelLock = NSLock()
     
-    /// Setup a local-to-remote port forward (local port -> remote host:port via SSH)
-    /// Note: Full port forwarding requires NIOSSH direct-tcpip support.
-    /// Current implementation tracks tunnel state for UI purposes.
+    /// Setup a local-to-remote port forward using NIOSSH direct-tcpip channels.
+    /// Binds a local TCP server on 127.0.0.1:localPort and forwards each incoming
+    /// connection through an SSH direct-tcpip child channel to remoteHost:remotePort.
     func setupPortForward(localPort: Int, remoteHost: String, remotePort: Int) async throws {
-        guard isConnected else {
+        guard isConnected, let sshChannel = self.channel, let group = self.group else {
             throw SSHClientError.notConnected
         }
-        
+
+        // Reject duplicate tunnels on the same local port
+        var existingTunnel: SSHPortForwardTunnel?
+        tunnelLock.withLock {
+            existingTunnel = activeTunnels[localPort]
+        }
+        if let existing = existingTunnel, existing.isActive {
+            throw SSHClientError.portForwardFailed("Port \(localPort) is already being forwarded")
+        }
+
         let tunnel = SSHPortForwardTunnel(
             localPort: localPort,
             remoteHost: remoteHost,
             remotePort: remotePort
         )
-        
+
+        // The originator address reports 127.0.0.1:localPort to the SSH server
+        let originatorAddress = try SocketAddress(ipAddress: "127.0.0.1", port: localPort)
+
+        let listenerChannel = try await ServerBootstrap(group: group)
+            .serverChannelOption(ChannelOptions.backlog, value: 16)
+            .childChannelOption(ChannelOptions.socket(
+                SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR
+            ), value: 1)
+            .childChannelInitializer { [weak sshChannel] localChannel in
+                guard let sshChannel = sshChannel else {
+                    return localChannel.eventLoop.makeFailedFuture(SSHClientError.notConnected)
+                }
+
+                // For each incoming TCP connection create an SSH direct-tcpip child channel
+                return sshChannel.pipeline.handler(type: NIOSSHHandler.self).flatMap { sshHandler in
+                    let sshChildPromise = sshChannel.eventLoop.makePromise(of: Channel.self)
+
+                    let channelType: SSHChannelType = .directTCPIP(.init(
+                        targetHost: remoteHost,
+                        targetPort: remotePort,
+                        originatorAddress: originatorAddress
+                    ))
+
+                    sshHandler.createChannel(sshChildPromise, channelType: channelType) { sshChildChannel, _ in
+                        // When the SSH child channel closes, close the local TCP connection
+                        sshChildChannel.closeFuture.whenComplete { _ in
+                            localChannel.close(mode: .all, promise: nil)
+                        }
+
+                        // PortForwardDataHandler converts SSHChannelData <-> ByteBuffer and
+                        // writes inbound data directly to the local TCP channel
+                        return sshChildChannel.pipeline.addHandler(
+                            PortForwardDataHandler(localChannel: localChannel)
+                        )
+                    }
+
+                    // Once the SSH child channel is ready, add a GlueHandler on the local
+                    // TCP channel to forward its inbound reads to the SSH child channel.
+                    return sshChildPromise.futureResult.flatMap { sshChildChannel in
+                        localChannel.pipeline.addHandler(
+                            PortForwardGlueHandler(pairedChannel: sshChildChannel)
+                        )
+                    }.flatMapError { error in
+                        // SSH channel creation failed — close the local TCP connection
+                        localChannel.close(mode: .all, promise: nil)
+                        return localChannel.eventLoop.makeFailedFuture(error)
+                    }
+                }.flatMapError { error in
+                    // Failed to get SSH handler — close local TCP connection
+                    localChannel.close(mode: .all, promise: nil)
+                    return localChannel.eventLoop.makeFailedFuture(error)
+                }
+            }
+            .bind(host: "127.0.0.1", port: localPort).get()
+
+        tunnel.listenerChannel = listenerChannel
+        tunnel.isActive = true
         tunnelLock.withLock {
             activeTunnels[localPort] = tunnel
         }
-        
-        // Use SSH command to set up port forwarding on the remote side
-        // This is a simplified approach - full implementation would use direct-tcpip channels
-        _ = try await executeCommand("echo 'Port forward \(localPort) -> \(remoteHost):\(remotePort) established'")
     }
     
     /// Setup remote-to-local port forward
@@ -572,14 +643,19 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         }
     }
     
-    /// Cancel a port forward
+    /// Cancel a port forward by closing its listener channel and removing the tunnel.
     func cancelPortForward(localPort: Int) async throws {
+        var tunnel: SSHPortForwardTunnel?
         tunnelLock.withLock {
-            if let tunnel = activeTunnels[localPort] {
-                tunnel.listenerChannel?.close(mode: .all, promise: nil)
-                activeTunnels.removeValue(forKey: localPort)
-            }
+            tunnel = activeTunnels[localPort]
+            activeTunnels.removeValue(forKey: localPort)
         }
+        guard let tunnel = tunnel else { return }
+        tunnel.isActive = false
+        if let listener = tunnel.listenerChannel {
+            try? await listener.close()
+        }
+        tunnel.listenerChannel = nil
     }
     
     /// Cancel remote port forward
@@ -692,34 +768,79 @@ struct DiscoveredPort: Identifiable, Equatable {
         lhs.port == rhs.port
     }
 }
-/// Data handler for port forwarding - bridges between local TCP and SSH channel
+
+// MARK: - Port Forward Data Handler
+
+/// Data handler for port forwarding – sits on the SSH child channel and bridges
+/// SSHChannelData <-> ByteBuffer. Inbound data (from the remote) is forwarded
+/// to the local TCP channel as raw bytes; outbound ByteBuffer data is wrapped
+/// as SSHChannelData before being sent over SSH.
 final class PortForwardDataHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
     typealias InboundOut = ByteBuffer
     typealias OutboundIn = ByteBuffer
     typealias OutboundOut = SSHChannelData
-    
+
     private weak var localChannel: Channel?
-    
+
     init(localChannel: Channel) {
         self.localChannel = localChannel
     }
-    
+
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let channelData = self.unwrapInboundIn(data)
-        guard case .byteBuffer(var buf) = channelData.data else { return }
-        if let str = buf.readString(length: buf.readableBytes) {
-            // Forward data to local channel
-            var outBuf = localChannel?.allocator.buffer(capacity: str.utf8.count) ?? ByteBuffer()
-            outBuf.writeString(str)
-            localChannel?.writeAndFlush(outBuf, promise: nil)
-        }
+        guard case .byteBuffer(let buf) = channelData.data else { return }
+        // Forward raw bytes directly to the local TCP channel (no string conversion)
+        localChannel?.writeAndFlush(buf, promise: nil)
     }
-    
+
     func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         let buffer = self.unwrapOutboundIn(data)
         let channelData = SSHChannelData(type: .channel, data: .byteBuffer(buffer))
         context.write(self.wrapOutboundOut(channelData), promise: promise)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        localChannel?.close(mode: .all, promise: nil)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        localChannel?.close(mode: .all, promise: nil)
+        context.close(mode: .all, promise: nil)
+    }
+}
+
+
+// MARK: - Port Forward Glue Handler
+
+/// Bidirectional bridge that connects a local TCP child channel to an SSH
+/// direct-tcpip child channel. Placed on the **local** TCP channel, it:
+///   • Forwards inbound ByteBuffer reads to the paired SSH channel.
+///   • Closes the paired SSH channel when the local connection becomes inactive.
+///   • Propagates errors by closing both sides.
+final class PortForwardGlueHandler: ChannelDuplexHandler, @unchecked Sendable {
+    typealias InboundIn = ByteBuffer
+    typealias InboundOut = ByteBuffer
+    typealias OutboundIn = ByteBuffer
+    typealias OutboundOut = ByteBuffer
+
+    private weak var pairedChannel: Channel?
+
+    init(pairedChannel: Channel) {
+        self.pairedChannel = pairedChannel
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        pairedChannel?.writeAndFlush(unwrapInboundIn(data), promise: nil)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        pairedChannel?.close(mode: .all, promise: nil)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        pairedChannel?.close(mode: .all, promise: nil)
+        context.close(mode: .all, promise: nil)
     }
 }
 
@@ -734,8 +855,10 @@ final class SSHConnectionStore: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let storageKey = "ssh_saved_connections"
+    private let migrationFlagKey = "ssh_keychain_migrated"
     
     init() {
+        migrateToKeychain()
         loadConnections()
     }
     
@@ -753,6 +876,7 @@ final class SSHConnectionStore: ObservableObject {
     }
     
     func delete(_ connection: SSHConnectionConfig) {
+        deleteKeychainEntries(for: connection.id)
         savedConnections.removeAll { $0.id == connection.id }
         persistConnections()
     }
@@ -764,16 +888,106 @@ final class SSHConnectionStore: ObservableObject {
         }
     }
     
+    // MARK: - Keychain Helpers
+    
+    private func keychainKey(for configId: UUID, type: String) -> String {
+        return "ssh_\(configId.uuidString)_\(type)"
+    }
+    
+    private func deleteKeychainEntries(for configId: UUID) {
+        KeychainHelper.shared.delete(keychainKey(for: configId, type: "password"))
+        KeychainHelper.shared.delete(keychainKey(for: configId, type: "private_key"))
+        KeychainHelper.shared.delete(keychainKey(for: configId, type: "passphrase"))
+    }
+    
+    private func saveCredentialsToKeychain(for config: SSHConnectionConfig) {
+        switch config.authMethod {
+        case .password(let pwd):
+            if !pwd.isEmpty {
+                KeychainHelper.shared.set(pwd, forKey: keychainKey(for: config.id, type: "password"))
+            }
+        case .privateKey(let key, let passphrase):
+            if !key.isEmpty {
+                KeychainHelper.shared.set(key, forKey: keychainKey(for: config.id, type: "private_key"))
+            }
+            if let passphrase = passphrase, !passphrase.isEmpty {
+                KeychainHelper.shared.set(passphrase, forKey: keychainKey(for: config.id, type: "passphrase"))
+            }
+        }
+    }
+    
+    private func sanitizedConfig(_ config: SSHConnectionConfig) -> SSHConnectionConfig {
+        var sanitized = config
+        switch config.authMethod {
+        case .password:
+            sanitized.authMethod = .password("")
+        case .privateKey:
+            sanitized.authMethod = .privateKey(key: "", passphrase: nil)
+        }
+        return sanitized
+    }
+    
+    private func restoredConfig(_ config: SSHConnectionConfig) -> SSHConnectionConfig {
+        var restored = config
+        
+        // Check if this config has credentials in Keychain
+        if let keyPwd = KeychainHelper.shared.get(keychainKey(for: config.id, type: "password")) {
+            restored.authMethod = .password(keyPwd)
+        } else if let key = KeychainHelper.shared.get(keychainKey(for: config.id, type: "private_key")) {
+            let passphrase = KeychainHelper.shared.get(keychainKey(for: config.id, type: "passphrase"))
+            restored.authMethod = .privateKey(key: key, passphrase: passphrase)
+        }
+        // If no Keychain entries found, keep whatever was in UserDefaults (backward compat)
+        
+        return restored
+    }
+    
+    // MARK: - Migration
+    
+    private func migrateToKeychain() {
+        guard !userDefaults.bool(forKey: migrationFlagKey) else { return }
+        
+        // Load existing configs (which may have plaintext credentials)
+        guard let data = userDefaults.data(forKey: storageKey),
+              var configs = try? JSONDecoder().decode([SSHConnectionConfig].self, from: data) else {
+            // No existing data — nothing to migrate, just mark as done
+            userDefaults.set(true, forKey: migrationFlagKey)
+            return
+        }
+        
+        // For each config, save credentials to Keychain and sanitize
+        for i in configs.indices {
+            saveCredentialsToKeychain(for: configs[i])
+            configs[i] = sanitizedConfig(configs[i])
+        }
+        
+        // Re-persist with sanitized configs
+        if let sanitizedData = try? JSONEncoder().encode(configs) {
+            userDefaults.set(sanitizedData, forKey: storageKey)
+        }
+        
+        userDefaults.set(true, forKey: migrationFlagKey)
+    }
+    
+    // MARK: - Persistence
+    
     private func loadConnections() {
         guard let data = userDefaults.data(forKey: storageKey),
               let connections = try? JSONDecoder().decode([SSHConnectionConfig].self, from: data) else {
             return
         }
-        savedConnections = connections.sorted { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) }
+        // Restore real credentials from Keychain
+        savedConnections = connections.map { restoredConfig($0) }
+            .sorted { ($0.lastUsed ?? .distantPast) > ($1.lastUsed ?? .distantPast) }
     }
     
     private func persistConnections() {
-        guard let data = try? JSONEncoder().encode(savedConnections) else { return }
+        // Save credentials to Keychain and build sanitized array for UserDefaults
+        let sanitized = savedConnections.map { config -> SSHConnectionConfig in
+            saveCredentialsToKeychain(for: config)
+            return sanitizedConfig(config)
+        }
+        guard let data = try? JSONEncoder().encode(sanitized) else { return }
         userDefaults.set(data, forKey: storageKey)
     }
 }

@@ -110,6 +110,12 @@ final class PortForwardingManager: ObservableObject {
     
     func removePort(id: UUID) {
         if let port = forwardedPorts.first(where: { $0.id == id }) {
+            // If user port was active, tear down the real SSH tunnel
+            if port.isActive && port.origin == .user {
+                Task {
+                    try? await SSHManager.shared.cancelPortForward(localPort: port.port)
+                }
+            }
             forwardedPorts.removeAll { $0.id == id }
             NotificationCenter.default.post(name: .portStopped, object: nil, userInfo: ["port": port.port])
         }
@@ -133,18 +139,50 @@ final class PortForwardingManager: ObservableObject {
         forwardedPorts[index].portProtocol = proto
     }
     
-    // TODO: UI-only stub — needs real SSH tunnel implementation to actually stop port forwarding.
-    // Currently only toggles the local isActive flag; no actual SSH channel is torn down.
+    /// Stop forwarding a port by tearing down the real SSH tunnel.
     func stopForwarding(id: UUID) {
         guard let index = forwardedPorts.firstIndex(where: { $0.id == id }) else { return }
+        let port = forwardedPorts[index]
         forwardedPorts[index].isActive = false
+        
+        guard port.origin == .user else { return }
+        
+        Task { @MainActor [weak self] in
+            do {
+                try await SSHManager.shared.cancelPortForward(localPort: port.port)
+            } catch {
+                // Log but don't crash — tunnel may already be gone
+                print("PortForwardingManager: failed to cancel tunnel for port \(port.port): \(error.localizedDescription)")
+            }
+        }
     }
     
-    // TODO: UI-only stub — needs real SSH tunnel implementation to actually start port forwarding.
-    // Currently only toggles the local isActive flag; no actual SSH tunnel is established.
+    /// Start forwarding a port by establishing a real SSH tunnel via direct-tcpip.
     func startForwarding(id: UUID) {
         guard let index = forwardedPorts.firstIndex(where: { $0.id == id }) else { return }
-        forwardedPorts[index].isActive = true
+        let port = forwardedPorts[index]
+        
+        guard port.origin == .user else { return }
+        
+        Task { @MainActor [weak self] in
+            do {
+                try await SSHManager.shared.setupPortForward(
+                    localPort: port.port,
+                    remoteHost: "localhost",
+                    remotePort: port.port
+                )
+                self?.forwardedPorts[index].isActive = true
+            } catch SSHClientError.portForwardFailed(let reason) {
+                self?.forwardedPorts[index].isActive = false
+                self?.scanError = reason
+            } catch SSHClientError.notConnected {
+                self?.forwardedPorts[index].isActive = false
+                self?.scanError = "Cannot forward port \(port.port): not connected to SSH server"
+            } catch {
+                self?.forwardedPorts[index].isActive = false
+                self?.scanError = "Failed to forward port \(port.port): \(error.localizedDescription)"
+            }
+        }
     }
     
     func copyLocalAddress(id: UUID) {
