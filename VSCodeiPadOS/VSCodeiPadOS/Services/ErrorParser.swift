@@ -6,7 +6,7 @@ import SwiftUI
 
 /// Represents a parsed error with file location and severity
 struct ParsedError: Identifiable, Equatable, Hashable, Codable {
-    let id = UUID()
+    var id = UUID()
     let file: String
     let line: Int
     let column: Int
@@ -383,7 +383,7 @@ func parseGeneric(output: String) -> [ParsedError] {
 
 /// Represents the location of an error in source code
 struct ErrorLocation: Identifiable, Equatable, Hashable {
-    let id = UUID()
+    var id = UUID()
     let file: String
     let line: Int
     let column: Int

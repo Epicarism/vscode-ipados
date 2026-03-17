@@ -333,18 +333,39 @@ class EditorCore: ObservableObject {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
+            // Extract data outside MainActor.assumeIsolated to avoid Sendable issues
             let userInfo = notification.userInfo
-            if let clear = userInfo?["clear"] as? Bool, clear {
-                self.diagnosticErrorCount = 0
-                self.diagnosticWarningCount = 0
+            let shouldClear = (userInfo?["clear"] as? Bool) == true
+            let errorCount: Int
+            let warningCount: Int
+            let singleSeverity: DiagnosticSeverity?
+            
+            if shouldClear {
+                errorCount = 0
+                warningCount = 0
+                singleSeverity = nil
             } else if let items = userInfo?["diagnostics"] as? [[String: Any]] {
                 let diagnostics = items.compactMap { DiagnosticItem(userInfo: $0) }
-                self.diagnosticErrorCount = diagnostics.filter { $0.severity == .error }.count
-                self.diagnosticWarningCount = diagnostics.filter { $0.severity == .warning }.count
-            } else if let item = userInfo as? [String: Any], item["message"] != nil {
-                // Single diagnostic appended — increment based on severity
-                if let severityRaw = item["severity"] as? String,
-                   let severity = DiagnosticSeverity(rawValue: severityRaw) {
+                errorCount = diagnostics.filter { $0.severity == .error }.count
+                warningCount = diagnostics.filter { $0.severity == .warning }.count
+                singleSeverity = nil
+            } else if let item = userInfo as? [String: Any], item["message"] != nil,
+                      let severityRaw = item["severity"] as? String {
+                errorCount = -1 // sentinel: use increment mode
+                warningCount = -1
+                singleSeverity = DiagnosticSeverity(rawValue: severityRaw)
+            } else {
+                return
+            }
+            
+            MainActor.assumeIsolated {
+                if shouldClear {
+                    self.diagnosticErrorCount = 0
+                    self.diagnosticWarningCount = 0
+                } else if errorCount >= 0 {
+                    self.diagnosticErrorCount = errorCount
+                    self.diagnosticWarningCount = warningCount
+                } else if let severity = singleSeverity {
                     switch severity {
                     case .error: self.diagnosticErrorCount += 1
                     case .warning: self.diagnosticWarningCount += 1
@@ -1057,6 +1078,12 @@ mod tests {
     }
 
     func closeOtherTabs(except id: UUID) {
+        // If any tab being closed has unsaved changes, defer to confirmation dialog
+        if let firstUnsaved = tabs.first(where: { $0.id != id && $0.isUnsaved }) {
+            pendingCloseTabId = firstUnsaved.id
+            return
+        }
+
         // Release security-scoped access for tabs being closed.
         for tab in tabs where tab.id != id {
             if let url = tab.url {
@@ -1070,6 +1097,13 @@ mod tests {
 
     func closeTabsToTheRight(of id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+
+        // If any tab being closed has unsaved changes, defer to confirmation dialog
+        if let firstUnsaved = tabs[(index + 1)...].first(where: { $0.isUnsaved }) {
+            pendingCloseTabId = firstUnsaved.id
+            return
+        }
+
         let tabsToClose = Array(tabs[(index + 1)...])
         for tab in tabsToClose {
             if let url = tab.url {
@@ -1085,6 +1119,13 @@ mod tests {
 
     func closeTabsToTheLeft(of id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+
+        // If any tab being closed has unsaved changes, defer to confirmation dialog
+        if let firstUnsaved = tabs[..<index].first(where: { $0.isUnsaved }) {
+            pendingCloseTabId = firstUnsaved.id
+            return
+        }
+
         let tabsToClose = Array(tabs[..<index])
         for tab in tabsToClose {
             if let url = tab.url {
@@ -1099,6 +1140,7 @@ mod tests {
     }
 
     func selectTab(id: UUID) {
+        guard tabs.contains(where: { $0.id == id }) else { return }
         activeTabId = id
         updateLargeFileStatus()
     }
@@ -1136,7 +1178,8 @@ mod tests {
         updateLargeFileStatus()
         
         // Trigger auto-save if enabled
-        Task { @MainActor in AutoSaveManager.shared.contentDidChange(tabId: self.tabs[index].id) }
+        let tabId = tabs[index].id
+        Task { @MainActor in AutoSaveManager.shared.contentDidChange(tabId: tabId) }
     }
 
     func saveActiveTab() {
@@ -1150,8 +1193,8 @@ mod tests {
         NotificationCenter.default.post(name: .forceEditorSync, object: nil)
 
         // Small delay to allow sync to complete before reading content
-        DispatchQueue.main.async { [self] in
-            self._performSave(tabId: capturedTabId, index: capturedIndex)
+        DispatchQueue.main.async { [weak self] in
+            self?._performSave(tabId: capturedTabId, index: capturedIndex)
         }
     }
 
@@ -1255,7 +1298,8 @@ mod tests {
         NotificationCenter.default.post(name: .forceEditorSync, object: nil)
 
         // Small delay to allow sync to complete before reading content
-        DispatchQueue.main.async { [self] in
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             for index in self.tabs.indices {
                 guard self.tabs[index].url != nil, self.tabs[index].isUnsaved else { continue }
                 // Call the existing _performSave to avoid code duplication

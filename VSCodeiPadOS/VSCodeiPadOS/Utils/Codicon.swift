@@ -379,6 +379,7 @@ struct CodiconMapping {
 // MARK: - Image Extension for Codicon
 
 extension Image {
+    @MainActor
     static func codicon(_ icon: Codicon) -> some View {
         CodiconView(icon)
     }

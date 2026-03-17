@@ -23,6 +23,9 @@ final class GitService: ObservableObject {
     @Published var aheadCount: Int = 0
     @Published var behindCount: Int = 0
     @Published var stashes: [GitStash] = []
+    private var busyCount: Int = 0 {
+        didSet { isBusy = busyCount > 0 }
+    }
     @Published var isBusy: Bool = false
     @Published var branches: [String] = []
     @Published var lastErrorMessage: String?
@@ -79,7 +82,7 @@ final class GitService: ObservableObject {
     // MARK: - Branch Operations
 
     func switchBranch(to branch: String) {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.checkout(branch: branch)
@@ -87,7 +90,7 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
@@ -96,7 +99,7 @@ final class GitService: ObservableObject {
             lastErrorMessage = "Branch name cannot be empty"
             return
         }
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.createBranch(name: name)
@@ -107,7 +110,7 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
@@ -116,7 +119,7 @@ final class GitService: ObservableObject {
             lastErrorMessage = "Cannot delete current branch"
             return
         }
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.deleteBranch(name: branch)
@@ -124,23 +127,23 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     // MARK: - Status / Commit
 
     func refreshStatus() {
-        isBusy = true
+        busyCount += 1
         Task {
             await gitManager.refresh()
             lastErrorMessage = gitManager.lastError
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     func commit(message: String) {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.commit(message: message)
@@ -148,14 +151,14 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     // MARK: - Remote Operations
 
     func pull() {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.pull()
@@ -164,12 +167,12 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     func push() {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.push()
@@ -178,14 +181,14 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     // MARK: - Stash
 
     func stashSave(message: String?) {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.stashPush(message: message)
@@ -193,12 +196,12 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     func stashApply(index: Int) {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 // GitManager has stashPop which applies + drops; use it as the
@@ -208,12 +211,12 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 
     func stashPop(index: Int) {
-        isBusy = true
+        busyCount += 1
         Task {
             do {
                 try await gitManager.stashPop(index: index)
@@ -221,7 +224,7 @@ final class GitService: ObservableObject {
             } catch {
                 lastErrorMessage = error.localizedDescription
             }
-            isBusy = false
+            busyCount -= 1
         }
     }
 }

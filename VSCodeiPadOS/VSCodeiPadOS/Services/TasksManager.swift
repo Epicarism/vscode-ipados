@@ -644,7 +644,7 @@ final class TasksManager: ObservableObject {
         }
     }
 
-    private static func runWithProcess(
+    nonisolated private static func runWithProcess(
         task: VSCodeTask,
         workspaceRootURL: URL?,
         onOutput: @escaping (String) -> Void

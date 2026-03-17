@@ -770,14 +770,16 @@ class SettingsWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         AppLogger.editor.debug("[WebView] Provisional navigation failed: \(error.localizedDescription)")
     }
-    
-    // MARK: - UI Delegate (handle alerts, confirms, prompts)
-    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+}
+
+// MARK: - WKUIDelegate (JS Panels)
+extension SettingsWebViewCoordinator {
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable () -> Void) {
         AppLogger.editor.debug("[JS Alert] \(message)")
         completionHandler()
     }
     
-    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (Bool) -> Void) {
         AppLogger.editor.debug("[JS Confirm] \(message)")
         completionHandler(true)
     }

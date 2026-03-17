@@ -99,20 +99,22 @@ final class LocalLLMService: ObservableObject {
         ) { [weak self] _ in
             guard let self else { return }
             
-            self.logger.warning(
-                "Received memory warning. isModelLoaded=\(self.isModelLoaded, privacy: .public) isGenerating=\(self.isGenerating, privacy: .public)"
-            )
-            
-            // If we're actively generating, don't kill inference mid-flight.
-            // If we're idle, unload to free memory.
-            guard self.isModelLoaded else { return }
-            
-            if self.isGenerating {
-                self.logger.warning("Memory warning during inference; keeping model loaded.")
-            } else {
-                self.logger.warning("Model idle during memory warning; unloading model to reclaim memory.")
-                self.unloadModel()
-                self.statusMessage = "Model unloaded due to low memory"
+            Task { @MainActor in
+                self.logger.warning(
+                    "Received memory warning. isModelLoaded=\(self.isModelLoaded, privacy: .public) isGenerating=\(self.isGenerating, privacy: .public)"
+                )
+                
+                // If we're actively generating, don't kill inference mid-flight.
+                // If we're idle, unload to free memory.
+                guard self.isModelLoaded else { return }
+                
+                if self.isGenerating {
+                    self.logger.warning("Memory warning during inference; keeping model loaded.")
+                } else {
+                    self.logger.warning("Model idle during memory warning; unloading model to reclaim memory.")
+                    self.unloadModel()
+                    self.statusMessage = "Model unloaded due to low memory"
+                }
             }
         }
         

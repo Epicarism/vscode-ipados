@@ -429,6 +429,9 @@ final class AIManager: ObservableObject {
         error = nil
         streamingResponse = ""
         
+        // Wrap the streaming work in a cancellable Task so cancelStreaming() works.
+        let streamingTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
         do {
             let response: String
             
@@ -463,7 +466,7 @@ final class AIManager: ObservableObject {
                 }
                 AppLogger.ai.debug("sendMessage: using LocalMLX streaming")
                 let localSystemOverride: String?
-                if isSmallLocalModel && toolExecutor != nil {
+                if isSmallLocalModel {
                     AppLogger.ai.debug("sendMessage: small local model has tools disabled for stability; using explicit no-tools prompt")
                     localSystemOverride = buildSmallLocalNoToolsSystemPrompt(context: context)
                 } else {
@@ -478,15 +481,35 @@ final class AIManager: ObservableObject {
             } else {
                 response = try await makeAPIRequest(messages: currentSession.messages, context: context, agentMode: false)
             }
+            
+            // Bug 3 fix: Verify the task wasn't cancelled before writing the response.
+            // Without this guard, a cancelled stream's final chunk still gets appended
+            // as a full assistant message (ghost response).
+            guard !Task.isCancelled else {
+                AppLogger.ai.debug("sendMessage: streaming was cancelled, discarding ghost response")
+                return
+            }
+            
             AppLogger.ai.debug("sendMessage: final response length=\(response.count), preview='\(response.prefix(100))'")
             let assistantMessage = ChatMessage(role: .assistant, content: response, codeBlocks: extractCodeBlocks(from: response))
             currentSession.messages.append(assistantMessage)
             updateSession()
+        } catch is CancellationError {
+            // Task was cancelled via cancelStreaming() — don't overwrite its cleanup.
+            AppLogger.ai.debug("sendMessage: streaming task cancelled")
         } catch {
             self.error = error.localizedDescription
         }
+        }
         
-        isLoading = false
+        currentStreamingTask = streamingTask
+        await streamingTask.value
+        currentStreamingTask = nil
+        
+        // Only reset isLoading if the task wasn't cancelled (cancelStreaming already handles it)
+        if !streamingTask.isCancelled {
+            isLoading = false
+        }
     }
     
     // MARK: - Tool-Aware Request (works for ALL providers)

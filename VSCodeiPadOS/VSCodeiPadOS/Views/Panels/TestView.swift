@@ -149,7 +149,7 @@ struct TestView: View {
     }
 
     /// Scans the app's documents directory and bundle for Swift test files.
-    static func discoverTestFunctions() -> [TestSuite] {
+    nonisolated static func discoverTestFunctions() -> [TestSuite] {
         var suites: [String: [String]] = [:]
 
         // Scan the app's documents directory (workspace files)
@@ -178,7 +178,7 @@ struct TestView: View {
     }
 
     /// Recursively scans a directory for Swift test files.
-    private static func scanDirectoryRecursively(_ url: URL, into suites: inout [String: [String]]) {
+    nonisolated private static func scanDirectoryRecursively(_ url: URL, into suites: inout [String: [String]]) {
         let fileManager = FileManager.default
         guard let enumerator = fileManager.enumerator(
             at: url,
@@ -204,7 +204,7 @@ struct TestView: View {
 
     /// Parses a single Swift file for test function declarations.
     /// Looks for patterns like `func testName(` that start with "test".
-    private static func scanSwiftFile(at url: URL, into suites: inout [String: [String]]) {
+    nonisolated private static func scanSwiftFile(at url: URL, into suites: inout [String: [String]]) {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return }
 
         // Check for XCTest import (confirm this is a test file)

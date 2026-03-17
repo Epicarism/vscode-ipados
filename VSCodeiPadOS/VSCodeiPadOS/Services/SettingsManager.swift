@@ -8,38 +8,22 @@ final class SettingsManager: ObservableObject {
 
     // MARK: - AppStorage keys
 
-    @AppStorage("fontSize") var fontSize: Double = 14 {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("fontSize") var fontSize: Double = 14
 
-    @AppStorage("fontFamily") var fontFamily: String = "Menlo" {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("fontFamily") var fontFamily: String = "Menlo"
 
-    @AppStorage("tabSize") var tabSize: Int = 4 {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("tabSize") var tabSize: Int = 4
 
-    @AppStorage("wordWrap") var wordWrap: Bool = true {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("wordWrap") var wordWrap: Bool = true
 
     /// Mirrors SettingsView's picker tags: off / afterDelay / onFocusChange / onWindowChange
-    @AppStorage("autoSave") var autoSaveRaw: String = AutoSaveMode.off.rawValue {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("autoSave") var autoSaveRaw: String = AutoSaveMode.off.rawValue
 
-    @AppStorage("minimapEnabled") var minimapEnabled: Bool = true {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("minimapEnabled") var minimapEnabled: Bool = true
 
-    @AppStorage("trimTrailingWhitespace") var trimTrailingWhitespace: Bool = false {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("trimTrailingWhitespace") var trimTrailingWhitespace: Bool = false
 
-    @AppStorage("insertFinalNewline") var insertFinalNewline: Bool = false {
-        willSet { objectWillChange.send() }
-    }
+    @AppStorage("insertFinalNewline") var insertFinalNewline: Bool = false
 
     private init() {}
 

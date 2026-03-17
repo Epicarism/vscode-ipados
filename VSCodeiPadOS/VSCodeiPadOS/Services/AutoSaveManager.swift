@@ -163,15 +163,17 @@ final class AutoSaveManager: ObservableObject {
     private func saveAllPending() {
         guard let editorCore = editorCore else { return }
         
+        var succeeded: Set<UUID> = []
         for tabId in pendingSaves {
             if let index = editorCore.tabs.firstIndex(where: { $0.id == tabId }),
                editorCore.tabs[index].isUnsaved,
                editorCore.tabs[index].url != nil {
                 performAutoSave(tabId: tabId)
+                succeeded.insert(tabId)
             }
         }
         
-        pendingSaves.removeAll()
+        pendingSaves.subtract(succeeded)
     }
     
     deinit {

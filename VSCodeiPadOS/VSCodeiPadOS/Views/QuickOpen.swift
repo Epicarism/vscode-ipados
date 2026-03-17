@@ -245,9 +245,9 @@ struct QuickOpenView: View {
                             }
                         }
                     }
-                    .onChange(of: selectedIndex) { newIndex in
+                    .onChange(of: selectedIndex) {
                         withAnimation(.easeInOut(duration: 0.1)) {
-                            proxy.scrollTo(newIndex, anchor: .center)
+                            proxy.scrollTo(selectedIndex, anchor: .center)
                         }
                     }
                 }

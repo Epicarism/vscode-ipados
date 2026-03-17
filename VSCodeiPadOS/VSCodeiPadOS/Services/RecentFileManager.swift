@@ -122,13 +122,9 @@ final class RecentFileManager: ObservableObject {
                 bookmarkDataIsStale: &isStale
             )
 
-            // Attempt to start accessing – this may fail if the file was moved/deleted
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer {
-                if didStart {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
+            // Start accessing the security-scoped resource; the caller is
+            // responsible for calling stopAccessingSecurityScopedResource when done.
+            _ = url.startAccessingSecurityScopedResource()
 
             guard FileManager.default.fileExists(atPath: url.path) else {
                 return nil
@@ -138,6 +134,7 @@ final class RecentFileManager: ObservableObject {
             if isStale {
                 if let freshData = createBookmark(for: url) {
                     bookmarkCache[url] = freshData
+                    saveRecentFiles()
                 }
             }
 

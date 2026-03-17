@@ -495,8 +495,8 @@ final class GitManager: ObservableObject {
             throw GitManagerError.invalidRepository
         }
         
-        // Validate branch name to prevent path traversal
-        guard !name.contains("..") && !name.contains("/") && !name.isEmpty else {
+        // Validate branch name using full git-check-ref-format rules
+        guard isValidBranchName(name) else {
             throw GitManagerError.commandFailed(args: "branch", exitCode: 1, message: "Invalid branch name")
         }
         
@@ -671,7 +671,11 @@ final class GitManager: ObservableObject {
         } else {
             // File doesn't exist in HEAD - delete it
             let filePath = repoURL.appendingPathComponent(file)
-            try? FileManager.default.removeItem(at: filePath)
+            do {
+                try FileManager.default.removeItem(at: filePath)
+            } catch {
+                AppLogger.git.warning("[GitManager] discardFileWithoutRefresh: failed to delete untracked file '\(file)': \(error)")
+            }
         }
     }
     
@@ -684,7 +688,11 @@ final class GitManager: ObservableObject {
         for file in untrackedFiles {
             guard let repoURL = workingDirectory else { continue }
             let filePath = repoURL.appendingPathComponent(file.path)
-            try? FileManager.default.removeItem(at: filePath)
+            do {
+                try FileManager.default.removeItem(at: filePath)
+            } catch {
+                AppLogger.git.warning("[GitManager] discardAll: failed to delete untracked file '\(file.path)': \(error)")
+            }
         }
         await refresh()
     }

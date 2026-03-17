@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 import NIOCore
 import NIOPosix
-import NIOSSH
+@preconcurrency import NIOSSH
 
 // MARK: - SSH Connection Model
 
@@ -203,7 +203,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.group = group
         
-        let authDelegate: NIOSSHClientUserAuthenticationDelegate
+        nonisolated(unsafe) let authDelegate: NIOSSHClientUserAuthenticationDelegate
         switch config.authMethod {
         case .password(let password):
             authDelegate = PasswordAuthDelegate(username: config.username, password: password)
@@ -216,18 +216,17 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         let bootstrap = ClientBootstrap(group: group)
             .channelInitializer { channel in
-                channel.pipeline.addHandlers([
-                    NIOSSHHandler(
-                        role: .client(
-                            .init(
-                                userAuthDelegate: authDelegate,
-                                serverAuthDelegate: AcceptAllHostKeysDelegate()
-                            )
-                        ),
-                        allocator: channel.allocator,
-                        inboundChildChannelInitializer: nil
-                    )
-                ])
+                nonisolated(unsafe) let handler = NIOSSHHandler(
+                    role: .client(
+                        .init(
+                            userAuthDelegate: authDelegate,
+                            serverAuthDelegate: AcceptAllHostKeysDelegate()
+                        )
+                    ),
+                    allocator: channel.allocator,
+                    inboundChildChannelInitializer: nil
+                )
+                return channel.pipeline.addHandlers([handler])
             }
             .connectTimeout(.seconds(15))
         
@@ -427,7 +426,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             throw SSHClientError.notConnected
         }
         
-        let delegate = self.delegate
+        nonisolated(unsafe) let delegate = self.delegate
         let manager = self
         
         let childChannel: Channel = try await channel.pipeline.handler(type: NIOSSHHandler.self).flatMap { sshHandler in
@@ -660,7 +659,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     
     /// Cancel remote port forward
     func cancelRemoteForward(remotePort: Int) async throws {
-        tunnelLock.withLock {
+        _ = tunnelLock.withLock {
             activeTunnels.removeValue(forKey: remotePort)
         }
     }

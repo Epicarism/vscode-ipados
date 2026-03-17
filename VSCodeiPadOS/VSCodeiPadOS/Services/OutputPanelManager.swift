@@ -131,7 +131,7 @@ enum ANSIParser {
         var attributes: [NSRange: [NSAttributedString.Key: Any]] = [:]
         var strippedText = ""
         var currentAttrs: [NSAttributedString.Key: Any] = [:]
-        var scanner = Scanner(string: text)
+        let scanner = Scanner(string: text)
         scanner.charactersToBeSkipped = nil
         
         while !scanner.isAtEnd {

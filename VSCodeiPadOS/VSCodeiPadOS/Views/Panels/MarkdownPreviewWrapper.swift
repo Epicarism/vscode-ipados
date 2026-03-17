@@ -11,8 +11,8 @@ struct MarkdownPreviewWrapper: View {
             .onAppear {
                 content = tab.content
             }
-            .onChange(of: tab.content) { newContent in
-                content = newContent
+            .onChange(of: tab.content) {
+                content = tab.content
             }
     }
 }

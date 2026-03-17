@@ -398,17 +398,23 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 // VERY LARGE FILES (50k+): Wait 1.5 seconds of idle before highlighting
                 // This prevents UI blocking entirely during active typing
                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
-                    self?.applyVisibleRangeHighlighting(to: textView)
+                    DispatchQueue.main.async {
+                        self?.applyVisibleRangeHighlighting(to: textView)
+                    }
                 }
             } else if textLength > largeFileThreshold {
                 // LARGE FILES (10k-50k): Wait 1 second of idle, then highlight visible range only
                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
-                    self?.applyVisibleRangeHighlighting(to: textView)
+                    DispatchQueue.main.async {
+                        self?.applyVisibleRangeHighlighting(to: textView)
+                    }
                 }
             } else if textLength > 5000 {
                 // MEDIUM FILES (5k-10k): 300ms debounce, full highlighting on background thread
                 highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-                    self?.applyHighlightingAsync(to: textView)
+                    DispatchQueue.main.async {
+                        self?.applyHighlightingAsync(to: textView)
+                    }
                 }
             } else {
                 // SMALL FILES (<5k): 80ms debounce, direct highlighting (fast enough)
@@ -507,12 +513,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             visibleCharRange = NSRange(location: rangeStart, length: rangeEnd - rangeStart)
             
             // Process highlighting on background thread
+            let capturedCharRange = visibleCharRange
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 // Extract the visible portion of text
                 let nsText = text as NSString
                 let safeRange = NSRange(
-                    location: visibleCharRange.location,
-                    length: min(visibleCharRange.length, nsText.length - visibleCharRange.location)
+                    location: capturedCharRange.location,
+                    length: min(capturedCharRange.length, nsText.length - capturedCharRange.location)
                 )
                 guard safeRange.length > 0 else {
                     DispatchQueue.main.async {
@@ -576,13 +583,17 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 // FEAT-044: Matching bracket highlight - PERF: debounced to avoid O(n) scan spam
                 bracketMatchDebouncer?.invalidate()
                 bracketMatchDebouncer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
-                    self?.updateMatchingBracketHighlight(textView)
+                    DispatchQueue.main.async {
+                        self?.updateMatchingBracketHighlight(textView)
+                    }
                 }
                 
                 // FEAT-NEW: Word occurrence highlighting - debounced for performance
                 wordOccurrenceDebouncer?.invalidate()
                 wordOccurrenceDebouncer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { [weak self] _ in
-                    self?.updateWordOccurrenceHighlights(textView)
+                    DispatchQueue.main.async {
+                        self?.updateWordOccurrenceHighlights(textView)
+                    }
                 }
 
                 // PERF: Only trigger redraw when line actually changes (not on every cursor move)
@@ -632,7 +643,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 // Small delay to let any final scroll events settle
                 userScrollDebouncer?.invalidate()
                 userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
-                    self?.isUserScrolling = false
+                    DispatchQueue.main.async {
+                        self?.isUserScrolling = false
+                    }
                 }
             }
         }
@@ -641,7 +654,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             // Deceleration finished - user scroll is complete
             userScrollDebouncer?.invalidate()
             userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
-                self?.isUserScrolling = false
+                DispatchQueue.main.async {
+                    self?.isUserScrolling = false
+                }
             }
         }
         
@@ -653,7 +668,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             if isUserScrolling {
                 userScrollDebouncer?.invalidate()
                 userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-                    self?.isUserScrolling = false
+                    DispatchQueue.main.async {
+                        self?.isUserScrolling = false
+                    }
                 }
             }
             
@@ -959,7 +976,6 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             
             // Find all line ranges that intersect with the selection
             var lineRanges: [NSRange] = []
-            var searchStart = selStart
             
             // If no selection (cursor only), just use the current line
             if selStart == selEnd {
@@ -1263,9 +1279,11 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         in textContainer: NSTextContainer,
         forGlyphRange glyphRange: NSRange
     ) -> Bool {
-        guard let owner = ownerTextView,
-              let foldingManager = owner.foldingManager,
-              let fileId = owner.fileId
+        guard let owner = ownerTextView else { return false }
+        let (foldingManager, fileId) = MainActor.assumeIsolated {
+            (owner.foldingManager, owner.fileId)
+        }
+        guard let foldingManager, let fileId
         else {
             return false
         }

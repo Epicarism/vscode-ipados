@@ -359,7 +359,9 @@ struct RunestoneEditorView: UIViewRepresentable {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.syncTextImmediately()
+                MainActor.assumeIsolated {
+                    self?.syncTextImmediately()
+                }
             }
         }
         
@@ -383,14 +385,14 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Create new debounced work item
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
-                self.isUpdatingFromTextView = true
-                defer { self.isUpdatingFromTextView = false }
-                
-                // Update text binding (debounced - only after typing stops)
-                self.parent.text = textView.text
-                
-                // Update line count
-                DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.isUpdatingFromTextView = true
+                    defer { self.isUpdatingFromTextView = false }
+                    
+                    // Update text binding (debounced - only after typing stops)
+                    self.parent.text = textView.text
+                    
+                    // Update line count
                     self.parent.totalLines = self.parent.countLines(in: textView.text)
                 }
             }
@@ -411,8 +413,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             defer { isUpdatingFromTextView = false }
             
             // Immediate sync
-            parent.text = textView.text
-            parent.totalLines = parent.countLines(in: textView.text)
+            MainActor.assumeIsolated {
+                parent.text = textView.text
+                parent.totalLines = parent.countLines(in: textView.text)
+            }
         }
         
         /// Cancel pending text sync without syncing - used when switching tabs
@@ -437,7 +441,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             // Handle Tab key for autocomplete acceptance
             if text == "\t" {
-                if let onAccept = parent.onAcceptAutocomplete, onAccept() {
+                let accepted = MainActor.assumeIsolated {
+                    parent.onAcceptAutocomplete?()
+                }
+                if accepted == true {
                     return false
                 }
             }
@@ -450,38 +457,38 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             // Update scroll offset binding for gutter synchronization
-            DispatchQueue.main.async {
-                self.parent.scrollOffset = scrollView.contentOffset.y
+            MainActor.assumeIsolated {
+                parent.scrollOffset = scrollView.contentOffset.y
             }
         }
         
         // MARK: - Cursor Position Calculation
         
         private func updateCursorPosition(in textView: TextView) {
-            let selectedRange = textView.selectedRange
-            let text = textView.text as NSString
-            let cursorLocation = selectedRange.location
-            
-            // Calculate line and column from cursor location
-            var lineNumber = 1
-            var columnNumber = 1
-            var currentLineStart = 0
-            
-            for i in 0..<min(cursorLocation, text.length) {
-                if text.character(at: i) == UInt16(UnicodeScalar("\n").value) {
-                    lineNumber += 1
-                    currentLineStart = i + 1
+            MainActor.assumeIsolated {
+                let selectedRange = textView.selectedRange
+                let text = textView.text as NSString
+                let cursorLocation = selectedRange.location
+                
+                // Calculate line and column from cursor location
+                var lineNumber = 1
+                var columnNumber = 1
+                var currentLineStart = 0
+                
+                for i in 0..<min(cursorLocation, text.length) {
+                    if text.character(at: i) == UInt16(UnicodeScalar("\n").value) {
+                        lineNumber += 1
+                        currentLineStart = i + 1
+                    }
                 }
-            }
-            
-            // Column is the offset from the start of the current line
-            columnNumber = cursorLocation - currentLineStart + 1
-            
-            // Update bindings on main thread to avoid SwiftUI state update warnings
-            DispatchQueue.main.async {
-                self.parent.cursorIndex = cursorLocation
-                self.parent.currentLineNumber = lineNumber
-                self.parent.currentColumn = columnNumber
+                
+                // Column is the offset from the start of the current line
+                columnNumber = cursorLocation - currentLineStart + 1
+                
+                // Update bindings
+                parent.cursorIndex = cursorLocation
+                parent.currentLineNumber = lineNumber
+                parent.currentColumn = columnNumber
             }
         }
     }
