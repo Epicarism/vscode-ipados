@@ -87,6 +87,7 @@ final class AutocompleteManager: ObservableObject {
     ]
 
     private let memberCompletions: [String: [String]] = [
+        // MARK: - Strings & Collections
         "String": [
             "count", "isEmpty", "startIndex", "endIndex",
             "uppercased()", "lowercased()",
@@ -119,6 +120,144 @@ final class AutocompleteManager: ObservableObject {
         ],
         "Result": [
             "get()", "map(_:)", "mapError(_:)"
+        ],
+
+        // MARK: - Numeric Types
+        "Int": [
+            "abs", "magnitude",
+            "description", "isNaN",
+            "advanced(by:)", "distance(to:)",
+            "stride(to:)", "stride(through:)"
+        ],
+        "Double": [
+            "isNaN", "isInfinite", "isFinite", "isZero",
+            "abs", "magnitude", "sign",
+            "squareRoot()", "rounded()", "rounded(_:)",
+            "floor()", "ceil()", "trunc(_:)",
+            "description",
+            "advanced(by:)", "distance(to:)",
+            "stride(to:)", "stride(through:)"
+        ],
+        "Bool": [
+            "toggle()", "description"
+        ],
+
+        // MARK: - Foundation Types
+        "URL": [
+            "absoluteString", "absoluteURL", "scheme", "host", "port", "path",
+            "query", "fragment", "baseURL",
+            "isFileURL", "lastPathComponent",
+            "deletingLastPathComponent()", "deletingPathExtension()",
+            "appendingPathComponent(_:)", "appendingPathExtension(_:)",
+            "appendingQueryItem(_:)"
+        ],
+        "Data": [
+            "count", "isEmpty", "capacity",
+            "map(_:)", "filter(_:)", "reduce(_:_:)",
+            "base64EncodedString()", "base64EncodedData()",
+            "append(_:)", "append(contentsOf:)"
+        ],
+        "Date": [
+            "timeIntervalSince1970", "timeIntervalSinceNow", "timeIntervalSinceReferenceDate",
+            "description",
+            "addingTimeInterval(_:)",
+            "formatted()", "formatted(date:time:)",
+            "ISO8601Format()"
+        ],
+
+        // MARK: - Concurrency
+        "Task": [
+            "isCancelled", "cancel()", "value",
+            "priority", "description"
+        ],
+
+        // MARK: - SwiftUI View Modifiers (common)
+        "View": [
+            // Layout
+            "padding()", "padding(_:)", "padding(_:_:)",
+            "frame(width:height:)", "frame(maxWidth:maxHeight:)", "frame(minWidth:idealWidth:maxWidth:minHeight:idealHeight:maxHeight:alignment:)",
+            "fixedSize()", "fixedSize(horizontal:vertical:)",
+            // Background & Overlay
+            "background(_:)", "background(_:_:)",
+            "overlay(_:)", "overlay(_:_:)",
+            // Color & Style
+            "foregroundColor(_:)", "foregroundStyle(_:)", "tint(_:)",
+            "backgroundStyle(_1:)",
+            // Borders & Shapes
+            "clipShape(_:)", "cornerRadius(_1:)",
+            "border(_:width:)", "shadow(color:radius:x:y:)",
+            "mask(_:)",
+            // Opacity & Visibility
+            "opacity(_1:)", "hidden()", "disabled(_1:)",
+            // Font & Text
+            "font(_1:)", "fontWeight(_1:)", "fontDesign(_1:)",
+            "lineLimit(_1:)", "lineSpacing(_1:)", "multilineTextAlignment(_1:)",
+            "minimumScaleFactor(_1:)", "truncationMode(_1:)",
+            "kerning(_1:)", "tracking(_1:)", "baselineOffset(_1:)",
+            // Interaction
+            "onTapGesture(count:perform:)", "onTapGesture(_1:)",
+            "onLongPressGesture(minimumDuration:maximumDistance:perform:)",
+            "gesture(_1:)", "highPriorityGesture(_1:)", "simultaneousGesture(_1:)",
+            "onHover(perform:)",
+            // Lifecycle
+            "onAppear(perform:)", "onDisappear(perform:)",
+            "task(id:priority:_1:)",
+            // Sheets & Alerts
+            "sheet(isPresented:onDismiss:content:)", "sheet(item:onDismiss:content:)",
+            "fullScreenCover(isPresented:onDismiss:content:)", "fullScreenCover(item:onDismiss:content:)",
+            "alert(_1:isPresented:actions:)", "alert(_1:isPresented:presenting:actions:)",
+            "confirmationDialog(_1:isPresented:titleVisibility:actions:)",
+            // Navigation
+            "navigationTitle(_1:)", "navigationBarTitleDisplayMode(_1:)",
+            "toolbar(_1:)", "toolbarBackground(_1:for:)", "toolbarColorScheme(_1:for:)",
+            "navigationDestination(for:destination:)",
+            // Environment
+            "environment(_1:)", "environmentObject(_1:)",
+            "preferredColorScheme(_1:)",
+            // Conditional modifiers
+            "id(_1:)", "tag(_1:)",
+            "transition(_1:)", "animation(_1:)", "animation(_1:value:)",
+            // Transforms
+            "rotationEffect(_1:)", "scaleEffect(_1:)", "offset(x:y:)", "offset(_1:)",
+            "position(_1:)", "zIndex(_1:)",
+            // Drawing
+            "drawingGroup()", "coordinateSpace(_1:)", "transformEffect(_1:)",
+            // Scrolling
+            "scrollDismissesKeyboard(_1:)",
+            // Reactive
+            "onReceive(_1:perform:)", "onChange(of:initial:_1:)",
+            "allowsHitTesting(_1:)",
+            // Accessibility
+            "accessibilityLabel(_1:)", "accessibilityHint(_1:)", "accessibilityValue(_1:)",
+            "accessibilityHidden(_1:)", "accessibilityElement(children:)",
+            "accessibilityAddTraits(_1:)", "accessibilityRemoveTraits(_1:)"
+        ],
+        "Text": [
+            // Font & Style
+            "font(_1:)", "fontWeight(_1:)", "bold()", "italic()",
+            "underline()", "underline(_1:color:)",
+            "strikethrough()", "strikethrough(_1:color:)",
+            "monospaced()", "monospacedDigit()",
+            "baselineOffset(_1:)", "kerning(_1:)", "tracking(_1:)", "textCase(_1:)",
+            // Color & Background
+            "foregroundColor(_1:)", "foregroundStyle(_1:)", "tint(_1:)",
+            "background(_1:_:)",
+            // Text Specific
+            "multilineTextAlignment(_1:)", "lineLimit(_1:)", "lineSpacing(_1:)",
+            "minimumScaleFactor(_1:)", "allowsTightening(_1:)", "truncationMode(_1:)",
+            "fixedSize()", "scaleEffect(_1:)",
+            // Interaction
+            "onTapGesture(count:perform:)",
+            // Layout
+            "padding()", "padding(_1:)", "padding(_1:_1:)",
+            "frame(width:height:)", "frame(maxWidth:maxHeight:)"
+        ],
+        "NavigationStack": [
+            "navigationTitle(_1:)",
+            "navigationBarTitleDisplayMode(_1:)",
+            "toolbar(_1:)", "toolbarBackground(_1:for:)", "toolbarColorScheme(_1:for:)",
+            "navigationDestination(for:destination:)",
+            "preferredColorScheme(_1:)"
         ]
     ]
 
@@ -348,4 +487,3 @@ final class AutocompleteManager: ObservableObject {
 }
 
 // MARK: - Safe Array Access
-
