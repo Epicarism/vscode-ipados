@@ -281,6 +281,42 @@ struct SingleTerminalView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            #if canImport(SwiftTerm)
+            if terminal.isConnected {
+                // Real terminal via SwiftTerm for SSH sessions
+                SwiftTerminalView(terminalManager: terminal)
+            } else {
+                legacyTerminalContent
+            }
+            #else
+            legacyTerminalContent
+            #endif
+        }
+        .background(themeManager.currentTheme.editorBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(isActive ? themeManager.currentTheme.tabActiveForeground.opacity(0.35) : .clear, lineWidth: 1)
+        )
+        .onAppear {
+            if isActive {
+                terminalFocused = true
+            }
+        }
+        .onChange(of: isInputFocused) { _, newValue in
+            if newValue {
+                terminalFocused = true
+            }
+        }
+        .onChange(of: terminalFocused) { _, newValue in
+            if !newValue {
+                isInputFocused = false
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var legacyTerminalContent: some View {
+        VStack(spacing: 0) {
             // Terminal Output
             ScrollViewReader { proxy in
                 ZStack(alignment: .bottomTrailing) {
@@ -420,26 +456,6 @@ struct SingleTerminalView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 6)
                 .background(themeManager.currentTheme.editorForeground.opacity(0.1))
-            }
-        }
-        .background(themeManager.currentTheme.editorBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: 0)
-                .stroke(isActive ? themeManager.currentTheme.tabActiveForeground.opacity(0.35) : .clear, lineWidth: 1)
-        )
-        .onAppear {
-            if isActive {
-                terminalFocused = true
-            }
-        }
-        .onChange(of: isInputFocused) { _, newValue in
-            if newValue {
-                terminalFocused = true
-            }
-        }
-        .onChange(of: terminalFocused) { _, newValue in
-            if !newValue {
-                isInputFocused = false
             }
         }
     }
