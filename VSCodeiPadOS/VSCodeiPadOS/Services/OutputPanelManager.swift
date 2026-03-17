@@ -296,16 +296,14 @@ final class OutputPanelManager: ObservableObject {
 
     /// Append a single line to a channel
     func appendLine(_ line: String, to channel: OutputChannel, streamType: StreamType = .stdout) {
-        let logLevel: LogLevel = inferLogLevel(from: line, streamType: streamType)
-        
         // Parse ANSI codes if present
         let isAnsiFormatted = ANSIParser.containsANSICodes(line)
         let (strippedText, ansiAttributes) = isAnsiFormatted 
             ? ANSIParser.parseANSI(line)
             : (line, nil)
         
-        // Use stripped text for log level inference to avoid false positives from escape sequences
-        let effectiveLogLevel = isAnsiFormatted ? inferLogLevel(from: strippedText, streamType: streamType) : logLevel
+        // Infer log level from stripped text (avoids false positives from escape sequences)
+        let effectiveLogLevel = inferLogLevel(from: isAnsiFormatted ? strippedText : line, streamType: streamType)
         
         let outputLine = OutputLine(
             text: strippedText,

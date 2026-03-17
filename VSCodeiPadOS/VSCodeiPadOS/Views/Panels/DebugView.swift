@@ -31,6 +31,7 @@ struct DebugView: View {
     @State private var showConnectDebuggerSheet: Bool = false
     @State private var debuggerProgramPath: String = ""
     @State private var debuggerHost: String = ""
+    @State private var debuggerCustomPath: String = ""
     @State private var selectedDebuggerType: DebuggerType = .lldb
     @State private var catchExceptions: Bool = false
     @State private var uncaughtExceptions: Bool = true
@@ -209,6 +210,16 @@ struct DebugView: View {
                         message: "Caught exceptions: \(newValue ? "enabled" : "disabled")",
                         kind: .system
                     ))
+                    // Wire to remote debugger if connected
+                    if let remote = debugManager.remoteDebugger, remote.isConnected {
+                        Task {
+                            if newValue {
+                                try? await remote.executeCommand("breakpoint set -E c++")
+                            } else {
+                                try? await remote.executeCommand("breakpoint delete -E c++")
+                            }
+                        }
+                    }
                 }
                 
                 Toggle(isOn: $uncaughtExceptions) {
@@ -219,6 +230,16 @@ struct DebugView: View {
                         message: "Uncaught exceptions: \(newValue ? "enabled" : "disabled")",
                         kind: .system
                     ))
+                    // Wire to remote debugger if connected
+                    if let remote = debugManager.remoteDebugger, remote.isConnected {
+                        Task {
+                            if newValue {
+                                try? await remote.executeCommand("breakpoint set -E objc")
+                            } else {
+                                try? await remote.executeCommand("breakpoint delete -E objc")
+                            }
+                        }
+                    }
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -588,6 +609,11 @@ struct DebugView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .textContentType(.URL)
+                    
+                    TextField("Custom debugger path (e.g. /usr/bin/lldb)", text: $debuggerCustomPath)
+                        .font(.system(size: 14, design: .monospaced))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
             }
             .navigationTitle("Connect Debugger")
@@ -625,7 +651,8 @@ struct DebugView: View {
             sshConnectionId: sshConfig.id,
             debuggerType: selectedDebuggerType,
             programPath: debuggerProgramPath,
-            remoteTarget: debuggerHost.isEmpty ? nil : debuggerHost
+            remoteTarget: debuggerHost.isEmpty ? nil : debuggerHost,
+            debuggerPath: debuggerCustomPath.isEmpty ? nil : debuggerCustomPath
         )
         
         do {

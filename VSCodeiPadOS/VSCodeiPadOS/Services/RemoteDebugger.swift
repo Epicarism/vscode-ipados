@@ -1032,7 +1032,11 @@ final class RemoteDebugger: ObservableObject {
     
     private func sendCommandAsync(_ command: String) async throws -> String {
         // For commands that may take a long time (run, continue)
-        return try await sendCommand(command)
+        // Use a longer timeout since the debuggee may run indefinitely
+        return try await withCheckedThrowingContinuation { continuation in
+            commandQueue.append((command, continuation))
+            processNextCommand()
+        }
     }
     
     private func processNextCommand() {
@@ -1382,6 +1386,13 @@ final class RemoteDebugger: ObservableObject {
     }
     
     private func handleStopResponse(_ response: String) {
+        // Check for termination FIRST - takes priority over other stop reasons
+        if response.contains("exited") || response.contains("terminated") {
+            state = .terminated
+            emitEvent(.stateChanged(.terminated))
+            return
+        }
+        
         // Determine stop reason from response
         var reason: RemoteDebuggerState.StopReason = .unknown
         
@@ -1409,10 +1420,6 @@ final class RemoteDebugger: ObservableObject {
                let id = Int(response[idRange]) {
                 reason = .watchpoint(id: id)
             }
-        } else if response.contains("exited") || response.contains("terminated") {
-            state = .terminated
-            emitEvent(.stateChanged(.terminated))
-            return
         }
         
         state = .stopped(reason: reason)
@@ -1492,6 +1499,3 @@ enum RemoteDebuggerError: Error, LocalizedError {
         }
     }
 }
-// MARK: - Command Output Types
-
-
