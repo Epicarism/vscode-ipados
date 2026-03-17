@@ -921,6 +921,318 @@ final class GitManager: ObservableObject {
         await refresh()
     }
     
+    /// Push local commits to remote via HTTPS git-receive-pack
+    private func pushViaHTTPS() async throws {
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        guard let remoteURL = try await getConfig(key: "remote.origin.url") else {
+            throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "No remote 'origin' configured")
+        }
+        
+        let baseURL = remoteURL.hasSuffix(".git") ? remoteURL : remoteURL + ".git"
+        let authToken = try await getConfig(key: "http.token")
+        
+        guard authToken != nil else {
+            throw GitManagerError.commandFailed(
+                args: "push",
+                exitCode: 1,
+                message: "HTTPS push requires an auth token. Set it in .git/config under [http] token = <your-token>, or connect via SSH."
+            )
+        }
+        
+        let gitDir = repoURL.appendingPathComponent(".git")
+        let branch = currentBranch
+        guard !branch.isEmpty else { throw GitManagerError.invalidRepository }
+        
+        // 1. Read local HEAD SHA
+        let localRefPath = gitDir.appendingPathComponent("refs/heads/\(branch)")
+        guard let localSHA = try? String(contentsOf: localRefPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+              localSHA.count == 40 else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        // 2. Discover remote refs to find remote HEAD for this branch
+        let remoteRefs = try await discoverReceivePackRefs(baseURL: baseURL, authToken: authToken)
+        let remoteBranchRef = "refs/heads/\(branch)"
+        let remoteSHA = remoteRefs.first(where: { $0.name == remoteBranchRef })?.sha ?? String(repeating: "0", count: 40)
+        
+        guard remoteSHA != localSHA else {
+            AppLogger.git.info("HTTPS push: already up to date")
+            return
+        }
+        
+        // 3. Collect objects to send (walk from local HEAD to remote SHA)
+        let reader = NativeGitReader(gitDir: gitDir)
+        let objectSHAs = collectObjectsForPush(reader: reader, localSHA: localSHA, remoteSHA: remoteSHA)
+        
+        guard !objectSHAs.isEmpty else {
+            AppLogger.git.info("HTTPS push: no new objects to send")
+            return
+        }
+        
+        // 4. Build pack file
+        let packData = try buildPackFile(reader: reader, objectSHAs: objectSHAs)
+        AppLogger.git.info("HTTPS push: built pack with \(objectSHAs.count) objects (\(packData.count) bytes)")
+        
+        // 5. Send via git-receive-pack
+        try await sendReceivePack(
+            baseURL: baseURL,
+            authToken: authToken,
+            oldSHA: remoteSHA,
+            newSHA: localSHA,
+            refName: remoteBranchRef,
+            packData: packData
+        )
+        
+        // 6. Update remote tracking ref
+        let remoteRefPath = gitDir.appendingPathComponent("refs/remotes/origin/\(branch)")
+        try FileManager.default.createDirectory(at: remoteRefPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (localSHA + "\n").write(to: remoteRefPath, atomically: true, encoding: .utf8)
+        
+        await refresh()
+        AppLogger.git.info("HTTPS push: successfully pushed \(branch) to origin")
+    }
+    
+    /// Discover refs from git-receive-pack endpoint (for push)
+    private func discoverReceivePackRefs(baseURL: String, authToken: String?) async throws -> [GitRef] {
+        guard let url = URL(string: "\(baseURL)/info/refs?service=git-receive-pack") else {
+            throw GitManagerError.cloneFailed("Invalid receive-pack refs URL")
+        }
+        
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Authentication failed. Check your auth token.")
+            }
+            if httpResponse.statusCode != 200 {
+                throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Server returned \(httpResponse.statusCode)")
+            }
+        }
+        
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw GitManagerError.cloneFailed("Invalid response encoding")
+        }
+        
+        return parseSmartHTTPRefs(text)
+    }
+    
+    /// Walk commit graph from localSHA backwards, collecting all objects until we hit remoteSHA
+    private func collectObjectsForPush(reader: NativeGitReader, localSHA: String, remoteSHA: String) -> [String] {
+        var objectSHAs = Set<String>()
+        var commitQueue = [localSHA]
+        var visitedCommits = Set<String>()
+        let zeroSHA = String(repeating: "0", count: 40)
+        
+        while !commitQueue.isEmpty {
+            let sha = commitQueue.removeFirst()
+            guard !visitedCommits.contains(sha), sha != remoteSHA, sha != zeroSHA else { continue }
+            visitedCommits.insert(sha)
+            
+            guard let obj = reader.readObject(sha: sha) else { continue }
+            objectSHAs.insert(sha)
+            
+            if obj.type == "commit" {
+                // Parse commit to get tree and parents
+                if let content = String(data: obj.data, encoding: .utf8) {
+                    for line in content.components(separatedBy: "\n") {
+                        if line.hasPrefix("tree ") {
+                            let treeSHA = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                            collectTreeObjects(reader: reader, sha: treeSHA, into: &objectSHAs)
+                        } else if line.hasPrefix("parent ") {
+                            let parentSHA = String(line.dropFirst(7)).trimmingCharacters(in: .whitespaces)
+                            if parentSHA != remoteSHA && parentSHA != zeroSHA {
+                                commitQueue.append(parentSHA)
+                            }
+                        } else if line.isEmpty {
+                            break // End of header
+                        }
+                    }
+                }
+            }
+        }
+        
+        return Array(objectSHAs)
+    }
+    
+    /// Recursively collect all tree and blob objects
+    private func collectTreeObjects(reader: NativeGitReader, sha: String, into objects: inout Set<String>) {
+        guard !objects.contains(sha) else { return }
+        guard let obj = reader.readObject(sha: sha) else { return }
+        objects.insert(sha)
+        
+        if obj.type == "tree" {
+            // Parse tree entries
+            var offset = 0
+            let data = obj.data
+            while offset < data.count {
+                // Format: <mode> <name>\0<20-byte-sha>
+                guard let nullIndex = data[offset...].firstIndex(of: 0) else { break }
+                let entryEnd = nullIndex + 21 // 20 bytes SHA + 1 for null
+                guard entryEnd <= data.count else { break }
+                
+                let shaBytes = data[(nullIndex + 1)..<(nullIndex + 21)]
+                let entrySHA = shaBytes.map { String(format: "%02x", $0) }.joined()
+                
+                // Check if it's a subtree (mode starts with '4' for 40000)
+                let modeStr = String(data: data[offset..<nullIndex], encoding: .ascii) ?? ""
+                if modeStr.hasPrefix("40") {
+                    collectTreeObjects(reader: reader, sha: entrySHA, into: &objects)
+                } else {
+                    objects.insert(entrySHA)
+                }
+                
+                offset = entryEnd
+            }
+        }
+    }
+    
+    /// Build a minimal pack file from a list of object SHAs
+    private func buildPackFile(reader: NativeGitReader, objectSHAs: [String]) throws -> Data {
+        var pack = Data()
+        
+        // Pack header: PACK + version 2 + object count
+        pack.append(contentsOf: [0x50, 0x41, 0x43, 0x4b]) // "PACK"
+        pack.append(contentsOf: withUnsafeBytes(of: UInt32(2).bigEndian) { Array($0) }) // version 2
+        pack.append(contentsOf: withUnsafeBytes(of: UInt32(objectSHAs.count).bigEndian) { Array($0) }) // count
+        
+        let typeMap: [String: UInt8] = ["commit": 1, "tree": 2, "blob": 3, "tag": 4]
+        
+        for sha in objectSHAs {
+            guard let obj = reader.readObject(sha: sha) else {
+                throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Cannot read object \(sha)")
+            }
+            
+            let typeNum = typeMap[obj.type] ?? 3 // default to blob
+            let rawData = obj.data
+            
+            // Compress the data
+            let compressedData = try compressDeflate(rawData)
+            
+            // Encode type+size header (variable-length encoding)
+            let size = rawData.count
+            var header = Data()
+            var firstByte = (typeNum << 4) | UInt8(size & 0x0F)
+            var remaining = size >> 4
+            if remaining > 0 {
+                firstByte |= 0x80
+            }
+            header.append(firstByte)
+            while remaining > 0 {
+                var byte = UInt8(remaining & 0x7F)
+                remaining >>= 7
+                if remaining > 0 {
+                    byte |= 0x80
+                }
+                header.append(byte)
+            }
+            
+            pack.append(header)
+            pack.append(compressedData)
+        }
+        
+        // Append SHA-1 checksum of the pack
+        var sha1 = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        pack.withUnsafeBytes { ptr in
+            _ = CC_SHA1(ptr.baseAddress, CC_LONG(pack.count), &sha1)
+        }
+        pack.append(contentsOf: sha1)
+        
+        return pack
+    }
+    
+    /// Compress data with zlib deflate
+    private func compressDeflate(_ data: Data) throws -> Data {
+        let sourceSize = data.count
+        let destinationSize = sourceSize + sourceSize / 10 + 12 + 256
+        var destinationBuffer = Data(count: destinationSize)
+        
+        let compressedSize = data.withUnsafeBytes { sourcePtr -> Int in
+            destinationBuffer.withUnsafeMutableBytes { destPtr -> Int in
+                let result = compression_encode_buffer(
+                    destPtr.bindMemory(to: UInt8.self).baseAddress!,
+                    destinationSize,
+                    sourcePtr.bindMemory(to: UInt8.self).baseAddress!,
+                    sourceSize,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+                return result
+            }
+        }
+        
+        guard compressedSize > 0 else {
+            throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Failed to compress object")
+        }
+        
+        return destinationBuffer.prefix(compressedSize)
+    }
+    
+    /// Send pack data to git-receive-pack endpoint
+    private func sendReceivePack(
+        baseURL: String,
+        authToken: String?,
+        oldSHA: String,
+        newSHA: String,
+        refName: String,
+        packData: Data
+    ) async throws {
+        guard let url = URL(string: "\(baseURL)/git-receive-pack") else {
+            throw GitManagerError.cloneFailed("Invalid receive-pack URL")
+        }
+        
+        // Build pkt-line body: <old-sha> <new-sha> <ref-name>\0<capabilities>\n + 0000 + pack data
+        var body = Data()
+        
+        let refLine = "\(oldSHA) \(newSHA) \(refName)\0 report-status side-band-64k\n"
+        let pktLen = String(format: "%04x", refLine.utf8.count + 4)
+        body.append(Data((pktLen + refLine).utf8))
+        body.append(Data("0000".utf8)) // flush
+        body.append(packData)
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-git-receive-pack-request", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = body
+        
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Push authentication failed. Check your auth token.")
+            }
+            if httpResponse.statusCode != 200 {
+                let responseText = String(data: responseData, encoding: .utf8) ?? "Unknown error"
+                throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Push failed (\(httpResponse.statusCode)): \(responseText)")
+            }
+        }
+        
+        // Parse response to check for errors
+        if let responseText = String(data: responseData, encoding: .utf8) {
+            if responseText.contains("ng ") || responseText.contains("error") {
+                // Extract error message
+                let lines = responseText.components(separatedBy: "\n")
+                let errorLines = lines.filter { $0.contains("ng ") || $0.contains("error") }
+                let errorMsg = errorLines.joined(separator: "; ")
+                throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Remote rejected push: \(errorMsg)")
+            }
+        }
+        
+        AppLogger.git.info("HTTPS push: git-receive-pack completed successfully")
+    }
+    
     /// Fetch pack file with have/want negotiation
     private func fetchPackFileWithHaves(baseURL: String, wants: [String], haves: [String], authToken: String? = nil) async throws -> Data {
         guard let url = URL(string: "\(baseURL)/git-upload-pack") else {
