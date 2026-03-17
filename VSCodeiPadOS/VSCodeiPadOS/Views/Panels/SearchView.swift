@@ -87,6 +87,8 @@ struct SearchView: View {
     
     // MARK: - Search Manager
     @StateObject private var searchManager = SearchManager()
+
+    @StateObject private var themeManager = ThemeManager.shared
     
     // MARK: - Search State
     @State private var searchText: String = ""
@@ -100,6 +102,10 @@ struct SearchView: View {
     // MARK: - Keyboard Navigation
     @State private var selectedNavigationItem: SearchNavigationItem?
     @State private var navigationItems: [SearchNavigationItem] = []
+
+    
+    // MARK: - Theme
+    private var theme: Theme { themeManager.currentTheme }
     
     // MARK: - Debounce & Search Task
     @State private var searchTask: Task<Void, Never>?
@@ -294,7 +300,7 @@ struct SearchView: View {
                 .padding(.bottom, 20)
             }
         }
-        .background(Color(UIColor.systemBackground))
+        .background(Color(theme.editorBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { focusSearchField() }
         .onDisappear(perform: onDisappear)
@@ -368,7 +374,7 @@ struct SearchView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color(UIColor.secondarySystemBackground))
+        .background(Color(theme.sidebarBackground))
     }
     
     @ViewBuilder
@@ -460,7 +466,7 @@ struct SearchView: View {
                     }
                 }
                 .padding(.trailing, 4)
-                .background(Color(UIColor.secondarySystemBackground))
+                .background(Color(theme.sidebarBackground))
                 .cornerRadius(4)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
@@ -495,7 +501,7 @@ struct SearchView: View {
         .font(.caption2)
         .foregroundColor(.primary)
         .padding(8)
-        .background(Color(UIColor.secondarySystemBackground))
+        .background(Color(theme.sidebarBackground))
         .cornerRadius(4)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
@@ -561,7 +567,7 @@ struct SearchView: View {
 
                     .padding(6)
                     .padding(.trailing, 24)
-                    .background(Color(UIColor.secondarySystemBackground))
+                    .background(Color(theme.sidebarBackground))
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
@@ -666,7 +672,7 @@ struct SearchView: View {
                 .padding(6)
                 .accessibilityLabel("Files to include")
                 .accessibilityHint("Enter file patterns to include in search, separated by commas")
-                .background(Color(UIColor.secondarySystemBackground))
+                .background(Color(theme.sidebarBackground))
                 .cornerRadius(4)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
@@ -678,7 +684,7 @@ struct SearchView: View {
                 .padding(6)
                 .accessibilityLabel("Files to exclude")
                 .accessibilityHint("Enter file patterns to exclude from search, separated by commas")
-                .background(Color(UIColor.secondarySystemBackground))
+                .background(Color(theme.sidebarBackground))
                 .cornerRadius(4)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
@@ -1148,7 +1154,7 @@ struct DirectoryGroupHeader: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+        .background(Color(theme.sidebarBackground).opacity(0.5))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Directory: \(directory), \(count) files")
     }
@@ -1225,7 +1231,7 @@ struct SearchResultsHeader: View {
             limitRow
         }
         .padding(8)
-        .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+        .background(Color(theme.sidebarBackground).opacity(0.5))
         .cornerRadius(6)
     }
     

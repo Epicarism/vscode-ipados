@@ -277,24 +277,66 @@ struct SingleTerminalView: View {
 
     @StateObject private var themeManager = ThemeManager.shared
     @FocusState private var isInputFocused: Bool
+    @State private var userIsScrolledUp = false
 
     var body: some View {
         VStack(spacing: 0) {
             // Terminal Output
             ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(terminal.output) { line in
-                            TerminalLineView(line: line)
-                                .id(line.id)
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(terminal.output) { line in
+                                TerminalLineView(line: line)
+                                    .id(line.id)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: ScrollOffsetKey.self,
+                                    value: geometry.frame(in: .named("terminalScroll")).origin.y
+                                )
+                            }
+                        )
+                    }
+                    .coordinateSpace(name: "terminalScroll")
+                    .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                        // Negative offset means the content has been scrolled up.
+                        // A small threshold accounts for overscroll / rounding.
+                        let isAtBottom = offset >= -20
+                        userIsScrolledUp = !isAtBottom
+                    }
+                    .onChange(of: terminal.output.count) { _, _ in
+                        if !userIsScrolledUp {
+                            withAnimation(.easeOut(duration: 0.1)) {
+                                proxy.scrollTo(terminal.output.last?.id, anchor: .bottom)
+                            }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                }
-                .onChange(of: terminal.output.count) { _, _ in
-                    withAnimation(.easeOut(duration: 0.1)) {
-                        proxy.scrollTo(terminal.output.last?.id, anchor: .bottom)
+
+                    // Scroll-to-bottom button: appears when user has scrolled up
+                    if userIsScrolledUp {
+                        Button {
+                            userIsScrolledUp = false
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(terminal.output.last?.id, anchor: .bottom)
+                            }
+                        } label: {
+                            Image(systemName: "chevron.down.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.accentColor)
+                                .background(
+                                    Circle()
+                                        .fill(Color(UIColor.systemBackground))
+                                        .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
+                                )
+                        }
+                        .padding(.trailing, 12)
+                        .padding(.bottom, 8)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                     }
                 }
             }
@@ -1835,6 +1877,15 @@ struct ANSIText: View {
         // 232-255: Grayscale (24 shades)
         let gray = (Double(index - 232) * 10.0 + 8.0) / 255.0
         return Color(.sRGB, red: gray, green: gray, blue: gray)
+    }
+}
+
+
+// MARK: - Scroll Preference Key
+struct ScrollOffsetKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

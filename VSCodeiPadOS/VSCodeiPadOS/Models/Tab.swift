@@ -40,6 +40,17 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     /// Whether this tab is in preview mode
     var isPreview: Bool
     
+    /// Encoding used when the file was read (stored as String.Encoding.rawValue).
+    /// Defaults to UTF-8. When saving, the same encoding is used to preserve the
+    /// original file encoding.
+    var fileEncoding: UInt
+    
+    /// Convenience accessor for the encoding as a Foundation String.Encoding
+    var stringEncoding: String.Encoding {
+        get { String.Encoding(rawValue: fileEncoding) }
+        set { fileEncoding = newValue.rawValue }
+    }
+    
     // MARK: - Initialization
     
     /// Creates a new tab
@@ -53,6 +64,7 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     ///   - isActive: Whether this is the active tab (false by default)
     ///   - isPinned: Whether the tab is pinned (false by default)
     ///   - isPreview: Whether the tab is in preview mode (false by default)
+    ///   - fileEncoding: Encoding used when reading the file (defaults to UTF-8)
     init(
         id: UUID = UUID(),
         fileName: String,
@@ -62,7 +74,8 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         isUnsaved: Bool = false,
         isActive: Bool = false,
         isPinned: Bool = false,
-        isPreview: Bool = false
+        isPreview: Bool = false,
+        fileEncoding: UInt = String.Encoding.utf8.rawValue
     ) {
         self.id = id
         self.fileName = fileName
@@ -72,6 +85,7 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         self.isActive = isActive
         self.isPinned = isPinned
         self.isPreview = isPreview
+        self.fileEncoding = fileEncoding
         
         // Auto-detect language from file extension if not provided
         if let language = language {
@@ -92,7 +106,8 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         isUnsaved: Bool = false,
         isActive: Bool = false,
         isPinned: Bool = false,
-        isPreview: Bool = false
+        isPreview: Bool = false,
+        fileEncoding: UInt = String.Encoding.utf8.rawValue
     ) {
         self.init(
             id: id,
@@ -103,7 +118,8 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
             isUnsaved: isUnsaved,
             isActive: isActive,
             isPinned: isPinned,
-            isPreview: isPreview
+            isPreview: isPreview,
+            fileEncoding: fileEncoding
         )
     }
     

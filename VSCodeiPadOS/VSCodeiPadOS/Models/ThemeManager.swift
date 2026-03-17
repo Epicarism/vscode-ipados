@@ -64,14 +64,79 @@ final class ThemeManager: ObservableObject {
     func color(for filename: String) -> Color {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
+        // Swift
         case "swift": return .orange
+        
+        // JavaScript/TypeScript
         case "js", "jsx": return .yellow
         case "ts", "tsx": return .blue
+        
+        // Python
         case "py": return .green
+        
+        // Web
         case "html", "htm": return .red
         case "css", "scss": return .purple
         case "json": return .green
+        case "xml", "svg": return .orange
+        
+        // Markdown
         case "md": return .blue
+        
+        // C/C++
+        case "c", "cpp", "h", "hpp": return .blue
+        
+        // Java/Kotlin
+        case "java", "kt": return .orange
+        
+        // Rust
+        case "rs": return .orange
+        
+        // Go
+        case "go": return .cyan
+        
+        // Shell scripts
+        case "sh", "bash", "zsh": return .green
+        
+        // SQL
+        case "sql": return .yellow
+        
+        // Config files
+        case "yaml", "yml", "toml": return .red
+        
+        // Ruby
+        case "rb": return .red
+        
+        // PHP
+        case "php": return .purple
+        
+        // C#
+        case "cs": return .green
+        
+        // R
+        case "r": return .blue
+        
+        // Lua
+        case "lua": return .blue
+        
+        // Dart
+        case "dart": return .blue
+        
+        // Scala
+        case "scala": return .red
+        
+        // Elixir
+        case "ex", "exs": return .purple
+        
+        // Zig
+        case "zig": return .orange
+        
+        // Vlang
+        case "v": return .blue
+        
+        // Nim
+        case "nim": return .yellow
+        
         default: return currentTheme.isDark ? .white : .black
         }
     }

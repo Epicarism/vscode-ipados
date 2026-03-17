@@ -325,6 +325,25 @@ final class DebugManager: ObservableObject {
 
             breakpointsByFile = dict
 
+            // Sync to remote debugger if connected
+            // Note: remote debugger uses 1-based line numbers
+            if remoteDebugger?.state.isActive == true {
+                Task {
+                    do {
+                        if wasPresent {
+                            try await remoteDebugger?.removeBreakpoint(file: fileId, line: line + 1)
+                        } else {
+                            _ = try await remoteDebugger?.setBreakpoint(file: fileId, line: line + 1)
+                        }
+                    } catch {
+                        consoleEntries.append(ConsoleEntry(
+                            message: "Remote breakpoint sync error: \(error.localizedDescription)",
+                            kind: .error
+                        ))
+                    }
+                }
+            }
+
             // Log to console
             let shortName = (fileId as NSString).lastPathComponent
             if wasPresent {
@@ -366,6 +385,20 @@ final class DebugManager: ObservableObject {
                 dict[fileId] = set
             }
             breakpointsByFile = dict
+
+            // Sync removal to remote debugger if connected
+            if remoteDebugger?.state.isActive == true {
+                Task {
+                    do {
+                        try await remoteDebugger?.removeBreakpoint(file: fileId, line: line + 1)
+                    } catch {
+                        consoleEntries.append(ConsoleEntry(
+                            message: "Remote breakpoint remove error: \(error.localizedDescription)",
+                            kind: .error
+                        ))
+                    }
+                }
+            }
         }
 
         func breakpoints(in file: String) -> [Breakpoint] {
@@ -797,8 +830,32 @@ final class DebugManager: ObservableObject {
 
         func removeAllBreakpoints() {
             let count = allBreakpoints.count
+            let oldBreakpoints = breakpointsByFile
             breakpointsByFile = [:]
             allBreakpointsEnabled = true
+
+            // Remove all breakpoints from remote debugger if connected
+            if remoteDebugger?.state.isActive == true, !oldBreakpoints.isEmpty {
+                Task {
+                    do {
+                        // Delete all breakpoints at once via the remote debugger
+                        let existing = try await remoteDebugger?.listBreakpoints() ?? []
+                        for bp in existing {
+                            try await remoteDebugger?.removeBreakpoint(id: bp.id)
+                        }
+                        consoleEntries.append(ConsoleEntry(
+                            message: "Removed \(existing.count) remote breakpoint(s).",
+                            kind: .system
+                        ))
+                    } catch {
+                        consoleEntries.append(ConsoleEntry(
+                            message: "Remote breakpoint clear error: \(error.localizedDescription)",
+                            kind: .error
+                        ))
+                    }
+                }
+            }
+
             consoleEntries.append(ConsoleEntry(
                 message: "All \(count) breakpoint\(count == 1 ? "" : "s") removed.",
                 kind: .system
@@ -859,6 +916,9 @@ final class DebugManager: ObservableObject {
             kind: .system
         ))
         
+        // Sync existing local breakpoints to the remote debugger
+        await syncBreakpointsToRemoteDebugger()
+        
         // Set up delegate handler callbacks
         RemoteDebuggerDelegateHandler.shared.onStateChanged = { [weak self] newState in
             Task { @MainActor in
@@ -893,6 +953,38 @@ final class DebugManager: ObservableObject {
             message: "Disconnected from remote debugger.",
             kind: .system
         ))
+    }
+
+    // MARK: - Breakpoint Sync
+
+    /// Sync all locally-stored breakpoints to the remote debugger.
+    /// Called after connecting and whenever the set of breakpoints needs to be pushed.
+    private func syncBreakpointsToRemoteDebugger() async {
+        guard let remote = remoteDebugger else { return }
+
+        let local = allBreakpoints
+        guard !local.isEmpty else { return }
+
+        consoleEntries.append(ConsoleEntry(
+            message: "Syncing \(local.count) breakpoint(s) to remote debugger…",
+            kind: .system
+        ))
+
+        do {
+            for bp in local {
+                // Remote debugger expects 1-based line numbers
+                _ = try await remote.setBreakpoint(file: bp.file, line: bp.line + 1)
+            }
+            consoleEntries.append(ConsoleEntry(
+                message: "Synced \(local.count) breakpoint(s) to remote debugger.",
+                kind: .system
+            ))
+        } catch {
+            consoleEntries.append(ConsoleEntry(
+                message: "Failed to sync breakpoints: \(error.localizedDescription)",
+                kind: .error
+            ))
+        }
     }
     
     /// Update local state from remote debugger state

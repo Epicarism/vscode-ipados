@@ -117,7 +117,7 @@ struct DebugView: View {
                     .foregroundColor(.green)
                     .padding(4)
                     .background(Color.green.opacity(0.1))
-                    .cornerRadius(4)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Start debugging")
@@ -135,7 +135,7 @@ struct DebugView: View {
                     .foregroundColor(.blue)
                     .padding(4)
                     .background(Color.blue.opacity(0.1))
-                    .cornerRadius(4)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Connect remote debugger")
@@ -175,12 +175,14 @@ struct DebugView: View {
                 Divider()
                 
                 Toggle(isOn: $catchExceptions) {
-                    Label("Caught Exceptions", systemImage: "exclamationmark.triangle")
+                    Label("Caught Exceptions (Coming Soon)", systemImage: "exclamationmark.triangle")
                 }
+                .disabled(true)
                 
                 Toggle(isOn: $uncaughtExceptions) {
-                    Label("Uncaught Exceptions", systemImage: "exclamationmark.triangle.fill")
+                    Label("Uncaught Exceptions (Coming Soon)", systemImage: "exclamationmark.triangle.fill")
                 }
+                .disabled(true)
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 12))
@@ -368,7 +370,7 @@ struct DebugView: View {
                         .font(.system(size: 12, design: .monospaced))
                         .padding(4)
                         .background(theme.selection)
-                        .cornerRadius(4)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                         .accessibilityLabel("New watch expression")
                     }
                     .padding(.vertical, 4)
@@ -637,7 +639,7 @@ struct DebugToolbarButton: View {
                 .foregroundColor(color)
                 .frame(width: 28, height: 28)
                 .background(theme.editorForeground.opacity(0.08))
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -731,7 +733,7 @@ struct CallStackRow: View {
         .padding(.vertical, 3)
         .padding(.horizontal, 8)
         .background(isActive ? theme.selection.opacity(0.3) : Color.clear)
-        .cornerRadius(2)
+        .clipShape(RoundedRectangle(cornerRadius: 2))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(isActive ? "Active frame: " : "")\(frame.function) at \(frame.fileName) line \(frame.line)")

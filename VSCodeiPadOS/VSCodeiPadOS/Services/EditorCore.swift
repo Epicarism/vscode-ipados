@@ -953,6 +953,29 @@ mod tests {
         return examples
     }
 
+    // MARK: - Encoding Detection
+
+    /// Attempt to decode file data using multiple encodings in priority order.
+    /// Returns the decoded string and the encoding that succeeded.
+    private func detectEncodedContent(from data: Data) -> (content: String, encoding: String.Encoding)? {
+        // Ordered by likelihood: UTF-8, UTF-16 (little-endian), UTF-16 big-endian,
+        // Windows-1252 (superset of ISO Latin 1), ISO Latin 1, ASCII.
+        let encodings: [String.Encoding] = [
+            .utf8,
+            .utf16LittleEndian,
+            .utf16BigEndian,
+            .windowsCP1252,
+            .isoLatin1,
+            .ascii
+        ]
+        for encoding in encodings {
+            if let content = String(data: data, encoding: encoding) {
+                return (content, encoding)
+            }
+        }
+        return nil
+    }
+
     // MARK: - Tab Management
 
     func addTab(fileName: String = "Untitled.swift", content: String = "", url: URL? = nil) {
@@ -1125,7 +1148,7 @@ mod tests {
                 // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
                 let didStart = (securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
                 defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                try contentToSave.write(to: url, atomically: true, encoding: .utf8)
+                try contentToSave.write(to: url, atomically: true, encoding: tabs[saveIndex].stringEncoding)
             }
 
             tabs[saveIndex].isUnsaved = false
@@ -1192,7 +1215,7 @@ mod tests {
                         // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
                         let didStart = (self.securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
                         defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                        try contentToSave.write(to: url, atomically: true, encoding: .utf8)
+                        try contentToSave.write(to: url, atomically: true, encoding: self.tabs[index].stringEncoding)
                     }
 
                     self.tabs[index].isUnsaved = false
@@ -1270,8 +1293,24 @@ mod tests {
         let retained = retainSecurityScopedAccess(to: url)
 
         do {
-            let content = try String(contentsOf: url, encoding: .utf8)
-            addTab(fileName: url.lastPathComponent, content: content, url: url)
+            let data = try Data(contentsOf: url)
+            guard let result = detectEncodedContent(from: data) else {
+                AppLogger.editor.error("Error opening file: unable to decode contents of \(url.lastPathComponent)")
+                if retained { releaseSecurityScopedAccess(to: url) }
+                return
+            }
+            let content = result.content
+            let encoding = result.encoding
+
+            // Create tab with detected encoding stored
+            let newTab = Tab(fileName: url.lastPathComponent, content: content, url: url, fileEncoding: encoding.rawValue)
+            tabs.append(newTab)
+            activeTabId = newTab.id
+            updateLargeFileStatus()
+
+            if encoding != .utf8 {
+                AppLogger.editor.info("Opened \(url.lastPathComponent) with encoding \(encoding) (fallback from UTF-8)")
+            }
 
             // Track recently opened file
             Task { @MainActor in RecentFileManager.shared.addRecentFile(url) }
@@ -1767,11 +1806,13 @@ extension EditorCore {
         for path in savedPaths {
             let fileURL = workspaceURL.appendingPathComponent(path)
             if FileManager.default.fileExists(atPath: fileURL.path) {
-                if let content = try? String(contentsOf: fileURL, encoding: .utf8) {
+                if let data = try? Data(contentsOf: fileURL),
+                   let result = self.detectEncodedContent(from: data) {
                     let tab = Tab(
                         fileName: fileURL.lastPathComponent,
-                        content: content,
-                        url: fileURL
+                        content: result.content,
+                        url: fileURL,
+                        fileEncoding: result.encoding.rawValue
                     )
                     tabs.append(tab)
 
