@@ -83,8 +83,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         let textView = TextView()
         textView.editorDelegate = context.coordinator
         
-        // Disable Runestone's built-in line numbers - we use custom LineNumbers gutter
-        textView.showLineNumbers = false
+        // Enable Runestone's built-in line numbers and line height multiplier for code folding support
+        textView.showLineNumbers = true
+        textView.lineHeightMultiplier = 1.3
         textView.lineSelectionDisplayType = .line
         
         // Configure line wrapping (from settings)
@@ -167,7 +168,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.theme = makeRunestoneTheme()
         }
         
-        // Line numbers always disabled - using custom LineNumbers gutter
+        // Sync Runestone's built-in line numbers with the user setting
+        textView.showLineNumbers = showLineNumbers
         // Word wrap toggle still works
         if textView.isLineWrappingEnabled != wordWrapEnabled {
             textView.isLineWrappingEnabled = wordWrapEnabled
@@ -476,6 +478,22 @@ struct RunestoneEditorView: UIViewRepresentable {
                     }
                 )
             }
+
+            // Listen for code folding notifications from EditorCore
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .collapseAllFolds, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.handleCollapseAllFolds()
+                    }
+                }
+            )
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .expandAllFolds, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.handleExpandAllFolds()
+                    }
+                }
+            )
         }
         
         deinit {
@@ -542,6 +560,42 @@ struct RunestoneEditorView: UIViewRepresentable {
             textSyncWorkItem?.cancel()
             textSyncWorkItem = nil
         }
+
+        // MARK: - Code Folding
+
+        /// Handles the collapseAllFolds notification from EditorCore.
+        /// Uses respondsToSelector to call Runestone's fold API if available,
+        /// otherwise falls back to a no-op (Runestone 0.5.x has no built-in
+        /// code folding, but this is future-proofed for newer versions).
+        private func handleCollapseAllFolds() {
+            guard let textView = textView else { return }
+            // Runestone 0.6+ may add collapseAllFolds() — call it dynamically if present
+            let sel = NSSelectorFromString("collapseAllFolds")
+            if textView.responds(to: sel) {
+                _ = textView.perform(sel)
+            } else {
+                // No built-in fold support in current Runestone version.
+                // Post a notification so UI can reflect the intent if needed.
+                NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
+            }
+        }
+
+        /// Handles the expandAllFolds notification from EditorCore.
+        /// Uses respondsToSelector to call Runestone's unfold API if available,
+        /// otherwise falls back to a no-op (Runestone 0.5.x has no built-in
+        /// code folding, but this is future-proofed for newer versions).
+        private func handleExpandAllFolds() {
+            guard let textView = textView else { return }
+            // Runestone 0.6+ may add expandAllFolds() — call it dynamically if present
+            let sel = NSSelectorFromString("expandAllFolds")
+            if textView.responds(to: sel) {
+                _ = textView.perform(sel)
+            } else {
+                // No built-in fold support in current Runestone version.
+                // Post a notification so UI can reflect the intent if needed.
+                NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
+            }
+        }
         
         func textViewDidChangeSelection(_ textView: TextView) {
             updateCursorPosition(in: textView)
@@ -587,11 +641,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                 }
 
                 // Insert spaces (or a real tab) according to settings
-                let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
-                                        ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
-                let spaces = (UserDefaults.standard.object(forKey: "insertSpaces") == nil)
-                                ? true
-                                : UserDefaults.standard.bool(forKey: "insertSpaces")
+                let tabSz = max(1, parent.tabSize)
+                let spaces = parent.insertSpaces
                 let indentStr = spaces ? String(repeating: " ", count: tabSz) : "\t"
                 let ms = NSMutableString(string: textView.text)
                 ms.replaceCharacters(in: range, with: indentStr)
@@ -624,11 +675,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let endsWithOpener = trimmed.hasSuffix("{") || trimmed.hasSuffix("(")
                                   || trimmed.hasSuffix("[") || trimmed.hasSuffix(":")
 
-                let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
-                                        ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
-                let spaces = (UserDefaults.standard.object(forKey: "insertSpaces") == nil)
-                                ? true
-                                : UserDefaults.standard.bool(forKey: "insertSpaces")
+                let tabSz = max(1, parent.tabSize)
+                let spaces = parent.insertSpaces
                 let oneLevel = spaces ? String(repeating: " ", count: tabSz) : "\t"
 
                 let ms = NSMutableString(string: nsText)
@@ -734,11 +782,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             let isPaste = text.contains("\n") && text.count > 2
             if isPaste {
                 // --- 1. Read tab/space settings ---
-                let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
-                                        ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
-                let spaces = (UserDefaults.standard.object(forKey: "insertSpaces") == nil)
-                                ? true
-                                : UserDefaults.standard.bool(forKey: "insertSpaces")
+                let tabSz = max(1, parent.tabSize)
+                let spaces = parent.insertSpaces
 
                 // --- 2. Get indentation of the current line at the cursor ---
                 let nsText = textView.text as NSString
@@ -938,20 +983,18 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let text = textView.text as NSString
                 let cursorLocation = selectedRange.location
                 
-                // Calculate line and column from cursor location
+                // Use built-in line enumeration - O(1) amortized per line boundary
                 var lineNumber = 1
                 var columnNumber = 1
-                var currentLineStart = 0
                 
-                for i in 0..<min(cursorLocation, text.length) {
-                    if text.character(at: i) == UInt16(UnicodeScalar("\n").value) {
-                        lineNumber += 1
-                        currentLineStart = i + 1
-                    }
+                var searchRange = NSRange(location: 0, length: min(cursorLocation, text.length))
+                text.enumerateSubstrings(in: searchRange, options: [.byLines, .substringNotRequired]) { _, _, _, _ in
+                    lineNumber += 1
                 }
                 
                 // Column is the offset from the start of the current line
-                columnNumber = cursorLocation - currentLineStart + 1
+                let lineRange = text.lineRange(for: NSRange(location: cursorLocation, length: 0))
+                columnNumber = cursorLocation - lineRange.location + 1
                 
                 // Update bindings
                 parent.cursorIndex = cursorLocation
@@ -993,14 +1036,33 @@ struct RunestoneEditorView: UIViewRepresentable {
                 return "--"
             case "sql":
                 return "--"
-            case "html", "htm", "xml", "svg":
-                return "//" // simplified — real HTML uses <!-- -->
+            case "css", "scss", "less":
+                return "/*"  // block comments handled separately
             default:
                 return "//"
             }
         }
         
+        /// Returns (prefix, suffix) for block comment languages, nil for line comments
+        private func blockCommentWrappers() -> (prefix: String, suffix: String)? {
+            let ext = (parent.filename as NSString).pathExtension.lowercased()
+            switch ext {
+            case "html", "htm", "xml", "svg":
+                return ("<!-- ", " -->")
+            case "css", "scss", "less":
+                return ("/* ", " */")
+            default:
+                return nil
+            }
+        }
+        
         private func performToggleComment(_ textView: TextView) {
+            // Block comment languages (HTML, CSS, etc.) use wrapping instead of line prefix
+            if let (blockPrefix, blockSuffix) = blockCommentWrappers() {
+                performToggleBlockComment(textView, prefix: blockPrefix, suffix: blockSuffix)
+                return
+            }
+            
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1053,6 +1115,55 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: min(selectedRange.location + (allCommented ? -(prefix.count + 1) : (prefix.count + 1)), max(0, (textView.text as NSString).length)),
                 length: max(0, selectedRange.length + lengthDiff)
             )
+            textViewDidChange(textView)
+        }
+        
+        private func performToggleBlockComment(_ textView: TextView, prefix: String, suffix: String) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            let linesText = text.substring(with: lineRange)
+            var lines = linesText.components(separatedBy: "\n")
+            
+            // Remove trailing empty element from split (if text ends with \n)
+            let hadTrailingNewline = linesText.hasSuffix("\n")
+            if hadTrailingNewline && lines.last == "" { lines.removeLast() }
+            
+            guard !lines.isEmpty else { return }
+            
+            // Find first and last non-empty lines
+            guard let firstIdx = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }),
+                  let lastIdx = lines.lastIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return }
+            
+            let firstTrimmed = lines[firstIdx].trimmingCharacters(in: .whitespaces)
+            let lastTrimmed = lines[lastIdx].trimmingCharacters(in: .whitespaces)
+            let isCommented = firstTrimmed.hasPrefix(prefix) && lastTrimmed.hasSuffix(suffix)
+            
+            if isCommented {
+                // Uncomment: remove prefix from first non-empty line, suffix from last non-empty line
+                if let range = lines[firstIdx].range(of: prefix) {
+                    lines[firstIdx].removeSubrange(range)
+                }
+                if lastIdx != firstIdx {
+                    if let range = lines[lastIdx].range(of: suffix, options: .backwards) {
+                        lines[lastIdx].removeSubrange(range)
+                    }
+                }
+            } else {
+                // Comment: wrap with block comment markers
+                let firstWS = String(lines[firstIdx].prefix(while: { $0 == " " || $0 == "\t" }))
+                lines[firstIdx] = firstWS + prefix + String(lines[firstIdx].dropFirst(firstWS.count))
+                
+                let lastWS = String(lines[lastIdx].prefix(while: { $0 == " " || $0 == "\t" }))
+                lines[lastIdx] = lastWS + String(lines[lastIdx].dropFirst(lastWS.count)) + suffix
+            }
+            
+            var newText = lines.joined(separator: "\n")
+            if hadTrailingNewline { newText += "\n" }
+            
+            let fullText = NSMutableString(string: textView.text)
+            fullText.replaceCharacters(in: lineRange, with: newText)
+            textView.text = fullText as String
             textViewDidChange(textView)
         }
         

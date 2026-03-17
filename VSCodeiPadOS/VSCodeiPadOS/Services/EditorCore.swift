@@ -310,6 +310,11 @@ class EditorCore: ObservableObject {
     // Debug state
     // Reference to file navigator for workspace search
     weak var fileNavigator: FileSystemNavigator?
+    
+    // Find References Service
+    @Published var findReferencesService = FindReferencesService()
+    @Published var findReferencesResults: [ReferenceLocation] = []
+    @Published var showFindReferencesResults: Bool = false
 
     // Navigation history
     private var navigationHistory: [NavigationLocation] = []
@@ -1692,18 +1697,108 @@ mod tests {
 
     // MARK: - Find References
 
-    /// Performs a basic find-references search across all open tabs.
-    /// Extracts the symbol name and searches for exact word matches in open files.
-    /// Opens the sidebar search panel with the symbol pre-filled.
+    /// Performs a find-references search across all source files in the workspace.
+    /// Uses FindReferencesService to search .swift, .js, .ts, .py, .go, .rs files.
+    /// Shows results in the sidebar search panel.
     func performFindReferences(symbol: String) {
         let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-
+        
+        AppLogger.editor.info("Find References: searching for '\(trimmed)' across workspace")
+        
+        // Get workspace root URL from file navigator
+        guard let rootURL = fileNavigator?.rootURL else {
+            // Fallback: search open tabs only
+            AppLogger.editor.warning("Find References: No workspace root, falling back to open tabs")
+            searchOpenTabs(for: trimmed)
+            return
+        }
+        
+        // Use FindReferencesService to search the entire workspace
+        findReferencesService.findReferences(symbol: trimmed, in: rootURL)
+        
+        // Also set the query so SearchView can show it pre-filled
+        findReferencesQuery = trimmed
+        focusedSidebarTab = 1
+        withAnimation {
+            showSidebar = true
+        }
+    }
+    
+    /// Fallback: search only open tabs (when no workspace is open)
+    private func searchOpenTabs(for symbol: String) {
+        var results: [(file: String, line: Int, text: String)] = []
+        
+        for tab in tabs {
+            let lines = tab.content.components(separatedBy: .newlines)
+            for (index, line) in lines.enumerated() {
+                let pattern = "\\b" + NSRegularExpression.escapedPattern(for: symbol) + "\\b"
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+                   regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+                    let filePath = tab.url?.path ?? tab.fileName
+                    results.append((file: filePath, line: index, text: line.trimmingCharacters(in: .whitespaces)))
+                }
+            }
+        }
+        
+        AppLogger.editor.info("Find References (tabs): found \(results.count) occurrences")
+        
+        // Convert to ReferenceLocation and store
+        findReferencesResults = results.map { result in
+            ReferenceLocation(file: result.file, line: result.line + 1, column: 1, lineText: result.text)
+        }
+        
+        // Open the sidebar search panel
+        findReferencesQuery = symbol
+        focusedSidebarTab = 1
+        withAnimation {
+            showSidebar = true
+        }
+    }
+    
+    /// Cancel any in-flight find references search
+    func cancelFindReferences() {
+        findReferencesService.cancelSearch()
+    }
+    
+    /// Clear find references results
+    func clearFindReferencesResults() {
+        findReferencesResults = []
+        findReferencesService.clearResults()
+    }
+    
+    /// Get current find references results
+    var findReferencesCurrentResults: [ReferenceLocation] {
+        findReferencesService.results
+    }
+    
+    /// Check if find references is currently searching
+    var isFindReferencesSearching: Bool {
+        findReferencesService.isSearching
+    }
+    
+    /// Get find references search progress (0.0 - 1.0)
+    var findReferencesProgress: Double {
+        findReferencesService.progress
+    }
+    
+    /// Get find references last error
+    var findReferencesError: String? {
+        findReferencesService.lastError
+    }
+    
+    // MARK: - Find References (Legacy)
+    
+    /// Legacy method kept for compatibility
+    func performFindReferencesLegacy(symbol: String) {
+        let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
         AppLogger.editor.info("Find References: searching for '\(trimmed)' across \(self.tabs.count) open tabs")
-
+        
         // Collect results from all open tabs that have a valid file URL
         var results: [(file: String, line: Int, text: String)] = []
-
+        
         for tab in tabs {
             let lines = tab.content.components(separatedBy: .newlines)
             for (index, line) in lines.enumerated() {
@@ -1716,14 +1811,14 @@ mod tests {
                 }
             }
         }
-
+        
         AppLogger.editor.info("Find References: found \(results.count) occurrences of '\(trimmed)'")
-
+        
         // Log results for debugging
         for result in results {
             AppLogger.editor.debug("  -> \(result.file):\(result.line + 1): \(result.text)")
         }
-
+        
         // Open the sidebar search panel and set the query
         // focusedSidebarTab = 1 is the Search tab
         findReferencesQuery = trimmed
@@ -1971,6 +2066,19 @@ mod tests {
         }
     }
 
+    /// Returns (prefix, suffix) for block comment languages, nil for line comments
+    private func blockCommentWrappers(for fileName: String) -> (prefix: String, suffix: String)? {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        switch ext {
+        case "html", "htm", "xml", "svg":
+            return ("<!-- ", " -->")
+        case "css", "scss", "less":
+            return ("/* ", " */")
+        default:
+            return nil
+        }
+    }
+
     // MARK: - Text Editing Actions
 
     /// Get comment prefix for a given filename extension
@@ -2017,6 +2125,13 @@ mod tests {
         let content = tabs[index].content
         let fileName = tabs[index].fileName
         var lines = content.components(separatedBy: "\n")
+
+        // Block comment languages use wrapping instead of line prefix
+        if let (blockPrefix, blockSuffix) = blockCommentWrappers(for: fileName) {
+            toggleBlockComment(index: index, lines: &lines, prefix: blockPrefix, suffix: blockSuffix)
+            return
+        }
+        
         let prefix = commentPrefix(for: fileName)
 
         // Determine which lines to toggle
@@ -2060,6 +2175,60 @@ mod tests {
                 let rest = String(lines[i].dropFirst(leadingWhitespace.count))
                 lines[i] = leadingWhitespace + prefix + " " + rest
             }
+        }
+
+        tabs[index].content = lines.joined(separator: "\n")
+    }
+
+    /// Toggle block comment (<!-- --> or /* */) for HTML/CSS/XML files
+    private func toggleBlockComment(index: Int, lines: inout [String], prefix: String, suffix: String) {
+        guard !lines.isEmpty else { return }
+        
+        // Determine which lines to toggle
+        let startLine: Int
+        let endLine: Int
+
+        if let range = currentSelectionRange, range.length > 0 {
+            let info1 = lineInfo(for: range.location, in: lines)
+            let info2 = lineInfo(for: range.location + range.length, in: lines)
+            startLine = info1.lineIndex
+            endLine = info2.lineIndex
+        } else if let primary = multiCursorState.primaryCursor {
+            let info = lineInfo(for: primary.position, in: lines)
+            startLine = info.lineIndex
+            endLine = info.lineIndex
+        } else {
+            return
+        }
+
+        guard startLine <= endLine, endLine < lines.count else { return }
+
+        // Find first and last non-empty lines in range
+        let rangeLines = Array(startLine...endLine)
+        guard let firstIdx = rangeLines.first(where: { !lines[$0].trimmingCharacters(in: .whitespaces).isEmpty }),
+              let lastIdx = rangeLines.last(where: { !lines[$0].trimmingCharacters(in: .whitespaces).isEmpty }) else { return }
+
+        let firstTrimmed = lines[firstIdx].trimmingCharacters(in: .whitespaces)
+        let lastTrimmed = lines[lastIdx].trimmingCharacters(in: .whitespaces)
+        let isCommented = firstTrimmed.hasPrefix(prefix) && lastTrimmed.hasSuffix(suffix)
+
+        if isCommented {
+            // Uncomment: remove prefix from first non-empty line, suffix from last non-empty line
+            if let range = lines[firstIdx].range(of: prefix) {
+                lines[firstIdx].removeSubrange(range)
+            }
+            if lastIdx != firstIdx {
+                if let range = lines[lastIdx].range(of: suffix, options: .backwards) {
+                    lines[lastIdx].removeSubrange(range)
+                }
+            }
+        } else {
+            // Comment: wrap with block comment markers
+            let firstWS = String(lines[firstIdx].prefix(while: { $0 == " " || $0 == "\t" }))
+            lines[firstIdx] = firstWS + prefix + String(lines[firstIdx].dropFirst(firstWS.count))
+
+            let lastWS = String(lines[lastIdx].prefix(while: { $0 == " " || $0 == "\t" }))
+            lines[lastIdx] = lastWS + String(lines[lastIdx].dropFirst(lastWS.count)) + suffix
         }
 
         tabs[index].content = lines.joined(separator: "\n")

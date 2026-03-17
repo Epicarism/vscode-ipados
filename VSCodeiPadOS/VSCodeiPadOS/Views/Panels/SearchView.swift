@@ -84,6 +84,10 @@ enum ResultLimit: String, CaseIterable, Identifiable {
 struct SearchView: View {
     var onResultSelected: ((String, Int) -> Void)?
     var rootURL: URL
+    var initialQuery: String? = nil  // Set by Find References action
+    
+    // MARK: - Environment
+    @EnvironmentObject var editorCore: EditorCore
     
     // MARK: - Search Manager
     @StateObject private var searchManager = SearchManager()
@@ -309,8 +313,24 @@ struct SearchView: View {
         }
         .background(Color(theme.editorBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { focusSearchField() }
+        .onAppear {
+            focusSearchField()
+            // Handle initial query from Find References
+            if let query = initialQuery, !query.isEmpty {
+                searchText = query
+                matchWholeWord = true  // Find References always uses whole-word matching
+                debouncedSearch(immediate: true)
+            }
+        }
         .onDisappear(perform: onDisappear)
+        .onChange(of: editorCore.findReferencesQuery) { _, newValue in
+            // Handle Find References query changes from EditorCore
+            if let query = newValue, !query.isEmpty {
+                searchText = query
+                matchWholeWord = true
+                debouncedSearch(immediate: true)
+            }
+        }
         .onChange(of: searchText) { _, newValue in
             if newValue.count >= 2 {
                 debouncedSearch()
@@ -349,7 +369,7 @@ struct SearchView: View {
         .onChange(of: useRegex) { _, _ in
             if searchText.count >= 2 { debouncedSearch() }
         }
-    }
+    } // End of body
     
     // MARK: - Search Header Section
     

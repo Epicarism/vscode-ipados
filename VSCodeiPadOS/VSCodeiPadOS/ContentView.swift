@@ -669,7 +669,8 @@ struct ContentView: View {
                             editorCore.openFile(from: url)
                             editorCore.requestedGoToLine = lineNumber
                         },
-                        rootURL: rootURL
+                        rootURL: rootURL,
+                        initialQuery: editorCore.findReferencesQuery
                     )
                 } else {
                     // No workspace open - show placeholder

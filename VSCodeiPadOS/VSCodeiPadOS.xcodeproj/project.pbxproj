@@ -50,6 +50,7 @@
 		1061 /* NavigationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2061 /* NavigationManager.swift */; };
 		1062 /* RecentFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* RecentFileManager.swift */; };
 		1063 /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* SearchManager.swift */; };
+		1063B /* FindReferencesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063B /* FindReferencesService.swift */; };
 		1064 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* SettingsManager.swift */; };
 		1065 /* SnippetsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* SnippetsManager.swift */; };
 		1066 /* TasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* TasksManager.swift */; };
@@ -103,6 +104,7 @@
 		BB11CC22DD33EE44FF550004 /* SnippetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550003 /* SnippetManager.swift */; };
 		BB11CC22DD33EE44FF550006 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550005 /* OnboardingView.swift */; };
 		AA01BB02CC03DD04EE05FF07 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */; };
+		CC01DD02EE03FF040012 /* CloneRepositoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC01DD02EE03FF040011 /* CloneRepositoryView.swift */; };
 		1143 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143 /* AppDelegate.swift */; };
 		1144 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2144 /* SceneDelegate.swift */; };
 		1145 /* NativeGitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2145 /* NativeGitReader.swift */; };
@@ -211,6 +213,7 @@
 		2061 /* NavigationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationManager.swift; sourceTree = "<group>"; };
 		2062 /* RecentFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFileManager.swift; sourceTree = "<group>"; };
 		2063 /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
+		2063B /* FindReferencesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindReferencesService.swift; sourceTree = "<group>"; };
 		2064 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		2065 /* SnippetsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsManager.swift; sourceTree = "<group>"; };
 		2066 /* TasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksManager.swift; sourceTree = "<group>"; };
@@ -263,6 +266,7 @@
 		BB11CC22DD33EE44FF550001 /* EmmetEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmmetEngine.swift; sourceTree = "<group>"; };
 		BB11CC22DD33EE44FF550003 /* SnippetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetManager.swift; sourceTree = "<group>"; };
 		BB11CC22DD33EE44FF550005 /* OnboardingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		CC01DD02EE03FF040011 /* CloneRepositoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloneRepositoryView.swift; sourceTree = "<group>"; };
 		2143 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2144 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		2145 /* NativeGitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitReader.swift; sourceTree = "<group>"; };
@@ -453,6 +457,7 @@
 				2061 /* NavigationManager.swift */,
 				2062 /* RecentFileManager.swift */,
 				2063 /* SearchManager.swift */,
+				2063B /* FindReferencesService.swift */,
 				2064 /* SettingsManager.swift */,
 				8021 /* AutoSaveManager.swift */,
 				2065 /* SnippetsManager.swift */,
@@ -497,6 +502,7 @@
 				2114 /* WorkspaceTrustDialog.swift */,
 				2164 /* GitHubLoginView.swift */,
 				BB11CC22DD33EE44FF550005 /* OnboardingView.swift */,
+				CC01DD02EE03FF040011 /* CloneRepositoryView.swift */,
 				4008 /* Editor */,
 				4009 /* Main */,
 				4010 /* Panels */,
@@ -734,6 +740,7 @@
 				BB11CC22DD33EE44FF550002 /* EmmetEngine.swift in Sources */,
 				BB11CC22DD33EE44FF550004 /* SnippetManager.swift in Sources */,
 				BB11CC22DD33EE44FF550006 /* OnboardingView.swift in Sources */,
+				CC01DD02EE03FF040012 /* CloneRepositoryView.swift in Sources */,
 				1143 /* AppDelegate.swift in Sources */,
 				1144 /* SceneDelegate.swift in Sources */,
 				1009 /* EditorState.swift in Sources */,
@@ -810,6 +817,7 @@
 				1061 /* NavigationManager.swift in Sources */,
 				1062 /* RecentFileManager.swift in Sources */,
 				1063 /* SearchManager.swift in Sources */,
+				1063B /* FindReferencesService.swift in Sources */,
 				1064 /* SettingsManager.swift in Sources */,
 				8020 /* AutoSaveManager.swift in Sources */,
 				1065 /* SnippetsManager.swift in Sources */,
