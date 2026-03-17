@@ -2375,6 +2375,23 @@ mod tests {
             userInfo: ["tabId": tabs[index].id]
         )
     }
+
+    /// Format the active document using CodeFormatter
+    func formatDocument() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        let filename = tabs[index].fileName
+        guard !content.isEmpty else { return }
+        
+        let formatted = CodeFormatter.shared.format(code: content, filename: filename)
+        guard formatted != content else { return }
+        
+        tabs[index].content = formatted
+        objectWillChange.send()
+        
+        // Also post notification so the active editor view updates
+        NotificationCenter.default.post(name: .formatDocument, object: nil)
+    }
 }
 
 // MARK: - Workspace Persistence

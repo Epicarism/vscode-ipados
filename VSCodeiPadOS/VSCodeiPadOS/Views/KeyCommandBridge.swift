@@ -139,6 +139,7 @@ class KeyCommandController: UIViewController {
             ("Move Line Down", UIKeyCommand.inputDownArrow, [.alternate], #selector(cmdMoveLineDown)),
             ("Duplicate Line Up", UIKeyCommand.inputUpArrow, [.shift, .alternate], #selector(cmdDuplicateLineUp)),
             ("Duplicate Line Down", UIKeyCommand.inputDownArrow, [.shift, .alternate], #selector(cmdDuplicateLineDown)),
+            ("Format Document", "f", [.shift, .alternate], #selector(cmdFormatDocument)),
             
             // MARK: - Panels
             ("Search in Files", "f", [.command, .shift], #selector(cmdSearchInFiles)),
@@ -257,6 +258,9 @@ class KeyCommandController: UIViewController {
     }
     @objc func cmdDuplicateLineDown() {
         NotificationCenter.default.post(name: .duplicateLineDown, object: nil)
+    }
+    @objc func cmdFormatDocument() {
+        NotificationCenter.default.post(name: .formatDocument, object: nil)
     }
     
     // MARK: - Panels

@@ -338,6 +338,11 @@ struct ContentView: View {
                     suggestedName: editorCore.activeTab?.fileName ?? "Untitled.txt"
                 )
             }
+            .sheet(isPresented: $showCloneSheet) {
+                CloneRepositoryView()
+                    .environmentObject(themeManager)
+                    .environmentObject(editorCore)
+            }
     }
 
     @ViewBuilder

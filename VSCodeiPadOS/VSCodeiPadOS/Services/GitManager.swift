@@ -1229,6 +1229,31 @@ final class GitManager: ObservableObject {
         progress?("Clone complete!")
     }
     
+    // MARK: - Remote Branch Discovery
+    
+    /// Discover remote branches from an HTTPS git URL.
+    /// Returns a tuple of (branch names, default branch name).
+    func discoverRemoteBranches(url: String, authToken: String? = nil) async throws -> ([String], String) {
+        let baseURL = url.hasSuffix(".git") ? url : url + ".git"
+        let refs = try await discoverRefs(baseURL: baseURL, authToken: authToken)
+        
+        // Extract branch names from refs/heads/
+        let branches = refs
+            .filter { $0.name.hasPrefix("refs/heads/") }
+            .map { $0.name.replacingOccurrences(of: "refs/heads/", with: "") }
+        
+        // Find default branch from symref
+        let symrefHead = refs.first { $0.isSymref }?.symrefTarget
+        let defaultBranch: String
+        if let symTarget = symrefHead {
+            defaultBranch = symTarget.replacingOccurrences(of: "refs/heads/", with: "")
+        } else {
+            defaultBranch = branches.first ?? "main"
+        }
+        
+        return (branches, defaultBranch)
+    }
+    
     // MARK: - Clone Helpers
     
     private struct GitRef {

@@ -494,6 +494,15 @@ struct RunestoneEditorView: UIViewRepresentable {
                     }
                 }
             )
+
+            // Listen for format document notification
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .formatDocument, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.handleFormatDocument()
+                    }
+                }
+            )
         }
         
         deinit {
@@ -595,6 +604,33 @@ struct RunestoneEditorView: UIViewRepresentable {
                 // Post a notification so UI can reflect the intent if needed.
                 NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
             }
+        }
+
+        // MARK: - Format Document
+
+        private func handleFormatDocument() {
+            guard let textView = textView else { return }
+            let text = textView.text
+            guard !text.isEmpty else { return }
+            
+            let formatted = MainActor.assumeIsolated {
+                let formatter = CodeFormatter.shared
+                return formatter.format(code: text, filename: parent.filename)
+            }
+            
+            guard formatted != text else {
+                AppLogger.editor.info("Format Document: No changes needed")
+                return
+            }
+            
+            textView.text = formatted
+            parent.text = formatted
+            MainActor.assumeIsolated {
+                parent.editorCore.objectWillChange.send()
+            }
+            
+            let ext = (parent.filename as NSString).pathExtension.lowercased()
+            AppLogger.editor.info("Format Document: Applied formatting for .\(ext) file")
         }
         
         func textViewDidChangeSelection(_ textView: TextView) {

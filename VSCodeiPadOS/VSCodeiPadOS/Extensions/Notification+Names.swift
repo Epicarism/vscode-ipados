@@ -239,6 +239,8 @@ extension Notification.Name {
     static let duplicateLineUp = Notification.Name("DuplicateLineUp")
     /// Duplicate the current line downward.
     static let duplicateLineDown = Notification.Name("DuplicateLineDown")
+    /// Format the active document.
+    static let formatDocument = Notification.Name("FormatDocument")
 
     // MARK: - Timeline
 

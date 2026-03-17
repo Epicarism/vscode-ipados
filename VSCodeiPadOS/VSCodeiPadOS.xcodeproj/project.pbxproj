@@ -51,6 +51,7 @@
 		1062 /* RecentFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* RecentFileManager.swift */; };
 		1063 /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* SearchManager.swift */; };
 		1063B /* FindReferencesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063B /* FindReferencesService.swift */; };
+		4063C /* CodeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3063C /* CodeFormatter.swift */; };
 		1064 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* SettingsManager.swift */; };
 		1065 /* SnippetsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* SnippetsManager.swift */; };
 		1066 /* TasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* TasksManager.swift */; };
@@ -214,6 +215,7 @@
 		2062 /* RecentFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFileManager.swift; sourceTree = "<group>"; };
 		2063 /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
 		2063B /* FindReferencesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindReferencesService.swift; sourceTree = "<group>"; };
+		3063C /* CodeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeFormatter.swift; sourceTree = "<group>"; };
 		2064 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		2065 /* SnippetsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsManager.swift; sourceTree = "<group>"; };
 		2066 /* TasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksManager.swift; sourceTree = "<group>"; };
@@ -458,6 +460,7 @@
 				2062 /* RecentFileManager.swift */,
 				2063 /* SearchManager.swift */,
 				2063B /* FindReferencesService.swift */,
+				3063C /* CodeFormatter.swift */,
 				2064 /* SettingsManager.swift */,
 				8021 /* AutoSaveManager.swift */,
 				2065 /* SnippetsManager.swift */,
@@ -818,6 +821,7 @@
 				1062 /* RecentFileManager.swift in Sources */,
 				1063 /* SearchManager.swift in Sources */,
 				1063B /* FindReferencesService.swift in Sources */,
+				4063C /* CodeFormatter.swift in Sources */,
 				1064 /* SettingsManager.swift in Sources */,
 				8020 /* AutoSaveManager.swift in Sources */,
 				1065 /* SnippetsManager.swift in Sources */,
