@@ -1,10 +1,29 @@
 # SWE Communication Doc
 
-## Last Updated: March 17, 2026 - 12:09 AM GMT+1
+## Last Updated: March 18, 2026 - 12:45 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
+
+### Session 3 Summary (March 18, 2026 - 12:45 AM):
+
+**Commit:** `aa3d42a` - fix: build errors, wire shortcuts, perf fixes, race conditions
+
+**Key fixes this session (10 fixes):**
+- **GitManager**: Fixed build errors — unwrap failable `NativeGitReader` init, `GitObjectType` enum comparisons, `var`→`let` warnings
+- **ContentView**: Fixed `showCloneSheet`/`showTerminal` scope error (moved `.onReceive` from IDEEditorView to ContentView)
+- **ContentView**: LineNumbers `visibleLineIndices` O(n)→O(viewport) with binary search + early termination (was iterating ALL lines per scroll frame)
+- **RunestoneEditorView**: Cursor position O(n)→O(log n) with cached newline offset index + binary search (was scanning from BOF per keystroke)
+- **RunestoneEditorView**: Wired `.selectLine`, `.indentLines`, `.outdentLines`, `.joinLines` notification handlers
+- **RunestoneEditorView**: Removed unconditional debug logging in `textColor(for:)` hot path
+- **SyntaxHighlightingTextView**: Fixed `isApplyingHighlighting` race condition with NSLock
+- **EditorCore**: Fixed `saveActiveTab` race condition with cancellable DispatchWorkItem
+- **SSHManager**: `print()`→`AppLogger.ssh.warning()` for RSA key warnings
+- **CommandPaletteView**: Fixed force-unwrap `command.shortcut!`→`command.shortcut ?? ""`
+- **TerminalView**: Wired `.clearTerminal` notification
+
+---
 
 ### Session 2 Summary (March 16-17, 2026 - Evening):
 
@@ -38,19 +57,19 @@
 - See commits `b9f7ce1` through `0418ffa`
 
 ### 🔴 Remaining Known Issues:
-- [ ] SyntaxHighlightingTextView: `isApplyingHighlighting` race condition, visible range strips highlighting outside buffer
+- [x] ~~SyntaxHighlightingTextView: `isApplyingHighlighting` race condition~~ ✅ Fixed (NSLock)
 - [ ] SyntaxHighlightingTextView: Bracket colorization applies inside strings/comments
 - [ ] SyntaxHighlightingTextView: Toggle comment only handles `//`, not language-aware
-- [ ] RunestoneEditorView: Debug logging unconditional in production (performance impact)
-- [ ] RunestoneEditorView: O(n) cursor position calculation per keystroke
+- [x] ~~RunestoneEditorView: Debug logging unconditional in production~~ ✅ Fixed (removed from hot path)
+- [x] ~~RunestoneEditorView: O(n) cursor position calculation per keystroke~~ ✅ Fixed (cached newline index + binary search)
 - [ ] FindViewModel: Silent regex failure (no user feedback on invalid regex)
 - [ ] FindViewModel: replaceAll silently swallows write errors on workspace scope
 - [ ] TimelineView: filteredEntries re-sorts on every view evaluation, localSaves unbounded
 - [ ] TerminalView: SSHConnectionView uses deprecated NavigationView
 - [ ] GitManager: Remote branch checkout always fails, delete branch doesn't handle packed-refs
 - [ ] GitManager: Stash list never populated during refresh()
-- [ ] EditorCore: saveActiveTab race (forceEditorSync + DispatchQueue.main.async timing)
-- [ ] ContentView: LineNumbers.visibleLineIndices O(n) recomputed on every scroll frame
+- [x] ~~EditorCore: saveActiveTab race~~ ✅ Fixed (cancellable DispatchWorkItem)
+- [x] ~~ContentView: LineNumbers.visibleLineIndices O(n)~~ ✅ Fixed (viewport-aware + binary search)
 - [ ] SettingsView: AIManager() vs AIManager.shared singleton mismatch, SettingsWebView onDismiss dead code
 
 ### 📝 Notes for Other SWE:
