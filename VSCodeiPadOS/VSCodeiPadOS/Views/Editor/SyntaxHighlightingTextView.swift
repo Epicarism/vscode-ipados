@@ -859,29 +859,90 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         func handleFindReferences(in textView: UITextView) {
             guard let selectedRange = textView.selectedTextRange else { return }
-            let text = textView.text ?? ""
             
+            // Extract the word at the current cursor position using the tokenizer
             if let range = textView.tokenizer.rangeEnclosingPosition(selectedRange.start, with: .word, inDirection: UITextDirection(rawValue: 1)) {
-                let location = textView.offset(from: textView.beginningOfDocument, to: range.start)
+                let word = textView.text(in: range) ?? ""
+                let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
                 
-                let prefix = String(text.prefix(location))
-                let sourceLine = prefix.components(separatedBy: CharacterSet.newlines).count - 1
-                
-                // TODO: Implement find references functionality in EditorCore
-                // For now, just trigger peek definition as a placeholder
-                parent.editorCore.triggerPeekDefinition(
-                    file: parent.filename,
-                    line: sourceLine,
-                    content: text,
-                    sourceLine: sourceLine
-                )
+                // Delegate to EditorCore which searches all open tabs and opens the search sidebar
+                parent.editorCore.performFindReferences(symbol: trimmed)
             }
         }
         
         func handleFormatDocument(in textView: UITextView) {
-            // TODO: Implement format document functionality
-            // This would typically call a formatter in EditorCore
-            AppLogger.editor.info("Format Document: Not yet implemented")
+            guard let text = textView.text, !text.isEmpty else { return }
+            
+            let ext = (parent.filename as NSString).pathExtension.lowercased()
+            
+            let formattedText: String
+            switch ext {
+            case "json":
+                formattedText = formatJSON(text)
+            default:
+                formattedText = formatGeneral(text)
+            }
+            
+            // Only update if formatting changed something
+            guard formattedText != text else {
+                AppLogger.editor.info("Format Document: No changes needed")
+                return
+            }
+            
+            textView.undoManager?.beginUndoGrouping()
+            let fullRange = NSRange(location: 0, length: (textView.text as NSString).length)
+            textView.textStorage.replaceCharacters(in: fullRange, with: formattedText)
+            textView.undoManager?.endUndoGrouping()
+            
+            // Update parent binding and editor state
+            parent.text = formattedText
+            parent.editorCore.objectWillChange.send()
+            
+            AppLogger.editor.info("Format Document: Applied formatting for .\(ext) file")
+        }
+        
+        /// Pretty-prints JSON text using JSONSerialization.
+        private func formatJSON(_ text: String) -> String {
+            guard let data = text.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data, options: .mutableContainers) else {
+                AppLogger.editor.warning("Format Document: Failed to parse JSON")
+                return text
+            }
+            
+            do {
+                let formattedData = try JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys])
+                guard let result = String(data: formattedData, encoding: .utf8) else {
+                    return text
+                }
+                // Ensure trailing newline
+                if !result.hasSuffix("\n") {
+                    return result + "\n"
+                }
+                return result
+            } catch {
+                AppLogger.editor.warning("Format Document: Failed to serialize JSON: \(error.localizedDescription)")
+                return text
+            }
+        }
+        
+        /// Applies basic indent normalization: converts tabs to spaces and trims trailing whitespace.
+        private func formatGeneral(_ text: String) -> String {
+            let spacesPerTab = 4
+            let spaceIndent = String(repeating: " ", count: spacesPerTab)
+            
+            let lines = text.components(separatedBy: "\n")
+            let formattedLines = lines.map { line -> String in
+                var trimmed = line
+                // Trim trailing whitespace (spaces and tabs) while preserving leading whitespace
+                while !trimmed.isEmpty, trimmed.last!.isWhitespace {
+                    trimmed.removeLast()
+                }
+                // Convert tabs to spaces for consistent indentation
+                trimmed = trimmed.replacingOccurrences(of: "\t", with: spaceIndent)
+                return trimmed
+            }
+            return formattedLines.joined(separator: "\n")
         }
         
         func handleToggleComment(in textView: UITextView) {

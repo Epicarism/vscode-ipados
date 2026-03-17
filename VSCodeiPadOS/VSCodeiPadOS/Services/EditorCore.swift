@@ -184,6 +184,7 @@ class EditorCore: ObservableObject {
     @Published var sidebarWidth: CGFloat = 250
     @Published var showFilePicker = false
     @Published var showSearch = false
+    @Published var findReferencesQuery: String? = nil
     @Published var showCommandPalette = false
     @Published var showQuickOpen = false
     @Published var showAIAssistant = false
@@ -1494,6 +1495,49 @@ mod tests {
 
     func closePeekDefinition() {
         peekState = nil
+    }
+
+    // MARK: - Find References
+
+    /// Performs a basic find-references search across all open tabs.
+    /// Extracts the symbol name and searches for exact word matches in open files.
+    /// Opens the sidebar search panel with the symbol pre-filled.
+    func performFindReferences(symbol: String) {
+        let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        AppLogger.editor.info("Find References: searching for '\(trimmed)' across \(self.tabs.count) open tabs")
+
+        // Collect results from all open tabs that have a valid file URL
+        var results: [(file: String, line: Int, text: String)] = []
+
+        for tab in tabs {
+            let lines = tab.content.components(separatedBy: .newlines)
+            for (index, line) in lines.enumerated() {
+                // Use regex to match whole-word occurrences
+                let pattern = "\\b" + NSRegularExpression.escapedPattern(for: trimmed) + "\\b"
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+                   regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+                    let filePath = tab.url?.path ?? tab.fileName
+                    results.append((file: filePath, line: index, text: line.trimmingCharacters(in: .whitespaces)))
+                }
+            }
+        }
+
+        AppLogger.editor.info("Find References: found \(results.count) occurrences of '\(trimmed)'")
+
+        // Log results for debugging
+        for result in results {
+            AppLogger.editor.debug("  -> \(result.file):\(result.line + 1): \(result.text)")
+        }
+
+        // Open the sidebar search panel and set the query
+        // focusedSidebarTab = 1 is the Search tab
+        findReferencesQuery = trimmed
+        focusedSidebarTab = 1
+        withAnimation {
+            showSidebar = true
+        }
     }
 
     // MARK: - Multi-Cursor Operations

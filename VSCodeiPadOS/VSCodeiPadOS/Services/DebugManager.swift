@@ -251,6 +251,7 @@ final class DebugManager: ObservableObject {
                             .replacingOccurrences(of: "[WARN] ", with: "")
                             .replacingOccurrences(of: "[INFO] ", with: "")
                         self.consoleEntries.append(ConsoleEntry(message: clean, kind: .output))
+                        OutputPanelManager.shared.appendLine(clean, to: .debug, streamType: .stdout)
                     }
                 }
             }
@@ -262,8 +263,10 @@ final class DebugManager: ObservableObject {
                         guard let self else { return }
                         if resultString.isEmpty || resultString == "undefined" {
                             self.consoleEntries.append(ConsoleEntry(message: "undefined", kind: .output))
+                            OutputPanelManager.shared.appendLine("undefined", to: .debug, streamType: .stdout)
                         } else {
                             self.consoleEntries.append(ConsoleEntry(message: resultString, kind: .output))
+                            OutputPanelManager.shared.appendLine(resultString, to: .debug, streamType: .stdout)
                         }
                     }
                 } catch {
@@ -273,6 +276,7 @@ final class DebugManager: ObservableObject {
                             message: "Error: \(error.localizedDescription)",
                             kind: .error
                         ))
+                        OutputPanelManager.shared.appendLine("Error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
                     }
                 }
             }
@@ -356,6 +360,7 @@ final class DebugManager: ObservableObject {
                             message: "Remote breakpoint sync error: \(error.localizedDescription)",
                             kind: .error
                         ))
+                        OutputPanelManager.shared.appendLine("Remote breakpoint sync error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
                     }
                 }
             }
@@ -417,6 +422,7 @@ final class DebugManager: ObservableObject {
                             message: "Remote breakpoint remove error: \(error.localizedDescription)",
                             kind: .error
                         ))
+                        OutputPanelManager.shared.appendLine("Remote breakpoint remove error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
                     }
                 }
             }
@@ -518,6 +524,7 @@ final class DebugManager: ObservableObject {
     message: "Remote debugger error: \(error.localizedDescription)",
     kind: .error
     ))
+    OutputPanelManager.shared.appendLine("Remote debugger error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
     }
     }
     return
@@ -615,6 +622,7 @@ final class DebugManager: ObservableObject {
                             .replacingOccurrences(of: "[WARN] ", with: "")
                             .replacingOccurrences(of: "[INFO] ", with: "")
                         self.consoleEntries.append(ConsoleEntry(message: cleanMessage, kind: kind))
+                        OutputPanelManager.shared.appendLine(cleanMessage, to: .debug, streamType: .stdout)
                     }
                 }
 
@@ -627,6 +635,7 @@ final class DebugManager: ObservableObject {
                                 message: "→ \(resultString)",
                                 kind: .output
                             ))
+                            OutputPanelManager.shared.appendLine("→ \(resultString)", to: .debug, streamType: .stdout)
                         }
                         self.consoleEntries.append(ConsoleEntry(
                             message: "Debug session ended.",
@@ -642,6 +651,7 @@ final class DebugManager: ObservableObject {
                             message: "Error: \(error.localizedDescription)",
                             kind: .error
                         ))
+                        OutputPanelManager.shared.appendLine("Error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
                         self.consoleEntries.append(ConsoleEntry(
                             message: "Debug session ended with error.",
                             kind: .system
@@ -675,6 +685,7 @@ final class DebugManager: ObservableObject {
     message: "Failed to stop remote debugger: \(error.localizedDescription)",
     kind: .error
     ))
+    OutputPanelManager.shared.appendLine("Failed to stop remote debugger: \(error.localizedDescription)", to: .debug, streamType: .stderr)
     }
     }
     return
@@ -711,6 +722,7 @@ final class DebugManager: ObservableObject {
     message: "Failed to pause: \(error.localizedDescription)",
     kind: .error
     ))
+    OutputPanelManager.shared.appendLine("Failed to pause: \(error.localizedDescription)", to: .debug, streamType: .stderr)
     }
     }
     return
@@ -742,6 +754,7 @@ final class DebugManager: ObservableObject {
     message: "Step over failed: \(error.localizedDescription)",
     kind: .error
     ))
+    OutputPanelManager.shared.appendLine("Step over failed: \(error.localizedDescription)", to: .debug, streamType: .stderr)
     }
     }
     return
@@ -773,6 +786,7 @@ final class DebugManager: ObservableObject {
     message: "Step into failed: \(error.localizedDescription)",
     kind: .error
     ))
+    OutputPanelManager.shared.appendLine("Step into failed: \(error.localizedDescription)", to: .debug, streamType: .stderr)
     }
     }
     return
@@ -811,6 +825,7 @@ final class DebugManager: ObservableObject {
     message: "Step out failed: \(error.localizedDescription)",
     kind: .error
     ))
+    OutputPanelManager.shared.appendLine("Step out failed: \(error.localizedDescription)", to: .debug, streamType: .stderr)
     }
     }
     return
@@ -875,6 +890,7 @@ final class DebugManager: ObservableObject {
                             message: "Remote breakpoint clear error: \(error.localizedDescription)",
                             kind: .error
                         ))
+                        OutputPanelManager.shared.appendLine("Remote breakpoint clear error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
                     }
                 }
             }
@@ -1018,6 +1034,7 @@ final class DebugManager: ObservableObject {
                     message: text,
                     kind: kind
                 ))
+                OutputPanelManager.shared.appendLine(text, to: .debug, streamType: (type == .stderr) ? .stderr : .stdout)
             }
         }
     }
@@ -1067,6 +1084,7 @@ final class DebugManager: ObservableObject {
                 message: "Failed to sync breakpoints: \(error.localizedDescription)",
                 kind: .error
             ))
+            OutputPanelManager.shared.appendLine("Failed to sync breakpoints: \(error.localizedDescription)", to: .debug, streamType: .stderr)
         }
     }
     
@@ -1131,6 +1149,7 @@ final class DebugManager: ObservableObject {
                     message: "Exception: \(description)",
                     kind: .error
                 ))
+                OutputPanelManager.shared.appendLine("Exception: \(description)", to: .debug, streamType: .stderr)
             }
         case .terminated:
             state = .stopped

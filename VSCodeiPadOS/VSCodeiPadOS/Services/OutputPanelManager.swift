@@ -22,8 +22,8 @@ enum OutputChannel: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .output: return "terminal"
-        case .javascript: return "js"
-        case .python: return "snake"
+        case .javascript: return "curlybraces"
+        case .python: return "chevron.left.forwardslash.chevron.right"
         case .remote: return "network"
         case .debug: return "ladybug"
         }
