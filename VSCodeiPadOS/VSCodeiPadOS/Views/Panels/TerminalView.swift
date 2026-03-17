@@ -631,6 +631,10 @@ extension TerminalTab: Equatable {}
     var ansiUnderline = false
     var ansiReverseVideo = false
     
+    /// Callback for SwiftTerm integration — when set, SSH output is fed here
+    /// instead of (or in addition to) being appended to the output array.
+    var swiftTermFeedHandler: ((String) -> Void)?
+    
     func clear() {
         output = []
     }
@@ -1158,13 +1162,23 @@ extension TerminalManager: SSHManagerDelegate {
     
     nonisolated func sshManager(_ manager: SSHManager, didReceiveOutput text: String) {
         Task { @MainActor in
-            self.appendOutput(text, type: .output)
+            // Feed to SwiftTerm if available, otherwise use legacy output
+            if let feedHandler = self.swiftTermFeedHandler {
+                feedHandler(text)
+            } else {
+                self.appendOutput(text, type: .output)
+            }
         }
     }
     
     nonisolated func sshManager(_ manager: SSHManager, didReceiveError text: String) {
         Task { @MainActor in
-            self.appendOutput(text, type: .error)
+            // Feed to SwiftTerm if available, otherwise use legacy output
+            if let feedHandler = self.swiftTermFeedHandler {
+                feedHandler(text)
+            } else {
+                self.appendOutput(text, type: .error)
+            }
         }
     }
 }

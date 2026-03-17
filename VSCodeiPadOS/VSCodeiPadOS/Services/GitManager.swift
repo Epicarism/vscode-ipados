@@ -1382,8 +1382,14 @@ final class GitManager: ObservableObject {
         var writtenCount = 0
         let objectsDir = gitDir.appendingPathComponent("objects")
         
+        // Track resolved objects by their pack offset for OFS_DELTA resolution
+        var resolvedObjects: [Int: (type: String, data: Data)] = [:]
+        
         for _ in 0..<objectCount {
             guard offset < packData.count else { break }
+            
+            // Save offset before reading header (needed for OFS_DELTA base lookup)
+            let objectStartOffset = offset
             
             // Read object header (variable-length encoding)
             var byte = packData[offset]
@@ -1421,6 +1427,9 @@ final class GitManager: ObservableObject {
                 }
                 offset += consumed
                 
+                // Store resolved object for delta base lookups
+                resolvedObjects[objectStartOffset] = (type: typeStr, data: decompressed)
+                
                 // Write as loose object
                 try writeLooseObject(
                     type: typeStr,
@@ -1430,7 +1439,7 @@ final class GitManager: ObservableObject {
                 writtenCount += 1
                 
             case 6:
-                // OFS_DELTA — skip for now
+                // OFS_DELTA — resolve against base object at negative offset
                 // Read negative offset
                 var oByte = packData[offset]
                 var negOffset: UInt64 = UInt64(oByte & 0x7F)
@@ -1441,22 +1450,62 @@ final class GitManager: ObservableObject {
                     negOffset = ((negOffset + 1) << 7) | UInt64(oByte & 0x7F)
                     offset += 1
                 }
-                // Skip the zlib data
+                
+                // Decompress delta instructions
                 let remaining = Data(packData[offset...])
-                if let (_, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) {
-                    offset += consumed
-                } else {
+                guard let (deltaData, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) else {
                     offset = packData.count // bail
+                    continue
+                }
+                offset += consumed
+                
+                // Look up base object
+                let baseOffset = objectStartOffset - Int(negOffset)
+                if let base = resolvedObjects[baseOffset],
+                   let resolved = applyDelta(base: base.data, delta: deltaData) {
+                    // Store resolved object
+                    resolvedObjects[objectStartOffset] = (type: base.type, data: resolved)
+                    
+                    // Write as loose object
+                    try writeLooseObject(
+                        type: base.type,
+                        data: resolved,
+                        objectsDir: objectsDir
+                    )
+                    writtenCount += 1
                 }
                 
             case 7:
-                // REF_DELTA — skip for now
-                offset += 20 // skip base object SHA
-                let remaining = Data(packData[offset...])
-                if let (_, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) {
-                    offset += consumed
-                } else {
+                // REF_DELTA — resolve against base object by SHA
+                guard offset + 20 <= packData.count else {
                     offset = packData.count
+                    continue
+                }
+                let baseSHABytes = packData[offset..<(offset + 20)]
+                let baseSHA = baseSHABytes.map { String(format: "%02x", $0) }.joined()
+                offset += 20
+                
+                // Decompress delta instructions
+                let remaining = Data(packData[offset...])
+                guard let (deltaData, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) else {
+                    offset = packData.count
+                    continue
+                }
+                offset += consumed
+                
+                // Look up base object from loose objects on disk
+                if let base = readLooseObjectData(sha: baseSHA, objectsDir: objectsDir),
+                   let resolved = applyDelta(base: base.data, delta: deltaData) {
+                    // Store resolved object
+                    resolvedObjects[objectStartOffset] = (type: base.type, data: resolved)
+                    
+                    // Write as loose object
+                    try writeLooseObject(
+                        type: base.type,
+                        data: resolved,
+                        objectsDir: objectsDir
+                    )
+                    writtenCount += 1
                 }
                 
             default:
@@ -1467,6 +1516,121 @@ final class GitManager: ObservableObject {
         return writtenCount
     }
     
+    /// Apply a Git delta to a base object, producing the target object.
+    /// Git delta format: [source_size][target_size][instructions...]
+    /// Instructions: MSB=0 → INSERT next N bytes; MSB=1 → COPY from base
+    private func applyDelta(base: Data, delta: Data) -> Data? {
+        var pos = 0
+        
+        // Read variable-length source size
+        func readVarInt() -> UInt64 {
+            var result: UInt64 = 0
+            var shift: UInt64 = 0
+            while pos < delta.count {
+                let b = delta[pos]
+                pos += 1
+                result |= UInt64(b & 0x7F) << shift
+                shift += 7
+                if b & 0x80 == 0 { break }
+            }
+            return result
+        }
+        
+        let sourceSize = readVarInt()
+        let targetSize = readVarInt()
+        
+        // Validate source size matches base
+        guard sourceSize == UInt64(base.count) else { return nil }
+        
+        var target = Data()
+        target.reserveCapacity(Int(targetSize))
+        
+        while pos < delta.count {
+            let cmd = delta[pos]
+            pos += 1
+            
+            if cmd & 0x80 != 0 {
+                // COPY instruction — copy from base
+                var copyOffset: UInt64 = 0
+                var copySize: UInt64 = 0
+                
+                if cmd & 0x01 != 0 { guard pos < delta.count else { return nil }; copyOffset |= UInt64(delta[pos]); pos += 1 }
+                if cmd & 0x02 != 0 { guard pos < delta.count else { return nil }; copyOffset |= UInt64(delta[pos]) << 8; pos += 1 }
+                if cmd & 0x04 != 0 { guard pos < delta.count else { return nil }; copyOffset |= UInt64(delta[pos]) << 16; pos += 1 }
+                if cmd & 0x08 != 0 { guard pos < delta.count else { return nil }; copyOffset |= UInt64(delta[pos]) << 24; pos += 1 }
+                
+                if cmd & 0x10 != 0 { guard pos < delta.count else { return nil }; copySize |= UInt64(delta[pos]); pos += 1 }
+                if cmd & 0x20 != 0 { guard pos < delta.count else { return nil }; copySize |= UInt64(delta[pos]) << 8; pos += 1 }
+                if cmd & 0x40 != 0 { guard pos < delta.count else { return nil }; copySize |= UInt64(delta[pos]) << 16; pos += 1 }
+                
+                if copySize == 0 { copySize = 0x10000 } // special case in git
+                
+                let start = Int(copyOffset)
+                let length = Int(copySize)
+                guard start + length <= base.count else { return nil }
+                target.append(base[start..<(start + length)])
+                
+            } else if cmd > 0 {
+                // INSERT instruction — next cmd bytes are literal data
+                let insertSize = Int(cmd)
+                guard pos + insertSize <= delta.count else { return nil }
+                target.append(delta[pos..<(pos + insertSize)])
+                pos += insertSize
+                
+            } else {
+                // cmd == 0 is reserved/invalid
+                return nil
+            }
+        }
+        
+        guard UInt64(target.count) == targetSize else { return nil }
+        return target
+    }
+    
+    /// Read a loose git object from disk, returning its type and decompressed content data.
+    /// Loose objects are stored as zlib-compressed "<type> <size>\0<data>" at .git/objects/xx/yyyy
+    private func readLooseObjectData(sha: String, objectsDir: URL) -> (type: String, data: Data)? {
+        let prefix = String(sha.prefix(2))
+        let suffix = String(sha.dropFirst(2))
+        let objectPath = objectsDir.appendingPathComponent(prefix).appendingPathComponent(suffix)
+        
+        guard let compressedData = try? Data(contentsOf: objectPath) else { return nil }
+        
+        // Decompress — loose objects can be large, try generous buffer
+        let bufferSize = max(compressedData.count * 4, 65536)
+        var decompressed = Data(count: bufferSize)
+        
+        let result = decompressed.withUnsafeMutableBytes { destBuf -> Int in
+            compressedData.withUnsafeBytes { srcBuf -> Int in
+                guard let destPtr = destBuf.baseAddress,
+                      let srcPtr = srcBuf.baseAddress else { return 0 }
+                return compression_decode_buffer(
+                    destPtr.assumingMemoryBound(to: UInt8.self),
+                    bufferSize,
+                    srcPtr.assumingMemoryBound(to: UInt8.self),
+                    compressedData.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+        
+        guard result > 0 else { return nil }
+        decompressed = decompressed.prefix(result)
+        
+        // Parse "<type> <size>\0<data>"
+        guard let nullIndex = decompressed.firstIndex(of: 0) else { return nil }
+        let headerBytes = decompressed[decompressed.startIndex..<nullIndex]
+        guard let headerStr = String(data: headerBytes, encoding: .utf8) else { return nil }
+        
+        let parts = headerStr.split(separator: " ", maxSplits: 1)
+        guard parts.count == 2 else { return nil }
+        let type = String(parts[0])
+        let data = decompressed[(nullIndex + 1)...]
+        
+        return (type: type, data: Data(data))
+    }
+
     /// Decompress zlib data, returning (decompressed, bytesConsumed)
     private func zlibDecompress(_ data: Data, expectedSize: Int) -> (Data, Int)? {
         // Use Compression framework

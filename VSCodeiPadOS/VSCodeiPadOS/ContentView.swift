@@ -83,6 +83,7 @@ struct ContentView: View {
             .modifier(NavigationHandlers(editorCore: editorCore, showTerminal: $showTerminal, showSettings: $showSettings))
             .modifier(EditorActionHandlers(editorCore: editorCore))
             .modifier(CursorAndZoomHandlers(editorCore: editorCore))
+            .modifier(EditingHandlers(editorCore: editorCore))
             .environmentObject(themeManager)
             .environmentObject(editorCore)
     }
@@ -133,6 +134,26 @@ struct ContentView: View {
                 .onReceive(NotificationCenter.default.publisher(for: .goForward)) { _ in editorCore.navigateForward() }
                 .onReceive(NotificationCenter.default.publisher(for: .addCursorAbove)) { _ in editorCore.addCursorAbove() }
                 .onReceive(NotificationCenter.default.publisher(for: .addCursorBelow)) { _ in editorCore.addCursorBelow() }
+        }
+    }
+
+    private struct EditingHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+
+        func body(content: Content) -> some View {
+            content
+                .onReceive(NotificationCenter.default.publisher(for: .toggleComment)) { _ in editorCore.toggleComment() }
+                .onReceive(NotificationCenter.default.publisher(for: .deleteLine)) { _ in editorCore.deleteLine() }
+                .onReceive(NotificationCenter.default.publisher(for: .moveLineUp)) { _ in editorCore.moveLineUp() }
+                .onReceive(NotificationCenter.default.publisher(for: .moveLineDown)) { _ in editorCore.moveLineDown() }
+                .onReceive(NotificationCenter.default.publisher(for: .duplicateLineUp)) { _ in editorCore.duplicateLineUp() }
+                .onReceive(NotificationCenter.default.publisher(for: .duplicateLineDown)) { _ in editorCore.duplicateLineDown() }
+                .onReceive(NotificationCenter.default.publisher(for: .addNextOccurrence)) { _ in editorCore.addNextOccurrence() }
+                .onReceive(NotificationCenter.default.publisher(for: .selectAllOccurrences)) { _ in editorCore.selectAllOccurrences() }
+                .onReceive(NotificationCenter.default.publisher(for: .showGlobalSearch)) { _ in
+                    editorCore.focusedSidebarTab = 1
+                    withAnimation { editorCore.showSidebar = true }
+                }
         }
     }
 

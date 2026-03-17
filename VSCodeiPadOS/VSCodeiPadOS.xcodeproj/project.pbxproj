@@ -629,6 +629,7 @@
 				89659713BBBB0004005B984D /* NIO */,
 				89659714BBBB0005005B984D /* NIOCore */,
 				89659715BBBB0006005B984D /* NIOPosix */,
+				89659721CCCC0002005B984D /* SwiftTerm */,
 			);
 			productName = VSCodeiPadOS;
 			productReference = 3000 /* VSCodeiPadOS.app */;
@@ -664,6 +665,7 @@
 				89659700AAAA0001005B984D /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 				89659710BBBB0001005B984D /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
 				89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */,
+				89659720CCCC0001005B984D /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			productRefGroup = 4099 /* Products */;
 			projectDirPath = "";
@@ -1084,6 +1086,14 @@
 				minimumVersion = 2.50.0;
 			};
 		};
+		89659720CCCC0001005B984D /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1161,6 +1171,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 89659711BBBB0002005B984D /* XCRemoteSwiftPackageReference "swift-nio" */;
 			productName = NIOPosix;
+		};
+		89659721CCCC0002005B984D /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89659720CCCC0001005B984D /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

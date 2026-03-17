@@ -1835,6 +1835,217 @@ mod tests {
         }
     }
 
+    // MARK: - Text Editing Actions
+
+    /// Get comment prefix for a given filename extension
+    private func commentPrefix(for fileName: String) -> String {
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        switch ext {
+        case "py", "pyw", "rb", "sh", "bash", "zsh", "fish",
+             "yaml", "yml", "toml", "r", "pl", "pm",
+             "dockerfile", "makefile", "mk":
+            return "#"
+        case "lua", "sql", "hs":
+            return "--"
+        case "html", "xml", "svg":
+            return "<!--"
+        case "css", "scss", "less":
+            return "/*"
+        case "bat", "cmd":
+            return "REM"
+        case "vim":
+            return "\""
+        case "lisp", "clj", "cljs", "el":
+            return ";"
+        default:
+            return "//"
+        }
+    }
+
+    /// Find line index and line start/end character offsets for a given cursor position
+    private func lineInfo(for position: Int, in lines: [String]) -> (lineIndex: Int, lineStart: Int, lineEnd: Int) {
+        var charCount = 0
+        for (i, line) in lines.enumerated() {
+            let lineEnd = charCount + line.count
+            if position <= lineEnd || i == lines.count - 1 {
+                return (i, charCount, lineEnd)
+            }
+            charCount += line.count + 1 // +1 for newline
+        }
+        return (0, 0, 0)
+    }
+
+    /// Toggle line comment (Cmd+/)
+    func toggleComment() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        let fileName = tabs[index].fileName
+        var lines = content.components(separatedBy: "\n")
+        let prefix = commentPrefix(for: fileName)
+
+        // Determine which lines to toggle
+        let startLine: Int
+        let endLine: Int
+
+        if let range = currentSelectionRange, range.length > 0 {
+            let info1 = lineInfo(for: range.location, in: lines)
+            let info2 = lineInfo(for: range.location + range.length, in: lines)
+            startLine = info1.lineIndex
+            endLine = info2.lineIndex
+        } else if let primary = multiCursorState.primaryCursor {
+            let info = lineInfo(for: primary.position, in: lines)
+            startLine = info.lineIndex
+            endLine = info.lineIndex
+        } else {
+            return
+        }
+
+        guard startLine <= endLine, endLine < lines.count else { return }
+
+        // Check if all lines already have the comment prefix
+        let allCommented = (startLine...endLine).allSatisfy { i in
+            lines[i].trimmingCharacters(in: .whitespaces).hasPrefix(prefix)
+        }
+
+        for i in startLine...endLine {
+            if allCommented {
+                // Remove comment
+                let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix(prefix) {
+                    if let prefixRange = lines[i].range(of: prefix + " ") {
+                        lines[i].removeSubrange(prefixRange)
+                    } else if let prefixRange = lines[i].range(of: prefix) {
+                        lines[i].removeSubrange(prefixRange)
+                    }
+                }
+            } else {
+                // Add comment - find leading whitespace and insert after it
+                let leadingWhitespace = String(lines[i].prefix(while: { $0 == " " || $0 == "\t" }))
+                let rest = String(lines[i].dropFirst(leadingWhitespace.count))
+                lines[i] = leadingWhitespace + prefix + " " + rest
+            }
+        }
+
+        tabs[index].content = lines.joined(separator: "\n")
+    }
+
+    /// Delete current line (Cmd+Shift+K)
+    func deleteLine() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        var lines = content.components(separatedBy: "\n")
+        guard !lines.isEmpty else { return }
+
+        let cursorPos = multiCursorState.primaryCursor?.position ?? 0
+        let info = lineInfo(for: cursorPos, in: lines)
+        let lineIdx = info.lineIndex
+
+        guard lineIdx < lines.count else { return }
+        lines.remove(at: lineIdx)
+
+        if lines.isEmpty {
+            lines = [""]
+        }
+
+        tabs[index].content = lines.joined(separator: "\n")
+
+        // Adjust cursor to stay at same position (clamped)
+        let newPos = min(info.lineStart, tabs[index].content.count)
+        multiCursorState.reset(to: newPos)
+    }
+
+    /// Move current line up (Alt+Up)
+    func moveLineUp() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        var lines = content.components(separatedBy: "\n")
+
+        let cursorPos = multiCursorState.primaryCursor?.position ?? 0
+        let info = lineInfo(for: cursorPos, in: lines)
+        let lineIdx = info.lineIndex
+
+        guard lineIdx > 0, lineIdx < lines.count else { return }
+
+        lines.swapAt(lineIdx, lineIdx - 1)
+        tabs[index].content = lines.joined(separator: "\n")
+
+        // Move cursor to the new line position
+        let offsetInLine = cursorPos - info.lineStart
+        var newLineStart = 0
+        for i in 0..<(lineIdx - 1) {
+            newLineStart += lines[i].count + 1
+        }
+        multiCursorState.reset(to: newLineStart + min(offsetInLine, lines[lineIdx - 1].count))
+    }
+
+    /// Move current line down (Alt+Down)
+    func moveLineDown() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        var lines = content.components(separatedBy: "\n")
+
+        let cursorPos = multiCursorState.primaryCursor?.position ?? 0
+        let info = lineInfo(for: cursorPos, in: lines)
+        let lineIdx = info.lineIndex
+
+        guard lineIdx < lines.count - 1 else { return }
+
+        lines.swapAt(lineIdx, lineIdx + 1)
+        tabs[index].content = lines.joined(separator: "\n")
+
+        // Move cursor to the new line position
+        let offsetInLine = cursorPos - info.lineStart
+        var newLineStart = 0
+        for i in 0..<(lineIdx + 1) {
+            newLineStart += lines[i].count + 1
+        }
+        multiCursorState.reset(to: newLineStart + min(offsetInLine, lines[lineIdx + 1].count))
+    }
+
+    /// Duplicate current line upward (Shift+Alt+Up)
+    func duplicateLineUp() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        var lines = content.components(separatedBy: "\n")
+
+        let cursorPos = multiCursorState.primaryCursor?.position ?? 0
+        let info = lineInfo(for: cursorPos, in: lines)
+        let lineIdx = info.lineIndex
+
+        guard lineIdx < lines.count else { return }
+
+        let duplicatedLine = lines[lineIdx]
+        lines.insert(duplicatedLine, at: lineIdx)
+        tabs[index].content = lines.joined(separator: "\n")
+
+        // Cursor stays on the original (now moved down) line position
+    }
+
+    /// Duplicate current line downward (Shift+Alt+Down)
+    func duplicateLineDown() {
+        guard let index = activeTabIndex else { return }
+        let content = tabs[index].content
+        var lines = content.components(separatedBy: "\n")
+
+        let cursorPos = multiCursorState.primaryCursor?.position ?? 0
+        let info = lineInfo(for: cursorPos, in: lines)
+        let lineIdx = info.lineIndex
+
+        guard lineIdx < lines.count else { return }
+
+        let duplicatedLine = lines[lineIdx]
+        lines.insert(duplicatedLine, at: lineIdx + 1)
+        tabs[index].content = lines.joined(separator: "\n")
+
+        // Move cursor to the duplicated line below
+        let offsetInLine = cursorPos - info.lineStart
+        var newLineStart = 0
+        for i in 0..<(lineIdx + 1) {
+            newLineStart += lines[i].count + 1
+        }
+        multiCursorState.reset(to: newLineStart + min(offsetInLine, duplicatedLine.count))
+    }
+
     // MARK: - Code Folding
 
     /// Collapse all foldable regions in the active editor

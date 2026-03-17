@@ -10,6 +10,7 @@ import SwiftUI
 import NIOCore
 import NIOPosix
 @preconcurrency import NIOSSH
+import Crypto
 
 // MARK: - SSH Connection Model
 
@@ -123,6 +124,257 @@ final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     }
 }
 
+// MARK: - SSH Private Key Authentication Handler
+
+final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
+    private let username: String
+    private let privateKeyString: String
+    private let passphrase: String?
+    private var attemptedKey = false
+    private var attemptedPasswordFallback = false
+    
+    init(username: String, privateKeyString: String, passphrase: String?) {
+        self.username = username
+        self.privateKeyString = privateKeyString
+        self.passphrase = passphrase
+    }
+    
+    func nextAuthenticationType(
+        availableMethods: NIOSSHAvailableUserAuthenticationMethods,
+        nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
+    ) {
+        // First try public key auth
+        if !attemptedKey && availableMethods.contains(.publicKey) {
+            attemptedKey = true
+            
+            if let nioKey = parsePrivateKey(privateKeyString) {
+                nextChallengePromise.succeed(
+                    NIOSSHUserAuthenticationOffer(
+                        username: username,
+                        serviceName: "ssh-connection",
+                        offer: .privateKey(.init(privateKey: nioKey))
+                    )
+                )
+                return
+            }
+        }
+        
+        // Fall back to password auth if key parsing failed
+        // (some users might paste a password in the key field)
+        if !attemptedPasswordFallback && availableMethods.contains(.password) {
+            attemptedPasswordFallback = true
+            nextChallengePromise.succeed(
+                NIOSSHUserAuthenticationOffer(
+                    username: username,
+                    serviceName: "ssh-connection",
+                    offer: .password(.init(password: privateKeyString))
+                )
+            )
+            return
+        }
+        
+        nextChallengePromise.succeed(nil)
+    }
+    
+    /// Parse a PEM-encoded private key string into an NIOSSHPrivateKey
+    private func parsePrivateKey(_ keyString: String) -> NIOSSHPrivateKey? {
+        let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Try OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----)
+        if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
+            return parseOpenSSHKey(trimmed)
+        }
+        
+        // Try PEM RSA format (-----BEGIN RSA PRIVATE KEY-----)
+        // NIOSSH doesn't support RSA keys directly, but we can try P256/P384
+        if trimmed.contains("BEGIN EC PRIVATE KEY") || trimmed.contains("BEGIN PRIVATE KEY") {
+            return parsePEMKey(trimmed)
+        }
+        
+        // Try raw base64 (no headers)
+        if let data = Data(base64Encoded: trimmed.replacingOccurrences(of: "\n", with: "")) {
+            return parseOpenSSHKeyData(data)
+        }
+        
+        return nil
+    }
+    
+    /// Parse OpenSSH format private key (openssh-key-v1)
+    private func parseOpenSSHKey(_ pem: String) -> NIOSSHPrivateKey? {
+        // Strip PEM headers and decode base64
+        let lines = pem.components(separatedBy: "\n")
+            .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
+        let base64 = lines.joined()
+        guard let data = Data(base64Encoded: base64) else { return nil }
+        return parseOpenSSHKeyData(data)
+    }
+    
+    /// Parse the binary openssh-key-v1 format
+    private func parseOpenSSHKeyData(_ data: Data) -> NIOSSHPrivateKey? {
+        // openssh-key-v1 magic: "openssh-key-v1\0"
+        let magic = "openssh-key-v1\0"
+        guard data.count > magic.utf8.count else { return nil }
+        let magicBytes = Data(magic.utf8)
+        guard data.prefix(magicBytes.count) == magicBytes else { return nil }
+        
+        var pos = magicBytes.count
+        
+        func readUInt32() -> UInt32? {
+            guard pos + 4 <= data.count else { return nil }
+            let val = data.withUnsafeBytes { buf -> UInt32 in
+                buf.load(fromByteOffset: pos, as: UInt32.self).bigEndian
+            }
+            pos += 4
+            return val
+        }
+        
+        func readString() -> Data? {
+            guard let length = readUInt32() else { return nil }
+            let len = Int(length)
+            guard pos + len <= data.count else { return nil }
+            let result = data[pos..<(pos + len)]
+            pos += len
+            return Data(result)
+        }
+        
+        // Read cipher name
+        guard let cipherName = readString(),
+              let cipherStr = String(data: cipherName, encoding: .utf8) else { return nil }
+        
+        // Read KDF name
+        guard let _ = readString() else { return nil } // kdfname
+        
+        // Read KDF options
+        guard let _ = readString() else { return nil } // kdfoptions
+        
+        // Number of keys
+        guard let numKeys = readUInt32(), numKeys >= 1 else { return nil }
+        
+        // Read public key(s) — skip them
+        for _ in 0..<numKeys {
+            guard let _ = readString() else { return nil }
+        }
+        
+        // Read private key section (may be encrypted)
+        guard let privateSection = readString() else { return nil }
+        
+        // Only handle unencrypted keys for now
+        guard cipherStr == "none" else {
+            // TODO: Implement encrypted key decryption with passphrase
+            return nil
+        }
+        
+        // Parse private section
+        var pPos = 0
+        let pData = privateSection
+        
+        func pReadUInt32() -> UInt32? {
+            guard pPos + 4 <= pData.count else { return nil }
+            let val = pData.withUnsafeBytes { buf -> UInt32 in
+                buf.load(fromByteOffset: pPos, as: UInt32.self).bigEndian
+            }
+            pPos += 4
+            return val
+        }
+        
+        func pReadString() -> Data? {
+            guard let length = pReadUInt32() else { return nil }
+            let len = Int(length)
+            guard pPos + len <= pData.count else { return nil }
+            let result = pData[pPos..<(pPos + len)]
+            pPos += len
+            return Data(result)
+        }
+        
+        // Check numbers (two random uint32 that must match)
+        guard let check1 = pReadUInt32(), let check2 = pReadUInt32(),
+              check1 == check2 else { return nil }
+        
+        // Read key type
+        guard let keyTypeData = pReadString(),
+              let keyType = String(data: keyTypeData, encoding: .utf8) else { return nil }
+        
+        switch keyType {
+        case "ssh-ed25519":
+            // Ed25519: 32 bytes public key, then 64 bytes private key (seed + public)
+            guard let _ = pReadString() else { return nil } // public key (32 bytes)
+            guard let privKeyData = pReadString() else { return nil } // 64 bytes: seed(32) + pub(32)
+            guard privKeyData.count == 64 else { return nil }
+            let seed = privKeyData.prefix(32) // first 32 bytes is the seed
+            
+            do {
+                let ed25519Key = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
+                return NIOSSHPrivateKey(ed25519Key: ed25519Key)
+            } catch {
+                return nil
+            }
+            
+        case "ecdsa-sha2-nistp256":
+            // P-256 ECDSA key
+            guard let _ = pReadString() else { return nil } // curve identifier "nistp256"
+            guard let _ = pReadString() else { return nil } // public key point
+            guard let privKeyData = pReadString() else { return nil } // private scalar
+            
+            do {
+                let p256Key = try P256.Signing.PrivateKey(rawRepresentation: privKeyData)
+                return NIOSSHPrivateKey(p256Key: p256Key)
+            } catch {
+                return nil
+            }
+            
+        case "ecdsa-sha2-nistp384":
+            guard let _ = pReadString() else { return nil }
+            guard let _ = pReadString() else { return nil }
+            guard let privKeyData = pReadString() else { return nil }
+            
+            do {
+                let p384Key = try P384.Signing.PrivateKey(rawRepresentation: privKeyData)
+                return NIOSSHPrivateKey(p384Key: p384Key)
+            } catch {
+                return nil
+            }
+            
+        case "ecdsa-sha2-nistp521":
+            guard let _ = pReadString() else { return nil }
+            guard let _ = pReadString() else { return nil }
+            guard let privKeyData = pReadString() else { return nil }
+            
+            do {
+                let p521Key = try P521.Signing.PrivateKey(rawRepresentation: privKeyData)
+                return NIOSSHPrivateKey(p521Key: p521Key)
+            } catch {
+                return nil
+            }
+            
+        default:
+            // Unsupported key type (e.g., ssh-rsa — NIOSSH doesn't support RSA signing)
+            return nil
+        }
+    }
+    
+    /// Parse PEM-encoded EC private key
+    private func parsePEMKey(_ pem: String) -> NIOSSHPrivateKey? {
+        // Strip headers and decode
+        let lines = pem.components(separatedBy: "\n")
+            .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
+        let base64 = lines.joined()
+        guard let data = Data(base64Encoded: base64) else { return nil }
+        
+        // Try P-256 first (most common EC key)
+        if let key = try? P256.Signing.PrivateKey(derRepresentation: data) {
+            return NIOSSHPrivateKey(p256Key: key)
+        }
+        if let key = try? P384.Signing.PrivateKey(derRepresentation: data) {
+            return NIOSSHPrivateKey(p384Key: key)
+        }
+        if let key = try? P521.Signing.PrivateKey(derRepresentation: data) {
+            return NIOSSHPrivateKey(p521Key: key)
+        }
+        
+        return nil
+    }
+}
+
 // MARK: - SSH Host Key Validator (Accept All for now)
 
 final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationDelegate {
@@ -207,11 +459,8 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         switch config.authMethod {
         case .password(let password):
             authDelegate = PasswordAuthDelegate(username: config.username, password: password)
-        case .privateKey(let key, _):
-            // For private key auth, we'd need to parse the key
-            // For now fall back to password-style with key as password
-            // TODO: Implement proper NIOSSHPrivateKey-based public key authentication
-            authDelegate = PasswordAuthDelegate(username: config.username, password: key)
+        case .privateKey(let key, let passphrase):
+            authDelegate = PrivateKeyAuthDelegate(username: config.username, privateKeyString: key, passphrase: passphrase)
         }
         
         let bootstrap = ClientBootstrap(group: group)
@@ -269,6 +518,17 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                 completion(.failure(error))
             }
         }
+    }
+    
+    /// Import a private key from a file URL (e.g., from Files app document picker)
+    func importPrivateKey(from url: URL) throws -> String {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        let keyData = try Data(contentsOf: url)
+        guard let keyString = String(data: keyData, encoding: .utf8) else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        return keyString
     }
     
     func disconnect() {
