@@ -92,6 +92,26 @@ struct CommandPaletteView: View {
                 editorCore.showSidebar = true
                 dismiss()
             },
+            Command(name: "Format Document", shortcut: "⌥⇧F", icon: "text.alignleft", category: .edit) {
+                NotificationCenter.default.post(name: .formatDocument, object: nil)
+                dismiss()
+            },
+            Command(name: "Toggle Line Comment", shortcut: "⌘/", icon: "text.quote", category: .edit) {
+                NotificationCenter.default.post(name: .toggleComment, object: nil)
+                dismiss()
+            },
+            Command(name: "Delete Line", shortcut: "⌘⇧K", icon: "minus.circle", category: .edit) {
+                NotificationCenter.default.post(name: .deleteLine, object: nil)
+                dismiss()
+            },
+            Command(name: "Move Line Up", shortcut: "⌥↑", icon: "arrow.up", category: .edit) {
+                NotificationCenter.default.post(name: .moveLineUp, object: nil)
+                dismiss()
+            },
+            Command(name: "Move Line Down", shortcut: "⌥↓", icon: "arrow.down", category: .edit) {
+                NotificationCenter.default.post(name: .moveLineDown, object: nil)
+                dismiss()
+            },
 
             // Selection Commands
             Command(name: "Select All", shortcut: "⌘A", icon: "selection.pin.in.out", category: .selection) {
@@ -217,6 +237,26 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "File Icon Theme", shortcut: nil, icon: "doc.badge.gearshape", category: .preferences) {
+                dismiss()
+            },
+
+            // Git / Source Control Commands
+            Command(name: "Git: Commit", shortcut: nil, icon: "checkmark.circle", category: .file) {
+                editorCore.focusedSidebarTab = 2
+                editorCore.showSidebar = true
+                dismiss()
+            },
+            Command(name: "Git: Clone Repository", shortcut: nil, icon: "arrow.down.circle", category: .file) {
+                dismiss()
+            },
+
+            // Code Folding Commands
+            Command(name: "Fold All", shortcut: nil, icon: "chevron.down.square", category: .view) {
+                editorCore.collapseAllFolds()
+                dismiss()
+            },
+            Command(name: "Unfold All", shortcut: nil, icon: "chevron.up.square", category: .view) {
+                editorCore.expandAllFolds()
                 dismiss()
             },
 

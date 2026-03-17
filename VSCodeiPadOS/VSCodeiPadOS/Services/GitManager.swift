@@ -678,8 +678,34 @@ final class GitManager: ObservableObject {
             return
         }
         
-        // No SSH connection available
-        throw GitManagerError.sshNotConnected
+        // HTTPS fallback: fetch + fast-forward merge
+        try await fetchViaHTTPS()
+        
+        // After fetch, try fast-forward merge with remote tracking branch
+        guard let repoURL = workingDirectory else { throw GitManagerError.noRepository }
+        let gitDir = repoURL.appendingPathComponent(".git")
+        let branch = currentBranch
+        guard !branch.isEmpty else { throw GitManagerError.invalidRepository }
+        
+        let remoteRefPath = gitDir.appendingPathComponent("refs/remotes/origin/\(branch)")
+        guard FileManager.default.fileExists(atPath: remoteRefPath.path),
+              let remoteSHA = try? String(contentsOf: remoteRefPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) else {
+            // No remote tracking branch - fetch was enough
+            return
+        }
+        
+        let localRefPath = gitDir.appendingPathComponent("refs/heads/\(branch)")
+        let localSHA = (try? String(contentsOf: localRefPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) ?? ""
+        
+        guard remoteSHA != localSHA else {
+            // Already up to date
+            return
+        }
+        
+        // Fast-forward: update local ref to remote SHA and re-checkout
+        try (remoteSHA + "\n").write(to: localRefPath, atomically: true, encoding: .utf8)
+        let _ = try checkoutWorkingTree(gitDir: gitDir, to: repoURL)
+        await refresh()
     }
     
     func push() async throws {
@@ -703,8 +729,12 @@ final class GitManager: ObservableObject {
             return
         }
         
-        // No SSH connection available
-        throw GitManagerError.sshNotConnected
+        // HTTPS push requires git-receive-pack protocol - needs auth token
+        throw GitManagerError.commandFailed(
+            args: "push",
+            exitCode: 1,
+            message: "Push requires an SSH connection. Connect to a remote server via SSH first, or use the terminal to push manually."
+        )
     }
     
     func stashPush(message: String?) async throws {
@@ -817,8 +847,138 @@ final class GitManager: ObservableObject {
             await refresh()
             return
         }
-        // No SSH connection — cannot fetch from remote
-        throw GitManagerError.sshNotConnected
+        
+        // HTTPS fallback: use Smart HTTP protocol
+        try await fetchViaHTTPS()
+    }
+    
+    /// Fetch updates from remote using Smart HTTP protocol (no SSH needed)
+    private func fetchViaHTTPS() async throws {
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Read remote URL from .git/config
+        guard let remoteURL = try await getConfig(key: "remote.origin.url") else {
+            throw GitManagerError.commandFailed(args: "fetch", exitCode: 1, message: "No remote 'origin' configured")
+        }
+        
+        let baseURL = remoteURL.hasSuffix(".git") ? remoteURL : remoteURL + ".git"
+        
+        // Read stored auth token if available
+        let authToken = try await getConfig(key: "http.token")
+        
+        // 1. Discover remote refs
+        let remoteRefs = try await discoverRefs(baseURL: baseURL, authToken: authToken)
+        guard !remoteRefs.isEmpty else { return }
+        
+        // 2. Read local refs to find what we already have
+        let gitDir = repoURL.appendingPathComponent(".git")
+        let reader = NativeGitReader(gitDir: gitDir)
+        var localSHAs = Set<String>()
+        
+        // Collect all known object SHAs from local refs
+        let refsDir = gitDir.appendingPathComponent("refs")
+        if let enumerator = FileManager.default.enumerator(at: refsDir, includingPropertiesForKeys: nil) {
+            while let fileURL = enumerator.nextObject() as? URL {
+                if let sha = try? String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+                   sha.count == 40, sha.allSatisfy({ $0.isHexDigit }) {
+                    localSHAs.insert(sha)
+                }
+            }
+        }
+        
+        // 3. Determine which remote refs we need
+        let wantSHAs = remoteRefs
+            .filter { $0.sha.count == 40 && !localSHAs.contains($0.sha) }
+            .map { $0.sha }
+        let uniqueWants = Array(Set(wantSHAs))
+        
+        guard !uniqueWants.isEmpty else {
+            // Already up to date - just update remote tracking refs
+            for ref in remoteRefs where ref.name.hasPrefix("refs/heads/") {
+                let remoteName = ref.name.replacingOccurrences(of: "refs/heads/", with: "refs/remotes/origin/")
+                let refPath = gitDir.appendingPathComponent(remoteName)
+                try FileManager.default.createDirectory(at: refPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try (ref.sha + "\n").write(to: refPath, atomically: true, encoding: .utf8)
+            }
+            await refresh()
+            return
+        }
+        
+        // 4. Fetch pack file with objects we need
+        let haveSHAs = Array(localSHAs)
+        let packData = try await fetchPackFileWithHaves(baseURL: baseURL, wants: uniqueWants, haves: haveSHAs, authToken: authToken)
+        
+        // 5. Parse and write objects
+        let objectCount = try parseAndWritePackFile(packData: packData, gitDir: gitDir)
+        AppLogger.git.info("HTTPS fetch: unpacked \(objectCount) objects")
+        
+        // 6. Update remote tracking refs
+        for ref in remoteRefs where ref.name.hasPrefix("refs/heads/") {
+            let remoteName = ref.name.replacingOccurrences(of: "refs/heads/", with: "refs/remotes/origin/")
+            let refPath = gitDir.appendingPathComponent(remoteName)
+            try FileManager.default.createDirectory(at: refPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try (ref.sha + "\n").write(to: refPath, atomically: true, encoding: .utf8)
+        }
+        
+        await refresh()
+    }
+    
+    /// Fetch pack file with have/want negotiation
+    private func fetchPackFileWithHaves(baseURL: String, wants: [String], haves: [String], authToken: String? = nil) async throws -> Data {
+        guard let url = URL(string: "\(baseURL)/git-upload-pack") else {
+            throw GitManagerError.cloneFailed("Invalid upload-pack URL")
+        }
+        
+        var body = ""
+        for (i, sha) in wants.enumerated() {
+            if i == 0 {
+                let line = "want \(sha) multi_ack_detailed no-done side-band-64k thin-pack ofs-delta agent=codepad/1.0\n"
+                body += String(format: "%04x", line.utf8.count + 4) + line
+            } else {
+                let line = "want \(sha)\n"
+                body += String(format: "%04x", line.utf8.count + 4) + line
+            }
+        }
+        body += "00000009done\n"
+        
+        // Add haves if we have local objects
+        if !haves.isEmpty {
+            body = ""
+            for (i, sha) in wants.enumerated() {
+                if i == 0 {
+                    let line = "want \(sha) multi_ack_detailed no-done side-band-64k thin-pack ofs-delta agent=codepad/1.0\n"
+                    body += String(format: "%04x", line.utf8.count + 4) + line
+                } else {
+                    let line = "want \(sha)\n"
+                    body += String(format: "%04x", line.utf8.count + 4) + line
+                }
+            }
+            body += "0000"
+            for sha in haves.prefix(256) { // Limit haves to avoid huge requests
+                let line = "have \(sha)\n"
+                body += String(format: "%04x", line.utf8.count + 4) + line
+            }
+            body += "0009done\n"
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-git-upload-pack-request", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = body.data(using: .utf8)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            throw GitManagerError.cloneFailed("Fetch failed: server returned \(httpResponse.statusCode)")
+        }
+        
+        return extractPackFromSideBand(data)
     }
     
 
