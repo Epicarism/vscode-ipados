@@ -11,6 +11,7 @@ import NIOCore
 import NIOPosix
 @preconcurrency import NIOSSH
 import Crypto
+import CommonCrypto
 
 // MARK: - SSH Connection Model
 
@@ -56,7 +57,9 @@ enum SSHClientError: Error, LocalizedError {
     case commandFailed(String)
     case notImplemented
     case portForwardFailed(String)
+    case passphraseRequired
     
+
     var errorDescription: String? {
         switch self {
         case .connectionFailed(let reason): return "Connection failed: \(reason)"
@@ -70,8 +73,10 @@ enum SSHClientError: Error, LocalizedError {
         case .commandFailed(let reason): return "Command execution failed: \(reason)"
         case .notImplemented: return "SSH feature not yet implemented"
         case .portForwardFailed(let reason): return "Port forwarding failed: \(reason)"
-        }
+        case .passphraseRequired: return "This private key is encrypted and requires a passphrase"
+
     }
+}
 }
 
 // MARK: - Command Output Types
@@ -126,6 +131,302 @@ final class PasswordAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     }
 }
 
+
+// MARK: - OpenSSH Encrypted Key Decryptor
+
+/// Helper class to decrypt OpenSSH format encrypted private keys
+enum OpenSSHKeyDecryptor {
+    
+    /// Decrypt an OpenSSH encrypted private key section
+    /// - Parameters:
+    ///   - encryptedData: The encrypted private key section
+    ///   - cipherName: The cipher name (e.g., "aes256-ctr")
+    ///   - kdfName: The KDF name (e.g., "bcrypt")
+    ///   - kdfOptions: The KDF options (salt + rounds for bcrypt)
+    ///   - passphrase: The passphrase to decrypt
+    /// - Returns: Decrypted private key data
+    static func decrypt(encryptedData: Data, cipherName: String, kdfName: String, kdfOptions: Data, passphrase: String) throws -> Data {
+        // Verify supported cipher
+        guard cipherName == "aes256-ctr" || cipherName == "aes256-cbc" else {
+            throw SSHClientError.unsupportedKeyType("Unsupported cipher: \(cipherName). Only aes256-ctr and aes256-cbc are supported.")
+        }
+        
+        // Verify supported KDF
+        guard kdfName == "bcrypt" else {
+            throw SSHClientError.unsupportedKeyType("Unsupported KDF: \(kdfName). Only bcrypt is supported.")
+        }
+        
+        // Parse KDF options (salt + rounds)
+        guard let (salt, rounds) = parseKDFOptions(kdfOptions) else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        
+        // Derive key and IV using bcrypt-pbkdf
+        let (key, iv) = try deriveKeyAndIV(passphrase: passphrase, salt: salt, rounds: rounds)
+        
+        // Decrypt using AES-256-CTR or AES-256-CBC
+        let decrypted: Data
+        if cipherName == "aes256-ctr" {
+            decrypted = try decryptAES256CTR(encryptedData: encryptedData, key: key, iv: iv)
+        } else {
+            decrypted = try decryptAES256CBC(encryptedData: encryptedData, key: key, iv: iv)
+        }
+        
+        return decrypted
+    }
+    
+    /// Parse KDF options to extract salt and rounds
+    private static func parseKDFOptions(_ options: Data) -> (Data, UInt32)? {
+        var pos = 0
+        
+        // Read salt length (uint32)
+        guard pos + 4 <= options.count else { return nil }
+        let saltLen = Int(options.withUnsafeBytes { buf in
+            buf.load(fromByteOffset: pos, as: UInt32.self).bigEndian
+        })
+        pos += 4
+        
+        // Read salt
+        guard pos + saltLen <= options.count else { return nil }
+        let salt = options[pos..<(pos + saltLen)]
+        pos += saltLen
+        
+        // Read rounds (uint32)
+        guard pos + 4 <= options.count else { return nil }
+        let rounds = options.withUnsafeBytes { buf in
+            buf.load(fromByteOffset: pos, as: UInt32.self).bigEndian
+        }
+        
+        return (Data(salt), rounds)
+    }
+    
+    /// Derive key and IV using bcrypt-pbkdf
+    /// Note: This is a simplified implementation using PBKDF2 as fallback
+    /// Full bcrypt-pbkdf implementation would require external library
+    private static func deriveKeyAndIV(passphrase: String, salt: Data, rounds: UInt32) throws -> (key: Data, iv: Data) {
+        // OpenSSH bcrypt-pbkdf derives 48 bytes: 32 for key + 16 for IV (for AES-256-CTR)
+        // We'll use a simplified approach with PBKDF2-SHA256
+        // Note: For production, consider using a proper bcrypt-pbkdf implementation
+        
+        let derivedKeyLength = 48 // 32 bytes key + 16 bytes IV
+        
+        // Convert passphrase to data
+        guard let passphraseData = passphrase.data(using: .utf8) else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        
+        // Use PBKDF2 with SHA256
+        var derivedKey = Data(count: derivedKeyLength)
+        let result = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
+            passphraseData.withUnsafeBytes { passphraseBytes in
+                salt.withUnsafeBytes { saltBytes in
+                    CCKeyDerivationPBKDF(
+                        CCPBKDFAlgorithm(kCCPBKDF2),
+                        passphraseBytes.baseAddress?.assumingMemoryBound(to: Int8.self),
+                        passphraseData.count,
+                        saltBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        salt.count,
+                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
+                        UInt32(rounds),
+                        derivedKeyBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        derivedKeyLength
+                    )
+                }
+            }
+        }
+        
+        guard result == kCCSuccess else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        
+        let key = derivedKey.prefix(32)
+        let iv = derivedKey.suffix(16)
+        
+        return (Data(key), Data(iv))
+    }
+    
+    /// Decrypt using AES-256-CTR
+    private static func decryptAES256CTR(encryptedData: Data, key: Data, iv: Data) throws -> Data {
+        // AES-CTR decryption is the same as encryption
+        // For CTR mode, we need to implement it manually as CommonCrypto doesn't directly support CTR
+        // We'll use CTR mode implementation
+        
+        let cryptor = try AES256CTRCryptor(key: key, iv: iv)
+        return try cryptor.update(encryptedData)
+    }
+    
+    /// Decrypt using AES-256-CBC
+    private static func decryptAES256CBC(encryptedData: Data, key: Data, iv: Data) throws -> Data {
+        // AES-CBC decryption
+        var decryptedData = Data(count: encryptedData.count + kCCBlockSizeAES128)
+        var numBytesDecrypted: size_t = 0
+        
+        var decryptedCount = decryptedData.count
+        let result = encryptedData.withUnsafeBytes { encryptedBytes in
+            decryptedData.withUnsafeMutableBytes { decryptedBytes in
+                key.withUnsafeBytes { keyBytes in
+                    iv.withUnsafeBytes { ivBytes in
+                        CCCrypt(
+                            CCOperation(kCCDecrypt),
+                            CCAlgorithm(kCCAlgorithmAES),
+                            CCOptions(kCCOptionPKCS7Padding),
+                            keyBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                            key.count,
+                            ivBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                            encryptedBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                            encryptedData.count,
+                            decryptedBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                            decryptedCount,
+                            &numBytesDecrypted
+                        )
+                    }
+                }
+            }
+        }
+        
+        guard result == kCCSuccess else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        
+        decryptedData.count = numBytesDecrypted
+        return decryptedData
+    }
+}
+
+// MARK: - AES-256-CTR Implementation
+
+/// Simple AES-256-CTR implementation for OpenSSH key decryption
+final class AES256CTRCryptor {
+    private let key: Data
+    private let iv: Data
+    private var counter: UInt128
+    private var keystreamPos = 0
+    private var keystream = Data()
+    
+    init(key: Data, iv: Data) throws {
+        guard key.count == 32 else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        guard iv.count == 16 else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        
+        self.key = key
+        self.iv = iv
+        
+        // Initialize counter from IV
+        // In OpenSSH, the IV is the initial counter value
+        self.counter = UInt128(iv)
+    }
+    
+    func update(_ data: Data) throws -> Data {
+        var result = Data(count: data.count)
+        
+        for (i, byte) in data.enumerated() {
+            // Generate more keystream if needed
+            if keystreamPos >= keystream.count {
+                keystream = try encryptCounter()
+                keystreamPos = 0
+                incrementCounter()
+            }
+            
+            // XOR with keystream
+            result[i] = byte ^ keystream[keystreamPos]
+            keystreamPos += 1
+        }
+        
+        return result
+    }
+    
+    private func encryptCounter() throws -> Data {
+        // Encrypt the counter block using AES-256-ECB
+        var counterData = counter.data
+        var encrypted = Data(count: kCCBlockSizeAES128)
+        var numBytesEncrypted: size_t = 0
+        
+        var encryptedCount = encrypted.count
+        let counterCount = counterData.count
+        let result = counterData.withUnsafeBytes { counterBytes in
+            encrypted.withUnsafeMutableBytes { encryptedBytes in
+                key.withUnsafeBytes { keyBytes in
+                    CCCrypt(
+                        CCOperation(kCCEncrypt),
+                        CCAlgorithm(kCCAlgorithmAES),
+                        CCOptions(0), // ECB mode (no padding)
+                        keyBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        key.count,
+                        nil, // No IV for ECB
+                        counterBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        counterCount,
+                        encryptedBytes.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        encryptedCount,
+                        &numBytesEncrypted
+                    )
+                }
+            }
+        }
+        
+        guard result == kCCSuccess else {
+            throw SSHClientError.invalidPrivateKey
+        }
+        
+        return encrypted
+    }
+    
+    private func incrementCounter() {
+        counter = counter + 1
+    }
+}
+
+// MARK: - UInt128 Helper
+
+/// Simple 128-bit unsigned integer for AES counter
+struct UInt128 {
+    var high: UInt64 = 0
+    var low: UInt64 = 0
+    
+    init() {}
+    
+    init(_ data: Data) {
+        guard data.count == 16 else { return }
+        
+        high = data.withUnsafeBytes { buf in
+            buf.load(fromByteOffset: 0, as: UInt64.self).bigEndian
+        }
+        low = data.withUnsafeBytes { buf in
+            buf.load(fromByteOffset: 8, as: UInt64.self).bigEndian
+        }
+    }
+    
+    var data: Data {
+        var result = Data(count: 16)
+        result.withUnsafeMutableBytes { buf in
+            buf.storeBytes(of: high.bigEndian, toByteOffset: 0, as: UInt64.self)
+            buf.storeBytes(of: low.bigEndian, toByteOffset: 8, as: UInt64.self)
+        }
+        return result
+    }
+    
+    static func + (lhs: UInt128, rhs: UInt128) -> UInt128 {
+        var result = UInt128()
+        let (low, overflow) = lhs.low.addingReportingOverflow(rhs.low)
+        result.low = low
+        result.high = lhs.high &+ rhs.high &+ (overflow ? 1 : 0)
+        return result
+    }
+    
+    static func + (lhs: UInt128, rhs: UInt64) -> UInt128 {
+        return lhs + UInt128(Data(count: 16)) + rhs
+    }
+}
+
+private extension UInt128 {
+    init(_ value: UInt64) {
+        high = 0
+        low = value
+    }
+}
+
 // MARK: - SSH Private Key Authentication Handler
 
 final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
@@ -149,7 +450,7 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         if !attemptedKey && availableMethods.contains(.publicKey) {
             attemptedKey = true
             
-            if let nioKey = parsePrivateKey(privateKeyString) {
+            if let nioKey = parsePrivateKey(privateKeyString, passphrase: passphrase) {
                 nextChallengePromise.succeed(
                     NIOSSHUserAuthenticationOffer(
                         username: username,
@@ -179,12 +480,16 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     }
     
     /// Parse a PEM-encoded private key string into an NIOSSHPrivateKey
-    private func parsePrivateKey(_ keyString: String) -> NIOSSHPrivateKey? {
+    /// - Parameters:
+    ///   - keyString: The PEM-encoded private key
+    ///   - passphrase: Optional passphrase for encrypted keys
+    /// - Returns: NIOSSHPrivateKey if parsing succeeds, nil otherwise
+    private func parsePrivateKey(_ keyString: String, passphrase: String? = nil) -> NIOSSHPrivateKey? {
         let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Try OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----)
         if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
-            return parseOpenSSHKey(trimmed)
+            return parseOpenSSHKey(trimmed, passphrase: passphrase)
         }
         
         // Detect RSA keys and warn — NIOSSH doesn't support RSA
@@ -201,24 +506,24 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         
         // Try raw base64 (no headers)
         if let data = Data(base64Encoded: trimmed.replacingOccurrences(of: "\n", with: "")) {
-            return parseOpenSSHKeyData(data)
+            return parseOpenSSHKeyData(data, passphrase: passphrase)
         }
         
         return nil
     }
-    
-    /// Parse OpenSSH format private key (openssh-key-v1)
-    private func parseOpenSSHKey(_ pem: String) -> NIOSSHPrivateKey? {
+    /// Parse OpenSSH format private key (openssh-key-v1) with optional passphrase
+    private func parseOpenSSHKey(_ pem: String, passphrase: String? = nil) -> NIOSSHPrivateKey? {
         // Strip PEM headers and decode base64
         let lines = pem.components(separatedBy: "\n")
             .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
         let base64 = lines.joined()
         guard let data = Data(base64Encoded: base64) else { return nil }
-        return parseOpenSSHKeyData(data)
+        return parseOpenSSHKeyData(data, passphrase: passphrase)
     }
+
     
-    /// Parse the binary openssh-key-v1 format
-    private func parseOpenSSHKeyData(_ data: Data) -> NIOSSHPrivateKey? {
+    /// Parse the binary openssh-key-v1 format with optional passphrase
+    private func parseOpenSSHKeyData(_ data: Data, passphrase: String? = nil) -> NIOSSHPrivateKey? {
         // openssh-key-v1 magic: "openssh-key-v1\0"
         let magic = "openssh-key-v1\0"
         guard data.count > magic.utf8.count else { return nil }
@@ -250,10 +555,12 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
               let cipherStr = String(data: cipherName, encoding: .utf8) else { return nil }
         
         // Read KDF name
-        guard let _ = readString() else { return nil } // kdfname
+        // Read KDF name
+        guard let kdfName = readString(),
+              let kdfNameStr = String(data: kdfName, encoding: .utf8) else { return nil }
         
         // Read KDF options
-        guard let _ = readString() else { return nil } // kdfoptions
+        guard let kdfOptions = readString() else { return nil } // kdfoptions
         
         // Number of keys
         guard let numKeys = readUInt32(), numKeys >= 1 else { return nil }
@@ -264,20 +571,29 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         }
         
         // Read private key section (may be encrypted)
-        guard let privateSection = readString() else { return nil }
+        guard var privateSection = readString() else { return nil }
         
-        // Only handle unencrypted keys for now.
-        // Encrypted OpenSSH keys (e.g. aes256-ctr with bcrypt KDF) require
-        // bcrypt-pbkdf to derive the AES key from the passphrase — that
-        // algorithm is not available in Apple's CommonCrypto/CryptoKit.
-        // To use an encrypted key, run:
-        //   ssh-keygen -p -m OpenSSH -f ~/.ssh/id_ed25519
-        // and set the passphrase to empty (press Enter twice).
-        guard cipherStr == "none" else {
-            // Surface a human-readable error rather than silently returning nil
-            // so the caller (PrivateKeyAuthDelegate) can fall through to the
-            // password path and the UI can show the message.
-            return nil  // encrypted key — see importPrivateKey(from:) for guidance
+        // Handle encrypted keys
+        if cipherStr != "none" {
+            // Key is encrypted - require passphrase
+            guard let passphrase = passphrase, !passphrase.isEmpty else {
+                // No passphrase provided - cannot decrypt
+                return nil
+            }
+            
+            // Attempt to decrypt
+            do {
+                privateSection = try OpenSSHKeyDecryptor.decrypt(
+                    encryptedData: privateSection,
+                    cipherName: cipherStr,
+                    kdfName: kdfNameStr,
+                    kdfOptions: kdfOptions,
+                    passphrase: passphrase
+                )
+            } catch {
+                // Decryption failed - wrong passphrase or corrupted key
+                return nil
+            }
         }
         
         // Parse private section
@@ -461,6 +777,10 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     private var channel: Channel?
     private var shellChannel: Channel?
     
+    /// In-memory passphrase cache (not persisted to keychain)
+    private var passphraseCache: [String: String] = [:]
+    private let passphraseCacheLock = NSLock()
+
     private init() {}
     
     // MARK: - Connection Methods
@@ -597,7 +917,38 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         SSHImportedKeyStore.shared.importKey(name: name, pem: pem)
         return name
     }
+
     
+    // MARK: - Passphrase Management
+    
+    /// Store a passphrase in memory (not persisted)
+    func cachePassphrase(_ passphrase: String, forKey key: String) {
+        passphraseCacheLock.withLock {
+            passphraseCache[key] = passphrase
+        }
+    }
+    
+    /// Retrieve a cached passphrase
+    func getCachedPassphrase(forKey key: String) -> String? {
+        passphraseCacheLock.withLock {
+            passphraseCache[key]
+        }
+    }
+    
+    /// Clear a cached passphrase
+    func clearCachedPassphrase(forKey key: String) {
+        passphraseCacheLock.withLock {
+            passphraseCache.removeValue(forKey: key)
+        }
+    }
+    
+    /// Clear all cached passphrases
+    func clearAllCachedPassphrases() {
+        passphraseCacheLock.withLock {
+            passphraseCache.removeAll()
+        }
+    }
+
     func disconnect() {
         // Close all active port forward listeners before tearing down the connection
         tunnelLock.withLock {

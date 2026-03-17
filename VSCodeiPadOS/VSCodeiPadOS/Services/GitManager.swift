@@ -160,6 +160,25 @@ struct GitStashEntry: Identifiable, Hashable {
     let branch: String
 }
 
+/// Represents a single line in git blame output
+struct BlameLine: Identifiable, Hashable {
+    let id = UUID()
+    let lineNumber: Int
+    let commitSHA: String      // Short SHA (7 chars)
+    let author: String
+    let date: Date
+    let lineContent: String
+}
+
+/// Represents a git tag
+struct GitTag: Identifiable, Hashable {
+    var id: String { name }
+    let name: String
+    let commitSHA: String
+    let message: String?       // Only for annotated tags
+    let isAnnotated: Bool
+}
+
 // Type alias for compatibility with GitView
 typealias GitStatusEntry = GitFileChange
 
@@ -1921,23 +1940,815 @@ final class GitManager: ObservableObject {
         return fileCount
     }
     
-    // MARK: - Missing Functionality TODOs
+    // MARK: - Git Blame/Annotate
     
-    // TODO: Git blame/annotate
-    // - func blame(file: String) async throws -> [BlameLine]
-    // - Show line-by-line commit information for a file
+    /// Get line-by-line commit information for a file.
+    /// This is a simplified implementation that returns the HEAD commit info for all lines.
+    /// A full implementation would walk the commit history to find when each line was last modified.
+    /// - Parameter file: Path to the file relative to repository root
+    /// - Returns: Array of BlameLine with commit info for each line
+    func blame(file: String) async throws -> [BlameLine] {
+        guard let repoURL = workingDirectory,
+              let reader = nativeReader else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Get HEAD commit info
+        guard let headSHA = reader.headSHA(),
+              let commit = reader.parseCommit(sha: headSHA) else {
+            throw GitManagerError.invalidRepository
+        }
+        
+        // Read file contents from HEAD
+        guard let content = reader.fileContentsString(atPath: file, commitSHA: headSHA) else {
+            throw GitManagerError.commandFailed(args: "blame", exitCode: 1, message: "File not found: \(file)")
+        }
+        
+        let lines = content.components(separatedBy: "\n")
+        let shortSHA = String(headSHA.prefix(7))
+        
+        return lines.enumerated().map { index, lineContent in
+            BlameLine(
+                lineNumber: index + 1,
+                commitSHA: shortSHA,
+                author: commit.author,
+                date: commit.authorDate,
+                lineContent: lineContent
+            )
+        }
+    }
     
-    // TODO: Tag management
-    // - func listTags() async throws -> [GitTag]
-    // - func createTag(name: String, message: String?) async throws
-    // - func deleteTag(name: String) async throws
-    // - func pushTag(name: String) async throws
+    // MARK: - Tag Management
     
-    // TODO: Revert commit
-    // - func revertCommit(sha: String) async throws
-    // - Create a new commit that undoes a previous commit
+    /// List all tags in the repository
+    /// - Returns: Array of GitTag sorted by name
+    func listTags() async throws -> [GitTag] {
+        guard let repoURL = workingDirectory,
+              let reader = nativeReader else {
+            throw GitManagerError.noRepository
+        }
+        
+        let tagsDir = repoURL.appendingPathComponent(".git/refs/tags")
+        var tags: [GitTag] = []
+        
+        // Read loose tags from .git/refs/tags/
+        if FileManager.default.fileExists(atPath: tagsDir.path) {
+            let looseTags = try listTagsRecursively(at: tagsDir, prefix: "", reader: reader)
+            tags.append(contentsOf: looseTags)
+        }
+        
+        // Read tags from packed-refs
+        let packedTags = readPackedTags(repoURL: repoURL, reader: reader)
+        for packedTag in packedTags {
+            // Only add if not already found as loose tag
+            if !tags.contains(where: { $0.name == packedTag.name }) {
+                tags.append(packedTag)
+            }
+        }
+        
+        return tags.sorted { $0.name < $1.name }
+    }
     
-    // TODO: Cherry-pick
-    // - func cherryPick(sha: String) async throws
-    // - Apply changes from a specific commit to current branch
+    /// Recursively list tags from a directory
+    private func listTagsRecursively(at url: URL, prefix: String, reader: NativeGitReader) throws -> [GitTag] {
+        var tags: [GitTag] = []
+        
+        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: url.path) else {
+            return tags
+        }
+        
+        for item in contents {
+            let itemURL = url.appendingPathComponent(item)
+            var isDir: ObjCBool = false
+            FileManager.default.fileExists(atPath: itemURL.path, isDirectory: &isDir)
+            
+            let fullName = prefix.isEmpty ? item : "\(prefix)/\(item)"
+            
+            if isDir.boolValue {
+                // Recurse into subdirectory (for nested tags)
+                let subTags = try listTagsRecursively(at: itemURL, prefix: fullName, reader: reader)
+                tags.append(contentsOf: subTags)
+            } else {
+                // Read tag ref to get commit SHA
+                if let content = try? String(contentsOf: itemURL, encoding: .utf8) {
+                    let sha = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !sha.isEmpty {
+                        // Check if it's an annotated tag (points to tag object)
+                        let (commitSHA, message, isAnnotated) = resolveTagObject(sha: sha, reader: reader)
+                        tags.append(GitTag(
+                            name: fullName,
+                            commitSHA: commitSHA,
+                            message: message,
+                            isAnnotated: isAnnotated
+                        ))
+                    }
+                }
+            }
+        }
+        
+        return tags
+    }
+    
+    /// Read tags from packed-refs file
+    private func readPackedTags(repoURL: URL, reader: NativeGitReader) -> [GitTag] {
+        var tags: [GitTag] = []
+        let packedRefsFile = repoURL.appendingPathComponent(".git/packed-refs")
+        
+        guard let content = try? String(contentsOf: packedRefsFile, encoding: .utf8) else {
+            return tags
+        }
+        
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") || trimmed.hasPrefix("^") {
+                continue
+            }
+            
+            let parts = trimmed.split(separator: " ", maxSplits: 1)
+            if parts.count == 2, String(parts[1]).hasPrefix("refs/tags/") {
+                let sha = String(parts[0])
+                let tagName = String(parts[1].dropFirst("refs/tags/".count))
+                
+                let (commitSHA, message, isAnnotated) = resolveTagObject(sha: sha, reader: reader)
+                tags.append(GitTag(
+                    name: tagName,
+                    commitSHA: commitSHA,
+                    message: message,
+                    isAnnotated: isAnnotated
+                ))
+            }
+        }
+        
+        return tags
+    }
+    
+    /// Resolve a tag SHA to its commit SHA and message (if annotated)
+    private func resolveTagObject(sha: String, reader: NativeGitReader) -> (commitSHA: String, message: String?, isAnnotated: Bool) {
+        // Try to read as a tag object (annotated tag)
+        if let obj = reader.readObject(sha: sha), obj.type == .tag {
+            // Parse tag object to get target commit and message
+            if let content = String(data: obj.data, encoding: .utf8) {
+                var targetCommitSHA: String?
+                var message: String?
+                
+                let lines = content.components(separatedBy: "\n")
+                var inMessage = false
+                var messageLines: [String] = []
+                
+                for line in lines {
+                    if inMessage {
+                        messageLines.append(line)
+                        continue
+                    }
+                    
+                    if line.isEmpty {
+                        inMessage = true
+                        continue
+                    }
+                    
+                    if line.hasPrefix("object ") {
+                        targetCommitSHA = String(line.dropFirst(7))
+                    }
+                }
+                
+                message = messageLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if let commitSHA = targetCommitSHA {
+                    return (commitSHA, message, true)
+                }
+            }
+        }
+        
+        // Lightweight tag - the SHA is the commit SHA
+        return (sha, nil, false)
+    }
+    
+    /// Create a new tag
+    /// - Parameters:
+    ///   - name: Tag name
+    ///   - message: Optional message for annotated tag (nil for lightweight tag)
+    ///   - commitSHA: Commit to tag (defaults to HEAD)
+    func createTag(name: String, message: String? = nil, commitSHA: String? = nil) async throws {
+        guard let repoURL = workingDirectory,
+              let reader = nativeReader else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Validate tag name to prevent path traversal
+        guard isValidTagName(name) else {
+            throw GitManagerError.commandFailed(args: "tag", exitCode: 1, message: "Invalid tag name: contains forbidden characters")
+        }
+        
+        // Get the commit SHA to tag
+        let targetSHA: String
+        if let sha = commitSHA {
+            targetSHA = sha
+        } else {
+            guard let headSHA = reader.headSHA() else {
+                throw GitManagerError.invalidRepository
+            }
+            targetSHA = headSHA
+        }
+        
+        let tagsDir = repoURL.appendingPathComponent(".git/refs/tags")
+        try FileManager.default.createDirectory(at: tagsDir, withIntermediateDirectories: true)
+        
+        let tagFile = tagsDir.appendingPathComponent(name)
+        
+        // Check if tag already exists
+        if FileManager.default.fileExists(atPath: tagFile.path) {
+            throw GitManagerError.commandFailed(args: "tag", exitCode: 1, message: "Tag '\(name)' already exists")
+        }
+        
+        if let message = message, !message.isEmpty {
+            // Create annotated tag (tag object)
+            guard let writer = nativeWriter else {
+                throw GitManagerError.invalidRepository
+            }
+            
+            // Create tag object
+            let tagObjectSHA = try createTagObject(
+                targetSHA: targetSHA,
+                name: name,
+                message: message,
+                writer: writer
+            )
+            
+            // Write ref pointing to tag object
+            try "\(tagObjectSHA)\n".write(to: tagFile, atomically: true, encoding: .utf8)
+        } else {
+            // Create lightweight tag (ref points directly to commit)
+            try "\(targetSHA)\n".write(to: tagFile, atomically: true, encoding: .utf8)
+        }
+    }
+    
+    /// Create a tag object for annotated tags
+    private func createTagObject(targetSHA: String, name: String, message: String, writer: NativeGitWriter) throws -> String {
+        // Get config for tagger info
+        let config = readGitConfigForWriter()
+        let taggerName = config.name ?? "VSCodeiPadOS"
+        let taggerEmail = config.email ?? "vscode@localhost"
+        
+        let now = Date()
+        let timestamp = Int(now.timeIntervalSince1970)
+        let tz = formatTimezoneForTag(secondsFromGMT: TimeZone.current.secondsFromGMT(for: now))
+        
+        // Build tag object content
+        var tagContent = ""
+        tagContent += "object \(targetSHA)\n"
+        tagContent += "type commit\n"
+        tagContent += "tag \(name)\n"
+        tagContent += "tagger \(taggerName) <\(taggerEmail)> \(timestamp) \(tz)\n"
+        tagContent += "\n"
+        tagContent += message
+        if !message.hasSuffix("\n") {
+            tagContent += "\n"
+        }
+        
+        // Write tag object using NativeGitWriter's internal writeObject
+        return try writeTagObject(type: .tag, content: Data(tagContent.utf8), writer: writer)
+    }
+    
+    /// Write a git object (for tag creation)
+    private func writeTagObject(type: GitObjectType, content: Data, writer: NativeGitWriter) throws -> String {
+        // Use NativeGitWriter's writeObject via reflection or create a helper
+        // Since writeObject is private, we'll write the object directly
+        let header = "\(type.rawValue) \(content.count)\u{0}"
+        var store = Data(header.utf8)
+        store.append(content)
+        
+        let sha = sha1Hex(store)
+        
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        let gitDir = repoURL.appendingPathComponent(".git")
+        let objectDir = gitDir.appendingPathComponent("objects").appendingPathComponent(String(sha.prefix(2)))
+        let objectFile = objectDir.appendingPathComponent(String(sha.dropFirst(2)))
+        
+        if FileManager.default.fileExists(atPath: objectFile.path) {
+            return sha
+        }
+        
+        try FileManager.default.createDirectory(at: objectDir, withIntermediateDirectories: true)
+        
+        let compressed = try compressZlibData(store)
+        try compressed.write(to: objectFile, options: [.atomic])
+        
+        return sha
+    }
+    
+    /// Delete a tag
+    /// - Parameter name: Tag name to delete
+    func deleteTag(name: String) async throws {
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Validate tag name to prevent path traversal
+        guard isValidTagName(name) else {
+            throw GitManagerError.commandFailed(args: "tag", exitCode: 1, message: "Invalid tag name")
+        }
+        
+        // Delete loose tag ref
+        let tagFile = repoURL.appendingPathComponent(".git/refs/tags/\(name)")
+        
+        if FileManager.default.fileExists(atPath: tagFile.path) {
+            try FileManager.default.removeItem(at: tagFile)
+        } else {
+            // Tag might be in packed-refs - we can't easily remove from packed-refs
+            // without rewriting the entire file, so we'll create an empty loose ref
+            // which takes precedence (though git won't show it)
+            throw GitManagerError.commandFailed(args: "tag", exitCode: 1, message: "Tag '\(name)' not found or is packed")
+        }
+    }
+    
+    // MARK: - Tag Helper Methods
+    
+    /// Validate tag name (prevent path traversal and invalid characters)
+    private func isValidTagName(_ name: String) -> Bool {
+        // Tag names cannot contain spaces, control chars, or path components
+        if name.isEmpty { return false }
+        if name.contains("..") { return false }
+        if name.contains("/") { return false }
+        if name.contains("\\") { return false }
+        if name.contains(" ") { return false }
+        if name.hasPrefix(".") { return false }
+        if name.hasSuffix(".") { return false }
+        if name.contains("~") { return false }
+        if name.contains("^") { return false }
+        if name.contains(":") { return false }
+        if name.contains("?") { return false }
+        if name.contains("*") { return false }
+        if name.contains("[") { return false }
+        return true
+    }
+    
+    /// Read git config for tagger info
+    private func readGitConfigForWriter() -> (name: String?, email: String?) {
+        guard let repoURL = workingDirectory else { return (nil, nil) }
+        let configFile = repoURL.appendingPathComponent(".git/config")
+        guard let content = try? String(contentsOf: configFile, encoding: .utf8) else {
+            return (nil, nil)
+        }
+        
+        var name: String?
+        var email: String?
+        var inUserSection = false
+        
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            if trimmed.hasPrefix("[") {
+                inUserSection = trimmed.hasPrefix("[user]") || trimmed.hasPrefix("[user \t")
+                continue
+            }
+            
+            if inUserSection {
+                let parts = trimmed.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count == 2 {
+                    let key = parts[0].lowercased()
+                    if key == "name" {
+                        name = parts[1]
+                    } else if key == "email" {
+                        email = parts[1]
+                    }
+                }
+            }
+        }
+        
+        return (name, email)
+    }
+    
+    /// Format timezone for tag object
+    private func formatTimezoneForTag(secondsFromGMT: Int) -> String {
+        let sign = secondsFromGMT >= 0 ? "+" : "-"
+        let absSeconds = abs(secondsFromGMT)
+        let hours = absSeconds / 3600
+        let minutes = (absSeconds % 3600) / 60
+        return String(format: "%@%02d%02d", sign, hours, minutes)
+    }
+    
+    /// SHA1 hash to hex string
+    private func sha1Hex(_ data: Data) -> String {
+        var digest = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        data.withUnsafeBytes { ptr in
+            _ = CC_SHA1(ptr.baseAddress, CC_LONG(data.count), &digest)
+        }
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+    
+    /// Compress data using zlib
+    private func compressZlibData(_ data: Data) throws -> Data {
+        var destSize = max(data.count / 2, 1024)
+        for _ in 0..<6 {
+            let destBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: destSize)
+            defer { destBuffer.deallocate() }
+            
+            let written: Int = data.withUnsafeBytes { sourcePtr in
+                guard let base = sourcePtr.baseAddress else { return 0 }
+                return compression_encode_buffer(
+                    destBuffer,
+                    destSize,
+                    base.assumingMemoryBound(to: UInt8.self),
+                    data.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+            
+            if written > 0 {
+                return Data(bytes: destBuffer, count: written)
+            }
+            
+            destSize *= 2
+        }
+        
+        throw GitManagerError.invalidRepository
+    }
+    
+    // MARK: - Revert Commit
+    
+    /// Revert a commit by creating a new commit that undoes the changes from the specified commit.
+    /// This reads the commit's parent tree and restores files to their parent state.
+    /// - Parameter sha: The SHA of the commit to revert
+    /// - Throws: GitManagerError if the operation fails
+    func revertCommit(sha: String) async throws {
+        guard let reader = nativeReader else {
+            throw GitManagerError.invalidRepository
+        }
+        guard let writer = nativeWriter else {
+            throw GitManagerError.invalidRepository
+        }
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Parse the commit to revert
+        guard let commit = reader.parseCommit(sha: sha) else {
+            throw GitManagerError.commandFailed(args: "revert", exitCode: 1, message: "Could not find commit \(sha)")
+        }
+        
+        guard let parentSHA = commit.parentSHA else {
+            throw GitManagerError.commandFailed(args: "revert", exitCode: 1, message: "Cannot revert root commit (no parent)")
+        }
+        
+        guard let commitTreeSHA = commit.treeSHA else {
+            throw GitManagerError.commandFailed(args: "revert", exitCode: 1, message: "Could not read commit tree")
+        }
+        
+        // Get parent commit's tree
+        guard let parentCommit = reader.parseCommit(sha: parentSHA),
+              let parentTreeSHA = parentCommit.treeSHA else {
+            throw GitManagerError.commandFailed(args: "revert", exitCode: 1, message: "Could not read parent commit tree")
+        }
+        
+        // Get all files from both trees
+        let commitTree = getFlatTree(sha: commitTreeSHA, reader: reader)
+        let parentTree = getFlatTree(sha: parentTreeSHA, reader: reader)
+        
+        // Find files that changed in the commit (exist in commit tree but differ from parent)
+        var changedFiles: [(path: String, oldSHA: String?, newSHA: String?)] = []
+        
+        // Files modified or deleted in the commit
+        for (path, parentFileSHA) in parentTree {
+            let commitFileSHA = commitTree[path]
+            if commitFileSHA != parentFileSHA {
+                // File was modified or deleted - restore to parent version
+                changedFiles.append((path: path, oldSHA: parentFileSHA, newSHA: commitFileSHA))
+            }
+        }
+        
+        // Files added in the commit (exist in commit but not in parent)
+        for (path, commitFileSHA) in commitTree {
+            if parentTree[path] == nil {
+                // File was added in commit - need to delete it (restore = not exist)
+                changedFiles.append((path: path, oldSHA: nil, newSHA: commitFileSHA))
+            }
+        }
+        
+        if changedFiles.isEmpty {
+            throw GitManagerError.commandFailed(args: "revert", exitCode: 1, message: "No changes to revert")
+        }
+        
+        // Check for conflicts with working directory
+        let currentTree = getCurrentTreeEntries(reader: reader)
+        let workingStatus = reader.status()
+        
+        for change in changedFiles {
+            // Check if file has uncommitted changes
+            if let status = workingStatus.first(where: { $0.path == change.path }),
+               status.working != nil || status.staged != nil {
+                // File has local modifications that might conflict
+                let hasConflict = checkForRevertConflict(
+                    path: change.path,
+                    currentTree: currentTree,
+                    revertFromSHA: change.newSHA,
+                    revertToSHA: change.oldSHA
+                )
+                if hasConflict {
+                    throw GitManagerError.commandFailed(
+                        args: "revert",
+                        exitCode: 1,
+                        message: "Conflict: file '\(change.path)' has local modifications that would be overwritten. Commit or stash your changes first."
+                    )
+                }
+            }
+        }
+        
+        // Apply the revert: restore files to parent state
+        for change in changedFiles {
+            let filePath = repoURL.appendingPathComponent(change.path)
+            
+            if let parentFileSHA = change.oldSHA {
+                // Restore parent version of the file
+                guard let blobObj = reader.readObject(sha: parentFileSHA),
+                      blobObj.type == .blob else {
+                    throw GitManagerError.commandFailed(
+                        args: "revert",
+                        exitCode: 1,
+                        message: "Could not read file blob for \(change.path)"
+                    )
+                }
+                
+                // Ensure parent directory exists
+                let parentDir = filePath.deletingLastPathComponent()
+                if !FileManager.default.fileExists(atPath: parentDir.path) {
+                    try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+                }
+                
+                try blobObj.data.write(to: filePath)
+                
+            } else {
+                // File was added in commit - delete it to revert
+                if FileManager.default.fileExists(atPath: filePath.path) {
+                    try FileManager.default.removeItem(at: filePath)
+                }
+            }
+        }
+        
+        // Stage all changes
+        try writer.stageAll()
+        
+        // Create the revert commit
+        let revertMessage = "Revert \"\(commit.message)\"\n\nThis reverts commit \(sha)."
+        let _ = try writer.commit(message: revertMessage)
+        
+        await refresh()
+    }
+    
+    // MARK: - Cherry-pick
+    
+    /// Cherry-pick a commit by applying its changes to the current branch.
+    /// This reads the commit's changes and applies them to the working directory.
+    /// - Parameter sha: The SHA of the commit to cherry-pick
+    /// - Throws: GitManagerError if the operation fails
+    func cherryPick(sha: String) async throws {
+        guard let reader = nativeReader else {
+            throw GitManagerError.invalidRepository
+        }
+        guard let writer = nativeWriter else {
+            throw GitManagerError.invalidRepository
+        }
+        guard let repoURL = workingDirectory else {
+            throw GitManagerError.noRepository
+        }
+        
+        // Parse the commit to cherry-pick
+        guard let commit = reader.parseCommit(sha: sha) else {
+            throw GitManagerError.commandFailed(args: "cherry-pick", exitCode: 1, message: "Could not find commit \(sha)")
+        }
+        
+        guard let parentSHA = commit.parentSHA else {
+            throw GitManagerError.commandFailed(args: "cherry-pick", exitCode: 1, message: "Cannot cherry-pick root commit (no parent)")
+        }
+        
+        guard let commitTreeSHA = commit.treeSHA else {
+            throw GitManagerError.commandFailed(args: "cherry-pick", exitCode: 1, message: "Could not read commit tree")
+        }
+        
+        // Get parent commit's tree
+        guard let parentCommit = reader.parseCommit(sha: parentSHA),
+              let parentTreeSHA = parentCommit.treeSHA else {
+            throw GitManagerError.commandFailed(args: "cherry-pick", exitCode: 1, message: "Could not read parent commit tree")
+        }
+        
+        // Get all files from both trees
+        let commitTree = getFlatTree(sha: commitTreeSHA, reader: reader)
+        let parentTree = getFlatTree(sha: parentTreeSHA, reader: reader)
+        
+        // Find files that changed in the commit
+        var changedFiles: [(path: String, parentSHA: String?, commitSHA: String?)] = []
+        
+        // Files modified or added in the commit
+        for (path, commitFileSHA) in commitTree {
+            let parentFileSHA = parentTree[path]
+            if parentFileSHA != commitFileSHA {
+                // File was modified or added
+                changedFiles.append((path: path, parentSHA: parentFileSHA, commitSHA: commitFileSHA))
+            }
+        }
+        
+        // Files deleted in the commit
+        for (path, parentFileSHA) in parentTree {
+            if commitTree[path] == nil {
+                // File was deleted in commit
+                changedFiles.append((path: path, parentSHA: parentFileSHA, commitSHA: nil))
+            }
+        }
+        
+        if changedFiles.isEmpty {
+            throw GitManagerError.commandFailed(args: "cherry-pick", exitCode: 1, message: "No changes to cherry-pick")
+        }
+        
+        // Check for conflicts with current working directory
+        let currentTree = getCurrentTreeEntries(reader: reader)
+        let workingStatus = reader.status()
+        
+        for change in changedFiles {
+            // Check if file has uncommitted changes
+            if let status = workingStatus.first(where: { $0.path == change.path }),
+               status.working != nil || status.staged != nil {
+                // File has local modifications - check for conflict
+                let hasConflict = checkForCherryPickConflict(
+                    path: change.path,
+                    currentTree: currentTree,
+                    sourceParentSHA: change.parentSHA,
+                    sourceCommitSHA: change.commitSHA
+                )
+                if hasConflict {
+                    throw GitManagerError.commandFailed(
+                        args: "cherry-pick",
+                        exitCode: 1,
+                        message: "Conflict: file '\(change.path)' has local modifications that conflict with the cherry-pick. Commit or stash your changes first."
+                    )
+                }
+            }
+        }
+        
+        // Apply the cherry-pick: copy commit's file versions to working directory
+        for change in changedFiles {
+            let filePath = repoURL.appendingPathComponent(change.path)
+            
+            if let commitFileSHA = change.commitSHA {
+                // Copy file from commit
+                guard let blobObj = reader.readObject(sha: commitFileSHA),
+                      blobObj.type == .blob else {
+                    throw GitManagerError.commandFailed(
+                        args: "cherry-pick",
+                        exitCode: 1,
+                        message: "Could not read file blob for \(change.path)"
+                    )
+                }
+                
+                // Ensure parent directory exists
+                let parentDir = filePath.deletingLastPathComponent()
+                if !FileManager.default.fileExists(atPath: parentDir.path) {
+                    try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+                }
+                
+                try blobObj.data.write(to: filePath)
+                
+            } else {
+                // File was deleted in commit - delete it
+                if FileManager.default.fileExists(atPath: filePath.path) {
+                    try FileManager.default.removeItem(at: filePath)
+                }
+            }
+        }
+        
+        // Stage all changes
+        try writer.stageAll()
+        
+        // Create the cherry-pick commit with the original message
+        let cherryPickMessage = "\(commit.message)\n\n(cherry picked from commit \(sha))"
+        let _ = try writer.commit(message: cherryPickMessage)
+        
+        await refresh()
+    }
+    
+    // MARK: - Helper Methods for Revert/Cherry-pick
+    
+    /// Get a flattened dictionary of all files in a tree (path -> blob SHA)
+    private func getFlatTree(sha: String, reader: NativeGitReader) -> [String: String] {
+        guard let treeObj = reader.readObject(sha: sha), treeObj.type == .tree else {
+            return [:]
+        }
+        
+        var results: [String: String] = [:]
+        let entries = parseTreeEntriesForRevert(treeData: treeObj.data)
+        
+        for entry in entries {
+            if entry.mode.hasPrefix("4") {
+                // Directory - recurse
+                let subtree = getFlatTree(sha: entry.sha, reader: reader)
+                for (subPath, subSHA) in subtree {
+                    results["\(entry.name)/\(subPath)"] = subSHA
+                }
+            } else {
+                // File
+                results[entry.name] = entry.sha
+            }
+        }
+        
+        return results
+    }
+    
+    /// Parse tree entries from raw tree data
+    private func parseTreeEntriesForRevert(treeData: Data) -> [(mode: String, name: String, sha: String)] {
+        var entries: [(String, String, String)] = []
+        var offset = 0
+        let bytes = [UInt8](treeData)
+        
+        while offset < bytes.count {
+            // Find space (end of mode)
+            guard let spaceIdx = bytes[offset...].firstIndex(of: 0x20) else { break }
+            let modeStr = String(bytes: Array(bytes[offset..<spaceIdx]), encoding: .ascii) ?? ""
+            offset = spaceIdx + 1
+            
+            // Find null (end of name)
+            guard let nullIdx = bytes[offset...].firstIndex(of: 0x00) else { break }
+            let name = String(bytes: Array(bytes[offset..<nullIdx]), encoding: .utf8) ?? ""
+            offset = nullIdx + 1
+            
+            // Read 20-byte SHA
+            guard offset + 20 <= bytes.count else { break }
+            let shaBytes = bytes[offset..<offset+20]
+            let sha = shaBytes.map { String(format: "%02x", $0) }.joined()
+            offset += 20
+            
+            entries.append((modeStr, name, sha))
+        }
+        
+        return entries
+    }
+    
+    /// Get current HEAD tree entries
+    private func getCurrentTreeEntries(reader: NativeGitReader) -> [String: String] {
+        guard let headSHA = reader.headSHA(),
+              let commit = reader.parseCommit(sha: headSHA),
+              let treeSHA = commit.treeSHA else {
+            return [:]
+        }
+        return getFlatTree(sha: treeSHA, reader: reader)
+    }
+    
+    /// Check if reverting a file would conflict with current working directory
+    private func checkForRevertConflict(
+        path: String,
+        currentTree: [String: String],
+        revertFromSHA: String?,
+        revertToSHA: String?
+    ) -> Bool {
+        // If the current HEAD version differs from what we're reverting from,
+        // and we're trying to restore a different version, there's a potential conflict
+        guard let currentSHA = currentTree[path] else {
+            // File doesn't exist in current HEAD
+            // If we're reverting an addition, that's fine (we'll delete it)
+            // If we're reverting a modification, check if working dir has the file
+            return false
+        }
+        
+        // If current HEAD matches what we're reverting from, no conflict
+        if currentSHA == revertFromSHA {
+            return false
+        }
+        
+        // If current HEAD already matches what we're reverting to, no conflict
+        if currentSHA == revertToSHA {
+            return false
+        }
+        
+        // Current HEAD differs from both - potential conflict
+        // The file has been modified since the commit we're reverting
+        return true
+    }
+    
+    /// Check if cherry-picking a file would conflict with current working directory
+    private func checkForCherryPickConflict(
+        path: String,
+        currentTree: [String: String],
+        sourceParentSHA: String?,
+        sourceCommitSHA: String?
+    ) -> Bool {
+        guard let currentSHA = currentTree[path] else {
+            // File doesn't exist in current HEAD - no conflict
+            return false
+        }
+        
+        // If current HEAD matches the source parent, no conflict
+        if currentSHA == sourceParentSHA {
+            return false
+        }
+        
+        // If current HEAD already matches the source commit, no conflict (already applied)
+        if currentSHA == sourceCommitSHA {
+            return false
+        }
+        
+        // Current HEAD differs from source parent - potential conflict
+        // The file has been modified differently than what we're cherry-picking onto
+        return true
+    }
 }

@@ -33,6 +33,11 @@ class NativeGitReader {
     private var indexCache: GitIndex?
     private var headCache: String?
     
+    /// Cache for pack file indexes: maps pack file path to SHA->offset dictionary
+    private var packIndexCache: [String: [String: UInt64]] = [:]
+    private let packIndexCacheLock = NSLock()
+
+    
     init?(repositoryURL: URL) {
         self.repoURL = repositoryURL
         self.gitDir = repositoryURL.appendingPathComponent(".git")
@@ -296,16 +301,20 @@ class NativeGitReader {
             let idxURL = packDir.appendingPathComponent(idxName)
             let packName = String(idxName.dropLast(4)) + ".pack"
             let packURL = packDir.appendingPathComponent(packName)
-            guard let idxData = try? Data(contentsOf: idxURL),
+            
+            // Use cached index if available, otherwise load it
+            guard let packIndex = readPackIndex(at: idxURL),
                   let packData = try? Data(contentsOf: packURL) else { continue }
-            if let offset = findOffsetInIndex(idxData: idxData, sha: sha) {
-                return readObjectFromPack(packData: packData, offset: offset, allPackData: packData)
+            
+            if let offset = packIndex[sha] {
+                return readObjectFromPack(packData: packData, offset: Int(offset), allPackData: packData)
             }
         }
         return nil
     }
-
+    
     // MARK: - Pack Index Parsing
+
 
     /// Parse a pack index (.idx) file and return the pack-file offset for `sha`, or nil.
     /// Supports v1 and v2 index formats.
@@ -380,7 +389,123 @@ class NativeGitReader {
         return nil
     }
 
-    // MARK: - Pack File Object Reading
+    // MARK: - Full Pack Index Reading (with caching)
+    
+    /// Read a pack index file and return a dictionary mapping SHA hex strings to offsets.
+    /// Results are cached for performance.
+    /// - Parameter idxURL: URL to the .idx file
+    /// - Returns: Dictionary mapping 40-character SHA strings to byte offsets in the pack file
+    func readPackIndex(at idxURL: URL) -> [String: UInt64]? {
+        let cacheKey = idxURL.path
+        
+        // Check cache first
+        packIndexCacheLock.lock()
+        defer { packIndexCacheLock.unlock() }
+        
+        if let cached = packIndexCache[cacheKey] {
+            return cached
+        }
+        
+        guard let idxData = try? Data(contentsOf: idxURL) else {
+            return nil
+        }
+        
+        var result: [String: UInt64] = [:]
+        
+        guard idxData.count >= 8 else { return nil }
+        
+        // v2 magic: 0xff 0x74 0x4f 0x63
+        let isV2 = idxData[0] == 0xff && idxData[1] == 0x74 &&
+                   idxData[2] == 0x4f && idxData[3] == 0x63
+        
+        if isV2 {
+            let version = packReadUInt32BE(idxData, offset: 4)
+            guard version == 2 else { return nil }
+            result = readPackIndexV2(idxData: idxData)
+        } else {
+            result = readPackIndexV1(idxData: idxData)
+        }
+        
+        // Cache the result
+        if !result.isEmpty {
+            packIndexCache[cacheKey] = result
+        }
+        
+        return result
+    }
+    
+    /// Read all entries from a v2 pack index file
+    private func readPackIndexV2(idxData: Data) -> [String: UInt64] {
+        // Layout: 4 magic + 4 version + 256*4 fanout + N*20 SHAs + N*4 CRCs + N*4 offsets [+ large offsets]
+        let fanoutBase = 8
+        let totalObjects = Int(packReadUInt32BE(idxData, offset: fanoutBase + 255 * 4))
+        let shaTableBase = fanoutBase + 256 * 4
+        let crcTableBase = shaTableBase + totalObjects * 20
+        let offsetTableBase = crcTableBase + totalObjects * 4
+        
+        var result: [String: UInt64] = [:]
+        result.reserveCapacity(totalObjects)
+        
+        for i in 0..<totalObjects {
+            let shaOff = shaTableBase + i * 20
+            let offsetOff = offsetTableBase + i * 4
+            
+            guard shaOff + 20 <= idxData.count, offsetOff + 4 <= idxData.count else {
+                break
+            }
+            
+            // Read SHA
+            let shaHex = idxData[shaOff..<shaOff + 20].map { String(format: "%02x", $0) }.joined()
+            
+            // Read offset
+            let rawOffset = packReadUInt32BE(idxData, offset: offsetOff)
+            
+            let finalOffset: UInt64
+            if rawOffset & 0x80000000 != 0 {
+                // Large (>2 GB) offset stored in auxiliary 8-byte table
+                let largeIdx = Int(rawOffset & 0x7FFFFFFF)
+                let largeBase = offsetTableBase + totalObjects * 4
+                guard largeBase + largeIdx * 8 + 8 <= idxData.count else {
+                    continue
+                }
+                let hi32 = UInt64(packReadUInt32BE(idxData, offset: largeBase + largeIdx * 8))
+                let lo32 = UInt64(packReadUInt32BE(idxData, offset: largeBase + largeIdx * 8 + 4))
+                finalOffset = (hi32 << 32) | lo32
+            } else {
+                finalOffset = UInt64(rawOffset)
+            }
+            
+            result[shaHex] = finalOffset
+        }
+        
+        return result
+    }
+    
+    /// Read all entries from a v1 pack index file
+    private func readPackIndexV1(idxData: Data) -> [String: UInt64] {
+        guard idxData.count >= 1024 else { return [:] }
+        
+        let totalObjects = Int(packReadUInt32BE(idxData, offset: 255 * 4))
+        let entryBase = 256 * 4
+        let entrySize = 24 // 4 bytes offset + 20 bytes SHA
+        
+        var result: [String: UInt64] = [:]
+        result.reserveCapacity(totalObjects)
+        
+        for i in 0..<totalObjects {
+            let eOff = entryBase + i * entrySize
+            guard eOff + entrySize <= idxData.count else { break }
+            
+            let offset = UInt64(packReadUInt32BE(idxData, offset: eOff))
+            let shaHex = idxData[eOff + 4..<eOff + 24].map { String(format: "%02x", $0) }.joined()
+            
+            result[shaHex] = offset
+        }
+        
+        return result
+    }
+    
+
 
     /// Read and return a single git object from `packData` at byte `offset`.
     /// `allPackData` is the complete pack (needed for OFS_DELTA base resolution).
@@ -737,48 +862,50 @@ class NativeGitReader {
     
     private func decompressZlib(_ data: Data) -> Data? {
         // Git uses zlib compression (DEFLATE with zlib header)
-        // iOS Compression framework supports COMPRESSION_ZLIB
+        // Apple's COMPRESSION_ZLIB expects raw DEFLATE data (no zlib header)
         
         guard data.count > 2 else { return nil }
         
-        // Zlib format: 1 byte CMF + 1 byte FLG + compressed data + 4 byte Adler-32
-        // We need to skip the 2-byte header for raw DEFLATE
+        // Strip the 2-byte zlib header if present
+        // Do NOT strip trailing Adler-32 - the decompressor will stop at end of stream
         let sourceData: Data
-        if data[0] == 0x78 { // Zlib header present
-            // Skip zlib header (2 bytes) and Adler-32 checksum (last 4 bytes)
-            if data.count > 6 {
-                sourceData = data.dropFirst(2).dropLast(4)
-            } else {
-                sourceData = data.dropFirst(2)
-            }
+        if data[0] == 0x78 { // Zlib header present (CMF byte)
+            sourceData = data.dropFirst(2)
         } else {
             sourceData = data
         }
         
-        // Allocate destination buffer (git objects are usually small, but can be large)
-        let destinationBufferSize = max(sourceData.count * 10, 65536)
-        let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: destinationBufferSize)
-        defer { destinationBuffer.deallocate() }
+        // Allocate destination buffer - start generous, retry if needed
+        var bufferSize = max(sourceData.count * 10, 65536)
         
-        let decompressedSize = sourceData.withUnsafeBytes { sourcePtr -> Int in
-            guard let sourceBaseAddress = sourcePtr.baseAddress else { return 0 }
+        for _ in 0..<3 { // Retry with larger buffer up to 3 times
+            let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+            defer { destinationBuffer.deallocate() }
             
-            return compression_decode_buffer(
-                destinationBuffer,
-                destinationBufferSize,
-                sourceBaseAddress.assumingMemoryBound(to: UInt8.self),
-                sourceData.count,
-                nil,
-                COMPRESSION_ZLIB
-            )
+            let decompressedSize = sourceData.withUnsafeBytes { sourcePtr -> Int in
+                guard let sourceBaseAddress = sourcePtr.baseAddress else { return 0 }
+                return compression_decode_buffer(
+                    destinationBuffer,
+                    bufferSize,
+                    sourceBaseAddress.assumingMemoryBound(to: UInt8.self),
+                    sourceData.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+            
+            if decompressedSize > 0 && decompressedSize < bufferSize {
+                return Data(bytes: destinationBuffer, count: decompressedSize)
+            } else if decompressedSize == bufferSize {
+                // Buffer was too small, retry with larger
+                bufferSize *= 4
+                continue
+            } else {
+                return nil
+            }
         }
         
-        guard decompressedSize > 0 else {
-            // Try with raw DEFLATE if zlib failed
-            return decompressRawDeflate(sourceData)
-        }
-        
-        return Data(bytes: destinationBuffer, count: decompressedSize)
+        return nil
     }
     
     private func decompressRawDeflate(_ data: Data) -> Data? {
@@ -795,7 +922,7 @@ class NativeGitReader {
                 sourceBaseAddress.assumingMemoryBound(to: UInt8.self),
                 data.count,
                 nil,
-                COMPRESSION_LZFSE // Try LZFSE as fallback
+                COMPRESSION_ZLIB // Raw DEFLATE (Apple's COMPRESSION_ZLIB handles raw deflate)
             )
         }
         

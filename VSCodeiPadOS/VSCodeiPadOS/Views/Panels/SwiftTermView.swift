@@ -173,6 +173,11 @@ struct SwiftTerminalView: UIViewRepresentable {
             tv.feed(byteArray: bytes)
         }
         
+        // Auto-focus the terminal so keyboard activates immediately
+        DispatchQueue.main.async {
+            tv.becomeFirstResponder()
+        }
+        
         return tv
     }
     

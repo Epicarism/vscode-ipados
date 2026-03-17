@@ -284,7 +284,34 @@ struct SingleTerminalView: View {
             #if canImport(SwiftTerm)
             if terminal.isConnected {
                 // Real terminal via SwiftTerm for SSH sessions
-                SwiftTerminalView(terminalManager: terminal)
+                VStack(spacing: 0) {
+                    SwiftTerminalView(terminalManager: terminal)
+                    
+                    // Mobile helper bar for SwiftTerm
+                    HStack(spacing: 12) {
+                        Button("Tab") {
+                            Task { try? await SSHManager.shared.sendInput("\t") }
+                        }
+                        Button("Esc") {
+                            Task { try? await SSHManager.shared.sendInput("\u{1b}") }
+                        }
+                        Button("Ctrl+C") {
+                            Task { try? await SSHManager.shared.sendInput("\u{03}") }
+                        }
+                        .foregroundColor(Color(UIColor.systemRed))
+                        Button("↑") {
+                            Task { try? await SSHManager.shared.sendInput("\u{1b}[A") }
+                        }
+                        Button("↓") {
+                            Task { try? await SSHManager.shared.sendInput("\u{1b}[B") }
+                        }
+                        Spacer()
+                    }
+                    .font(.caption)
+                    .padding(.horizontal)
+                    .padding(.vertical, 6)
+                    .background(themeManager.currentTheme.editorForeground.opacity(0.1))
+                }
             } else {
                 legacyTerminalContent
             }
