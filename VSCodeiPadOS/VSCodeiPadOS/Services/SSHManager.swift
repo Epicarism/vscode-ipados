@@ -52,6 +52,7 @@ enum SSHClientError: Error, LocalizedError {
     case notConnected
     case timeout
     case invalidPrivateKey
+    case unsupportedKeyType(String)
     case commandFailed(String)
     case notImplemented
     case portForwardFailed(String)
@@ -64,7 +65,8 @@ enum SSHClientError: Error, LocalizedError {
         case .invalidChannelType: return "Invalid channel type"
         case .notConnected: return "Not connected to server"
         case .timeout: return "Connection timed out"
-        case .invalidPrivateKey: return "Invalid private key format"
+        case .invalidPrivateKey: return "Invalid private key format. Supported types: Ed25519, ECDSA (P-256, P-384, P-521)"
+        case .unsupportedKeyType(let type): return "Unsupported key type: \(type). RSA keys are not supported. Please generate an Ed25519 key: ssh-keygen -t ed25519"
         case .commandFailed(let reason): return "Command execution failed: \(reason)"
         case .notImplemented: return "SSH feature not yet implemented"
         case .portForwardFailed(let reason): return "Port forwarding failed: \(reason)"
@@ -185,8 +187,14 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             return parseOpenSSHKey(trimmed)
         }
         
-        // Try PEM RSA format (-----BEGIN RSA PRIVATE KEY-----)
-        // NIOSSH doesn't support RSA keys directly, but we can try P256/P384
+        // Detect RSA keys and warn — NIOSSH doesn't support RSA
+        if trimmed.contains("BEGIN RSA PRIVATE KEY") {
+            // RSA keys cannot be used with NIOSSH
+            // User should run: ssh-keygen -t ed25519
+            return nil
+        }
+        
+        // Try PEM EC/PKCS8 format
         if trimmed.contains("BEGIN EC PRIVATE KEY") || trimmed.contains("BEGIN PRIVATE KEY") {
             return parsePEMKey(trimmed)
         }
@@ -346,10 +354,14 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
                 return nil
             }
             
-        default:
-            // Unsupported key type (e.g., ssh-rsa — NIOSSH doesn't support RSA signing)
+        case "ssh-rsa", "rsa-sha2-256", "rsa-sha2-512":
+            // RSA keys are not supported by NIOSSH library
+            // Users should generate Ed25519 keys: ssh-keygen -t ed25519
             return nil
-        }
+            
+        default:
+            // Unsupported key type
+            return nil
     }
     
     /// Parse PEM-encoded EC private key

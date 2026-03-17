@@ -345,6 +345,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         private var textSyncWorkItem: DispatchWorkItem?
         private let debounceInterval: TimeInterval = 0.5 // 500ms
         private var forceSyncObserver: NSObjectProtocol?
+        private var editorActionObservers: [NSObjectProtocol] = []
         
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
@@ -363,6 +364,21 @@ struct RunestoneEditorView: UIViewRepresentable {
                     self?.syncTextImmediately()
                 }
             }
+            
+            // Listen for editor action notifications (keyboard shortcuts)
+            let actions: [Notification.Name] = [
+                .toggleComment, .deleteLine, .moveLineUp, .moveLineDown,
+                .duplicateLineUp, .duplicateLineDown, .addNextOccurrence, .selectAllOccurrences
+            ]
+            for name in actions {
+                editorActionObservers.append(
+                    NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notif in
+                        MainActor.assumeIsolated {
+                            self?.handleEditorAction(notif.name)
+                        }
+                    }
+                )
+            }
         }
         
         deinit {
@@ -371,6 +387,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             if let observer = forceSyncObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
+            for observer in editorActionObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            editorActionObservers.removeAll()
         }
         
         // MARK: - TextViewDelegate
@@ -490,6 +510,241 @@ struct RunestoneEditorView: UIViewRepresentable {
                 parent.currentLineNumber = lineNumber
                 parent.currentColumn = columnNumber
             }
+        }
+        
+        // MARK: - Editor Action Handlers (Keyboard Shortcuts)
+        
+        private func handleEditorAction(_ name: Notification.Name) {
+            guard let textView = textView else { return }
+            switch name {
+            case .toggleComment: performToggleComment(textView)
+            case .deleteLine: performDeleteLine(textView)
+            case .moveLineUp: performMoveLineUp(textView)
+            case .moveLineDown: performMoveLineDown(textView)
+            case .duplicateLineUp: performDuplicateLine(textView, above: true)
+            case .duplicateLineDown: performDuplicateLine(textView, above: false)
+            case .addNextOccurrence: performAddNextOccurrence(textView)
+            case .selectAllOccurrences: performSelectAllOccurrences(textView)
+            default: break
+            }
+        }
+        
+        /// Get the line range (start index, length) for lines touched by the selection
+        private func currentLineRange(in textView: TextView) -> NSRange {
+            let text = textView.text as NSString
+            return text.lineRange(for: textView.selectedRange)
+        }
+        
+        /// Detect comment prefix based on current filename
+        private func commentPrefix() -> String {
+            let ext = (parent.filename as NSString).pathExtension.lowercased()
+            switch ext {
+            case "py", "pyw", "pyi", "rb", "sh", "bash", "zsh", "yml", "yaml", "toml", "r":
+                return "#"
+            case "lua":
+                return "--"
+            case "sql":
+                return "--"
+            case "html", "htm", "xml", "svg":
+                return "//" // simplified — real HTML uses <!-- -->
+            default:
+                return "//"
+            }
+        }
+        
+        private func performToggleComment(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            let linesText = text.substring(with: lineRange)
+            var lines = linesText.components(separatedBy: "\n")
+            let prefix = commentPrefix()
+            
+            // Remove trailing empty element from split (if text ends with \n)
+            let hadTrailingNewline = linesText.hasSuffix("\n")
+            if hadTrailingNewline && lines.last == "" { lines.removeLast() }
+            
+            // Check if all non-empty lines have the comment prefix
+            let nonEmptyLines = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            guard !nonEmptyLines.isEmpty else { return }
+            
+            let allCommented = nonEmptyLines.allSatisfy {
+                $0.trimmingCharacters(in: .whitespaces).hasPrefix(prefix)
+            }
+            
+            if allCommented {
+                // Uncomment: remove first occurrence of prefix (with optional space)
+                lines = lines.map { line in
+                    if let range = line.range(of: prefix + " ") {
+                        var r = line; r.removeSubrange(range); return r
+                    } else if let range = line.range(of: prefix) {
+                        var r = line; r.removeSubrange(range); return r
+                    }
+                    return line
+                }
+            } else {
+                // Comment: find minimum indent, insert prefix there
+                let minIndent = nonEmptyLines.map { $0.prefix(while: { $0 == " " || $0 == "\t" }).count }.min() ?? 0
+                lines = lines.map { line in
+                    if line.trimmingCharacters(in: .whitespaces).isEmpty { return line }
+                    let idx = line.index(line.startIndex, offsetBy: min(minIndent, line.count))
+                    var r = line; r.insert(contentsOf: prefix + " ", at: idx); return r
+                }
+            }
+            
+            var newText = lines.joined(separator: "\n")
+            if hadTrailingNewline { newText += "\n" }
+            
+            let fullText = NSMutableString(string: textView.text)
+            fullText.replaceCharacters(in: lineRange, with: newText)
+            textView.text = fullText as String
+            
+            // Adjust selection
+            let lengthDiff = newText.count - linesText.count
+            textView.selectedRange = NSRange(
+                location: min(selectedRange.location + (allCommented ? -(prefix.count + 1) : (prefix.count + 1)), max(0, (textView.text as NSString).length)),
+                length: max(0, selectedRange.length + lengthDiff)
+            )
+            textViewDidChange(textView)
+        }
+        
+        private func performDeleteLine(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            
+            let fullText = NSMutableString(string: textView.text)
+            fullText.replaceCharacters(in: lineRange, with: "")
+            textView.text = fullText as String
+            textView.selectedRange = NSRange(location: min(lineRange.location, max(0, (textView.text as NSString).length)), length: 0)
+            textViewDidChange(textView)
+        }
+        
+        private func performMoveLineUp(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            
+            guard lineRange.location > 0 else { return } // Already at top
+            
+            let prevLineRange = text.lineRange(for: NSRange(location: lineRange.location - 1, length: 0))
+            let currentLine = text.substring(with: lineRange)
+            let prevLine = text.substring(with: prevLineRange)
+            
+            let combinedRange = NSUnionRange(prevLineRange, lineRange)
+            let fullText = NSMutableString(string: textView.text)
+            
+            // Swap lines, preserving newline structure
+            var swap = currentLine
+            if !swap.hasSuffix("\n") && prevLine.hasSuffix("\n") {
+                swap += "\n"
+                let prevTrimmed = String(prevLine.dropLast())
+                fullText.replaceCharacters(in: combinedRange, with: swap + prevTrimmed)
+            } else {
+                fullText.replaceCharacters(in: combinedRange, with: currentLine + prevLine)
+            }
+            textView.text = fullText as String
+            
+            let newLocation = prevLineRange.location + (selectedRange.location - lineRange.location)
+            textView.selectedRange = NSRange(location: newLocation, length: selectedRange.length)
+            textViewDidChange(textView)
+        }
+        
+        private func performMoveLineDown(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            
+            let lineEnd = lineRange.location + lineRange.length
+            guard lineEnd < text.length else { return } // Already at bottom
+            
+            let nextLineRange = text.lineRange(for: NSRange(location: lineEnd, length: 0))
+            let currentLine = text.substring(with: lineRange)
+            let nextLine = text.substring(with: nextLineRange)
+            
+            let combinedRange = NSUnionRange(lineRange, nextLineRange)
+            let fullText = NSMutableString(string: textView.text)
+            
+            // Swap: next line first, then current line
+            var swap = nextLine
+            if !swap.hasSuffix("\n") && currentLine.hasSuffix("\n") {
+                swap += "\n"
+                let curTrimmed = String(currentLine.dropLast())
+                fullText.replaceCharacters(in: combinedRange, with: swap + curTrimmed)
+            } else {
+                fullText.replaceCharacters(in: combinedRange, with: nextLine + currentLine)
+            }
+            textView.text = fullText as String
+            
+            let newLocation = lineRange.location + nextLine.count + (selectedRange.location - lineRange.location)
+            textView.selectedRange = NSRange(location: min(newLocation, (textView.text as NSString).length), length: selectedRange.length)
+            textViewDidChange(textView)
+        }
+        
+        private func performDuplicateLine(_ textView: TextView, above: Bool) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            var lineText = text.substring(with: lineRange)
+            
+            if !lineText.hasSuffix("\n") { lineText += "\n" }
+            
+            let fullText = NSMutableString(string: textView.text)
+            if above {
+                fullText.insert(lineText, at: lineRange.location)
+                textView.text = fullText as String
+                // Cursor stays on original line (now shifted down)
+                textView.selectedRange = NSRange(location: selectedRange.location + lineText.count, length: selectedRange.length)
+            } else {
+                let insertAt = lineRange.location + lineRange.length
+                fullText.insert(lineText, at: insertAt)
+                textView.text = fullText as String
+                // Cursor moves to duplicated line below
+                textView.selectedRange = NSRange(location: selectedRange.location + lineText.count, length: selectedRange.length)
+            }
+            textViewDidChange(textView)
+        }
+        
+        private func performAddNextOccurrence(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            guard selectedRange.length > 0 else { return }
+            
+            let selectedText = text.substring(with: selectedRange)
+            let searchStart = selectedRange.location + selectedRange.length
+            let searchRange = NSRange(location: searchStart, length: text.length - searchStart)
+            let found = text.range(of: selectedText, options: [], range: searchRange)
+            
+            if found.location != NSNotFound {
+                textView.selectedRange = found
+            } else {
+                // Wrap around
+                let wrapRange = NSRange(location: 0, length: selectedRange.location)
+                let wrapFound = text.range(of: selectedText, options: [], range: wrapRange)
+                if wrapFound.location != NSNotFound {
+                    textView.selectedRange = wrapFound
+                }
+            }
+        }
+        
+        private func performSelectAllOccurrences(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            guard selectedRange.length > 0 else { return }
+            
+            let selectedText = text.substring(with: selectedRange)
+            var lastFound = selectedRange
+            var searchRange = NSRange(location: 0, length: text.length)
+            
+            while searchRange.location < text.length {
+                let found = text.range(of: selectedText, options: [], range: searchRange)
+                if found.location == NSNotFound { break }
+                lastFound = found
+                searchRange.location = found.location + found.length
+                searchRange.length = text.length - searchRange.location
+            }
+            // Without true multi-cursor, jump to last occurrence
+            textView.selectedRange = lastFound
         }
     }
 }
