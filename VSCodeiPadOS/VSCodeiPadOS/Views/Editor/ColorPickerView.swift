@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ColorPickerView: View {
-    @StateObject var manager = ColorPickerManager.shared
+    @ObservedObject var manager = ColorPickerManager.shared
     @StateObject private var themeManager = ThemeManager.shared
     
     // Local state for sliders (synced with manager)

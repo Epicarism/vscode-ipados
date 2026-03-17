@@ -276,7 +276,6 @@ final class TimelineViewModel: ObservableObject {
         self.provider = provider ?? GitTimelineProvider()
         
         // Listen for file save notifications (both manual and auto-save)
-        // Listen for file save notifications (both manual and auto-save)
         for notifName: Notification.Name in [.saveFile, .autoSaved] {
             NotificationCenter.default.publisher(for: notifName)
                 .receive(on: DispatchQueue.main)

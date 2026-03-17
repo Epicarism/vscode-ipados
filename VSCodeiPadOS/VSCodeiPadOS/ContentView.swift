@@ -117,7 +117,7 @@ struct ContentView: View {
                 .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
                 .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
                 .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
-                .onReceive(NotificationCenter.default.publisher(for: .showReplace)) { _ in editorCore.showSearch = true }
+                .onReceive(NotificationCenter.default.publisher(for: .showReplace)) { _ in editorCore.showSearch = true; editorCore.showReplace = true }
                 .onReceive(NotificationCenter.default.publisher(for: .saveAllFiles)) { _ in editorCore.saveAllTabs() }
                 .onReceive(NotificationCenter.default.publisher(for: .goToDefinition)) { _ in editorCore.goToDefinitionAtCursor() }
         }
@@ -142,14 +142,6 @@ struct ContentView: View {
 
         func body(content: Content) -> some View {
             content
-                .onReceive(NotificationCenter.default.publisher(for: .toggleComment)) { _ in editorCore.toggleComment() }
-                .onReceive(NotificationCenter.default.publisher(for: .deleteLine)) { _ in editorCore.deleteLine() }
-                .onReceive(NotificationCenter.default.publisher(for: .moveLineUp)) { _ in editorCore.moveLineUp() }
-                .onReceive(NotificationCenter.default.publisher(for: .moveLineDown)) { _ in editorCore.moveLineDown() }
-                .onReceive(NotificationCenter.default.publisher(for: .duplicateLineUp)) { _ in editorCore.duplicateLineUp() }
-                .onReceive(NotificationCenter.default.publisher(for: .duplicateLineDown)) { _ in editorCore.duplicateLineDown() }
-                .onReceive(NotificationCenter.default.publisher(for: .addNextOccurrence)) { _ in editorCore.addNextOccurrence() }
-                .onReceive(NotificationCenter.default.publisher(for: .selectAllOccurrences)) { _ in editorCore.selectAllOccurrences() }
                 .onReceive(NotificationCenter.default.publisher(for: .showGlobalSearch)) { _ in
                     editorCore.focusedSidebarTab = 1
                     withAnimation { editorCore.showSidebar = true }
@@ -837,6 +829,11 @@ struct IDEEditorView: View {
             if let line = line {
                 requestedLineSelection = line - 1  // Convert 1-indexed to 0-indexed
                 editorCore.requestedGoToLine = nil  // Clear the request
+            }
+        }
+        .onChange(of: editorCore.showReplace) { _, show in
+            if show {
+                findViewModel.isReplaceMode = true
             }
         }
     }

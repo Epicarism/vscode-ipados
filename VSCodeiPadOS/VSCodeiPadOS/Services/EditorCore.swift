@@ -184,6 +184,7 @@ class EditorCore: ObservableObject {
     @Published var sidebarWidth: CGFloat = 250
     @Published var showFilePicker = false
     @Published var showSearch = false
+    @Published var showReplace = false
     @Published var findReferencesQuery: String? = nil
     @Published var showCommandPalette = false
     @Published var showQuickOpen = false
