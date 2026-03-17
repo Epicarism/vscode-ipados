@@ -874,7 +874,7 @@ final class GitManager: ObservableObject {
         
         // 2. Read local refs to find what we already have
         let gitDir = repoURL.appendingPathComponent(".git")
-        let reader = NativeGitReader(gitDir: gitDir)
+        // NativeGitReader available if needed for object lookups
         var localSHAs = Set<String>()
         
         // Collect all known object SHAs from local refs
