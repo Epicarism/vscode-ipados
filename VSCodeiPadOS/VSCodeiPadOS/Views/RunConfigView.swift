@@ -895,7 +895,7 @@ struct PresetChip: View {
 
 struct RemotePathPickerView: View {
     @Binding var selectedPath: String
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @State private var currentPath: String = "/"
     @State private var pathHistory: [String] = ["/"]
     
@@ -933,7 +933,7 @@ struct RemotePathPickerView: View {
                 Section {
                     Button(action: {
                         selectedPath = currentPath
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }) {
                         Label("Select This Directory", systemImage: "checkmark.circle.fill")
                             .foregroundColor(.blue)
@@ -945,7 +945,7 @@ struct RemotePathPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
+                        dismiss()
                     }
                 }
             }

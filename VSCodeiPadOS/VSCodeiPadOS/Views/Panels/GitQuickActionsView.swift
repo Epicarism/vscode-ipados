@@ -133,12 +133,13 @@ struct GitQuickActionsView: View {
     
     @ViewBuilder
     private var changesContent: some View {
-        if git.stagedChanges.isEmpty && git.unstagedChanges.isEmpty {
+        if git.stagedChanges.isEmpty && git.unstagedChanges.isEmpty && git.untrackedFiles.isEmpty {
             Text("Nothing to commit, working tree clean")
                 .foregroundColor(.secondary)
         } else {
             stagedChangesView
             unstagedChangesView
+            untrackedFilesView
         }
     }
     
@@ -162,6 +163,31 @@ struct GitQuickActionsView: View {
             ForEach(git.unstagedChanges) { entry in
                 Text("  \(entry.kind.rawValue): \(entry.path)")
                     .font(.system(.footnote, design: .monospaced))
+            }
+        }
+    }
+    
+    // MARK: - Untracked Files Section
+    
+    @ViewBuilder
+    private var untrackedFilesView: some View {
+        if !git.untrackedFiles.isEmpty {
+            Text("Untracked files:")
+                .foregroundColor(.secondary)
+            ForEach(git.untrackedFiles) { entry in
+                HStack(spacing: 4) {
+                    Text("U")
+                        .font(.system(.caption, design: .monospaced))
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                        .frame(width: 16, height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(Color.secondary.opacity(0.15))
+                        )
+                    Text("  \(entry.path)")
+                        .font(.system(.footnote, design: .monospaced))
+                }
             }
         }
     }

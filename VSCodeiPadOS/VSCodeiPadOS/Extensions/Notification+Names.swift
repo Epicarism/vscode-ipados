@@ -134,8 +134,14 @@ extension Notification.Name {
 
     /// Undo the last action.
     static let undo = Notification.Name("Undo")
+    /// Perform an undo operation (triggered from Command Palette).
+    static let performUndo = Notification.Name("PerformUndo")
     /// Redo the last undone action.
     static let redo = Notification.Name("Redo")
+    /// Perform a redo operation (triggered from Command Palette).
+    static let performRedo = Notification.Name("PerformRedo")
+    /// Select all content in the active editor.
+    static let selectAll = Notification.Name("SelectAll")
 
     // MARK: - Code
 

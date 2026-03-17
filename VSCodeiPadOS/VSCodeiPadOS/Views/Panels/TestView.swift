@@ -6,6 +6,7 @@ struct TestView: View {
     @State private var isScanning: Bool = false
     @State private var scanMessage: String = "Scanning workspace for tests…"
     @State private var hasScanned: Bool = false
+    @State private var statusFilter: TestStatus? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,22 +35,20 @@ struct TestView: View {
                         Label("Sort by Name", systemImage: "textformat.abc")
                     }
                     Button(action: {
-                        for i in testSuites.indices {
-                            testSuites[i].tests.removeAll { $0.status == .success }
-                        }
+                        statusFilter = (statusFilter == .success) ? nil : .success
                     }) {
-                        Label("Show Passed", systemImage: "checkmark.circle")
+                        Label(statusFilter == .success ? "Show All Tests" : "Show Passed", systemImage: "checkmark.circle")
                     }
                     Button(action: {
-                        for i in testSuites.indices {
-                            testSuites[i].tests.removeAll { $0.status == .failure }
-                        }
+                        statusFilter = (statusFilter == .failure) ? nil : .failure
                     }) {
-                        Label("Show Failed", systemImage: "xmark.circle")
+                        Label(statusFilter == .failure ? "Show All Tests" : "Show Failed", systemImage: "xmark.circle")
                     }
                     Divider()
                     Button(action: {
-                        scanWorkspaceForTests()
+                        for i in testSuites.indices {
+                            testSuites[i].isExpanded = false
+                        }
                     }) {
                         Label("Collapse All", systemImage: "arrow.up.left.and.arrow.down.right")
                     }
@@ -114,7 +113,7 @@ struct TestView: View {
                         .padding(.vertical, 40)
                     } else {
                         ForEach($testSuites) { $suite in
-                            TestSuiteRow(suite: $suite)
+                            TestSuiteRow(suite: $suite, statusFilter: statusFilter)
                         }
                     }
                 }
@@ -193,7 +192,12 @@ struct TestView: View {
             guard filename.hasSuffix(".swift") else { continue }
             guard filename.hasSuffix("Tests.swift") || filename.hasSuffix("Test.swift") else {
                 // Also check file content for XCTest import
-                continue
+                if let content = try? String(contentsOf: fileURL, encoding: .utf8),
+                   content.contains("import XCTest") {
+                    // Fall through to scanSwiftFile below
+                } else {
+                    continue
+                }
             }
             scanSwiftFile(at: fileURL, into: &suites)
         }
@@ -250,13 +254,13 @@ struct TestView: View {
 
 struct TestSuiteRow: View {
     @Binding var suite: TestSuite
-    @State private var isExpanded: Bool = true
+    @Binding var statusFilter: TestStatus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() } }) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { suite.isExpanded.toggle() } }) {
+                    Image(systemName: suite.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .bold))
                         .frame(width: 16, height: 16)
                         .contentShape(Rectangle())
@@ -274,7 +278,8 @@ struct TestSuiteRow: View {
 
                 Spacer()
 
-                Text("\(suite.tests.count)")
+                let visibleCount = filteredTests.count
+                Text("\(visibleCount)")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 6)
@@ -285,16 +290,16 @@ struct TestSuiteRow: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
 
-            if isExpanded {
-                if suite.tests.isEmpty {
+            if suite.isExpanded {
+                if filteredTests.isEmpty {
                     Text("No test functions found in this file")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary.opacity(0.7))
                         .padding(.leading, 24)
                         .padding(.vertical, 4)
                 } else {
-                    ForEach($suite.tests) { $test in
-                        TestCaseRow(test: $test)
+                    ForEach(filteredTests.indices, id: \.self) { index in
+                        TestCaseRow(test: $suite.tests[indexForFiltered(index)])
                             .padding(.leading, 24)
                     }
                 }
@@ -306,6 +311,30 @@ struct TestSuiteRow: View {
                     .padding(.bottom, 6)
             }
         }
+    }
+
+    private var filteredTests: [TestCase] {
+        guard let filter = statusFilter else {
+            return suite.tests
+        }
+        return suite.tests.filter { $0.status == filter }
+    }
+
+    /// Maps a filtered index back to the original tests array index.
+    private func indexForFiltered(_ filteredIndex: Int) -> Int {
+        guard let filter = statusFilter else {
+            return filteredIndex
+        }
+        var count = -1
+        for (originalIndex, test) in suite.tests.enumerated() {
+            if test.status == filter {
+                count += 1
+                if count == filteredIndex {
+                    return originalIndex
+                }
+            }
+        }
+        return filteredIndex
     }
 
     private var unavailableNotice: some View {
@@ -377,6 +406,7 @@ struct TestSuite: Identifiable {
     let id = UUID()
     let name: String
     var tests: [TestCase]
+    var isExpanded: Bool = true
 }
 
 struct TestCase: Identifiable {

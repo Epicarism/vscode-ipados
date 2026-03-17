@@ -165,7 +165,6 @@ struct StatusBarView: View {
             // Selection count (shows when text is selected)
             if !editorCore.currentSelection.isEmpty {
                 let selectionCount = editorCore.currentSelection.count
-                let lineCount = editorCore.currentSelection.components(separatedBy: "\n").count
                 StatusBarItem(
                     text: selectionCount > 1 ? "\(selectionCount) selected" : "1 selected",
                     icon: "text.selection",

@@ -29,6 +29,7 @@ struct MinimapView: View {
     // MARK: - Internal state
 
     @State private var isInteracting: Bool = false
+    @StateObject private var themeManager = ThemeManager.shared
 
     // MARK: - Types
 
@@ -62,7 +63,7 @@ struct MinimapView: View {
             ZStack(alignment: .topLeading) {
                 // Background
                 Rectangle()
-                    .fill(Color(white: 0.13))
+                    .fill(themeManager.currentTheme.editorBackground)
 
                 // Syntax-colored code preview
                 Canvas { context, canvasSize in
@@ -241,7 +242,7 @@ struct MinimapView: View {
             if tokens.isEmpty {
                 // Render faint whitespace line.
                 let rect = CGRect(x: x, y: yAligned, width: max(4, contentWidth * 0.15), height: barHeight)
-                context.fill(Path(rect), with: .color(Color(white: 0.45).opacity(0.10)))
+                context.fill(Path(rect), with: .color(themeManager.currentTheme.editorForeground.opacity(0.10)))
                 continue
             }
 
@@ -249,7 +250,7 @@ struct MinimapView: View {
                 guard x < (paddingX + contentWidth) else { break }
                 let w = max(1, CGFloat(token.text.count) * charWidth)
                 let rect = CGRect(x: x, y: yAligned, width: min(w, paddingX + contentWidth - x), height: barHeight)
-                context.fill(Path(rect), with: .color(token.color.opacity(0.80)))
+                context.fill(Path(rect), with: .color(tokenColor(for: token).opacity(0.80)))
                 x += w
             }
         }
@@ -270,22 +271,26 @@ struct MinimapView: View {
         var text: Substring
         var kind: Kind
 
-        var color: Color {
+        func color(for theme: Theme) -> Color {
             switch kind {
             case .plain:
-                return Color(white: 0.70)
+                return theme.editorForeground
             case .keyword:
-                return Color(red: 0.78, green: 0.53, blue: 0.95) // purple-ish
+                return theme.keyword
             case .string:
-                return Color(red: 0.80, green: 0.72, blue: 0.43) // yellow-ish
+                return theme.string
             case .comment:
-                return Color(red: 0.46, green: 0.60, blue: 0.50) // green-ish
+                return theme.comment
             case .number:
-                return Color(red: 0.40, green: 0.73, blue: 0.92) // blue-ish
+                return theme.number
             case .typeName:
-                return Color(red: 0.45, green: 0.83, blue: 0.70) // teal-ish
+                return theme.type
             }
         }
+    }
+
+    private func tokenColor(for token: Token) -> Color {
+        token.color(for: themeManager.currentTheme)
     }
 
     private func tokenize(_ line: Substring) -> [Token] {

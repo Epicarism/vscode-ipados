@@ -11,6 +11,7 @@ struct RemoteExplorerView: View {
     @State private var showConnectionSheet = false
     @State private var selectedConnection: SSHConnectionConfig?
     @State private var activeTerminal: TerminalManager?
+    @State private var connectionTask: Task<Void, Never>?
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -25,6 +26,10 @@ struct RemoteExplorerView: View {
             }
         }
         .background(theme.sidebarBackground)
+        .onDisappear {
+            connectionTask?.cancel()
+            connectionTask = nil
+        }
         .sheet(isPresented: $showConnectionSheet) {
             if let terminal = activeTerminal {
                 SSHConnectionView(terminal: terminal, isPresented: $showConnectionSheet)
@@ -164,13 +169,17 @@ struct RemoteExplorerView: View {
         let terminal = TerminalManager()
         activeTerminal = terminal
         
+        // Cancel any previous connection attempt
+        connectionTask?.cancel()
+        
         // Connect and wait for actual connection status
         terminal.connect(to: config)
         
-        // Monitor connection status with proper async handling
-        Task {
+        // Monitor connection status with proper cancellation handling
+        connectionTask = Task {
             // Wait up to 10 seconds for connection
             for _ in 0..<20 {
+                if Task.isCancelled { return }
                 if terminal.isConnected {
                     await MainActor.run {
                         loadRemoteFiles()
@@ -180,6 +189,7 @@ struct RemoteExplorerView: View {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             }
             // Connection timeout - let user know
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 remoteFileNavigator.errorMessage = "SSH connection timeout after 10 seconds"
             }

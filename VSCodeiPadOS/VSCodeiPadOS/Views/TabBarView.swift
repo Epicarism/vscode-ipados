@@ -130,6 +130,7 @@ struct TabItemView: View {
                     .modifier(ConditionalItalicModifier(isItalic: tab.isPreview))
                     .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
                     .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             if !tab.isPinned {
@@ -149,7 +150,7 @@ struct TabItemView: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
                             .frame(width: 16, height: 16)
-                            .background(Color.black.opacity(0.1))
+                            .background((isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground).opacity(0.15))
                             .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
@@ -162,7 +163,7 @@ struct TabItemView: View {
         }
         .padding(.horizontal, tab.isPinned ? 12 : 10)
         .padding(.vertical, 8)
-        .frame(width: tab.isPinned ? 40 : 160)
+        .frame(minWidth: tab.isPinned ? 40 : 100, maxWidth: tab.isPinned ? 40 : 220)
         .background(isActive ? themeManager.currentTheme.tabActiveBackground : themeManager.currentTheme.tabInactiveBackground)
         .overlay(
             Rectangle()
