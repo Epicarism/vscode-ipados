@@ -625,7 +625,6 @@ struct PortRowView: View {
     let theme: Theme
     
     @StateObject private var portManager = PortForwardingManager.shared
-    @State private var isHovering = false
     
     var body: some View {
         HStack(spacing: 0) {
@@ -681,12 +680,45 @@ struct PortRowView: View {
             .frame(width: 70, alignment: .leading)
             
             Spacer()
+            
+            // Inline action buttons
+            HStack(spacing: 8) {
+                // Play/Stop button
+                Button {
+                    if port.isActive {
+                        portManager.stopForwarding(id: port.id)
+                    } else {
+                        Task {
+                            await portManager.startForwarding(id: port.id)
+                        }
+                    }
+                } label: {
+                    Image(systemName: port.isActive ? "stop.fill" : "play.fill")
+                        .foregroundColor(port.isActive ? .red : .green)
+                        .font(.caption)
+                }
+                
+                // Copy button
+                Button {
+                    portManager.copyLocalAddress(id: port.id)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption)
+                }
+                
+                // Delete button
+                Button(role: .destructive) {
+                    portManager.removePort(id: port.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isHovering ? theme.editorForeground.opacity(0.05) : Color.clear)
+        .background(Color.clear)
         .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
         .contextMenu {
             Button(action: {
                 if port.origin == .auto {

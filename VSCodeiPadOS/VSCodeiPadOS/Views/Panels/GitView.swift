@@ -18,6 +18,7 @@ struct GitView: View {
     @State private var isOperationInProgress = false
     @State private var showDiscardConfirmation = false
     @State private var pendingDiscardPath: String?
+    @State private var showDiscardAllAlert = false
     @State private var showCommitPushConfirmation = false
     @State private var gitConfigError: String?
 
@@ -183,7 +184,16 @@ struct GitView: View {
                     
                     // Unstaged changes
                     if !gitManager.unstagedChanges.isEmpty {
-                        sectionHeader("Changes", count: gitManager.unstagedChanges.count, color: .orange)
+                        HStack {
+                            sectionHeader("Changes", count: gitManager.unstagedChanges.count, color: .orange)
+                            Button(action: { showDiscardAllAlert = true }) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Discard all changes")
+                        }
                         ForEach(gitManager.unstagedChanges) { entry in
                             changeRow(entry, isStaged: false)
                         }
@@ -302,6 +312,24 @@ struct GitView: View {
                 .accessibilityLabel("Fetch")
                 .accessibilityHint("Double tap to fetch from remote without merging")
                 
+                Menu {
+                    Button("Stash Changes") {
+                        Task { try? await gitManager.stashPush(message: nil); await gitManager.refresh() }
+                    }
+                    Button("Pop Stash") {
+                        Task { try? await gitManager.stashPop(index: 0); await gitManager.refresh() }
+                    }
+                    Button("Drop Stash", role: .destructive) {
+                        Task { try? await gitManager.stashDrop(index: 0); await gitManager.refresh() }
+                    }
+                } label: {
+                    Image(systemName: "tray.and.arrow.down.fill")
+                }
+                .font(.system(size: 11))
+                .buttonStyle(.plain)
+                .disabled(isOperationInProgress)
+                .accessibilityLabel("Stash menu")
+                
                 Spacer()
             }
             .padding(12)
@@ -336,6 +364,14 @@ struct GitView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Commit \"\(commitMessage)\" and push to remote?")
+        }
+        .alert("Discard All Changes?", isPresented: $showDiscardAllAlert) {
+            Button("Discard All", role: .destructive) {
+                Task { try? await gitManager.discardAll(); await gitManager.refresh() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will permanently discard all unstaged changes and untracked files. This cannot be undone.")
         }
     }
 
@@ -707,24 +743,36 @@ struct BranchPickerSheet: View {
                 }
                 
                 // Local branches
-                Section("Local Branches") {
-                    ForEach(localBranches) { branch in
-                        Button(action: { checkout(branch.name) }) {
-                            HStack {
-                                if branch.isCurrent {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.accentColor)
+                    Section("Local Branches") {
+                        ForEach(localBranches) { branch in
+                            Button(action: { checkout(branch.name) }) {
+                                HStack {
+                                    if branch.isCurrent {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.accentColor)
+                                    }
+                                    Text(branch.name)
+                                        .foregroundColor(branch.isCurrent ? .accentColor : .primary)
+                                    Spacer()
                                 }
-                                Text(branch.name)
-                                    .foregroundColor(branch.isCurrent ? .accentColor : .primary)
-                                Spacer()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(branch.name)\(branch.isCurrent ? ", current branch" : "")")
+                            .accessibilityHint(branch.isCurrent ? "Currently selected branch" : "Double tap to switch to this branch")
+                            .swipeActions(edge: .trailing) {
+                                if !branch.isCurrent {
+                                    Button(role: .destructive) {
+                                        Task {
+                                            try? await gitManager.deleteBranch(name: branch.name)
+                                            await gitManager.refresh()
+                                        }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(branch.name)\(branch.isCurrent ? ", current branch" : "")")
-                        .accessibilityHint(branch.isCurrent ? "Currently selected branch" : "Double tap to switch to this branch")
                     }
-                }
                 
                 // Remote branches
                 if !remoteBranches.isEmpty {

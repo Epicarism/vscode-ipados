@@ -12,6 +12,7 @@ struct RemoteExplorerView: View {
     @State private var selectedConnection: SSHConnectionConfig?
     @State private var activeTerminal: TerminalManager?
     @State private var connectionTask: Task<Void, Never>?
+    @State private var isConnecting = false
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -26,6 +27,18 @@ struct RemoteExplorerView: View {
             }
         }
         .background(theme.sidebarBackground)
+        .overlay {
+            if isConnecting {
+                VStack {
+                    ProgressView()
+                    Text("Connecting...")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.opacity(0.3))
+            }
+        }
         .onDisappear {
             connectionTask?.cancel()
             connectionTask = nil
@@ -74,6 +87,13 @@ struct RemoteExplorerView: View {
                     ForEach(connectionStore.savedConnections) { config in
                         SavedConnectionRow(config: config, theme: theme) {
                             connectToSaved(config)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                SSHConnectionStore.shared.savedConnections.removeAll(where: { $0.id == config.id })
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -166,6 +186,9 @@ struct RemoteExplorerView: View {
     // MARK: - Helper Methods
     
     private func connectToSaved(_ config: SSHConnectionConfig) {
+        isConnecting = true
+        defer { isConnecting = false }
+        
         let terminal = TerminalManager()
         activeTerminal = terminal
         
@@ -177,6 +200,12 @@ struct RemoteExplorerView: View {
         
         // Monitor connection status with proper cancellation handling
         connectionTask = Task {
+            defer {
+                DispatchQueue.main.async {
+                    self.isConnecting = false
+                }
+            }
+            
             // Wait up to 10 seconds for connection
             for _ in 0..<20 {
                 if Task.isCancelled { return }
@@ -192,6 +221,7 @@ struct RemoteExplorerView: View {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 remoteFileNavigator.errorMessage = "SSH connection timeout after 10 seconds"
+                activeTerminal = nil
             }
         }
     }
