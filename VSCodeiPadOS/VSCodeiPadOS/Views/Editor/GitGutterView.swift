@@ -830,7 +830,30 @@ private actor NativeGitDiffService {
         let tn = trimmedOld.count
         let tm = trimmedNew.count
 
-        // LCS DP table
+        // Early-exit: one side is entirely new additions or deletions after trimming.
+        // Without these guards, `for i in 1...0` below creates an invalid Swift
+        // ClosedRange (1...0) and traps at runtime whenever lines are appended to
+        // the end of a file or the tail is deleted (a very common editing pattern).
+        if tn == 0 {
+            // All trimmed-middle lines are pure insertions.
+            var out: [_Edit] = []
+            out.reserveCapacity(prefixCount + tm + suffixCount)
+            for _ in 0..<prefixCount { out.append(.equal) }
+            for _ in 0..<tm          { out.append(.insert) }
+            for _ in 0..<suffixCount { out.append(.equal) }
+            return out
+        }
+        if tm == 0 {
+            // All trimmed-middle lines are pure deletions.
+            var out: [_Edit] = []
+            out.reserveCapacity(prefixCount + tn + suffixCount)
+            for _ in 0..<prefixCount { out.append(.equal) }
+            for _ in 0..<tn          { out.append(.delete) }
+            for _ in 0..<suffixCount { out.append(.equal) }
+            return out
+        }
+
+        // LCS DP table (tn >= 1 and tm >= 1, so 1...tn / 1...tm are valid)
         var dp = Array(repeating: Array(repeating: 0, count: tm + 1), count: tn + 1)
         for i in 1...tn {
             for j in 1...tm {
