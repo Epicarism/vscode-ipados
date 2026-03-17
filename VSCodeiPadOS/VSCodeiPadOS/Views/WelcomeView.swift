@@ -334,8 +334,10 @@ struct WelcomeView: View {
                 subtitle: "Browse CodePad documentation",
                 actionKey: "docs"
             ) {
-                // Documentation URL - will open when codepad.dev is available
-                AppLogger.editor.info("Documentation requested - URL not yet available")
+                // Documentation URL - open VS Code documentation
+                if let url = URL(string: "https://code.visualstudio.com/docs") {
+                    UIApplication.shared.open(url)
+                }
             }
 
             actionRow(
@@ -344,8 +346,10 @@ struct WelcomeView: View {
                 subtitle: "See what's new in CodePad v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")",
                 actionKey: "releaseNotes"
             ) {
-                // Release notes URL - will open when codepad.dev is available
-                AppLogger.editor.info("Release notes requested - URL not yet available")
+                // Release notes URL - open VS Code updates page
+                if let url = URL(string: "https://code.visualstudio.com/updates") {
+                    UIApplication.shared.open(url)
+                }
             }
         }
     }

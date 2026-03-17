@@ -392,6 +392,14 @@ private struct QuickOpenKeyboardModifier: ViewModifier {
                     onEscape()
                     return .handled
                 }
+                .onKeyPress(keys: [KeyEquivalent("p")], phases: .down) { keyPress in
+                    // Handle Cmd+P to toggle (close) QuickOpen
+                    if keyPress.modifiers == .command {
+                        onEscape()
+                        return .handled
+                    }
+                    return .ignored
+                }
         } else {
             content
         }

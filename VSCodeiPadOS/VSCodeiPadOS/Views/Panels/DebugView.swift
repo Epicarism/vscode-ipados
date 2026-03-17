@@ -211,7 +211,7 @@ struct DebugView: View {
                         kind: .system
                     ))
                     // Wire to remote debugger if connected
-                    if let remote = debugManager.remoteDebugger, remote.isConnected {
+                    if let remote = debugManager.remoteDebugger, remote.state == .connected || remote.state == .running {
                         Task {
                             if newValue {
                                 try? await remote.executeCommand("breakpoint set -E c++")
@@ -231,7 +231,7 @@ struct DebugView: View {
                         kind: .system
                     ))
                     // Wire to remote debugger if connected
-                    if let remote = debugManager.remoteDebugger, remote.isConnected {
+                    if let remote = debugManager.remoteDebugger, remote.state == .connected || remote.state == .running {
                         Task {
                             if newValue {
                                 try? await remote.executeCommand("breakpoint set -E objc")

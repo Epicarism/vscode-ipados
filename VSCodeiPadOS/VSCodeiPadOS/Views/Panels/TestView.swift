@@ -113,7 +113,7 @@ struct TestView: View {
                         .padding(.vertical, 40)
                     } else {
                         ForEach($testSuites) { $suite in
-                            TestSuiteRow(suite: $suite, statusFilter: statusFilter)
+                            TestSuiteRow(suite: $suite, statusFilter: $statusFilter)
                         }
                     }
                 }
@@ -190,12 +190,11 @@ struct TestView: View {
             let filename = fileURL.lastPathComponent
             // Only look at Swift files that appear to be test files
             guard filename.hasSuffix(".swift") else { continue }
-            guard filename.hasSuffix("Tests.swift") || filename.hasSuffix("Test.swift") else {
+            let isTestFile = filename.hasSuffix("Tests.swift") || filename.hasSuffix("Test.swift")
+            if !isTestFile {
                 // Also check file content for XCTest import
-                if let content = try? String(contentsOf: fileURL, encoding: .utf8),
-                   content.contains("import XCTest") {
-                    // Fall through to scanSwiftFile below
-                } else {
+                guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
+                      content.contains("import XCTest") else {
                     continue
                 }
             }

@@ -958,7 +958,7 @@ struct SearchView: View {
                 // Compute actual match ranges for highlighting
                 var matchRanges: [Range<String.Index>] = []
                 let lineContent = match.preview
-                let options: String.CompareOptions = caseSensitive ? [] : .caseInsensitive
+                let options: String.CompareOptions = matchCase ? [] : .caseInsensitive
                 if !searchText.isEmpty {
                     var searchStart = lineContent.startIndex
                     while searchStart < lineContent.endIndex,

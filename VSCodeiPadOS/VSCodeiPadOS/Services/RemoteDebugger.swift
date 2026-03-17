@@ -51,11 +51,13 @@ struct RemoteDebuggerConfig: Codable, Identifiable {
         workingDirectory: String? = nil,
         environmentVariables: [String: String] = [:],
         attachToPID: Int? = nil,
-        remoteTarget: String? = nil
+        remoteTarget: String? = nil,
+        debuggerPath: String? = nil
     ) {
         self.name = name
         self.sshConnectionId = sshConnectionId
         self.debuggerType = debuggerType
+        self.debuggerPath = debuggerPath
         self.programPath = programPath
         self.programArguments = programArguments
         self.workingDirectory = workingDirectory

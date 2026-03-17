@@ -63,11 +63,11 @@ struct CommandPaletteView: View {
 
             // Edit Commands
             Command(name: "Undo", shortcut: "⌘Z", icon: "arrow.uturn.backward", category: .edit) {
-                NotificationCenter.default.post(name: .performUndo)
+                NotificationCenter.default.post(name: .performUndo, object: nil)
                 dismiss()
             },
             Command(name: "Redo", shortcut: "⌘⇧Z", icon: "arrow.uturn.forward", category: .edit) {
-                NotificationCenter.default.post(name: .performRedo)
+                NotificationCenter.default.post(name: .performRedo, object: nil)
                 dismiss()
             },
             Command(name: "Cut", shortcut: "⌘X", icon: "scissors", category: .edit) {
@@ -95,7 +95,7 @@ struct CommandPaletteView: View {
 
             // Selection Commands
             Command(name: "Select All", shortcut: "⌘A", icon: "selection.pin.in.out", category: .selection) {
-                NotificationCenter.default.post(name: .selectAll)
+                NotificationCenter.default.post(name: .selectAll, object: nil)
                 dismiss()
             },
             Command(name: "Expand Selection", shortcut: "⌃⇧⌘→", icon: "arrow.up.left.and.arrow.down.right", category: .selection) {
@@ -191,12 +191,12 @@ struct CommandPaletteView: View {
 
             // Terminal Commands
             Command(name: "New Terminal", shortcut: "⌃⇧`", icon: "terminal.fill", category: .terminal) {
-                NotificationCenter.default.post(name: .newTerminal)
+                NotificationCenter.default.post(name: .newTerminal, object: nil)
                 showTerminal = true
                 dismiss()
             },
             Command(name: "Clear Terminal", shortcut: nil, icon: "trash", category: .terminal) {
-                NotificationCenter.default.post(name: .clearTerminal)
+                NotificationCenter.default.post(name: .clearTerminal, object: nil)
                 dismiss()
             },
             Command(name: "Kill Terminal", shortcut: nil, icon: "xmark.circle", category: .terminal) {

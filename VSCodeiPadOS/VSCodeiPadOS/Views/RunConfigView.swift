@@ -590,7 +590,7 @@ struct RunConfigView: View {
                 
                 Button(action: viewModel.addArgument) {
                     Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(UIColor.systemBlue))
                 }
                 .disabled(viewModel.newArgText.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -605,7 +605,7 @@ struct RunConfigView: View {
                             Spacer()
                             Button(action: { viewModel.removeArgument(at: index) }) {
                                 Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
+                                    .foregroundColor(Color(UIColor.systemRed))
                             }
                         }
                     }
@@ -638,7 +638,7 @@ struct RunConfigView: View {
                 
                 Button(action: viewModel.addEnvironmentVariable) {
                     Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(UIColor.systemBlue))
                 }
                 .disabled(viewModel.newEnvKey.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -650,7 +650,7 @@ struct RunConfigView: View {
                         HStack {
                             Text(key)
                                 .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color(UIColor.systemBlue))
                             Text("=")
                                 .foregroundColor(.secondary)
                             Text(value)
@@ -658,7 +658,7 @@ struct RunConfigView: View {
                             Spacer()
                             Button(action: { viewModel.removeEnvironmentVariable(key: key) }) {
                                 Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
+                                    .foregroundColor(Color(UIColor.systemRed))
                             }
                         }
                     }
@@ -690,7 +690,7 @@ struct RunConfigView: View {
             if !viewModel.currentConfig.workingDirectory.isEmpty {
                 Button(action: { viewModel.currentConfig.workingDirectory = "" }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(UIColor.systemRed))
                 }
             }
         }
@@ -791,7 +791,7 @@ struct RunConfigView: View {
                     .foregroundColor(.secondary)
             }
             .padding(10)
-            .background(Color.blue.opacity(0.1))
+            .background(Color(UIColor.systemBlue).opacity(0.1))
             .cornerRadius(8)
         }
     }
@@ -837,7 +837,7 @@ struct RunConfigView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(viewModel.isExecuting ? Color.gray : Color.blue)
+                .background(viewModel.isExecuting ? Color.gray : Color(UIColor.systemBlue))
                 .foregroundColor(.white)
                 .cornerRadius(10)
             }
@@ -876,17 +876,17 @@ struct PresetChip: View {
                 Button(action: onDelete) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.caption)
-                        .foregroundColor(.red.opacity(0.7))
+                        .foregroundColor(Color(UIColor.systemRed).opacity(0.7))
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.blue.opacity(0.1))
-            .foregroundColor(.blue)
+            .background(Color(UIColor.systemBlue).opacity(0.1))
+            .foregroundColor(Color(UIColor.systemBlue))
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    .stroke(Color(UIColor.systemBlue).opacity(0.3), lineWidth: 1)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -936,7 +936,7 @@ struct RemotePathPickerView: View {
                         dismiss()
                     }) {
                         Label("Select This Directory", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color(UIColor.systemBlue))
                     }
                 }
             }
