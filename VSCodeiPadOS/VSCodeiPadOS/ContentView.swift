@@ -73,6 +73,7 @@ struct ContentView: View {
     // sidebar tab now synced via editorCore.focusedSidebarTab (not local @State)
     @State private var pendingTrustURL: URL?
     @FocusState private var isTerminalFocused: Bool
+    @State private var isLoadingFile = false
 
     
     @StateObject private var trustManager = WorkspaceTrustManager.shared
@@ -256,7 +257,7 @@ struct ContentView: View {
                     ])
                 ) { _, action in
                     switch action {
-                    case "newFile": editorCore.addTab()
+                    case "newFile": editorCore.newUntitledFile()
                     case "saveFile": HapticManager.impact(.light); editorCore.saveActiveTab()
                     case "closeTab": if let id = editorCore.activeTabId { editorCore.closeTab(id: id) }
                     case "showFind": editorCore.showSearch = true
@@ -493,12 +494,27 @@ struct ContentView: View {
                                 guard let data = data as? Data,
                                       let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
                                 DispatchQueue.main.async {
+                                    isLoadingFile = true
                                     editorCore.openFile(from: url)
+                                    isLoadingFile = false
                                 }
                             }
                         }
                     }
                     return true
+                }
+                .overlay {
+                    if isLoadingFile {
+                        ZStack {
+                            Color.black.opacity(0.25)
+                            VStack(spacing: 8) {
+                                ProgressView()
+                                Text("Opening file...")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
                 }
             }
             
@@ -1285,7 +1301,7 @@ struct IDEWelcomeView: View {
                             .foregroundColor(theme.editorForeground.opacity(0.5))
                             .textCase(.uppercase)
                         
-                        WelcomeLink(icon: "doc.badge.plus", title: "New File", shortcut: "\u{2318}N", theme: theme) { editorCore.addTab() }
+                        WelcomeLink(icon: "doc.badge.plus", title: "New File", shortcut: "\u{2318}N", theme: theme) { editorCore.newUntitledFile() }
                         WelcomeLink(icon: "folder", title: "Open Folder...", shortcut: "\u{2318}\u{21E7}O", theme: theme) { showFolderPicker = true }
                         WelcomeLink(icon: "doc", title: "Open File...", shortcut: "\u{2318}O", theme: theme) { editorCore.showFilePicker = true }
                         WelcomeLink(icon: "arrow.triangle.branch", title: "Clone Repository...", shortcut: nil, theme: theme) {

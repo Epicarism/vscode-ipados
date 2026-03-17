@@ -1084,6 +1084,22 @@ mod tests {
         updateLargeFileStatus()
     }
 
+    /// Always creates a brand-new untitled tab with a unique name.
+    /// Unlike addTab(), this never deduplicates — it always opens a fresh buffer.
+    func newUntitledFile() {
+        let existingNames = Set(tabs.filter { $0.url == nil }.map { $0.fileName })
+        var candidate = "Untitled.swift"
+        var counter = 2
+        while existingNames.contains(candidate) {
+            candidate = "Untitled-\(counter).swift"
+            counter += 1
+        }
+        let tab = Tab(fileName: candidate, content: "", url: nil)
+        tabs.append(tab)
+        activeTabId = tab.id
+        updateLargeFileStatus()
+    }
+
     func closeTab(id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
 
