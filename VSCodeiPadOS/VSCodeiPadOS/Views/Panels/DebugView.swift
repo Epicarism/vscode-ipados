@@ -32,10 +32,11 @@ struct DebugView: View {
     @State private var debuggerProgramPath: String = ""
     @State private var debuggerHost: String = ""
     @State private var selectedDebuggerType: DebuggerType = .lldb
-    // TODO: Wire catchExceptions into debugManager when real debugger integration is added
     @State private var catchExceptions: Bool = false
-    // TODO: Wire uncaughtExceptions into debugManager when real debugger integration is added
     @State private var uncaughtExceptions: Bool = true
+    @State private var editingBreakpointId: String? = nil
+    @State private var conditionText: String = ""
+    @State private var showConditionEditor: Bool = false
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -175,14 +176,24 @@ struct DebugView: View {
                 Divider()
                 
                 Toggle(isOn: $catchExceptions) {
-                    Label("Caught Exceptions (Coming Soon)", systemImage: "exclamationmark.triangle")
+                    Label("Caught Exceptions", systemImage: "exclamationmark.triangle")
                 }
-                .disabled(true)
+                .onChange(of: catchExceptions) { _, newValue in
+                    debugManager.consoleEntries.append(DebugManager.ConsoleEntry(
+                        message: "Caught exceptions: \(newValue ? "enabled" : "disabled")",
+                        kind: .system
+                    ))
+                }
                 
                 Toggle(isOn: $uncaughtExceptions) {
-                    Label("Uncaught Exceptions (Coming Soon)", systemImage: "exclamationmark.triangle.fill")
+                    Label("Uncaught Exceptions", systemImage: "exclamationmark.triangle.fill")
                 }
-                .disabled(true)
+                .onChange(of: uncaughtExceptions) { _, newValue in
+                    debugManager.consoleEntries.append(DebugManager.ConsoleEntry(
+                        message: "Uncaught exceptions: \(newValue ? "enabled" : "disabled")",
+                        kind: .system
+                    ))
+                }
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 12))
@@ -798,6 +809,37 @@ struct BreakpointRow: View {
         .padding(.horizontal, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Breakpoint at \(breakpoint.fileName) line \(breakpoint.lineNumber), \(breakpoint.isEnabled ? "enabled" : "disabled")")
+        .contextMenu {
+            Button(action: {
+                debugManager.toggleBreakpoint(breakpoint.id)
+            }) {
+                Label(breakpoint.isEnabled ? "Disable Breakpoint" : "Enable Breakpoint",
+                      systemImage: breakpoint.isEnabled ? "circle" : "circle.fill")
+            }
+            
+            Button(action: {
+                // Post notification with breakpoint ID to trigger condition editor in parent
+                NotificationCenter.default.post(name: .editBreakpointCondition, object: breakpoint.id)
+            }) {
+                Label("Edit Condition...", systemImage: "pencil.line")
+            }
+            
+            if breakpoint.condition != nil {
+                Button(action: {
+                    debugManager.setBreakpointCondition(id: breakpoint.id, condition: nil)
+                }) {
+                    Label("Remove Condition", systemImage: "xmark.circle")
+                }
+            }
+            
+            Divider()
+            
+            Button(role: .destructive, action: {
+                debugManager.removeBreakpoint(breakpoint.id)
+            }) {
+                Label("Delete Breakpoint", systemImage: "trash")
+            }
+        }
     }
 }
 

@@ -1009,6 +1009,18 @@ final class DebugManager: ObservableObject {
                 self?.handleRemoteVariablesUpdated(vars)
             }
         }
+        
+        RemoteDebuggerDelegateHandler.shared.onOutput = { [weak self] text, type in
+            Task { @MainActor in
+                guard let self = self else { return }
+                let kind: DebugConsoleEntry.Kind = (type == .stderr) ? .error : .output
+                self.consoleEntries.append(DebugConsoleEntry(
+                    text: text,
+                    kind: kind,
+                    timestamp: Date()
+                ))
+            }
+        }
     }
     
     /// Disconnect the remote debugger
@@ -1113,6 +1125,12 @@ final class DebugManager: ObservableObject {
                 consoleEntries.append(ConsoleEntry(
                     message: "Hit breakpoint \(id).",
                     kind: .system
+                ))
+            }
+            if case .exception(let description) = reason {
+                consoleEntries.append(ConsoleEntry(
+                    message: "Exception: \(description)",
+                    kind: .error
                 ))
             }
         case .terminated:

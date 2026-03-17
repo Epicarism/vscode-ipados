@@ -1,59 +1,53 @@
 # SWE Communication Log
 
-## Last Updated: March 17, 2026 - 2:10 AM GMT+1
+## Last Updated: March 17, 2026 - 3:25 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
 
 ### Latest Commits (newest first):
+- `02e50cf` fix: HoverInfoView theme-aware colors, WelcomeView dynamic version, placeholder URL safety
+- `98233cd` fix: Encoding/EOL settings now applied to saves, notification badge visibility
+- `7ca080f` fix: GitView merge conflict UI, SearchView polish, RemoteExplorer improvements, editor cleanup
+- `395463f` feat: Git merge conflicts, debug output wiring, status bar encoding, output panel polish
+- `2a1d260` fix: SearchView theme, DebugView UX, ThemeManager 40+ colors, TerminalView concurrency
 - `2a49012` feat: Watch expression eval, breakpoint sync, terminal auto-scroll, multi-encoding files
 - `af43fc1` feat: Wire up Cmd+Z/Cmd+Shift+Z undo/redo keyboard shortcuts
-- `202bd70` Fix AIAssistantView font modifier error, SplitEditorView type-check complexity (other SWE)
-- `29a4f62` Fix crash risks: remove force unwraps, try!, deprecated UIScreen.main
-- `ed80dde` Major quality: 65 @StateObject fixes, ANSI persistence, Git security, WelcomeView accessibility
-- `de24129` Fix deprecated UIScreen.main, multi-lang sticky headers, JSON depth limit, dead code removal
-- `f46e5e3` BreadcrumbsView dynamic symbols, SplitEditorView drop handling & Runestone, themes
 
 ---
 
-## ✅ Critical Issues RESOLVED This Session:
+## ✅ Issues RESOLVED Since Last Doc Update:
 
-### Undo/Redo (was: "No undo/redo support")
-- ✅ Cmd+Z / Cmd+Shift+Z wired in SyntaxHighlightingTextView keyCommands
-- ✅ Runestone handles undo natively via TimedUndoManager responder chain
+### Undo Stack (was: "polluted by highlighting changes")
+- ✅ All 3 highlighting paths now use textStorage.beginEditing/endEditing
+- ✅ applyHighlightingAsync (5k-10k chars), applyVisibleRangeHighlighting (10k+), applySyntaxHighlighting (small)
+- ✅ Zero instances of `textView.attributedText =` in production code
 
-### SSH Keychain (was: "passwords stored in plaintext")
-- ✅ SSHConnectionStore now saves credentials to Keychain (KeychainHelper)
-- ✅ UserDefaults only stores sanitized configs (empty password/key fields)
-- ✅ One-time migration on first launch via `migrateToKeychain()`
-- ✅ Credentials restored from Keychain on `loadConnections()`
-- ✅ Keychain entries deleted when connections are removed
+### Encoding/EOL (was: "settings not applied to saves")
+- ✅ StatusBar encoding picker now calls EditorCore.setActiveTabEncoding()
+- ✅ StatusBar EOL picker now calls EditorCore.convertActiveTabEOL()
+- ✅ EOL conversion normalizes CRLF/CR to LF then converts to target
+- ✅ stringEncodingFromName() helper for all 8 supported encodings
 
-### Port Forwarding (was: "UI-only stub")
-- ✅ Real SSH tunneling via NIO ServerBootstrap + directTCPIP channels
-- ✅ PortForwardDataHandler converts SSHChannelData ↔ ByteBuffer
-- ✅ PortForwardGlueHandler bridges local TCP ↔ SSH channels bidirectionally
-- ✅ PortsView startForwarding/stopForwarding wired to real SSHManager calls
-- ✅ Proper cleanup on disconnect (all tunnels closed)
+### ExtensionsView Theme (was: "12+ hardcoded system colors")
+- ✅ Complete theme overhaul - all 3 structs now use ThemeManager
+- ✅ 39 Color(theme.xxx) references, 0 Color(UIColor...) references
+- ✅ Search bar, filters, rows, detail view all theme-aware
 
-### Debug System Improvements:
-- ✅ Watch expressions auto-evaluate via JSRunner after each step/play
-- ✅ Breakpoints sync to RemoteDebugger when connected (set/remove/list)
-- ✅ syncBreakpointsToRemoteDebugger() on connect with 0→1 line conversion
+### Merge Conflicts (was: "No merge conflict handling")
+- ✅ GitView: merge conflict banner, conflict section, resolution UI (ours/theirs/manual)
+- ✅ Notification observer for .gitMergeConflictsDetected
 
-### Terminal:
-- ✅ Smart auto-scroll (only when user is at bottom)
-- ✅ Floating scroll-to-bottom button when scrolled up
-- ✅ Enhanced ls (-a, -l flags) and grep command
-- ✅ ANSI state persistence across lines
+### HoverInfoView (was: "hardcoded dark-only color")
+- ✅ Replaced with theme.editorBackground via ThemeManager
 
-### Editor:
-- ✅ Multi-encoding file detection (UTF-8/UTF-16/Win-1252/Latin1/ASCII)
-- ✅ Save files using detected encoding
-- ✅ 65 @StateObject fixes across 29 files
-- ✅ BreadcrumbsView dynamic symbol detection
-- ✅ SplitEditorView proper Runestone support & tab drop handling
+### WelcomeView (was: "placeholder URLs break Safari")
+- ✅ Documentation/Release Notes links now safely log instead of opening broken URLs
+- ✅ Dynamic version from Bundle.main instead of hardcoded "v1.0.0"
+
+### Notification Badge (was: "invisible in dark mode")
+- ✅ Changed from Color(.systemBackground) to .white for badge text
 
 ---
 
@@ -66,18 +60,22 @@
 ### High:
 - SFTP upload limited to 100KB (base64 over SSH)
 - Terminal only supports one SSH session (singleton SSHManager)
+- AIAssistantView has 25+ hardcoded system colors (worst remaining theme offender)
 
 ### Medium:
-- No merge conflict handling in git pull
 - Debug step controls are simulated stubs in local mode (remote mode works)
-- Exception breakpoints not connected
+- Exception breakpoints not connected to debugger
 - Breakpoint conditions always nil (no UI to set conditions)
 - Remote debugger onOutput callback not wired
+- SearchView.SearchResultLine.matches array always empty (highlighted preview doesn't work)
+- ~150 instances of .foregroundColor(.secondary) across views
+- ~80 instances of Color(UIColor...) across views
 
 ### Low:
-- SyntaxHighlightingTextView undo stack polluted by highlighting changes
 - TypeScript falls back to JavaScript TreeSitter grammar
 - No TreeSitter for Ruby, PHP, Kotlin, C/C++, SQL
+- ContentView IDEWelcomeView layout overflow on narrow screens
+- DemoFileRow missing VoiceOver accessibility actions
 
 ---
 
@@ -93,12 +91,15 @@
 - `SSHConnectionStore` now uses Keychain for credentials (migration handled automatically)
 - Port forwarding uses NIO ServerBootstrap + directTCPIP SSH channels
 - `Tab.fileEncoding` stores detected encoding as UInt (String.Encoding.rawValue)
-- `AppLogger`: use `.editor`, `.git`, `.ssh` etc.
+- `AppLogger`: use `.editor`, `.git`, `.ssh`, `.ai`, `.fileSystem` etc. (NO `.app`)
 - `Notification+Names.swift` is the single source for all notification names
+- `Theme` struct has: editorBackground, editorForeground, selection, cursor, lineNumber, lineNumberActive, currentLineHighlight, sidebarBackground, sidebarForeground, sidebarSectionHeader, sidebarSelection, activityBarBackground/Foreground/Selection, tabBarBackground, tabActive/InactiveBackground/Foreground, statusBarBackground/Foreground, keyword, string, number, comment, function, type, variable, bracketPair1-6, indentGuide/Active
 
 ### Files I'm Currently Working On:
-- Continuing with remaining medium/low priority issues
-- SSH private key auth, SFTP improvements
+- Breakpoint conditions UI
+- Debug output wiring
+- AIAssistantView theme compliance
+- Continuing theme cleanup across remaining views
 
 ### Commit Convention:
 - `fix:` for bug fixes

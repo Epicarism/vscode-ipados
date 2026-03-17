@@ -440,7 +440,7 @@ final class IntegrationTests: XCTestCase {
         
         // Then: All benchmarks complete within reasonable time
         for (name, time) in results {
-            print("Benchmark '\(name)': \(String(format: "%.4f", time))s")
+            AppLogger.general.debug("Benchmark '\(name)': \(String(format: "%.4f", time))s")
             XCTAssertLessThan(time, 5.0, "Benchmark '\(name)' took too long")
         }
     }
@@ -468,7 +468,7 @@ final class IntegrationTests: XCTestCase {
                 let peakMemory = self.resourceMonitor.peakMemoryUsage()
                 let memoryDelta = peakMemory - baselineMemory
                 
-                print("Memory test '\(name)': baseline=\(baselineMemory)MB, peak=\(peakMemory)MB, delta=\(memoryDelta)MB")
+                AppLogger.general.debug("Memory test '\(name)': baseline=\(baselineMemory)MB, peak=\(peakMemory)MB, delta=\(memoryDelta)MB")
                 
                 // Memory should stay within bounds
                 XCTAssertLessThan(memoryDelta, 100, "Memory test '\(name)' exceeded memory limit")
@@ -547,7 +547,7 @@ final class IntegrationTests: XCTestCase {
         let finalMemory = resourceMonitor.currentMemoryUsage()
         let memoryGrowth = finalMemory - initialMemory
         
-        print("Memory leak test: initial=\(initialMemory)MB, final=\(finalMemory)MB, growth=\(memoryGrowth)MB")
+        AppLogger.general.debug("Memory leak test: initial=\(initialMemory)MB, final=\(finalMemory)MB, growth=\(memoryGrowth)MB")
         
         // Allow for some fluctuation but not continuous growth
         XCTAssertLessThan(memoryGrowth, 10, "Detected memory leak: \(memoryGrowth)MB growth over \(iterations) iterations")
