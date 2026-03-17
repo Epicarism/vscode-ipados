@@ -6,8 +6,8 @@ import Foundation
 // MARK: - Terminal View (Main Container)
 
 struct TerminalView: View {
-    @StateObject private var workspace = TerminalWorkspace.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var workspace = TerminalWorkspace.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @FocusState.Binding var terminalFocused: Bool
     @State private var showConnectionSheet = false
 
@@ -205,7 +205,7 @@ struct TerminalTabButtonView: View {
     var onRename: () -> Void
     var onSplit: () -> Void
 
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var showRenameAlert = false
 
     var body: some View {
@@ -275,7 +275,7 @@ struct SingleTerminalView: View {
     var onKill: () -> Void
     @FocusState.Binding var terminalFocused: Bool
 
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @FocusState private var isInputFocused: Bool
     @State private var userIsScrolledUp = false
 
@@ -497,7 +497,7 @@ struct SingleTerminalView: View {
 
 struct TerminalLineView: View {
     let line: TerminalLine
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         if line.isANSI {
@@ -1266,9 +1266,9 @@ struct SSHKeyDocumentPicker: UIViewControllerRepresentable {
 struct SSHConnectionView: View {
     @ObservedObject var terminal: TerminalManager
     @Binding var isPresented: Bool
-    @StateObject private var connectionStore = SSHConnectionStore.shared
-    @StateObject private var importedKeyStore = SSHImportedKeyStore.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var connectionStore = SSHConnectionStore.shared
+    @ObservedObject private var importedKeyStore = SSHImportedKeyStore.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     @State private var connectionName = ""
     @State private var host = ""
@@ -1553,7 +1553,7 @@ enum LineType {
 struct ANSIText: View {
     let text: String
     let preParsedSegments: [ANSISegment]?
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     private static let ansiRegex: NSRegularExpression? = try? NSRegularExpression(pattern: "\u{1B}\\[([0-9;]*)([a-zA-Z])")
     private static let oscRegex: NSRegularExpression? = try? NSRegularExpression(pattern: "\u{1B}\\][^\u{07}\u{1B}]*(\u{07}|\u{1B}\\\\)")

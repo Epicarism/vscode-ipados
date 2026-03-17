@@ -210,10 +210,41 @@ class EditorCore: ObservableObject {
     static let largeFileThreshold = 100_000 // ~100KB in characters
     @Published var isLargeFile = false
 
-    // MARK: - Diagnostics Counts
-    @Published var diagnosticErrorCount: Int = 0
-    @Published var diagnosticWarningCount: Int = 0
+    // MARK: - Diagnostics Counts (Frequently Changing - NOT @Published for performance)
+    /// Diagnostic counts are updated frequently during editing.
+    /// NOT @Published to avoid triggering view updates on every change.
+    /// Use updateDiagnosticCounts() to batch updates with a single objectWillChange.
+    var diagnosticErrorCount: Int = 0
+    var diagnosticWarningCount: Int = 0
     private nonisolated(unsafe) var diagnosticsObserver: NSObjectProtocol?
+    
+    /// Batch update diagnostic counts with a single change notification
+    func updateDiagnosticCounts(errorCount: Int, warningCount: Int) {
+        let hasChanges = diagnosticErrorCount != errorCount || diagnosticWarningCount != warningCount
+        diagnosticErrorCount = errorCount
+        diagnosticWarningCount = warningCount
+        if hasChanges {
+            objectWillChange.send()
+        }
+    }
+    
+    /// Increment diagnostic count with optional batching
+    func incrementDiagnosticCount(for severity: DiagnosticSeverity) {
+        switch severity {
+        case .error: diagnosticErrorCount += 1
+        case .warning: diagnosticWarningCount += 1
+        case .info: break
+        }
+        // Note: Call objectWillChange.send() explicitly if needed
+    }
+    
+    /// Clear diagnostic counts
+    func clearDiagnosticCounts() {
+        guard diagnosticErrorCount != 0 || diagnosticWarningCount != 0 else { return }
+        diagnosticErrorCount = 0
+        diagnosticWarningCount = 0
+        objectWillChange.send()
+    }
 
     // Snippet picker support
     @Published var showSnippetPicker = false
@@ -224,13 +255,43 @@ class EditorCore: ObservableObject {
     // Pending close tab (for unsaved changes confirmation)
     @Published var pendingCloseTabId: UUID? = nil
 
-    // Cursor tracking
-    @Published var cursorPosition = CursorPosition()
-
-    // Multi-cursor support
-    @Published var multiCursorState = MultiCursorState()
-    @Published var currentSelection: String = ""
-    @Published var currentSelectionRange: NSRange?
+    // MARK: - Cursor Tracking (Frequently Changing - Debounced for performance)
+    /// Cursor position changes on every keystroke/click.
+    /// NOT @Published - uses debounced updates to avoid 60+ view refreshes per second.
+    /// Access directly for read, use updateCursorPosition() for debounced write.
+    var cursorPosition = CursorPosition()
+    
+    /// Debounce task for cursor position updates
+    private var cursorUpdateTask: Task<Void, Never>?
+    
+    /// Debounce delay for cursor updates (100ms)
+    private let cursorDebounceDelay: UInt64 = 100_000_000 // 100ms in nanoseconds
+    
+    /// Update cursor position with debouncing to reduce view updates
+    func updateCursorPosition(_ newPosition: CursorPosition) {
+        cursorPosition = newPosition
+        
+        // Cancel previous debounce task
+        cursorUpdateTask?.cancel()
+        
+        // Create new debounced update
+        cursorUpdateTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: cursorDebounceDelay)
+            guard !Task.isCancelled else { return }
+            objectWillChange.send()
+        }
+    }
+    
+    /// Immediate cursor update (for critical updates that need instant UI refresh)
+    func updateCursorPositionImmediate(_ newPosition: CursorPosition) {
+        cursorPosition = newPosition
+        objectWillChange.send()
+    }
+    
+    // Multi-cursor support (Frequently changing)
+    var multiCursorState = MultiCursorState()
+    var currentSelection: String = ""
+    var currentSelectionRange: NSRange?
 
     // Selection request for find/replace navigation
     @Published var requestedSelection: NSRange?
@@ -362,21 +423,20 @@ class EditorCore: ObservableObject {
             }
             
             MainActor.assumeIsolated {
+                // Use batched update methods to reduce view refreshes
                 if shouldClear {
-                    self.diagnosticErrorCount = 0
-                    self.diagnosticWarningCount = 0
+                    self.clearDiagnosticCounts()
                 } else if errorCount >= 0 {
-                    self.diagnosticErrorCount = errorCount
-                    self.diagnosticWarningCount = warningCount
+                    self.updateDiagnosticCounts(errorCount: errorCount, warningCount: warningCount)
                 } else if let severity = singleSeverity {
-                    switch severity {
-                    case .error: self.diagnosticErrorCount += 1
-                    case .warning: self.diagnosticWarningCount += 1
-                    case .info: break
-                    }
+                    // For single increments, we still batch via the method
+                    self.incrementDiagnosticCount(for: severity)
+                    // Trigger single update after increment
+                    self.objectWillChange.send()
                 }
             }
         }
+
     }
 
     deinit {

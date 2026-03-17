@@ -11,7 +11,7 @@ import SwiftUI
 // MARK: - Main Extensions View
 
 struct ExtensionsPanel: View {
-    @StateObject private var manager = ExtensionManager.shared
+    @ObservedObject private var manager = ExtensionManager.shared
     @ObservedObject private var themeManager = ThemeManager.shared
     @State private var selectedExtensionId: String? = nil
     @State private var showingDetail: Bool = false

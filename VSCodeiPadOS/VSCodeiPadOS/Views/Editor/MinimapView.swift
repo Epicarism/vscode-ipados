@@ -29,7 +29,7 @@ struct MinimapView: View {
     // MARK: - Internal state
 
     @State private var isInteracting: Bool = false
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     // MARK: - Types
 
@@ -447,7 +447,7 @@ struct MinimapView: View {
         case .added:
             return Color.green
         case .modified:
-            return Color.red
+            return Color(red: 0.89, green: 0.75, blue: 0.55)
         case .deleted:
             // VS Code uses red-ish for deletions too; keep distinct via slightly different tone.
             return Color(red: 1.0, green: 0.35, blue: 0.35)

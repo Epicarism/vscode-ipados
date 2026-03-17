@@ -88,7 +88,7 @@ struct SearchView: View {
     // MARK: - Search Manager
     @StateObject private var searchManager = SearchManager()
 
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     // MARK: - Search State
     @State private var searchText: String = ""

@@ -551,50 +551,54 @@ struct PaneEditorView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .trailing, spacing: 0) {
                             // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
-                            ForEach(0..<totalLines, id: \ .self) { lineIndex in
-                                HStack(spacing: 2) {
-                                    // Fold chevron icon
-                                    if foldingManager.isFoldable(fileId: fileId, line: lineIndex) {
-                                        Button(action: { 
-                                            foldingManager.toggleFold(fileId: fileId, line: lineIndex)
-                                        }) {
-                                            Image(systemName: foldingManager.isFolded(fileId: fileId, line: lineIndex) ? "chevron.right" : "chevron.down")
-                                                .font(.system(size: 10, weight: .regular))
-                                                .foregroundColor(.secondary.opacity(0.8))
-                                                .frame(width: 12, height: lineHeight)
+                            ForEach(0..<totalLines, id: \.self) { lineIndex in
+                                // Skip rendering line numbers for folded lines - this keeps gutter in sync with editor
+                                // FoldingLayoutManager hides text by setting height to 0; we hide line numbers entirely
+                                if !foldingManager.isLineFolded(fileId: fileId, line: lineIndex) {
+                                    HStack(spacing: 2) {
+                                        // Fold chevron icon
+                                        if foldingManager.isFoldable(fileId: fileId, line: lineIndex) {
+                                            Button(action: { 
+                                                foldingManager.toggleFold(fileId: fileId, line: lineIndex)
+                                            }) {
+                                                Image(systemName: foldingManager.isFolded(fileId: fileId, line: lineIndex) ? "chevron.right" : "chevron.down")
+                                                    .font(.system(size: 10, weight: .regular))
+                                                    .foregroundColor(.secondary.opacity(0.8))
+                                                    .frame(width: 12, height: lineHeight)
+                                            }
+                                            .buttonStyle(.plain)
+                                        } else {
+                                            // Spacer for alignment
+                                            Spacer()
+                                                .frame(width: 12)
+                                        }
+                                        
+                                        // Breakpoint indicator
+                                        Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
+                                            Circle()
+                                                .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ?Color(UIColor.systemRed) : Color.clear)
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(Color.red.opacity(0.6), lineWidth: 1)
+                                                        .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
+                                                )
+                                                .frame(width: 10, height: 10)
                                         }
                                         .buttonStyle(.plain)
-                                    } else {
-                                        // Spacer for alignment
-                                        Spacer()
-                                            .frame(width: 12)
-                                    }
-                                    
-                                    // Breakpoint indicator
-                                    Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
-                                        Circle()
-                                            .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ?Color(UIColor.systemRed) : Color.clear)
-                                            .overlay(
-                                                Circle()
-                                                    .stroke(Color.red.opacity(0.6), lineWidth: 1)
-                                                    .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
-                                            )
-                                            .frame(width: 10, height: 10)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .frame(width: 14, height: lineHeight)
+                                        .frame(width: 14, height: lineHeight)
 
-                                    Text(displayText(for: lineIndex))
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .foregroundColor(lineIndex + 1 == currentLineNumber ? .primary : .secondary.opacity(0.6))
-                                        .frame(height: lineHeight)
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            requestedLineSelection = lineIndex
-                                        }
+                                        Text(displayText(for: lineIndex))
+                                            .font(.system(size: 12, design: .monospaced))
+                                            .foregroundColor(lineIndex + 1 == currentLineNumber ? .primary : .secondary.opacity(0.6))
+                                            .frame(height: lineHeight)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                requestedLineSelection = lineIndex
+                                            }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                            }
+                            
                         }
                         .padding(.trailing, 4)
                         .padding(.top, 8)
@@ -616,6 +620,7 @@ struct PaneEditorView: View {
                             currentLineNumber: $currentLineNumber,
                             currentColumn: $currentColumn,
                             cursorIndex: $cursorIndex,
+                            lineHeight: $lineHeight,
                             isActive: splitManager.activePaneId == pane.id
                         )
                         .environmentObject(editorCore)
@@ -760,6 +765,7 @@ struct PaneEditorView: View {
                 }
             }
         }
+    }
     }
     
     private func displayText(for lineIndex: Int) -> String {

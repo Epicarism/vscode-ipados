@@ -31,6 +31,7 @@ struct RunestoneEditorView: UIViewRepresentable {
     @Binding var currentLineNumber: Int
     @Binding var currentColumn: Int
     @Binding var cursorIndex: Int
+    @Binding var lineHeight: CGFloat
     let isActive: Bool
     let fontSize: CGFloat
     @EnvironmentObject var editorCore: EditorCore
@@ -51,6 +52,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         currentLineNumber: Binding<Int>,
         currentColumn: Binding<Int>,
         cursorIndex: Binding<Int> = .constant(0),
+        lineHeight: Binding<CGFloat> = .constant(0),
         isActive: Bool,
         fontSize: CGFloat = 14.0,
         onAcceptAutocomplete: (() -> Bool)? = nil,
@@ -63,6 +65,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         self._currentLineNumber = currentLineNumber
         self._currentColumn = currentColumn
         self._cursorIndex = cursorIndex
+        self._lineHeight = lineHeight
         self.isActive = isActive
         self.fontSize = fontSize
         self.onAcceptAutocomplete = onAcceptAutocomplete
@@ -207,6 +210,28 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         // If user HAS edited OR is actively editing, DO NOTHING
         // Let the user's edits remain - don't corrupt the lineManager
+
+        // MARK: Minimap tap-to-scroll: apply external scroll offset changes
+        // This fires when the minimap (or any external source) writes to scrollOffset.
+        // We guard with isExternalScroll to break the feedback loop.
+        if abs(textView.contentOffset.y - scrollOffset) > 1.0 {
+            context.coordinator.isExternalScroll = true
+            textView.setContentOffset(
+                CGPoint(x: textView.contentOffset.x, y: scrollOffset),
+                animated: false
+            )
+            context.coordinator.isExternalScroll = false
+        }
+
+        // Report line height back so minimap and gutter use the correct value.
+        // Only update when lineHeight binding is writable (not .constant(0)).
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let computedLineHeight = ceil(font.lineHeight * 1.4)
+        if lineHeight != 0 && abs(lineHeight - computedLineHeight) > 0.5 {
+            DispatchQueue.main.async {
+                self.lineHeight = computedLineHeight
+            }
+        }
     }
     
     // MARK: - Runestone Theme Factory
@@ -333,6 +358,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         var parent: RunestoneEditorView
         weak var textView: TextView?
         var isUpdatingFromTextView = false
+        var isExternalScroll = false
         var lastFontSize: CGFloat = 14.0
         var lastThemeId: String = ""
         var currentLanguage: Language?
@@ -477,7 +503,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            // Update scroll offset binding for gutter synchronization
+            // Only propagate scroll events that originate from the user.
+            // When isExternalScroll is true we triggered setContentOffset ourselves
+            // (e.g. from a minimap tap) and must not write back to avoid a loop.
+            guard !isExternalScroll else { return }
             MainActor.assumeIsolated {
                 parent.scrollOffset = scrollView.contentOffset.y
             }

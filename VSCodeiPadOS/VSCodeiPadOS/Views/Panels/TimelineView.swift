@@ -364,7 +364,7 @@ final class TimelineViewModel: ObservableObject {
 /// VS Code-style Timeline panel: shows file history and allows filtering by source.
 struct TimelineView: View {
     @StateObject private var viewModel: TimelineViewModel
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     init(filePath: String? = nil, workingDirectory: String? = nil, provider: (any TimelineProviding)? = nil) {
         _viewModel = StateObject(wrappedValue: TimelineViewModel(filePath: filePath, workingDirectory: workingDirectory, provider: provider))

@@ -11,8 +11,8 @@ struct DebugVariable: Identifiable {
 
 // MARK: - Debug View
 struct DebugView: View {
-    @StateObject private var debugManager = DebugManager.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var debugManager = DebugManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     private var variables: [DebugVariable] {
         debugManager.variables.map { convertToDebugVariable($0) }

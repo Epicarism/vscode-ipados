@@ -8,7 +8,7 @@ import WebKit
 
 struct AddTunnelSheet: View {
     @Environment(\.dismiss) var dismiss
-    @StateObject var tunnelManager = TunnelManager.shared
+    @ObservedObject var tunnelManager = TunnelManager.shared
     
     @State private var name = ""
     @State private var url = ""
@@ -159,7 +159,7 @@ struct SettingsDetailView: View {
     let searchText: String
     @ObservedObject var themeManager: ThemeManager
 
-    @StateObject private var aiManager = AIManager.shared
+    @ObservedObject private var aiManager = AIManager.shared
     @State private var showAISettings = false
     
     @AppStorage("fontSize") private var fontSize: Double = 14
@@ -561,7 +561,7 @@ struct ThemePreviewView: View {
 // MARK: - Connected Mode Settings Section
 
 struct ConnectedModeSettingsSection: View {
-    @StateObject var tunnelManager = TunnelManager.shared
+    @ObservedObject var tunnelManager = TunnelManager.shared
     @State private var showingAddTunnel = false
     
     var body: some View {

@@ -55,7 +55,7 @@ enum DiagnosticSeverity: String, CaseIterable, Identifiable {
 
 struct ProblemRowView: View {
     let problem: DiagnosticItem
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -155,7 +155,7 @@ struct FileGroupView: View {
     let file: String
     let problems: [DiagnosticItem]
     @State private var isExpanded: Bool = true
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     private var theme: Theme { themeManager.currentTheme }
     private var fileName: String { (file as NSString).lastPathComponent }
@@ -234,7 +234,7 @@ struct FileGroupView: View {
 struct ProblemsView: View {
     @State private var problems: [DiagnosticItem] = []
     @State private var selectedSeverities: Set<DiagnosticSeverity> = Set(DiagnosticSeverity.allCases)
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     private var theme: Theme { themeManager.currentTheme }
     

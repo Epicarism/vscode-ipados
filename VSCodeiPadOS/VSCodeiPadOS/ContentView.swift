@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import UniformTypeIdentifiers
 
@@ -83,7 +84,6 @@ struct ContentView: View {
             .modifier(NavigationHandlers(editorCore: editorCore, showTerminal: $showTerminal, showSettings: $showSettings))
             .modifier(EditorActionHandlers(editorCore: editorCore))
             .modifier(CursorAndZoomHandlers(editorCore: editorCore))
-            .modifier(EditingHandlers(editorCore: editorCore))
             .modifier(TimelineHandlers(editorCore: editorCore))
             .environmentObject(themeManager)
             .environmentObject(editorCore)
@@ -198,6 +198,10 @@ struct ContentView: View {
 
     // MARK: - Notification Handler Modifiers (split to help type-checker)
 
+    // MARK: - Batched Notification Handlers
+    // Optimized: Combined 22 separate .onReceive into 4 handlers using Publishers.MergeMany
+    // This reduces cascading re-renders when multiple notifications fire in the same run loop.
+
     private struct NavigationHandlers: ViewModifier {
         @ObservedObject var editorCore: EditorCore
         @Binding var showTerminal: Bool
@@ -205,14 +209,31 @@ struct ContentView: View {
 
         func body(content: Content) -> some View {
             content
-                .onReceive(NotificationCenter.default.publisher(for: .showCommandPalette)) { _ in editorCore.showCommandPalette = true }
-                .onReceive(NotificationCenter.default.publisher(for: .toggleTerminal)) { _ in showTerminal.toggle() }
-                .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in editorCore.toggleSidebar() }
-                .onReceive(NotificationCenter.default.publisher(for: .showQuickOpen)) { _ in editorCore.showQuickOpen = true }
-                .onReceive(NotificationCenter.default.publisher(for: .showGoToSymbol)) { _ in editorCore.showGoToSymbol = true }
-                .onReceive(NotificationCenter.default.publisher(for: .showGoToLine)) { _ in editorCore.showGoToLine = true }
-                .onReceive(NotificationCenter.default.publisher(for: .showAIAssistant)) { _ in editorCore.showAIAssistant = true }
-                .onReceive(NotificationCenter.default.publisher(for: .showSettings)) { _ in showSettings = true }
+                // Boolean toggle notifications - combined into single stream
+                .onReceive(
+                    Publishers.MergeMany([
+                        NotificationCenter.default.publisher(for: .showCommandPalette).map { ($0, "showCommandPalette") },
+                        NotificationCenter.default.publisher(for: .toggleTerminal).map { ($0, "toggleTerminal") },
+                        NotificationCenter.default.publisher(for: .toggleSidebar).map { ($0, "toggleSidebar") },
+                        NotificationCenter.default.publisher(for: .showQuickOpen).map { ($0, "showQuickOpen") },
+                        NotificationCenter.default.publisher(for: .showGoToSymbol).map { ($0, "showGoToSymbol") },
+                        NotificationCenter.default.publisher(for: .showGoToLine).map { ($0, "showGoToLine") },
+                        NotificationCenter.default.publisher(for: .showAIAssistant).map { ($0, "showAIAssistant") },
+                        NotificationCenter.default.publisher(for: .showSettings).map { ($0, "showSettings") }
+                    ])
+                ) { _, action in
+                    switch action {
+                    case "showCommandPalette": editorCore.showCommandPalette = true
+                    case "toggleTerminal": showTerminal.toggle()
+                    case "toggleSidebar": editorCore.toggleSidebar()
+                    case "showQuickOpen": editorCore.showQuickOpen = true
+                    case "showGoToSymbol": editorCore.showGoToSymbol = true
+                    case "showGoToLine": editorCore.showGoToLine = true
+                    case "showAIAssistant": editorCore.showAIAssistant = true
+                    case "showSettings": showSettings = true
+                    default: break
+                    }
+                }
         }
     }
 
@@ -221,13 +242,33 @@ struct ContentView: View {
 
         func body(content: Content) -> some View {
             content
-                .onReceive(NotificationCenter.default.publisher(for: .newFile)) { _ in editorCore.addTab() }
-                .onReceive(NotificationCenter.default.publisher(for: .saveFile)) { _ in editorCore.saveActiveTab() }
-                .onReceive(NotificationCenter.default.publisher(for: .closeTab)) { _ in if let id = editorCore.activeTabId { editorCore.closeTab(id: id) } }
-                .onReceive(NotificationCenter.default.publisher(for: .showFind)) { _ in editorCore.showSearch = true }
-                .onReceive(NotificationCenter.default.publisher(for: .showReplace)) { _ in editorCore.showSearch = true; editorCore.showReplace = true }
-                .onReceive(NotificationCenter.default.publisher(for: .saveAllFiles)) { _ in editorCore.saveAllTabs() }
-                .onReceive(NotificationCenter.default.publisher(for: .goToDefinition)) { _ in editorCore.goToDefinitionAtCursor() }
+                // Editor action notifications - combined into single stream
+                .onReceive(
+                    Publishers.MergeMany([
+                        NotificationCenter.default.publisher(for: .newFile).map { ($0, "newFile") },
+                        NotificationCenter.default.publisher(for: .saveFile).map { ($0, "saveFile") },
+                        NotificationCenter.default.publisher(for: .closeTab).map { ($0, "closeTab") },
+                        NotificationCenter.default.publisher(for: .showFind).map { ($0, "showFind") },
+                        NotificationCenter.default.publisher(for: .showReplace).map { ($0, "showReplace") },
+                        NotificationCenter.default.publisher(for: .saveAllFiles).map { ($0, "saveAllFiles") },
+                        NotificationCenter.default.publisher(for: .goToDefinition).map { ($0, "goToDefinition") },
+                        NotificationCenter.default.publisher(for: .showGlobalSearch).map { ($0, "showGlobalSearch") }
+                    ])
+                ) { _, action in
+                    switch action {
+                    case "newFile": editorCore.addTab()
+                    case "saveFile": editorCore.saveActiveTab()
+                    case "closeTab": if let id = editorCore.activeTabId { editorCore.closeTab(id: id) }
+                    case "showFind": editorCore.showSearch = true
+                    case "showReplace": editorCore.showSearch = true; editorCore.showReplace = true
+                    case "saveAllFiles": editorCore.saveAllTabs()
+                    case "goToDefinition": editorCore.goToDefinitionAtCursor()
+                    case "showGlobalSearch":
+                        editorCore.focusedSidebarTab = 1
+                        withAnimation { editorCore.showSidebar = true }
+                    default: break
+                    }
+                }
         }
     }
 
@@ -236,26 +277,32 @@ struct ContentView: View {
 
         func body(content: Content) -> some View {
             content
-                .onReceive(NotificationCenter.default.publisher(for: .zoomIn)) { _ in editorCore.zoomIn() }
-                .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in editorCore.zoomOut() }
-                .onReceive(NotificationCenter.default.publisher(for: .goBack)) { _ in editorCore.navigateBack() }
-                .onReceive(NotificationCenter.default.publisher(for: .goForward)) { _ in editorCore.navigateForward() }
-                .onReceive(NotificationCenter.default.publisher(for: .addCursorAbove)) { _ in editorCore.addCursorAbove() }
-                .onReceive(NotificationCenter.default.publisher(for: .addCursorBelow)) { _ in editorCore.addCursorBelow() }
-        }
-    }
-
-    private struct EditingHandlers: ViewModifier {
-        @ObservedObject var editorCore: EditorCore
-
-        func body(content: Content) -> some View {
-            content
-                .onReceive(NotificationCenter.default.publisher(for: .showGlobalSearch)) { _ in
-                    editorCore.focusedSidebarTab = 1
-                    withAnimation { editorCore.showSidebar = true }
+                // Cursor and zoom notifications - combined into single stream
+                .onReceive(
+                    Publishers.MergeMany([
+                        NotificationCenter.default.publisher(for: .zoomIn).map { ($0, "zoomIn") },
+                        NotificationCenter.default.publisher(for: .zoomOut).map { ($0, "zoomOut") },
+                        NotificationCenter.default.publisher(for: .goBack).map { ($0, "goBack") },
+                        NotificationCenter.default.publisher(for: .goForward).map { ($0, "goForward") },
+                        NotificationCenter.default.publisher(for: .addCursorAbove).map { ($0, "addCursorAbove") },
+                        NotificationCenter.default.publisher(for: .addCursorBelow).map { ($0, "addCursorBelow") }
+                    ])
+                ) { _, action in
+                    switch action {
+                    case "zoomIn": editorCore.zoomIn()
+                    case "zoomOut": editorCore.zoomOut()
+                    case "goBack": editorCore.navigateBack()
+                    case "goForward": editorCore.navigateForward()
+                    case "addCursorAbove": editorCore.addCursorAbove()
+                    case "addCursorBelow": editorCore.addCursorBelow()
+                    default: break
+                    }
                 }
         }
     }
+
+    // EditingHandlers removed - merged into EditorActionHandlers above
+
 
     @ViewBuilder
     private var contentWithSheets: some View {
@@ -808,6 +855,7 @@ struct IDEEditorView: View {
                                     currentLineNumber: $currentLineNumber,
                                     currentColumn: $currentColumn,
                                     cursorIndex: $cursorIndex,
+                                    lineHeight: $lineHeight,
                                     isActive: isTerminalFocused?.wrappedValue != true,
                                     fontSize: editorCore.editorFontSize,
                                     onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
@@ -837,7 +885,8 @@ struct IDEEditorView: View {
                         }
                         .onChange(of: text) { _, newValue in
                             editorCore.updateActiveTabContent(newValue)
-                            editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: currentColumn)
+                            // Use debounced cursor update to reduce view refreshes
+                            editorCore.updateCursorPosition(CursorPosition(line: currentLineNumber, column: currentColumn))
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
                             foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
@@ -862,7 +911,7 @@ struct IDEEditorView: View {
                                 scrollPosition = max(0, min(newLine, totalLines - 1))
                             }
                         )
-                        .frame(width: 80)
+                        .frame(width: 60)
                     }
                 }
                 .background(theme.editorBackground)
@@ -948,10 +997,12 @@ struct IDEEditorView: View {
             foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
         }
         .onChange(of: currentLineNumber) { _, line in
-            editorCore.cursorPosition = CursorPosition(line: line, column: currentColumn)
+            // Use debounced cursor update to reduce view refreshes
+            editorCore.updateCursorPosition(CursorPosition(line: line, column: currentColumn))
         }
         .onChange(of: currentColumn) { _, col in
-            editorCore.cursorPosition = CursorPosition(line: currentLineNumber, column: col)
+            // Use debounced cursor update to reduce view refreshes
+            editorCore.updateCursorPosition(CursorPosition(line: currentLineNumber, column: col))
         }
         .onChange(of: editorCore.editorFontSize) { _, newSize in
             // Update lineHeight to match Runestone's line height (~1.4x font size)

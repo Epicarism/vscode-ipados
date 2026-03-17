@@ -217,6 +217,21 @@ final class GitManager: ObservableObject {
     private var nativeReader: NativeGitReader?
     private var nativeWriter: NativeGitWriter?
     
+    /// Data structure for passing refresh results from background to main thread
+    private struct RefreshData: Sendable {
+        let currentBranch: String
+        let branches: [GitBranch]
+        let remoteBranches: [GitBranch]
+        let fileStatuses: [GitFileStatus]
+        let recentCommits: [GitCommit]
+        let aheadCount: Int
+        let behindCount: Int
+    }
+    
+    /// Task tracking for cancellation and debouncing
+    private var refreshTask: Task<(error: String?, data: RefreshData?), Never>?
+    private var debounceTask: Task<Void, Never>?
+    
     private init() {}
     
     // MARK: - Repository Setup
@@ -258,118 +273,168 @@ final class GitManager: ObservableObject {
     // MARK: - Git Operations
     
     func refresh() async {
-        isLoading = true
-        defer { isLoading = false }
-        lastError = nil
+        // Cancel any in-flight refresh
+        refreshTask?.cancel()
         
-        guard let reader = nativeReader else {
+        // Capture the repo URL to create reader in background
+        guard let repoURL = workingDirectory else {
             lastError = "No git repository found"
             return
         }
         
-        // Current branch
-        currentBranch = reader.currentBranch() ?? "HEAD"
+        isLoading = true
+        lastError = nil
         
-        // Branches
-        let localBranchNames = reader.localBranches()
-        branches = localBranchNames.map { name in
-            GitBranch(name: name, isRemote: false, isCurrent: name == currentBranch)
+        // Run all heavy I/O on a background thread
+        refreshTask = Task.detached { [weak self] in
+            // Create reader inside detached task (NativeGitReader is not Sendable)
+            guard let reader = NativeGitReader(repositoryURL: repoURL) else {
+                return (error: "No git repository found", data: nil as RefreshData?)
+            }
+            
+            // Current branch
+            let branch = reader.currentBranch() ?? "HEAD"
+            
+            // Branches
+            let localBranchNames = reader.localBranches()
+            let localBranches = localBranchNames.map { name in
+                GitBranch(name: name, isRemote: false, isCurrent: name == branch)
+            }
+            
+            let remoteBranchPairs = reader.remoteBranches()
+            let remoteBranches = remoteBranchPairs.map { (remote, br) in
+                GitBranch(name: "\(remote)/\(br)", isRemote: true, isCurrent: false)
+            }
+            
+            // Status
+            let fileStatuses = reader.status()
+            
+            // Recent commits
+            let commits = reader.recentCommits(count: 20)
+            let recentCommits = commits.map { commit in
+                GitCommit(id: commit.sha, message: commit.message, author: commit.author, date: commit.authorDate)
+            }
+            
+            // Ahead/behind counting
+            var aheadCount = 0
+            var behindCount = 0
+            
+            if let headSHA = reader.headSHA() {
+                // Look for a remote tracking branch matching the current branch
+                let trackingRemote = remoteBranches.first { $0.name.hasSuffix("/\(branch)") }
+                if let tracking = trackingRemote {
+                    let refPath = repoURL.appendingPathComponent(".git/refs/remotes/\(tracking.name)")
+                    var remoteSHA: String?
+                    if let data = try? Data(contentsOf: refPath) {
+                        remoteSHA = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else {
+                        // Fallback: check packed-refs
+                        let packedRefPath = repoURL.appendingPathComponent(".git/packed-refs")
+                        if let packedContent = try? String(contentsOf: packedRefPath, encoding: .utf8) {
+                            for line in packedContent.components(separatedBy: .newlines) {
+                                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+                                guard !trimmedLine.isEmpty, !trimmedLine.hasPrefix("#") else { continue }
+                                let parts = trimmedLine.components(separatedBy: .whitespaces)
+                                guard parts.count >= 2 else { continue }
+                                if parts[1] == "refs/remotes/\(tracking.name)" {
+                                    remoteSHA = parts[0]
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    if let remoteSHA, remoteSHA != headSHA {
+                        let (ahead, behind) = Self.countAheadBehindStatic(
+                            headSHA: headSHA,
+                            remoteSHA: remoteSHA,
+                            reader: reader
+                        )
+                        aheadCount = ahead
+                        behindCount = behind
+                    }
+                }
+            }
+            
+            
+            let data = RefreshData(
+                currentBranch: branch,
+                branches: localBranches,
+                remoteBranches: remoteBranches,
+                fileStatuses: fileStatuses,
+                recentCommits: recentCommits,
+                aheadCount: aheadCount,
+                behindCount: behindCount
+            )
+            return (error: nil, data: data)
         }
         
-        let remoteBranchPairs = reader.remoteBranches()
-        remoteBranches = remoteBranchPairs.map { (remote, branch) in
-            GitBranch(name: "\(remote)/\(branch)", isRemote: true, isCurrent: false)
+        // Await background work and update @Published on MainActor
+        let result = await refreshTask?.value
+        
+        guard let (error, data) = result else {
+            isLoading = false
+            return
         }
         
-        // Status
-        let fileStatuses = reader.status()
+        if let error = error {
+            lastError = error
+            isLoading = false
+            return
+        }
         
-        stagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
+        guard let data = data else {
+            isLoading = false
+            return
+        }
+        
+        // Update all @Published properties on MainActor
+        currentBranch = data.currentBranch
+        branches = data.branches
+        remoteBranches = data.remoteBranches
+        
+        stagedChanges = data.fileStatuses.compactMap { status -> GitFileChange? in
             guard let staged = status.staged else { return nil }
             return GitFileChange(path: status.path, kind: mapStatusType(staged), staged: true)
         }
         
-        unstagedChanges = fileStatuses.compactMap { status -> GitFileChange? in
+        unstagedChanges = data.fileStatuses.compactMap { status -> GitFileChange? in
             guard let working = status.working, working != .untracked else { return nil }
             return GitFileChange(path: status.path, kind: mapStatusType(working), staged: false)
         }
         
-        untrackedFiles = fileStatuses.compactMap { status -> GitFileChange? in
+        untrackedFiles = data.fileStatuses.compactMap { status -> GitFileChange? in
             guard status.working == .untracked else { return nil }
             return GitFileChange(path: status.path, kind: .untracked, staged: false)
         }
         
-        // Populate ahead/behind counts (simplified)
-        if let headSHA = reader.headSHA() {
-            // Look for a remote tracking branch matching the current branch
-            let trackingRemote = remoteBranches.first { $0.name.hasSuffix("/\(currentBranch)") }
-            if let tracking = trackingRemote {
-                let refPath = workingDirectory?.appendingPathComponent(".git/refs/remotes/\(tracking.name)")
-                var remoteSHA: String?
-                if let refPath, let data = try? Data(contentsOf: refPath) {
-                    remoteSHA = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    // Fallback: check packed-refs
-                    if let packedRefPath = workingDirectory?.appendingPathComponent(".git/packed-refs"),
-                       let packedContent = try? String(contentsOf: packedRefPath, encoding: .utf8) {
-                        for line in packedContent.components(separatedBy: .newlines) {
-                            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-                            guard !trimmedLine.isEmpty, !trimmedLine.hasPrefix("#") else { continue }
-                            let parts = trimmedLine.components(separatedBy: .whitespaces)
-                            // packed-refs format: <sha> <refname>
-                            guard parts.count >= 2 else { continue }
-                            if parts[1] == "refs/remotes/\(tracking.name)" {
-                                remoteSHA = parts[0]
-                                break
-                        }
-                        }
-                    }
-                }
-                if let remoteSHA, remoteSHA != headSHA {
-                    // Walk the commit chain from HEAD to count ahead/behind accurately
-                    let (ahead, behind) = countAheadBehind(
-                        headSHA: headSHA,
-                        remoteSHA: remoteSHA,
-                        reader: reader
-                    )
-                    aheadCount = ahead
-                    behindCount = behind
-                } else {
-                    aheadCount = 0
-                    behindCount = 0
-                }
-            } else {
-                aheadCount = 0
-                behindCount = 0
-            }
-        }
-
-        // Recent commits
-        let commits = reader.recentCommits(count: 20)
-        recentCommits = commits.map { commit in
-            GitCommit(id: commit.sha, message: commit.message, author: commit.author, date: commit.authorDate)
-        }
+        recentCommits = data.recentCommits
+        aheadCount = data.aheadCount
+        behindCount = data.behindCount
+        
+        isLoading = false
     }
     
-    private func mapStatusType(_ status: GitStatusType) -> GitChangeKind {
-        switch status {
-        case .modified: return .modified
-        case .added: return .added
-        case .deleted: return .deleted
-        case .renamed: return .renamed
-        case .copied: return .copied
-        case .untracked: return .untracked
-        case .ignored: return .ignored
+    /// Debounced refresh - waits 300ms before actually refreshing, canceling any pending refresh.
+    /// Use this for rapid operations to avoid queuing multiple refreshes.
+    func debouncedRefresh() async {
+        // Cancel any pending debounce
+        debounceTask?.cancel()
+        
+        debounceTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
+            guard !Task.isCancelled else { return }
+            await refresh()
         }
+        
+        await debounceTask?.value
     }
-    /// Walk commit chains from HEAD and remote to count ahead/behind commits.
-    /// Uses the NativeGitReader's parseCommit to follow parent links.
-    /// Falls back to approximate counts if the chain is too long to walk locally.
-    private func countAheadBehind(headSHA: String, remoteSHA: String, reader: NativeGitReader) -> (ahead: Int, behind: Int) {
+    
+    /// Static version of countAheadBehind for use from detached context
+    nonisolated private static func countAheadBehindStatic(headSHA: String, remoteSHA: String, reader: NativeGitReader) -> (ahead: Int, behind: Int) {
         var ahead: Int = 0
         var behind: Int = 0
-        let maxWalk: Int = 200 // safety limit to avoid excessive work
-
+        let maxWalk: Int = 200
+        
         // Walk from HEAD towards the remote tracking branch
         var visited = Set<String>()
         var queue = [headSHA]
@@ -388,10 +453,9 @@ final class GitManager: ObservableObject {
             }
         }
         if !foundRemote {
-            // Could not reach remote from HEAD — we are definitely ahead, but count is approximate
             ahead = max(ahead, 1)
         }
-
+        
         // Walk from remote towards HEAD
         visited.removeAll()
         queue = [remoteSHA]
@@ -412,10 +476,21 @@ final class GitManager: ObservableObject {
         if !foundHead {
             behind = max(behind, 1)
         }
-
+        
         return (ahead, behind)
     }
-
+    
+    private func mapStatusType(_ status: GitStatusType) -> GitChangeKind {
+        switch status {
+        case .modified: return .modified
+        case .added: return .added
+        case .deleted: return .deleted
+        case .renamed: return .renamed
+        case .copied: return .copied
+        case .untracked: return .untracked
+        case .ignored: return .ignored
+        }
+    }
     
     /// Build a real diff for a working-copy file against HEAD (offline, using NativeGitReader).
     func diffWorkingCopyToHEAD(path: String, kind: GitChangeKind) async -> DiffFile? {
