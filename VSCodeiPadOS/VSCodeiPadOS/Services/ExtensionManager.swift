@@ -143,7 +143,7 @@ final class ExtensionManager: ObservableObject {
             return
         }
         
-        // Simulate brief async loading
+        // Brief delay so the in-progress indicator is visible before state updates.
         Task {
             defer {
                 operationInProgress = nil
@@ -176,7 +176,7 @@ final class ExtensionManager: ObservableObject {
             return
         }
         
-        // Simulate brief async unloading
+        // Brief delay so the in-progress indicator is visible before state updates.
         Task {
             defer {
                 operationInProgress = nil

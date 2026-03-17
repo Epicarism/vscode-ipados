@@ -151,11 +151,55 @@ struct VSCodeWebView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
             logger.info("[WebView Alert] \(message)")
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: nil,
+                        message: message,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        continuation.resume()
+                    })
+                    Self.topmostViewController(from: webView).present(alert, animated: true)
+                }
+            }
         }
         
         func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async -> Bool {
             logger.info("[WebView Confirm] \(message)")
-            return true
+            return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: nil,
+                        message: message,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                        continuation.resume(returning: false)
+                    })
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        continuation.resume(returning: true)
+                    })
+                    Self.topmostViewController(from: webView).present(alert, animated: true)
+                }
+            }
+        }
+        
+        private static func topmostViewController(from webView: WKWebView) -> UIViewController {
+            let root: UIViewController?
+            if let windowRoot = webView.window?.rootViewController {
+                root = windowRoot
+            } else {
+                root = UIApplication.shared.connectedScenes
+                    .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }
+                    .first
+            }
+            var presenter = root ?? UIViewController()
+            while let presented = presenter.presentedViewController {
+                presenter = presented
+            }
+            return presenter
         }
         
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

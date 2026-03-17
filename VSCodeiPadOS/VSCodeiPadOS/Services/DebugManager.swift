@@ -52,7 +52,7 @@ final class DebugManager: ObservableObject {
         /// Convenience for displaying in UI (1-based).
         var displayLine: Int { line + 1 }
 
-        /// UI only for now; there is no real debugger yet.
+        /// Whether this breakpoint is active. Synced to the remote debugger when connected.
         var isEnabled: Bool = true
 
         var fileName: String { (file as NSString).lastPathComponent }
@@ -176,11 +176,8 @@ final class DebugManager: ObservableObject {
         var breakpoints: [Breakpoint] { allBreakpoints }
 
         private init() {
-            // Seed some UI data so the panels aren't empty.
-            watchExpressions = [
-                WatchExpression(expression: "counter", value: "0"),
-                WatchExpression(expression: "user.name", value: "\"Taylor\""),
-            ]
+            // Restore any breakpoints saved in a previous session.
+            restoreBreakpoints()
         }
 
         // MARK: - Console Methods
@@ -378,6 +375,7 @@ final class DebugManager: ObservableObject {
                     kind: .system
                 ))
             }
+            saveBreakpoints()
         }
 
         func setBreakpoint(file: String, line: Int, isEnabled: Bool) {
@@ -411,6 +409,7 @@ final class DebugManager: ObservableObject {
                 dict[fileId] = set
             }
             breakpointsByFile = dict
+            saveBreakpoints()
 
             // Sync removal to remote debugger if connected
             if remoteDebugger?.state.isActive == true {
@@ -530,50 +529,15 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // Simulated mode fallback
-    // If paused, resume; if stopped, start a simulated session.
-    if state == .stopped {
-    callStack = [
-    StackFrame(function: "main()", file: "App.swift", line: 12),
-    StackFrame(function: "run()", file: "Runner.swift", line: 48),
-    StackFrame(function: "doWork()", file: "Worker.swift", line: 103)
-    ]
-    selectedFrameId = callStack.first?.id
-
-    variables = [
-    Variable(name: "counter", value: "0", type: "Int"),
-    Variable(
-    name: "user",
-    value: "User(…)",
-    type: "User",
-    children: [
-    Variable(name: "id", value: "42", type: "Int"),
-    Variable(name: "name", value: "\"Taylor\"", type: "String")
-    ]
-    )
-    ]
-
+    // No remote debugger connected — show guidance instead of simulating.
+    if state == .paused {
+        // Already paused; nothing to do.
+        return
+    }
     consoleEntries.append(ConsoleEntry(
-    message: "Debug session started.",
-    kind: .system
+        message: "Local JavaScript debugging: Use the Debug Console to evaluate JavaScript expressions. For full step debugging, connect a remote debugger via SSH.",
+        kind: .info
     ))
-    }
-
-    state = .running
-
-    // Auto-pause quickly so step buttons make sense in the UI.
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-    Task { @MainActor in
-    guard let self else { return }
-    if self.state == .running {
-    self.state = .paused
-    self.consoleEntries.append(ConsoleEntry(
-    message: "Paused.",
-    kind: .system
-    ))
-    }
-    }
-    }
     }
 
         /// Start a real JavaScript debug session
@@ -760,11 +724,10 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // Simulated mode fallback
-    advanceTopFrameLine(by: 1)
+    // No remote debugger — step debugging is not available locally.
     consoleEntries.append(ConsoleEntry(
-    message: "Stepped over.",
-    kind: .system
+        message: "Step debugging requires a remote debugger connection. Use 'Connect' to attach via SSH.",
+        kind: .info
     ))
     }
 
@@ -792,18 +755,10 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // Simulated mode fallback
-    advanceTopFrameLine(by: 1)
-    // Pretend we stepped into a function.
-    if let top = callStack.first {
-    var cs = callStack
-    cs.insert(StackFrame(function: "helper()", file: top.file, line: top.line), at: 0)
-    callStack = cs
-    selectedFrameId = callStack.first?.id
-    }
+    // No remote debugger — step debugging is not available locally.
     consoleEntries.append(ConsoleEntry(
-    message: "Stepped into helper().",
-    kind: .system
+        message: "Step debugging requires a remote debugger connection. Use 'Connect' to attach via SSH.",
+        kind: .info
     ))
     }
 
@@ -831,17 +786,10 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // Simulated mode fallback
-    advanceTopFrameLine(by: 1)
-    if callStack.count > 1 {
-    var cs = callStack
-    cs.removeFirst()
-    callStack = cs
-    selectedFrameId = callStack.first?.id
-    }
+    // No remote debugger — step debugging is not available locally.
     consoleEntries.append(ConsoleEntry(
-    message: "Stepped out.",
-    kind: .system
+        message: "Step debugging requires a remote debugger connection. Use 'Connect' to attach via SSH.",
+        kind: .info
     ))
     }
 
@@ -899,6 +847,7 @@ final class DebugManager: ObservableObject {
                 message: "All \(count) breakpoint\(count == 1 ? "" : "s") removed.",
                 kind: .system
             ))
+            saveBreakpoints()
         }
 
         /// Toggle a breakpoint by its composite id string ("file::line").
@@ -933,6 +882,7 @@ final class DebugManager: ObservableObject {
                 message: "Breakpoint at \(shortName):\(line + 1) \(newState ? "enabled" : "disabled")",
                 kind: .system
             ))
+            saveBreakpoints()
         }
         
         /// Set the condition for a breakpoint by its composite id string ("file::line").
@@ -962,6 +912,7 @@ final class DebugManager: ObservableObject {
                     kind: .system
                 ))
             }
+            saveBreakpoints()
         }
 
     private func advanceTopFrameLine(by delta: Int) {
@@ -1190,6 +1141,61 @@ final class DebugManager: ObservableObject {
                 }
             )
         }
+    }
+
+    // MARK: - Breakpoint Persistence
+
+    /// Codable mirror of `Breakpoint` used exclusively for UserDefaults persistence.
+    private struct PersistedBreakpoint: Codable {
+        var file: String
+        var line: Int
+        var isEnabled: Bool
+        var condition: String?
+    }
+
+    private static let breakpointsPersistenceKey = "DebugManager.persistedBreakpoints"
+
+    /// Serialize the current breakpoint state and write it to UserDefaults.
+    private func saveBreakpoints() {
+        let records: [PersistedBreakpoint] = allBreakpoints.map { bp in
+            PersistedBreakpoint(
+                file: bp.file,
+                line: bp.line,
+                isEnabled: bp.isEnabled,
+                condition: bp.condition
+            )
+        }
+        if let data = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(data, forKey: Self.breakpointsPersistenceKey)
+        }
+    }
+
+    /// Read breakpoints from UserDefaults and restore them into the in-memory state.
+    private func restoreBreakpoints() {
+        guard let data = UserDefaults.standard.data(forKey: Self.breakpointsPersistenceKey),
+              let records = try? JSONDecoder().decode([PersistedBreakpoint].self, from: data)
+        else { return }
+
+        var dict: [String: Set<Int>] = [:]
+        var enabledStates: [String: Bool] = [:]
+        var conditions: [String: String] = [:]
+
+        for record in records {
+            let fileId = canonicalFileId(record.file)
+            let line   = canonicalLine(record.line)
+            dict[fileId, default: []].insert(line)
+            let id = "\(fileId)::\(line)"
+            if !record.isEnabled {
+                enabledStates[id] = false
+            }
+            if let cond = record.condition, !cond.isEmpty {
+                conditions[id] = cond
+            }
+        }
+
+        breakpointsByFile       = dict
+        breakpointEnabledStates = enabledStates
+        breakpointConditions    = conditions
     }
 }
 

@@ -64,12 +64,12 @@ struct ExtensionsPanel: View {
                 .font(.system(size: 12))
                 .accessibilityHidden(true)
             
-            TextField("Search Extensions in Marketplace", text: $manager.searchText)
+            TextField("Search Extensions", text: $manager.searchText)
                 .font(.system(size: 13))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .accessibilityLabel("Search extensions in marketplace")
+                .accessibilityLabel("Search extensions")
             
             if !manager.searchText.isEmpty {
                 Button(action: { manager.searchText = "" }) {
@@ -189,6 +189,31 @@ struct ExtensionsPanel: View {
                             showingDetail = true
                         }
                     )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if ext.isInstalled {
+                            Button(role: .destructive) {
+                                manager.uninstall(ext)
+                            } label: {
+                                Label("Uninstall", systemImage: "trash")
+                            }
+                            Button {
+                                manager.toggleEnabled(ext)
+                            } label: {
+                                Label(
+                                    ext.isEnabled ? "Disable" : "Enable",
+                                    systemImage: ext.isEnabled ? "pause.circle" : "play.circle"
+                                )
+                            }
+                            .tint(ext.isEnabled ? .orange : .green)
+                        } else {
+                            Button {
+                                manager.install(ext)
+                            } label: {
+                                Label("Install", systemImage: "arrow.down.circle")
+                            }
+                            .tint(.blue)
+                        }
+                    }
                     Divider().padding(.leading, 52)
                 }
             }
@@ -240,17 +265,27 @@ struct ExtensionsPanel: View {
     }
     
     private var emptyIcon: String {
-        manager.searchText.isEmpty ? "puzzlepiece" : "magnifyingglass"
+        if !manager.searchText.isEmpty { return "magnifyingglass" }
+        switch manager.selectedFilter {
+        case .installed: return "puzzlepiece.extension"
+        case .recommended: return "star"
+        default: return "square.grid.2x2"
+        }
     }
-    
+
     private var emptyMessage: String {
         if !manager.searchText.isEmpty {
-            return "No extensions matching '\(manager.searchText)'"
+            return "No extensions found for '\(manager.searchText)'\nTry a different search term."
         }
         switch manager.selectedFilter {
-        case .installed: return "No extensions installed yet"
-        case .recommended: return "No recommendations available"
-        default: return "No extensions found"
+        case .installed:
+            return "You haven't installed any extensions yet.\nBrowse the marketplace to get started."
+        case .recommended:
+            return "No recommendations right now.\nInstall some extensions to get personalized picks."
+        case .popular:
+            return "No popular extensions to show."
+        case .all:
+            return "No extensions available."
         }
     }
 }
