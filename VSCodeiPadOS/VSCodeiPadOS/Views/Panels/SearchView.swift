@@ -525,10 +525,10 @@ struct SearchView: View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption)
-                .foregroundColor(.red)
+                .foregroundColor(Color(UIColor.systemRed))
             Text(error)
                 .font(.caption)
-                .foregroundColor(.red)
+                .foregroundColor(Color(UIColor.systemRed))
                 .lineLimit(2)
             Spacer()
             Button(action: {
@@ -536,7 +536,7 @@ struct SearchView: View {
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
-                    .foregroundColor(.red.opacity(0.7))
+                    .foregroundColor(Color(UIColor.systemRed).opacity(0.7))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss error")
@@ -544,7 +544,7 @@ struct SearchView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.red.opacity(0.1))
+        .background(Color(UIColor.systemRed).opacity(0.1))
         .cornerRadius(4)
         .padding(.leading, 20)
     }
@@ -888,10 +888,9 @@ struct SearchView: View {
             excludeGlobs: excludeGlobs
         )
         
-        searchTask = Task { [weak searchManager] in
-            guard let manager = searchManager else { return }
+        searchTask = Task {
             guard !Task.isCancelled else { return }
-            manager.search(in: rootURL, query: searchQuery)
+            searchManager.search(in: rootURL, query: searchQuery)
         }
     }
     
@@ -956,10 +955,22 @@ struct SearchView: View {
         cachedConvertedResults = searchManager.results.map { fileMatch in
             let fileName = URL(fileURLWithPath: fileMatch.filePath).lastPathComponent
             let matches = fileMatch.matches.map { match in
-                SearchResultLine(
+                // Compute actual match ranges for highlighting
+                var matchRanges: [Range<String.Index>] = []
+                let lineContent = match.preview
+                let options: String.CompareOptions = caseSensitive ? [] : .caseInsensitive
+                if !searchText.isEmpty {
+                    var searchStart = lineContent.startIndex
+                    while searchStart < lineContent.endIndex,
+                          let range = lineContent.range(of: searchText, options: options, range: searchStart..<lineContent.endIndex) {
+                        matchRanges.append(range)
+                        searchStart = range.upperBound
+                    }
+                }
+                return SearchResultLine(
                     lineNumber: match.location.line,
                     text: match.preview,
-                    matches: []
+                    matches: matchRanges
                 )
             }
             return FileSearchResult(

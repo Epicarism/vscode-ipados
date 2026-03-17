@@ -130,7 +130,7 @@ struct DebugView: View {
             if isDebugging {
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(debugManager.state == .running ? Color.green : Color.orange)
+                        .fill(debugManager.state == .running ? Color(UIColor.systemGreen) : Color(UIColor.systemOrange))
                         .frame(width: 6, height: 6)
                     Text(debugManager.state.displayName)
                         .font(.system(size: 10))
@@ -141,9 +141,9 @@ struct DebugView: View {
             Button(action: { debugManager.play() }) {
                 Image(systemName: "play.fill")
                     .font(.system(size: 10))
-                    .foregroundColor(.green)
+                    .foregroundColor(Color(UIColor.systemGreen))
                     .padding(4)
-                    .background(Color.green.opacity(0.1))
+                    .background(Color(UIColor.systemGreen).opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
             }
             .buttonStyle(.plain)
@@ -159,9 +159,9 @@ struct DebugView: View {
                         Text("Connect")
                             .font(.system(size: 9))
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color(UIColor.systemBlue))
                     .padding(4)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color(UIColor.systemBlue).opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
                 .buttonStyle(.plain)
@@ -174,7 +174,7 @@ struct DebugView: View {
                 HStack(spacing: 2) {
                     Image(systemName: "antenna.radiowaves.left.and.right")
                         .font(.system(size: 8))
-                        .foregroundColor(.green)
+                        .foregroundColor(Color(UIColor.systemGreen))
                     Text("Remote")
                         .font(.system(size: 8))
                         .foregroundColor(theme.comment)
@@ -243,7 +243,7 @@ struct DebugView: View {
             // Continue / Pause
             DebugToolbarButton(
                 icon: debugManager.state == .paused ? "play.fill" : "pause.fill",
-                color: .blue,
+                color: Color(UIColor.systemBlue),
                 label: debugManager.state == .paused ? "Continue" : "Pause",
                 theme: theme
             ) {
@@ -294,7 +294,7 @@ struct DebugView: View {
             // Restart
             DebugToolbarButton(
                 icon: "arrow.clockwise",
-                color: .green,
+                color: Color(UIColor.systemGreen),
                 label: "Restart",
                 theme: theme
             ) {
@@ -304,7 +304,7 @@ struct DebugView: View {
             // Stop
             DebugToolbarButton(
                 icon: "stop.fill",
-                color: .red,
+                color: Color(UIColor.systemRed),
                 label: "Stop",
                 theme: theme
             ) {
@@ -422,7 +422,7 @@ struct DebugView: View {
                             Text("Add Expression")
                         }
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(UIColor.systemBlue))
                         .padding(.vertical, 4)
                         .padding(.leading, 12)
                     }
@@ -749,7 +749,7 @@ struct CallStackRow: View {
             if isActive {
                 Image(systemName: "play.fill")
                     .font(.system(size: 7))
-                    .foregroundColor(.yellow)
+                    .foregroundColor(Color(UIColor.systemYellow))
                     .accessibilityLabel("Active frame")
             } else {
                 Spacer().frame(width: 10)
@@ -813,7 +813,7 @@ struct BreakpointRow: View {
             if let condition = breakpoint.condition, !condition.isEmpty {
                 Text("(\(condition))")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.orange)
+                    .foregroundColor(Color(UIColor.systemOrange))
                     .lineLimit(1)
             }
             

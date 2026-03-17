@@ -60,8 +60,8 @@ struct OutputLineView: View {
     
     private var textColor: Color {
         switch line.logLevel {
-        case .error: return Color.red
-        case .warning: return Color.orange
+        case .error: return Color(UIColor.systemRed)
+        case .warning: return Color(UIColor.systemOrange)
         case .debug: return theme.comment
         case .info: return theme.editorForeground
         }
@@ -129,7 +129,7 @@ struct RemoteProgressView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 12) {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .purple))
+                        .progressViewStyle(CircularProgressViewStyle(tint: Color(UIColor.systemPurple)))
                         .scaleEffect(0.8)
                         .accessibilityHidden(true)
                     
@@ -173,11 +173,11 @@ struct RemoteProgressView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
             }
-            .background(Color.purple.opacity(0.1))
+            .background(Color(UIColor.systemPurple).opacity(0.1))
             .overlay(
                 HStack(spacing: 0) {
                     Rectangle()
-                        .fill(Color.purple)
+                        .fill(Color(UIColor.systemPurple))
                         .frame(width: 3)
                     Spacer()
                 }
@@ -361,6 +361,7 @@ struct OutputView: View {
     @State private var showingSearchBar: Bool = false
     @State private var showingLogLevelFilter: Bool = false
     @State private var showCopyConfirmation: Bool = false
+    @State private var copyTask: Task<Void, Never>?
 
     private var theme: Theme { themeManager.currentTheme }
     
@@ -518,19 +519,22 @@ struct OutputView: View {
             Button(action: {
                 outputManager.copyToClipboard(channel: outputManager.selectedChannel)
                 showCopyConfirmation = true
-                // Hide confirmation after 2 seconds
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    showCopyConfirmation = false
+                copyTask?.cancel()
+                copyTask = Task {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    if !Task.isCancelled {
+                        showCopyConfirmation = false
+                    }
                 }
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
                         .font(.system(size: 12))
-                        .foregroundColor(showCopyConfirmation ? .green : theme.comment)
+                        .foregroundColor(showCopyConfirmation ? Color(UIColor.systemGreen) : theme.comment)
                     if showCopyConfirmation {
                         Text("Copied")
                             .font(.system(size: 10))
-                            .foregroundColor(.green)
+                            .foregroundColor(Color(UIColor.systemGreen))
                     }
                 }
             }

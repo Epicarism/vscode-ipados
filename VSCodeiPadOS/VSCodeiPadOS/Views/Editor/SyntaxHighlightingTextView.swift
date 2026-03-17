@@ -204,9 +204,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         // Calculate line height
         if let font = textView.font {
-            DispatchQueue.main.async {
-                self.lineHeight = font.lineHeight
-            }
+            self.lineHeight = font.lineHeight
         }
         
         // Set initial text with syntax highlighting
@@ -252,9 +250,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             
             // Update line height
             if let font = textView.font {
-                DispatchQueue.main.async {
-                    self.lineHeight = font.lineHeight
-                }
+                self.lineHeight = font.lineHeight
             }
         }
         
@@ -484,7 +480,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             
             // Calculate visible range with buffer
             let visibleRect = textView.bounds
-            let _ = textView.textContainer
+
             let layoutManager = textView.layoutManager
             
             // Get the glyph range for the visible rect
@@ -891,51 +887,82 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         func handleToggleComment(in textView: UITextView) {
             guard let selectedRange = textView.selectedTextRange else { return }
             let text = textView.text ?? ""
+            let nsText = text as NSString
             
             // Determine comment prefix based on file language
             let commentPrefix = commentPrefixForFilename(parent.filename)
             
-            // Get the current line range
-            if let lineRange = textView.tokenizer.rangeEnclosingPosition(selectedRange.start, with: .paragraph, inDirection: UITextDirection(rawValue: 1)) {
-                let location = textView.offset(from: textView.beginningOfDocument, to: lineRange.start)
-                let length = textView.offset(from: lineRange.start, to: lineRange.end)
-                let nsRange = NSRange(location: location, length: length)
-                
-                if nsRange.location + nsRange.length <= (text as NSString).length {
-                    let lineText = (text as NSString).substring(with: nsRange)
-                    let trimmed = lineText.trimmingCharacters(in: .whitespaces)
-                    
-                    // Check if line starts with the language-appropriate comment prefix
-                    let isCommented = trimmed.hasPrefix(commentPrefix)
-                    
-                    // Toggle comment
-                    var newLineText: String
-                    if isCommented {
-                        // Remove comment prefix (first occurrence only)
-                        if let range = lineText.range(of: commentPrefix) {
-                            newLineText = lineText.replacingCharacters(in: range, with: "")
-                            // Also remove one trailing space if present after the prefix
-                            if newLineText.hasPrefix(" "), lineText.hasPrefix(commentPrefix + " ") == false {
-                                // Don't remove space if there wasn't one
-                            }
-                        } else {
-                            newLineText = lineText
-                        }
-                    } else {
-                        // Add comment prefix with a space
-                        newLineText = commentPrefix + " " + lineText
+            // Get the full range of selected text in NSRange
+            let selStart = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
+            let selEnd = textView.offset(from: textView.beginningOfDocument, to: selectedRange.end)
+            
+            // Find all line ranges that intersect with the selection
+            var lineRanges: [NSRange] = []
+            var searchStart = selStart
+            
+            // If no selection (cursor only), just use the current line
+            if selStart == selEnd {
+                if let lineRange = textView.tokenizer.rangeEnclosingPosition(selectedRange.start, with: .paragraph, inDirection: UITextDirection(rawValue: 1)) {
+                    let loc = textView.offset(from: textView.beginningOfDocument, to: lineRange.start)
+                    let len = textView.offset(from: lineRange.start, to: lineRange.end)
+                    lineRanges.append(NSRange(location: loc, length: len))
+                }
+            } else {
+                // Find all lines in selection
+                let fullRange = NSRange(location: selStart, length: selEnd - selStart)
+                nsText.enumerateSubstrings(in: fullRange, options: [.byLines, .substringNotRequired]) { _, substringRange, _, _ in
+                    lineRanges.append(substringRange)
+                }
+                // If enumerateSubstrings returned nothing, fall back to paragraph
+                if lineRanges.isEmpty {
+                    if let lineRange = textView.tokenizer.rangeEnclosingPosition(selectedRange.start, with: .paragraph, inDirection: UITextDirection(rawValue: 1)) {
+                        let loc = textView.offset(from: textView.beginningOfDocument, to: lineRange.start)
+                        let len = textView.offset(from: lineRange.start, to: lineRange.end)
+                        lineRanges.append(NSRange(location: loc, length: len))
                     }
-                    
-                    // Replace the line with undo support
-                    textView.undoManager?.beginUndoGrouping()
-                    let textStorage = textView.textStorage
-                    textStorage.replaceCharacters(in: nsRange, with: newLineText)
-                    textView.undoManager?.endUndoGrouping()
-                    
-                    // Update parent binding
-                    parent.text = textView.text
                 }
             }
+            
+            guard !lineRanges.isEmpty else { return }
+            
+            // Determine if we should add or remove comments
+            // If ALL lines are commented, remove comments; otherwise add
+            let allCommented = lineRanges.allSatisfy { range in
+                guard range.location + range.length <= nsText.length else { return false }
+                let lineText = nsText.substring(with: range)
+                return lineText.trimmingCharacters(in: .whitespaces).hasPrefix(commentPrefix)
+            }
+            
+            // Apply changes in reverse order to preserve offsets
+            textView.undoManager?.beginUndoGrouping()
+            let textStorage = textView.textStorage
+            
+            for lineRange in lineRanges.reversed() {
+                guard lineRange.location + lineRange.length <= nsText.length else { continue }
+                let lineText = nsText.substring(with: lineRange)
+                
+                let newLineText: String
+                if allCommented {
+                    // Remove comment prefix
+                    if let range = lineText.range(of: commentPrefix + " ") {
+                        newLineText = lineText.replacingCharacters(in: range, with: "")
+                    } else if let range = lineText.range(of: commentPrefix) {
+                        newLineText = lineText.replacingCharacters(in: range, with: "")
+                    } else {
+                        newLineText = lineText
+                    }
+                } else {
+                    // Add comment prefix with a space
+                    newLineText = commentPrefix + " " + lineText
+                }
+                
+                textStorage.replaceCharacters(in: lineRange, with: newLineText)
+            }
+            
+            textView.undoManager?.endUndoGrouping()
+            
+            // Update parent binding
+            parent.text = textView.text
         }
         
         /// Returns the correct single-line comment prefix for the given filename.

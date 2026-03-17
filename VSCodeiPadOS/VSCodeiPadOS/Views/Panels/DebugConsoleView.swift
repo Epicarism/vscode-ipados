@@ -44,7 +44,7 @@ struct DebugConsoleEntryView: View {
                         Button(action: { isExpanded.toggle() }) {
                             Text(isExpanded ? "Show less" : "Show more...")
                                 .font(.system(size: 10))
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color(UIColor.systemBlue))
                         }
                     }
                     
@@ -67,9 +67,9 @@ struct DebugConsoleEntryView: View {
         switch entry.kind {
         case .input: return theme.keyword
         case .output: return theme.comment
-        case .error: return .red
-        case .warning: return .orange
-        case .info: return .blue
+        case .error: return Color(UIColor.systemRed)
+        case .warning: return Color(UIColor.systemOrange)
+        case .info: return Color(UIColor.systemBlue)
         case .system: return theme.comment.opacity(0.7)
         }
     }
@@ -81,20 +81,24 @@ struct DebugConsoleEntryView: View {
         case .output:
             return theme.editorForeground.opacity(0.9)
         case .error:
-            return .red
+            return Color(UIColor.systemRed)
         case .warning:
-            return .orange
+            return Color(UIColor.systemOrange)
         case .info:
-            return .blue
+            return Color(UIColor.systemBlue)
         case .system:
             return theme.comment
         }
     }
     
+    private static let timestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+    
     private func formatTimestamp(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss.SSS"
-        return formatter.string(from: date)
+        Self.timestampFormatter.string(from: date)
     }
 }
 
@@ -127,7 +131,7 @@ struct DebugConsoleView: View {
                                     Text("Debug Console")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(theme.comment)
-                                    Text("Type expressions to evaluate JavaScript, or type \"help\" for commands.")
+                                    Text("Type expressions to evaluate, or type \"help\" for commands.")
                                         .font(.system(size: 11))
                                         .foregroundColor(theme.comment.opacity(0.7))
                                         .multilineTextAlignment(.center)
@@ -171,7 +175,7 @@ struct DebugConsoleView: View {
             if debugManager.state == .running || debugManager.state == .paused {
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(debugManager.state == .running ? Color.green : Color.orange)
+                        .fill(debugManager.state == .running ? Color(UIColor.systemGreen) : Color(UIColor.systemOrange))
                         .frame(width: 6, height: 6)
                     Text(debugManager.state.displayName)
                         .font(.system(size: 10))
@@ -225,7 +229,7 @@ struct DebugConsoleView: View {
                             .font(.system(size: 10))
                             .foregroundColor(theme.comment)
                         
-                        ForEach(["this", "arguments", "locals", "globals"], id: \.self) { expr in
+                        ForEach(debugManager.remoteDebugger != nil ? ["frame", "args", "locals", "registers"] : ["this", "arguments", "locals", "globals"], id: \.self) { expr in
                             Button(action: {
                                 input = expr
                                 submit()

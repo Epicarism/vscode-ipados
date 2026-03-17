@@ -28,8 +28,8 @@ struct TimelineEntry: Identifiable, Hashable, Sendable {
 
         var tint: Color {
             switch self {
-            case .git: return .blue
-            case .local: return .orange
+            case .git: return Color(UIColor.systemBlue)
+            case .local: return Color(UIColor.systemOrange)
             }
         }
     }
@@ -275,25 +275,18 @@ final class TimelineViewModel: ObservableObject {
         self.provider = provider ?? GitTimelineProvider()
         
         // Listen for file save notifications (both manual and auto-save)
-        NotificationCenter.default.publisher(for: .saveFile)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let self = self else { return }
-                if let savedPath = notification.userInfo?["filePath"] as? String {
-                    self.recordLocalSave(filePath: savedPath)
+        // Listen for file save notifications (both manual and auto-save)
+        for notifName: Notification.Name in [.saveFile, .autoSaved] {
+            NotificationCenter.default.publisher(for: notifName)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] notification in
+                    guard let self = self else { return }
+                    if let savedPath = notification.userInfo?["filePath"] as? String {
+                        self.recordLocalSave(filePath: savedPath)
+                    }
                 }
-            }
-            .store(in: &cancellables)
-        
-        NotificationCenter.default.publisher(for: .autoSaved)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let self = self else { return }
-                if let savedPath = notification.userInfo?["filePath"] as? String {
-                    self.recordLocalSave(filePath: savedPath)
-                }
-            }
-            .store(in: &cancellables)
+                .store(in: &cancellables)
+        }
     }
     
     /// Record a local save event
@@ -306,7 +299,7 @@ final class TimelineViewModel: ObservableObject {
             let entry = TimelineEntry(
                 timestamp: save.timestamp,
                 source: .local,
-                author: "This iPad",
+                author: UIDevice.current.name,
                 message: "Saved",
                 diff: nil,
                 commitSHA: nil
@@ -336,7 +329,7 @@ final class TimelineViewModel: ObservableObject {
                     TimelineEntry(
                         timestamp: save.timestamp,
                         source: .local,
-                        author: "This iPad",
+                        author: UIDevice.current.name,
                         message: "Saved",
                         diff: nil,
                         commitSHA: nil
@@ -349,7 +342,7 @@ final class TimelineViewModel: ObservableObject {
                 TimelineEntry(
                     timestamp: save.timestamp,
                     source: .local,
-                    author: "This iPad",
+                    author: UIDevice.current.name,
                     message: "Saved \(save.filePath)",
                     diff: nil,
                     commitSHA: nil
@@ -371,6 +364,7 @@ final class TimelineViewModel: ObservableObject {
 /// VS Code-style Timeline panel: shows file history and allows filtering by source.
 struct TimelineView: View {
     @StateObject private var viewModel: TimelineViewModel
+    @StateObject private var themeManager = ThemeManager.shared
 
     init(filePath: String? = nil, workingDirectory: String? = nil, provider: (any TimelineProviding)? = nil) {
         _viewModel = StateObject(wrappedValue: TimelineViewModel(filePath: filePath, workingDirectory: workingDirectory, provider: provider))
@@ -426,7 +420,7 @@ struct TimelineView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(ThemeManager.shared.currentTheme.sidebarBackground)
+        .background(themeManager.currentTheme.sidebarBackground)
     }
 
     // MARK: Content
@@ -450,7 +444,7 @@ struct TimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)
-        .background(ThemeManager.shared.currentTheme.editorBackground)
+        .background(themeManager.currentTheme.editorBackground)
     }
     
     private var empty: some View {
@@ -463,7 +457,7 @@ struct TimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(20)
-        .background(ThemeManager.shared.currentTheme.editorBackground)
+        .background(themeManager.currentTheme.editorBackground)
     }
 }
 // MARK: - Row

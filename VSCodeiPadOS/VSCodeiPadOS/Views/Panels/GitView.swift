@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Git View (Source Control Panel)
 
 struct GitView: View {
-    @StateObject private var gitManager = GitManager.shared
+    @ObservedObject private var gitManager = GitManager.shared
     @StateObject private var themeManager = ThemeManager.shared
     @EnvironmentObject var editorCore: EditorCore
     @State private var commitMessage = ""
@@ -90,7 +90,7 @@ struct GitView: View {
                                 Text("\(gitManager.aheadCount)")
                             }
                             .font(.system(size: 10))
-                            .foregroundColor(.orange)
+                            .foregroundColor(Color(UIColor.systemOrange))
                             .accessibilityLabel("\(gitManager.aheadCount) commit\(gitManager.aheadCount == 1 ? "" : "s") ahead of remote")
                         }
                         if gitManager.behindCount > 0 {
@@ -99,7 +99,7 @@ struct GitView: View {
                                 Text("\(gitManager.behindCount)")
                             }
                             .font(.system(size: 10))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color(UIColor.systemBlue))
                             .accessibilityLabel("\(gitManager.behindCount) commit\(gitManager.behindCount == 1 ? "" : "s") behind remote")
                         }
                     }
@@ -109,7 +109,7 @@ struct GitView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(themeManager.currentTheme.sidebarBackground)
             
             Divider()
             
@@ -206,7 +206,7 @@ struct GitView: View {
                             Spacer()
                             Image(systemName: "checkmark.circle")
                                 .font(.system(size: 32))
-                                .foregroundColor(.green.opacity(0.7))
+                                .foregroundColor(Color(UIColor.systemGreen).opacity(0.7))
                                 .accessibilityHidden(true)
                             Text("No changes")
                                 .font(.subheadline)
@@ -243,14 +243,14 @@ struct GitView: View {
             if let error = gitManager.error {
                 HStack {
                     Image(systemName: "exclamationmark.triangle")
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(UIColor.systemRed))
                     Text(error)
                         .font(.system(size: 10))
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(UIColor.systemRed))
                         .lineLimit(2)
                 }
                 .padding(8)
-                .background(Color.red.opacity(0.1))
+                .background(Color(UIColor.systemRed).opacity(0.1))
                 .cornerRadius(6)
                 .padding(.horizontal, 12)
                 .accessibilityElement(children: .combine)
@@ -267,7 +267,7 @@ struct GitView: View {
                         Text("Pull")
                         if gitManager.behindCount > 0 {
                             Text("(\(gitManager.behindCount))")
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color(UIColor.systemBlue))
                         }
                     }
                 }
@@ -283,7 +283,7 @@ struct GitView: View {
                         Text("Push")
                         if gitManager.aheadCount > 0 {
                             Text("(\(gitManager.aheadCount))")
-                                .foregroundColor(.orange)
+                                .foregroundColor(Color(UIColor.systemOrange))
                         }
                     }
                 }
@@ -383,7 +383,7 @@ struct GitView: View {
                 Button(action: { unstageFile(entry.path) }) {
                     Image(systemName: "minus")
                         .font(.system(size: 10))
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(UIColor.systemRed))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Unstage \(entry.path.components(separatedBy: "/").last ?? entry.path)")
@@ -392,7 +392,7 @@ struct GitView: View {
                 Button(action: { stageFile(entry.path) }) {
                     Image(systemName: "plus")
                         .font(.system(size: 10))
-                        .foregroundColor(.green)
+                        .foregroundColor(Color(UIColor.systemGreen))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stage \(entry.path.components(separatedBy: "/").last ?? entry.path)")
@@ -452,16 +452,16 @@ struct GitView: View {
     private func mergeConflictsBanner() -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.yellow)
+                .foregroundColor(Color(UIColor.systemYellow))
                 .font(.system(size: 12))
             Text("\(gitManager.mergeConflicts.count) merge conflict\(gitManager.mergeConflicts.count == 1 ? "" : "s") detected")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.yellow)
+                .foregroundColor(Color(UIColor.systemYellow))
             Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color.yellow.opacity(0.1))
+        .background(Color(UIColor.systemYellow).opacity(0.1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Warning: \(gitManager.mergeConflicts.count) merge conflict\(gitManager.mergeConflicts.count == 1 ? "" : "s") detected")
     }
@@ -470,7 +470,7 @@ struct GitView: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 10))
-                .foregroundColor(.yellow)
+                .foregroundColor(Color(UIColor.systemYellow))
                 .frame(width: 16)
                 .accessibilityHidden(true)
             
@@ -507,7 +507,7 @@ struct GitView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
-        .background(Color.yellow.opacity(0.08))
+        .background(Color(UIColor.systemYellow).opacity(0.08))
         .cornerRadius(4)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Merge conflict in \(path.components(separatedBy: "/").last ?? path)")

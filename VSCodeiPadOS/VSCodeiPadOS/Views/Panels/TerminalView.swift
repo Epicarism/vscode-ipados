@@ -256,7 +256,7 @@ struct TerminalTabButtonView: View {
                 onClose()
             }) {
                 Label("Close Terminal", systemImage: "xmark")
-                    .foregroundColor(.red)
+                    .foregroundColor(Color(UIColor.systemRed))
             }
         }
         .alert("Rename Terminal", isPresented: $showRenameAlert) {
@@ -371,7 +371,7 @@ struct SingleTerminalView: View {
                     onKill()
                 }) {
                     Label("Kill Terminal", systemImage: "xmark.circle")
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(UIColor.systemRed))
                 }
             }
             .onTapGesture {
@@ -409,7 +409,7 @@ struct SingleTerminalView: View {
                     Button("Tab") { terminal.sendTab() }
                     Button("Esc") { terminal.sendEscape() }
                     Button("Ctrl+C") { terminal.sendInterrupt() }
-                        .foregroundColor(.red)
+                        .foregroundColor(Color(UIColor.systemRed))
                     Button("↑") { if let cmd = terminal.previousCommand() { terminal.draftCommand = cmd } }
                     Button("↓") { if let cmd = terminal.nextCommand() { terminal.draftCommand = cmd } }
                     Spacer()
@@ -1209,7 +1209,7 @@ struct SSHConnectionView: View {
                                     Spacer()
                                     if case .privateKey = config.authMethod {
                                         Image(systemName: "key.fill")
-                                            .foregroundColor(.orange)
+                                            .foregroundColor(Color(UIColor.systemOrange))
                                     } else {
                                         Image(systemName: "lock.fill")
                                             .foregroundColor(.blue)
@@ -1280,7 +1280,7 @@ struct SSHConnectionView: View {
                 if let error = errorMessage {
                     Section {
                         Text(error)
-                            .foregroundColor(.red)
+                            .foregroundColor(Color(UIColor.systemRed))
                             .font(.caption)
                     }
                 }

@@ -454,7 +454,7 @@ struct PortsView: View {
                 Button(action: addPort) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(.green)
+                        .foregroundColor(Color(UIColor.systemGreen))
                 }
                 .disabled(Int(newPortText) == nil)
                 .accessibilityLabel("Confirm add port")
@@ -587,10 +587,10 @@ struct PortsView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 12))
-                        .foregroundColor(.yellow)
+                        .foregroundColor(Color(UIColor.systemYellow))
                     Text(scanError)
                         .font(.system(size: 11))
-                        .foregroundColor(.yellow)
+                        .foregroundColor(Color(UIColor.systemYellow))
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, 12)
@@ -632,7 +632,7 @@ struct PortRowView: View {
             // Status dot + Port number
             HStack(spacing: 6) {
                 Circle()
-                    .fill(port.origin == .auto ? Color.orange : (port.isActive ? Color.green : Color.red))
+                    .fill(port.origin == .auto ? Color(UIColor.systemOrange) : (port.isActive ? Color(UIColor.systemGreen) : Color(UIColor.systemRed)))
                     .frame(width: 6, height: 6)
                     .accessibilityLabel(port.origin == .auto ? "Detected" : (port.isActive ? "Active" : "Inactive"))
                 

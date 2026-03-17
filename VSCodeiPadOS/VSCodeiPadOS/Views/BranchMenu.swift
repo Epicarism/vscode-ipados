@@ -16,6 +16,10 @@ struct BranchMenu<Label: View>: View {
         git.branches.filter { !$0.isRemote }
     }
     
+    private var remoteBranches: [GitBranch] {
+        git.branches.filter { $0.isRemote }
+    }
+    
     private var deletableBranches: [GitBranch] {
         localBranches.filter { !$0.isCurrent }
     }
@@ -50,19 +54,51 @@ struct BranchMenu<Label: View>: View {
     
     @ViewBuilder
     private var branchListSection: some View {
-        ForEach(localBranches) { branch in
-            Button {
-                Task { try? await git.checkout(branch: branch.name) }
-            } label: {
-                HStack {
-                    Text(branch.name)
-                    if branch.isCurrent {
-                        Spacer()
-                        Image(systemName: "checkmark")
+        Section("Local") {
+            ForEach(localBranches) { branch in
+                Button {
+                    Task {
+                        do {
+                            try await git.checkout(branch: branch.name)
+                        } catch {
+                            await MainActor.run {
+                                showErrorAlert = true
+                                errorMessage = error.localizedDescription
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(branch.name)
+                        if branch.isCurrent {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
                     }
                 }
+                .disabled(git.isLoading)
             }
-            .disabled(git.isLoading)
+        }
+        if !remoteBranches.isEmpty {
+            Section("Remote") {
+                ForEach(remoteBranches) { branch in
+                    Button {
+                        Task {
+                            do {
+                                try await git.checkout(branch: branch.name)
+                            } catch {
+                                await MainActor.run {
+                                    showErrorAlert = true
+                                    errorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(branch.name)
+                    }
+                    .disabled(git.isLoading)
+                }
+            }
         }
     }
     
@@ -81,9 +117,14 @@ struct BranchMenu<Label: View>: View {
         TextField("Branch name", text: $newBranchName)
         Button("Cancel", role: .cancel) {}
         Button("Create") {
+            let branchToCreate = newBranchName
             Task {
                 do {
-                    try await git.createBranch(name: newBranchName)
+                    try await git.createBranch(name: branchToCreate)
+                    await MainActor.run {
+                        showCreateBranchAlert = false
+                        newBranchName = ""
+                    }
                 } catch {
                     await MainActor.run {
                         errorMessage = error.localizedDescription
@@ -126,6 +167,9 @@ struct BranchMenu<Label: View>: View {
                 Task {
                     do {
                         try await git.deleteBranch(name: name)
+                        await MainActor.run {
+                            pendingDeleteBranch = nil
+                        }
                     } catch {
                         await MainActor.run {
                             errorMessage = error.localizedDescription
@@ -133,7 +177,6 @@ struct BranchMenu<Label: View>: View {
                         }
                     }
                 }
-                pendingDeleteBranch = nil
             }
         }
     }
