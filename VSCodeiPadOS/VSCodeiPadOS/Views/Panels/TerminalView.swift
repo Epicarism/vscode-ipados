@@ -581,7 +581,7 @@ extension TerminalTab: Equatable {}
     private var currentDirectory: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
     
     // Persistent ANSI state across line boundaries
-    // TODO: Pass these to parseANSI for cross-line ANSI state continuity
+    // Used by parseANSIWithState for cross-line ANSI state continuity
     var ansiColor: Color? = nil
     var ansiBgColor: Color? = nil
     var ansiBold = false

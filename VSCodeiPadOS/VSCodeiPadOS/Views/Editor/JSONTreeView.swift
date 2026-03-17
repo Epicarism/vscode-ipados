@@ -9,6 +9,7 @@ struct JSONNode: Identifiable {
 }
 
 struct JSONTreeView: View {
+    static let maxDepth = 50
     let data: Data
     @State private var rootNodes: [JSONNode] = []
     @State private var error: String? = nil
@@ -41,29 +42,32 @@ struct JSONTreeView: View {
     private func parseJSON() {
         do {
             let json = try JSONSerialization.jsonObject(with: data, options: [])
-            rootNodes = parseRoot(json: json)
+            rootNodes = parseRoot(json: json, depth: 0)
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
     }
     
-    private func parseRoot(json: Any) -> [JSONNode] {
+    private func parseRoot(json: Any, depth: Int) -> [JSONNode] {
         if let dict = json as? [String: Any] {
-            return dict.sorted(by: { $0.key < $1.key }).map { createNode(key: $0.key, value: $0.value) }
+            return dict.sorted(by: { $0.key < $1.key }).map { createNode(key: $0.key, value: $0.value, depth: depth) }
         } else if let array = json as? [Any] {
-            return array.enumerated().map { createNode(key: "[\($0.offset)]", value: $0.element) }
+            return array.enumerated().map { createNode(key: "[\($0.offset)]", value: $0.element, depth: depth) }
         } else {
-            return [createNode(key: "root", value: json)]
+            return [createNode(key: "root", value: json, depth: depth)]
         }
     }
     
-    private func createNode(key: String, value: Any) -> JSONNode {
+    private func createNode(key: String, value: Any, depth: Int) -> JSONNode {
+        if depth >= Self.maxDepth {
+            return JSONNode(key: key, value: "…(nested too deep)" as Any, children: nil, isArray: false)
+        }
         if let dict = value as? [String: Any] {
-            let children = dict.sorted(by: { $0.key < $1.key }).map { createNode(key: $0.key, value: $0.value) }
+            let children = dict.sorted(by: { $0.key < $1.key }).map { createNode(key: $0.key, value: $0.value, depth: depth + 1) }
             return JSONNode(key: key, value: nil, children: children, isArray: false)
         } else if let array = value as? [Any] {
-            let children = array.enumerated().map { createNode(key: "[\($0.offset)]", value: $0.element) }
+            let children = array.enumerated().map { createNode(key: "[\($0.offset)]", value: $0.element, depth: depth + 1) }
             return JSONNode(key: key, value: nil, children: children, isArray: true)
         } else {
             return JSONNode(key: key, value: value, children: nil, isArray: false)

@@ -288,28 +288,6 @@ struct MinimapView: View {
         }
     }
 
-    private func makeAttributedLine(from line: Substring, fontSize: CGFloat) -> AttributedString {
-        let tokens = tokenize(line)
-
-        var out = AttributedString()
-        for token in tokens {
-            var chunk = AttributedString(String(token.text))
-            chunk.font = .system(size: fontSize, weight: .regular, design: .monospaced)
-            chunk.foregroundColor = token.color
-            out.append(chunk)
-        }
-
-        if out.characters.isEmpty {
-            // Preserve a tiny amount of "whitespace presence" so empty lines still show.
-            var chunk = AttributedString(" ")
-            chunk.font = .system(size: fontSize, weight: .regular, design: .monospaced)
-            chunk.foregroundColor = Color(white: 0.7).opacity(0.25)
-            out.append(chunk)
-        }
-
-        return out
-    }
-
     private func tokenize(_ line: Substring) -> [Token] {
         // Extremely lightweight tokenizer:
         // - full-line comment if first non-space is # (python-like)

@@ -11,17 +11,19 @@ struct EditorSplitView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
-                .frame(maxWidth: showPreview ? UIScreen.main.bounds.width * 0.5 : .infinity)
-            
-            if showPreview && isMarkdown {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 1)
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                IDEEditorView(editorCore: editorCore, tab: tab, theme: theme)
+                    .frame(maxWidth: showPreview ? geometry.size.width * 0.5 : .infinity)
                 
-                MarkdownPreviewWrapper(editorCore: editorCore, tab: tab)
-                    .frame(maxWidth: .infinity)
+                if showPreview && isMarkdown {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 1)
+                    
+                    MarkdownPreviewWrapper(editorCore: editorCore, tab: tab)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
         .overlay(alignment: .topTrailing) {

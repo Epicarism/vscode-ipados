@@ -33,8 +33,8 @@ struct StickyHeaderView: View {
     }
     
     private func updateStickyLines() {
-        // Simplified logic: scan upwards from currentLine for class/func definitions
-        // In a real app, use AST or Symbol Table
+        // Scan upwards from currentLine for declaration keywords
+        // Supports: Swift, JavaScript/TypeScript, Python, Rust, Go, C/C++, Ruby, Java/Kotlin
         
         let lines = text.components(separatedBy: .newlines)
         guard currentLine < lines.count else { return }
@@ -53,14 +53,78 @@ struct StickyHeaderView: View {
             
             // Heuristic: declarations usually have less indentation than current scope
             // and contain keywords
+            // Supports: Swift, JavaScript/TypeScript, Python, Rust, Go, C/C++, Ruby, Java/Kotlin
             if indent < minIndent {
-                if trimmed.hasPrefix("class ") || 
-                   trimmed.hasPrefix("struct ") || 
-                   trimmed.hasPrefix("enum ") || 
-                   trimmed.hasPrefix("func ") || 
-                   trimmed.hasPrefix("extension ") ||
-                   trimmed.contains(" body: some View") {
-                    
+                let lower = trimmed.lowercased()
+                let isDeclaration =
+                    // Swift
+                    lower.hasPrefix("class ") ||
+                    lower.hasPrefix("struct ") ||
+                    lower.hasPrefix("enum ") ||
+                    lower.hasPrefix("func ") ||
+                    lower.hasPrefix("extension ") ||
+                    lower.hasPrefix("protocol ") ||
+                    trimmed.contains(" body: some View") ||
+                    // JavaScript / TypeScript
+                    lower.hasPrefix("function ") ||
+                    lower.hasPrefix("class ") ||
+                    lower.hasPrefix("const ") ||
+                    lower.hasPrefix("export ") ||
+                    lower.hasPrefix("module ") ||
+                    lower.hasPrefix("async function ") ||
+                    lower.hasPrefix("var ") ||
+                    lower.hasPrefix("let ") ||
+                    // Python
+                    lower.hasPrefix("def ") ||
+                    lower.hasPrefix("class ") ||
+                    lower.hasPrefix("async def ") ||
+                    lower.hasPrefix("@") ||
+                    // Rust
+                    lower.hasPrefix("fn ") ||
+                    lower.hasPrefix("struct ") ||
+                    lower.hasPrefix("enum ") ||
+                    lower.hasPrefix("impl ") ||
+                    lower.hasPrefix("trait ") ||
+                    lower.hasPrefix("mod ") ||
+                    lower.hasPrefix("pub fn ") ||
+                    lower.hasPrefix("pub struct ") ||
+                    lower.hasPrefix("pub enum ") ||
+                    lower.hasPrefix("pub trait ") ||
+                    lower.hasPrefix("pub mod ") ||
+                    lower.hasPrefix("pub async fn ") ||
+                    // Go
+                    lower.hasPrefix("func ") ||
+                    lower.hasPrefix("type ") ||
+                    lower.hasPrefix("package ") ||
+                    lower.hasPrefix("import ") ||
+                    // C / C++
+                    lower.hasPrefix("void ") ||
+                    lower.hasPrefix("int ") ||
+                    lower.hasPrefix("class ") ||
+                    lower.hasPrefix("struct ") ||
+                    lower.hasPrefix("namespace ") ||
+                    lower.hasPrefix("template ") ||
+                    lower.hasPrefix("typedef ") ||
+                    lower.hasPrefix("#include") ||
+                    lower.hasPrefix("#define") ||
+                    // Ruby
+                    lower.hasPrefix("def ") ||
+                    lower.hasPrefix("class ") ||
+                    lower.hasPrefix("module ") ||
+                    lower.hasPrefix("require ") ||
+                    lower.hasPrefix("attr_") ||
+                    // Java / Kotlin
+                    lower.hasPrefix("class ") ||
+                    lower.hasPrefix("interface ") ||
+                    lower.hasPrefix("fun ") ||
+                    lower.hasPrefix("public ") ||
+                    lower.hasPrefix("private ") ||
+                    lower.hasPrefix("protected ") ||
+                    lower.hasPrefix("object ") ||
+                    lower.hasPrefix("companion object ") ||
+                    lower.hasPrefix("@")
+                
+                if isDeclaration {
                     found.insert((i, line, indent), at: 0)
                     minIndent = indent
                 }

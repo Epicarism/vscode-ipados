@@ -191,6 +191,11 @@ extension Notification.Name {
     /// SSH connection was disconnected.
     static let sshDidDisconnect = Notification.Name("SSHDidDisconnect")
 
+    // MARK: - Workspace Actions
+
+    /// Clone a repository.
+    static let cloneRepository = Notification.Name("CloneRepository")
+
     // MARK: - System
 
     /// App received a memory warning — views should release caches.
