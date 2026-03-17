@@ -196,6 +196,11 @@ extension Notification.Name {
     /// Clone a repository.
     static let cloneRepository = Notification.Name("CloneRepository")
 
+    // MARK: - Debug
+
+    /// Edit a breakpoint condition (object: breakpoint ID string)
+    static let editBreakpointCondition = Notification.Name("EditBreakpointCondition")
+
     // MARK: - System
 
     /// App received a memory warning — views should release caches.

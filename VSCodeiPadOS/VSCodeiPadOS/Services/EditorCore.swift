@@ -1067,6 +1067,36 @@ mod tests {
         activeTabId = id
     }
 
+    func closeTabsToTheRight(of id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let tabsToClose = Array(tabs[(index + 1)...])
+        for tab in tabsToClose {
+            if let url = tab.url {
+                releaseSecurityScopedAccess(to: url)
+            }
+        }
+        tabs.removeSubrange((index + 1)...)
+        // If active tab was to the right, select the kept tab
+        if let activeId = activeTabId, !tabs.contains(where: { $0.id == activeId }) {
+            activeTabId = id
+        }
+    }
+
+    func closeTabsToTheLeft(of id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let tabsToClose = Array(tabs[..<index])
+        for tab in tabsToClose {
+            if let url = tab.url {
+                releaseSecurityScopedAccess(to: url)
+            }
+        }
+        tabs.removeSubrange(..<index)
+        // If active tab was to the left, select the kept tab
+        if let activeId = activeTabId, !tabs.contains(where: { $0.id == activeId }) {
+            activeTabId = id
+        }
+    }
+
     func selectTab(id: UUID) {
         activeTabId = id
         updateLargeFileStatus()

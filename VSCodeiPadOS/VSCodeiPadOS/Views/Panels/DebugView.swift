@@ -88,6 +88,32 @@ struct DebugView: View {
         .sheet(isPresented: $showConnectDebuggerSheet) {
             connectDebuggerSheet
         }
+        .alert("Edit Breakpoint Condition", isPresented: $showConditionEditor) {
+            TextField("Condition (e.g. x > 5)", text: $conditionText)
+            Button("Save") {
+                if let bpId = editingBreakpointId {
+                    debugManager.setBreakpointCondition(id: bpId, condition: conditionText.isEmpty ? nil : conditionText)
+                }
+                editingBreakpointId = nil
+                conditionText = ""
+            }
+            Button("Cancel", role: .cancel) {
+                editingBreakpointId = nil
+                conditionText = ""
+            }
+        } message: {
+            Text("Enter an expression that must be true for the breakpoint to pause execution.")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .editBreakpointCondition)) { notification in
+            if let bpId = notification.object as? String {
+                editingBreakpointId = bpId
+                // Pre-fill with existing condition if any
+                if let bp = debugManager.allBreakpoints.first(where: { $0.id == bpId }) {
+                    conditionText = bp.condition ?? ""
+                }
+                showConditionEditor = true
+            }
+        }
     }
     
     // MARK: - Header
