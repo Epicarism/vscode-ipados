@@ -469,7 +469,7 @@ struct PaneTabItem: View {
             
             if tab.isUnsaved {
                 Circle()
-                    .fill(Color.orange)
+                    .fill(Color(UIColor.systemOrange))
                     .frame(width: 6, height: 6)
             }
             
@@ -572,7 +572,7 @@ struct PaneEditorView: View {
                                     // Breakpoint indicator
                                     Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
                                         Circle()
-                                            .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color.red : Color.clear)
+                                            .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ?Color(UIColor.systemRed) : Color.clear)
                                             .overlay(
                                                 Circle()
                                                     .stroke(Color.red.opacity(0.6), lineWidth: 1)

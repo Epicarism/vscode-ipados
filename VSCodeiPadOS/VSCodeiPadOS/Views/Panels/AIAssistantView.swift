@@ -41,7 +41,7 @@ struct AIAssistantView: View {
                                 HStack(alignment: .top, spacing: 12) {
                                     // Avatar
                                     Circle()
-                                        .fill(Color.purple)
+                                        .fill(Color(UIColor.systemPurple))
                                         .frame(width: 32, height: 32)
                                         .overlay(
                                             Image(systemName: "brain")
@@ -99,7 +99,7 @@ struct AIAssistantView: View {
                                 Spacer()
                             }
                             .padding()
-                            .background(Color.red.opacity(0.1))
+                            .background(Color(UIColor.systemRed).opacity(0.1))
                             .cornerRadius(8)
                             .padding(.horizontal)
                         }
@@ -339,7 +339,7 @@ struct ChatMessageView: View {
         HStack(alignment: .top, spacing: 12) {
             // Avatar
             Circle()
-                .fill(message.role == .user ? Color.blue : Color.purple)
+                .fill(message.role == .user ? Color(UIColor.systemBlue) : Color(UIColor.systemPurple))
                 .frame(width: 32, height: 32)
                 .overlay(
                     Image(systemName: message.role == .user ? "person.fill" : "brain")

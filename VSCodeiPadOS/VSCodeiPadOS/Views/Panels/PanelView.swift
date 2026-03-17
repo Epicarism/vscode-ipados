@@ -204,7 +204,7 @@ struct PanelTabButton: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.red.opacity(0.8)))
+                        .background(Capsule().fill(Color(UIColor.systemRed).opacity(0.8)))
                 }
             }
             .foregroundColor(isSelected ? theme.tabActiveForeground : theme.comment)

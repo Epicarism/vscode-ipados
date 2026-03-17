@@ -236,7 +236,7 @@ struct GitHubLoginView: View {
             }
         }
         .padding(8)
-        .background(Color.orange.opacity(0.1))
+        .background(Color(UIColor.systemOrange).opacity(0.1))
         .cornerRadius(6)
         .padding(.horizontal)
         .padding(.bottom, 8)

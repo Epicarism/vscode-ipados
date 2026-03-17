@@ -350,12 +350,12 @@ struct ExtensionRowView: View {
     
     private var iconBackground: Color {
         switch extension_.category {
-        case .themes: return Color.purple.opacity(0.15)
-        case .languages: return Color.blue.opacity(0.15)
-        case .snippets: return Color.green.opacity(0.15)
-        case .linters: return Color.orange.opacity(0.15)
+        case .themes: return Color(UIColor.systemPurple).opacity(0.15)
+        case .languages: return Color(UIColor.systemBlue).opacity(0.15)
+        case .snippets: return Color(UIColor.systemGreen).opacity(0.15)
+        case .linters: return Color(UIColor.systemOrange).opacity(0.15)
         case .formatters: return Color.teal.opacity(0.15)
-        case .debuggers: return Color.red.opacity(0.15)
+        case .debuggers: return Color(UIColor.systemRed).opacity(0.15)
         case .keymaps: return Color.gray.opacity(0.15)
         case .other: return Color.indigo.opacity(0.15)
         }
@@ -566,7 +566,7 @@ struct ExtensionDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color.red.opacity(0.1))
+                            .background(Color(UIColor.systemRed).opacity(0.1))
                             .foregroundColor(.red)
                             .cornerRadius(6)
                     }

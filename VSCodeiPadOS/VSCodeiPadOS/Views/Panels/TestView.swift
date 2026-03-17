@@ -79,7 +79,7 @@ struct TestView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.08))
+                    .background(Color(UIColor.systemOrange).opacity(0.08))
                     .cornerRadius(6)
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
