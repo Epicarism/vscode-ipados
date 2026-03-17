@@ -1,6 +1,6 @@
-# Status
+# VSCode iPadOS — Project Status
 
-> **Last updated:** June 2025 by Claude Agent (Session 4)
+> **Last updated:** March 17, 2026 by Claude Agent (Session 5)
 >
 > This file provides a quick snapshot of the project's current state.
 > For detailed task tracking, see [BACKLOG.md](BACKLOG.md).
@@ -12,80 +12,110 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Commits** | 259 |
-| **Swift Files** | ~157 (84K lines total) |
+| **Total Swift Files** | 174 (84K+ lines) |
+| **Build Status** | ✅ PASSING (iOS generic) |
 | **Critical Bugs Open** | 1 (BUG-005, known/workaround) |
-| **Open TODOs** | 4 (FEAT-004, FEAT-006, CLEANUP-005, CLEANUP-006) |
-| **Partially Done** | 1 (FEAT-008 SFTP) |
-| **Recently Completed** | 3 (FEAT-003, FEAT-007, CLEANUP-004) |
+| **Key Features** | Editor, Git, SSH, SFTP, Terminal, AI, Themes, Search, Debug, Code Folding, Tunnel |
 
 ---
 
-## Backlog Status by Priority
+## Feature Completeness
 
-### 🔴 Critical (0 open)
-- BUG-005: Security-Scoped Resource Edge Case — **KNOWN, workaround in place**
+### ✅ Fully Functional
+- **Syntax Highlighting Editor** — UITextView + TextKit 1 + FoldingLayoutManager, tiered debounce (80ms-1.5s), visible-range-only for large files, background thread highlighting
+- **Code Folding** — 932-line CodeFoldingManager, FoldingLayoutManager integration, Cmd+Shift+[/] shortcuts
+- **Code Formatter** — Multi-language (Swift, JS/TS, Python, Go, Rust, C/C++, JSON, HTML, CSS), Cmd+Shift+F
+- **Comment Toggle** — Multi-language Cmd+/ with multi-line selection support
+- **Git (Native)** — Pure-Swift NativeGitReader/Writer, commit, branch, diff, blame, stash, merge conflicts
+- **Git Clone (HTTPS)** — Smart HTTP protocol, pack file parsing, working tree checkout, branch discovery
+- **Git Fetch/Pull (HTTPS)** — Smart HTTP fallback when no SSH, fast-forward merge
+- **Git Push/Pull/Fetch (SSH)** — Full remote operations via SSH connection
+- **SSH Manager** — 1761 lines, SwiftNIO SSH, key-based & password auth, command execution
+- **SFTP Manager** — Remote file browsing, read/write, wired into RemoteExplorerView
+- **VSCode Tunnel** — Connect to existing tunnel URLs, health monitoring
+- **Terminal** — 2398-line local SwiftTerm terminal with command support
+- **AI Assistant** — 1629-line AIManager with chat interface
+- **Search** — 912-line SearchManager, workspace-wide find/replace, regex support
+- **Find References** — Workspace-wide symbol search across all open tabs
+- **Diagnostics** — Per-file linting (Swift, JS/TS, Python), force unwrap/eval/var detection
+- **Themes** — 1272-line theme system with multiple VSCode-like themes
+- **Debug** — 1558-line DebugManager + RemoteDebugger (1503 lines)
+- **AutoSave** — Automatic file saving with debounce
+- **Command Palette** — Cmd+Shift+P, fuzzy search, recent commands
+- **Quick Open** — Cmd+P file search
+- **Go to Line** — Ctrl+G
+- **Go to Symbol** — Cmd+Shift+O
+- **Keyboard Shortcuts** — Comprehensive iPad keyboard support
+- **Minimap** — Side scrollbar with code overview
+- **Bracket Matching** — Highlight matching brackets
+- **Word Occurrence Highlighting** — Highlight all occurrences of selected word
+- **Multi-cursor** — Basic multi-cursor support
+- **Snippets** — Code snippet insertion
+- **Settings** — Font size, tab size, theme selection, feature toggles
 
-### 🟠 High (0 open)
-- ~~BUG-009: Syntax Highlighter~~ ✅ DONE
+### 🔧 Partially Done / Needs Polish
+- **Git Push (HTTPS)** — Requires SSH; HTTPS push needs git-receive-pack protocol
+- **Extension Manager** — Basic framework exists, no marketplace integration
+- **iCloud Sync** — Feature-flagged off (enableiCloudSync=false)
+- **Split Editor** — Basic split view exists, needs polish
 
-### 🟡 Medium (1 open)
-- FEAT-004: Format Document — **TODO**
-- FEAT-006: Git Pull/Push via GitHub API — **TODO**
-- ~~FEAT-003: Find References~~ ✅ DONE
-- ~~INFRA-001: CI/CD Pipeline~~ ✅ DONE
-
-### 🟢 Low (2 open)
-- CLEANUP-005: Int.uuid Conversion Safety — **TODO**
-- CLEANUP-006: Split Large Files — **TODO** (top files: GitManager 2832, SyntaxHighlightingTextView 2591, EditorCore 2495)
-- ~~FEAT-007: SSH Manager~~ ✅ DONE (1761 lines, enableSSH=true)
-- ~~FEAT-008: SFTP~~ ✅ Partially done (SFTPManager wired into RemoteExplorerView)
-- ~~CLEANUP-004: Feature Flags~~ Mostly done (only enableiCloudSync=false remains)
-
----
-
-## Recently Shipped (Post-March 16 Sessions)
-
-Major features and fixes delivered across ~30 commits after the initial March 16 audit sessions:
-
-- **FindReferencesService** — workspace-wide symbol search
-- **SSH Manager** — full implementation (1761 lines)
-- **SFTP** — file browsing/download via remote connections
-- **CodeFoldingManager** — fold TODO/FIXME/bracket regions
-- **SnippetManager + EmmetEngine** — code snippet expansion, Emmet abbreviations
-- **CloneRepositoryView** — git clone from URL
-- **VS Code Tunnel** — remote connection support
-- **OnboardingView** — first-run experience
-- **SwiftTerm** — local terminal integration
-- **Remote file editing** — edit files on remote servers
-- **JS debugger breakpoints**, inline AI suggestions, expanded autocomplete
-- 20+ bug fixes (crashes, build errors, accessibility, deprecations)
-- Memory warning handlers, app lifecycle improvements, responsive layout
-
----
-
-## Codebase Health
-
-| Check | Status |
-|-------|--------|
-| Zero `as!` force casts | ✅ |
-| Zero `try!` force tries (prod) | ✅ |
-| Zero `fatalError()` in prod | ✅ |
-| Zero bare `print()` | ✅ |
-| All compiler warnings fixed | ✅ |
-| CI/CD pipeline | ✅ |
-| Privacy manifest | ✅ |
-| Trademark compliance ("CodePad") | ✅ |
-| API keys in Keychain (not UserDefaults) | ✅ |
+### 📋 Remaining TODOs
+- **CLEANUP-005**: Int.uuid Conversion Safety
+- **CLEANUP-006**: Split Large Files (GitManager 3K, SyntaxHighlightingTextView 2.5K, EditorCore 2.5K)
+- **FEAT**: Breadcrumbs navigation bar
+- **FEAT**: Integrated diff viewer (side-by-side)
+- **FEAT**: Git graph visualization
+- **FEAT**: Extension marketplace
+- **FEAT**: Collaborative editing
 
 ---
 
-## Other Coordination Docs
+## Architecture
 
-> - [BACKLOG.md](BACKLOG.md) — Bug/feature backlog
-> - [PROGRESS.md](PROGRESS.md) — Chronological progress log
-> - [SPRINT_STATUS.md](SPRINT_STATUS.md) — Sprint task tracking
-> - [CONTRIBUTING.md](CONTRIBUTING.md) — Contributing guide
-> - [CHANGELOG.md](CHANGELOG.md) — Version changelog
-> - [SECURITY.md](SECURITY.md) — Security policy
-> - [APPSTORE_METADATA.md](APPSTORE_METADATA.md) — App Store submission metadata
+```
+App/
+├── Services/           # Core business logic
+│   ├── EditorCore.swift          (2512 lines) — Central state manager
+│   ├── GitManager.swift          (3018 lines) — Native git + SSH git operations
+│   ├── SSHManager.swift          (1761 lines) — SwiftNIO SSH
+│   ├── SFTPManager.swift         (558 lines)  — Remote file operations
+│   ├── AIManager.swift           (1629 lines) — AI chat integration
+│   ├── DebugManager.swift        (1558 lines) — Debug session management
+│   ├── SearchManager.swift       (912 lines)  — Workspace search
+│   ├── CodeFoldingManager.swift  (932 lines)  — Code folding regions
+│   ├── CodeFormatter.swift       (412 lines)  — Multi-language formatting
+│   ├── ThemeManager.swift        — Theme switching
+│   ├── AutoSaveManager.swift     (186 lines)  — Auto-save with debounce
+│   └── NativeGit/                — Pure-Swift git (reader 1160, writer)
+├── Views/
+│   ├── ContentView.swift         (1663 lines) — Main app layout
+│   ├── Editor/
+│   │   ├── SyntaxHighlightingTextView.swift (2546 lines)
+│   │   ├── RunestoneEditorView.swift        (1633 lines)
+│   │   └── FoldingLayoutManager.swift
+│   ├── Panels/
+│   │   ├── TerminalView.swift    (2398 lines)
+│   │   ├── SearchView.swift      (1385 lines)
+│   │   ├── GitView.swift         (1126 lines)
+│   │   └── AIAssistantView.swift (939 lines)
+│   └── CommandPaletteView.swift
+└── Models/
+    └── Theme.swift               (1272 lines)
+```
+
+---
+
+## Build & Run
+
+```bash
+# Build for iOS
+xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
+  -scheme VSCodeiPadOS \
+  -destination 'generic/platform=iOS' build
+
+# Run in simulator
+xcodebuild -project VSCodeiPadOS/VSCodeiPadOS.xcodeproj \
+  -scheme VSCodeiPadOS \
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)' \
+  build
+```

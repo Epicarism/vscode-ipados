@@ -729,12 +729,8 @@ final class GitManager: ObservableObject {
             return
         }
         
-        // HTTPS push requires git-receive-pack protocol - needs auth token
-        throw GitManagerError.commandFailed(
-            args: "push",
-            exitCode: 1,
-            message: "Push requires an SSH connection. Connect to a remote server via SSH first, or use the terminal to push manually."
-        )
+        // HTTPS push via git-receive-pack smart protocol
+        try await pushViaHTTPS()
     }
     
     func stashPush(message: String?) async throws {
