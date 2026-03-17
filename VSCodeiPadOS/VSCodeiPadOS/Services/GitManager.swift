@@ -1384,6 +1384,8 @@ final class GitManager: ObservableObject {
         
         // Track resolved objects by their pack offset for OFS_DELTA resolution
         var resolvedObjects: [Int: (type: String, data: Data)] = [:]
+        // Track resolved objects by SHA for REF_DELTA resolution (objects resolved in this pack)
+        var resolvedBySHA: [String: (type: String, data: Data)] = [:]
         
         for _ in 0..<objectCount {
             guard offset < packData.count else { break }
@@ -1427,8 +1429,12 @@ final class GitManager: ObservableObject {
                 }
                 offset += consumed
                 
-                // Store resolved object for delta base lookups
+                // Compute SHA for REF_DELTA lookups
+                let sha = computeGitObjectSHA(type: typeStr, data: decompressed)
+                
+                // Store resolved object for delta base lookups (by offset and SHA)
                 resolvedObjects[objectStartOffset] = (type: typeStr, data: decompressed)
+                resolvedBySHA[sha] = (type: typeStr, data: decompressed)
                 
                 // Write as loose object
                 try writeLooseObject(
@@ -1459,16 +1465,20 @@ final class GitManager: ObservableObject {
                 }
                 offset += consumed
                 
-                // Look up base object
+                // Look up base object — recursively resolve if the base is itself a delta
                 let baseOffset = objectStartOffset - Int(negOffset)
-                if let base = resolvedObjects[baseOffset],
-                   let resolved = applyDelta(base: base.data, delta: deltaData) {
-                    // Store resolved object
-                    resolvedObjects[objectStartOffset] = (type: base.type, data: resolved)
+                if let baseData = recursivelyResolveObject(at: baseOffset, packData: packData, resolvedObjects: &resolvedObjects, resolvedBySHA: &resolvedBySHA, objectsDir: objectsDir),
+                   let resolved = applyDelta(base: baseData.data, delta: deltaData) {
+                    // Compute SHA for REF_DELTA lookups
+                    let sha = computeGitObjectSHA(type: baseData.type, data: resolved)
+                    
+                    // Store resolved object (by offset and SHA)
+                    resolvedObjects[objectStartOffset] = (type: baseData.type, data: resolved)
+                    resolvedBySHA[sha] = (type: baseData.type, data: resolved)
                     
                     // Write as loose object
                     try writeLooseObject(
-                        type: base.type,
+                        type: baseData.type,
                         data: resolved,
                         objectsDir: objectsDir
                     )
@@ -1493,15 +1503,26 @@ final class GitManager: ObservableObject {
                 }
                 offset += consumed
                 
-                // Look up base object from loose objects on disk
-                if let base = readLooseObjectData(sha: baseSHA, objectsDir: objectsDir),
-                   let resolved = applyDelta(base: base.data, delta: deltaData) {
-                    // Store resolved object
-                    resolvedObjects[objectStartOffset] = (type: base.type, data: resolved)
+                // Look up base object: check in-pack resolved first, then fall back to disk
+                let baseData: (type: String, data: Data)?
+                if let inPack = resolvedBySHA[baseSHA] {
+                    baseData = inPack
+                } else {
+                    baseData = readLooseObjectData(sha: baseSHA, objectsDir: objectsDir)
+                }
+                
+                if let baseData = baseData,
+                   let resolved = applyDelta(base: baseData.data, delta: deltaData) {
+                    // Compute SHA for REF_DELTA lookups
+                    let sha = computeGitObjectSHA(type: baseData.type, data: resolved)
+                    
+                    // Store resolved object (by offset and SHA)
+                    resolvedObjects[objectStartOffset] = (type: baseData.type, data: resolved)
+                    resolvedBySHA[sha] = (type: baseData.type, data: resolved)
                     
                     // Write as loose object
                     try writeLooseObject(
-                        type: base.type,
+                        type: baseData.type,
                         data: resolved,
                         objectsDir: objectsDir
                     )
@@ -1514,6 +1535,121 @@ final class GitManager: ObservableObject {
         }
         
         return writtenCount
+    }
+    
+    /// Recursively resolve an object at a pack offset, following OFS_DELTA and REF_DELTA chains.
+    /// This handles chained deltas (delta of delta) by recursing until a non-delta base is found.
+    private func recursivelyResolveObject(at offset: Int, packData: Data, resolvedObjects: inout [Int: (type: String, data: Data)], resolvedBySHA: inout [String: (type: String, data: Data)], objectsDir: URL) -> (type: String, data: Data)? {
+        // If already resolved, return cached result
+        if let cached = resolvedObjects[offset] {
+            return cached
+        }
+        
+        guard offset < packData.count else { return nil }
+        
+        // Parse the object header at the given offset (local copy, don't mutate main offset)
+        var pos = offset
+        var byte = packData[pos]
+        let objectType = (byte >> 4) & 0x07
+        var size: UInt64 = UInt64(byte & 0x0F)
+        var shift: UInt64 = 4
+        pos += 1
+        
+        while byte & 0x80 != 0 {
+            guard pos < packData.count else { return nil }
+            byte = packData[pos]
+            size |= UInt64(byte & 0x7F) << shift
+            shift += 7
+            pos += 1
+        }
+        
+        switch objectType {
+        case 1, 2, 3, 4:
+            // Regular object — decompress
+            let typeStr: String
+            switch objectType {
+            case 1: typeStr = "commit"
+            case 2: typeStr = "tree"
+            case 3: typeStr = "blob"
+            case 4: typeStr = "tag"
+            default: typeStr = "unknown"
+            }
+            let remaining = Data(packData[pos...])
+            guard let (decompressed, _) = zlibDecompress(remaining, expectedSize: Int(size)) else { return nil }
+            let result = (type: typeStr, data: decompressed)
+            resolvedObjects[offset] = result
+            let sha = computeGitObjectSHA(type: typeStr, data: decompressed)
+            resolvedBySHA[sha] = result
+            return result
+            
+        case 6:
+            // OFS_DELTA — read negative offset and recurse
+            var oByte = packData[pos]
+            var negOffset: UInt64 = UInt64(oByte & 0x7F)
+            pos += 1
+            while oByte & 0x80 != 0 {
+                guard pos < packData.count else { return nil }
+                oByte = packData[pos]
+                negOffset = ((negOffset + 1) << 7) | UInt64(oByte & 0x7F)
+                pos += 1
+            }
+            
+            let remaining = Data(packData[pos...])
+            guard let (deltaData, _) = zlibDecompress(remaining, expectedSize: Int(size)) else { return nil }
+            
+            let baseOffset = offset - Int(negOffset)
+            guard let baseData = recursivelyResolveObject(at: baseOffset, packData: packData, resolvedObjects: &resolvedObjects, resolvedBySHA: &resolvedBySHA, objectsDir: objectsDir) else { return nil }
+            guard let resolved = applyDelta(base: baseData.data, delta: deltaData) else { return nil }
+            
+            let result = (type: baseData.type, data: resolved)
+            resolvedObjects[offset] = result
+            let sha = computeGitObjectSHA(type: baseData.type, data: resolved)
+            resolvedBySHA[sha] = result
+            return result
+            
+        case 7:
+            // REF_DELTA — read base SHA and recurse
+            guard pos + 20 <= packData.count else { return nil }
+            let baseSHABytes = packData[pos..<(pos + 20)]
+            let baseSHA = baseSHABytes.map { String(format: "%02x", $0) }.joined()
+            pos += 20
+            
+            let remaining = Data(packData[pos...])
+            guard let (deltaData, _) = zlibDecompress(remaining, expectedSize: Int(size)) else { return nil }
+            
+            // Look up base: in-pack first, then disk
+            let baseData: (type: String, data: Data)?
+            if let inPack = resolvedBySHA[baseSHA] {
+                baseData = inPack
+            } else {
+                baseData = readLooseObjectData(sha: baseSHA, objectsDir: objectsDir)
+            }
+            
+            guard let baseData = baseData else { return nil }
+            guard let resolved = applyDelta(base: baseData.data, delta: deltaData) else { return nil }
+            
+            let result = (type: baseData.type, data: resolved)
+            resolvedObjects[offset] = result
+            let sha = computeGitObjectSHA(type: baseData.type, data: resolved)
+            resolvedBySHA[sha] = result
+            return result
+            
+        default:
+            return nil
+        }
+    }
+    
+    /// Compute the SHA-1 hash of a git loose object ("<type> <size>\0<data>")
+    private func computeGitObjectSHA(type: String, data: Data) -> String {
+        let header = "\(type) \(data.count)\0"
+        guard let headerData = header.data(using: .utf8) else { return "" }
+        var objectData = headerData + data
+        
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        objectData.withUnsafeBytes { buf in
+            _ = CC_SHA1(buf.baseAddress, CC_LONG(objectData.count), &hash)
+        }
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
     
     /// Apply a Git delta to a base object, producing the target object.

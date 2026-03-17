@@ -142,6 +142,7 @@ class KeyCommandController: UIViewController {
             // MARK: - Panels
             ("Search in Files", "f", [.command, .shift], #selector(cmdSearchInFiles)),
             ("Settings", ",", [.command], #selector(cmdSettings)),
+        ]
         return defs.map { (title, input, mods, action) in
             let cmd = UIKeyCommand(title: title, action: action, input: input, modifierFlags: mods)
             cmd.wantsPriorityOverSystemBehavior = true

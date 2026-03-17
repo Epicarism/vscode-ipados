@@ -24,6 +24,9 @@ let package = Package(
         
         // SwiftNIO - Required by swift-nio-ssh
         .package(url: "https://github.com/apple/swift-nio", from: "2.50.0"),
+
+        // SwiftTerm - Terminal emulator
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.2.0"),
     ],
     targets: [
         .target(
@@ -33,6 +36,7 @@ let package = Package(
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
             ],
             path: "VSCodeiPadOS"
         ),

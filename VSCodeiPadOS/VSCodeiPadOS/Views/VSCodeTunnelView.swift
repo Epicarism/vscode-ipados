@@ -180,7 +180,6 @@ struct VSCodeTunnelView: View {
     
     var body: some View {
         Group {
-        Group {
             if let config = tunnelManager.activeConfig, tunnelManager.isConnected {
                 connectedView(config: config)
             } else {
@@ -203,6 +202,7 @@ struct VSCodeTunnelView: View {
                 .padding(.bottom, 8)
             }
         }
+    }
     
     // MARK: - Connected View (WebView)
     
