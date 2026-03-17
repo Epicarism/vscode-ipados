@@ -983,18 +983,22 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let text = textView.text as NSString
                 let cursorLocation = selectedRange.location
                 
-                // Use built-in line enumeration - O(1) amortized per line boundary
                 var lineNumber = 1
                 var columnNumber = 1
                 
-                var searchRange = NSRange(location: 0, length: min(cursorLocation, text.length))
-                text.enumerateSubstrings(in: searchRange, options: [.byLines, .substringNotRequired]) { _, _, _, _ in
-                    lineNumber += 1
-                }
-                
-                // Column is the offset from the start of the current line
+                // Get line range for cursor position - O(1) via NSString
                 let lineRange = text.lineRange(for: NSRange(location: cursorLocation, length: 0))
                 columnNumber = cursorLocation - lineRange.location + 1
+                
+                // Count newlines before this line's start using NSString range search - O(lines) not O(chars)
+                let lineStart = lineRange.location
+                var searchPos = 0
+                while searchPos < lineStart {
+                    let r = text.range(of: "\n", options: [], range: NSRange(location: searchPos, length: lineStart - searchPos))
+                    if r.location == NSNotFound { break }
+                    lineNumber += 1
+                    searchPos = r.location + r.length
+                }
                 
                 // Update bindings
                 parent.cursorIndex = cursorLocation
