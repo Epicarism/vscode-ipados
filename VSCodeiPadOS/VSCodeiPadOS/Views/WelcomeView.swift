@@ -102,7 +102,7 @@ struct WelcomeView: View {
                         .font(.system(size: 13, weight: .regular, design: .default))
                         .foregroundColor(theme.lineNumber)
 
-                    Text("v1.0.0")
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(theme.lineNumber)
                         .padding(.horizontal, 6)
@@ -115,7 +115,7 @@ struct WelcomeView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("CodePad v1.0.0 - Code editing. Redefined.")
+        .accessibilityLabel("CodePad v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0") - Code editing. Redefined.")
     }
 
     // MARK: - Section Header
@@ -334,20 +334,18 @@ struct WelcomeView: View {
                 subtitle: "Browse CodePad documentation",
                 actionKey: "docs"
             ) {
-                if let url = URL(string: "https://codepad.dev/docs") {
-                    UIApplication.shared.open(url)
-                }
+                // Documentation URL - will open when codepad.dev is available
+                AppLogger.editor.info("Documentation requested - URL not yet available")
             }
 
             actionRow(
                 icon: "questionmark.circle",
                 title: "Release Notes",
-                subtitle: "See what's new in CodePad v1.0.0",
+                subtitle: "See what's new in CodePad v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")",
                 actionKey: "releaseNotes"
             ) {
-                if let url = URL(string: "https://codepad.dev/docs/release-notes") {
-                    UIApplication.shared.open(url)
-                }
+                // Release notes URL - will open when codepad.dev is available
+                AppLogger.editor.info("Release notes requested - URL not yet available")
             }
         }
     }

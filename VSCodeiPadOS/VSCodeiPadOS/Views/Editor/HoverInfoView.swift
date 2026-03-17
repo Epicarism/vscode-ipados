@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HoverInfoView: View {
     @StateObject var manager = HoverInfoManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
+    private var theme: Theme { themeManager.currentTheme }
     
     var body: some View {
         Group {
@@ -42,7 +44,7 @@ struct HoverInfoView: View {
                 }
                 .padding(12)
                 .frame(width: 320)
-                .background(Color(UIColor(red: 0.15, green: 0.15, blue: 0.16, alpha: 1.0)))
+                .background(Color(theme.editorBackground))
                 .cornerRadius(10)
                 .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 5)
                 .overlay(
