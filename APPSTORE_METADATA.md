@@ -229,19 +229,19 @@ Already included in `Assets.xcassets` (AppIcon).
 
 ## 12. Submission Checklist
 
-- [ ] App Name: `CodePad Pro - Code Editor`
-- [ ] Subtitle: `Professional IDE for iPad`
-- [ ] Description: ~4,000 characters ✅
-- [ ] Keywords: `code,editor,IDE,programming,developer,swift,python,javascript,git,terminal` ✅
-- [ ] Category: Developer Tools ✅
-- [ ] Price: Free ✅
-- [ ] Age Rating: 4+ ✅
+- [x] App Name: `CodePad Pro - Code Editor`
+- [x] Subtitle: `Professional IDE for iPad`
+- [x] Description: ~4,000 characters ✅
+- [x] Keywords: `code,editor,IDE,programming,developer,swift,python,javascript,git,terminal` ✅
+- [x] Category: Developer Tools ✅
+- [x] Price: Free ✅
+- [x] Age Rating: 4+ ✅
 - [ ] Screenshots: 6 required (12.9" + 11" iPad Pro) ⬜
-- [ ] Privacy Nutrition Label filled out ✅
-- [ ] Support URL: https://github.com/nicktmro/vscode-ipados ✅
-- [ ] Privacy Policy URL: https://github.com/nicktmro/vscode-ipados/blob/main/PRIVACY_POLICY.md ✅
-- [ ] App icon (1024 × 1024 px) in Assets.xcassets ✅
-- [ ] Export compliance: Exempt (HTTPS/TLS + SSH) ✅
+- [x] Privacy Nutrition Label filled out ✅
+- [x] Support URL: https://github.com/nicktmro/vscode-ipados ✅
+- [x] Privacy Policy URL: https://github.com/nicktmro/vscode-ipados/blob/main/PRIVACY_POLICY.md ✅
+- [x] App icon (1024 × 1024 px) in Assets.xcassets ✅
+- [x] Export compliance: Exempt (HTTPS/TLS + SSH) ✅
 - [ ] Binary uploaded and processing complete ⬜
 
 ---

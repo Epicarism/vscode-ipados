@@ -364,3 +364,70 @@ struct KeychainStorage: DynamicProperty {
     }
 }
 #endif
+
+// MARK: - KeychainHelper is defined in Utils/KeychainHelper.swift
+
+// MARK: - SSH Imported Key Store
+
+/// A single imported SSH private key saved to Keychain.
+struct SSHImportedKey: Identifiable, Codable {
+    var id: UUID = UUID()
+    var name: String          // display name (e.g. file name)
+    var addedDate: Date
+    // The PEM content itself is stored in Keychain under a derived key;
+    // only metadata lives here.
+}
+
+/// Manages a list of user-imported SSH private keys.
+/// Key metadata is persisted in UserDefaults; PEM content is in Keychain.
+@MainActor
+final class SSHImportedKeyStore: ObservableObject {
+    static let shared = SSHImportedKeyStore()
+
+    @Published var keys: [SSHImportedKey] = []
+
+    private let metadataKey = "ssh_imported_keys_metadata"
+
+    init() {
+        loadMetadata()
+    }
+
+    // MARK: - Public API
+
+    /// Import a PEM string under a given display name. Saves PEM to Keychain.
+    func importKey(name: String, pem: String) {
+        let record = SSHImportedKey(name: name, addedDate: Date())
+        KeychainHelper.shared.set(pem, forKey: keychainKey(for: record.id))
+        keys.append(record)
+        saveMetadata()
+    }
+
+    /// Retrieve the PEM content for a stored key.
+    func pem(for key: SSHImportedKey) -> String? {
+        KeychainHelper.shared.get(keychainKey(for: key.id))
+    }
+
+    /// Delete an imported key (metadata + Keychain entry).
+    func delete(_ key: SSHImportedKey) {
+        KeychainHelper.shared.delete(keychainKey(for: key.id))
+        keys.removeAll { $0.id == key.id }
+        saveMetadata()
+    }
+
+    // MARK: - Helpers
+
+    private func keychainKey(for id: UUID) -> String {
+        "ssh_imported_key_\(id.uuidString)"
+    }
+
+    private func loadMetadata() {
+        guard let data = UserDefaults.standard.data(forKey: metadataKey),
+              let records = try? JSONDecoder().decode([SSHImportedKey].self, from: data) else { return }
+        keys = records
+    }
+
+    private func saveMetadata() {
+        guard let data = try? JSONEncoder().encode(keys) else { return }
+        UserDefaults.standard.set(data, forKey: metadataKey)
+    }
+}

@@ -952,7 +952,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let formattedLines = lines.map { line -> String in
                 var trimmed = line
                 // Trim trailing whitespace (spaces and tabs) while preserving leading whitespace
-                while !trimmed.isEmpty, trimmed.last!.isWhitespace {
+                while let lastChar = trimmed.last, lastChar.isWhitespace {
                     trimmed.removeLast()
                 }
                 // Convert tabs to spaces for consistent indentation

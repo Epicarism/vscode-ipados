@@ -237,4 +237,15 @@ extension Notification.Name {
     static let duplicateLineUp = Notification.Name("DuplicateLineUp")
     /// Duplicate the current line downward.
     static let duplicateLineDown = Notification.Name("DuplicateLineDown")
+
+    // MARK: - Timeline
+
+    /// Show the diff for a specific Git commit. userInfo: ["commitSHA": String]
+    static let showCommitDiff = Notification.Name("ShowCommitDiff")
+    /// Restore a local save version. userInfo: ["entryId": String]
+    static let restoreLocalVersion = Notification.Name("RestoreLocalVersion")
+    /// Checkout a specific Git commit. userInfo: ["commitSHA": String]
+    static let checkoutCommit = Notification.Name("CheckoutCommit")
+    /// Compare a local save version with the current file. userInfo: ["entryId": String]
+    static let compareLocalVersion = Notification.Name("CompareLocalVersion")
 }

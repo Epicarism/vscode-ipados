@@ -1013,6 +1013,19 @@ Use the EXACT filename shown in the file list. Examples:
             return "Error: \(error.localizedDescription)"
         }
     }
+
+    // MARK: - Inline Code Completion
+
+    /// Fetches a short code completion for the given prompt string.
+    /// Returns the raw response text (caller is responsible for parsing).
+    func getCodeCompletion(prompt: String) async throws -> String {
+        guard hasValidAPIKey() else {
+            throw AIError.noAPIKey
+        }
+        let systemPrompt = "You are a code completion engine. Only output the code that should be inserted at the cursor. No explanations, no markdown fences, no extra context. If unsure, output an empty string."
+        let messages = [ChatMessage(role: .user, content: prompt)]
+        return try await makeAPIRequest(messages: messages, context: nil, agentMode: false, systemOverride: systemPrompt)
+    }
     
     // MARK: - API Request (non-tool path)
     

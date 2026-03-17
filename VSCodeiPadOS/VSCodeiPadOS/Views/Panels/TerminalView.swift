@@ -1201,12 +1201,48 @@ extension TerminalManager: SSHManagerDelegate {
 
 // MARK: - SSH Connection View (Enhanced with Saved Connections)
 
+// MARK: - Document Picker for SSH Key Import
+
+final class SSHKeyDocumentPickerDelegate: NSObject,
+    UIDocumentPickerDelegate, ObservableObject {
+
+    var onPick: ((URL) -> Void)?
+
+    func documentPicker(_ controller: UIDocumentPickerViewController,
+                        didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        onPick?(url)
+    }
+}
+
+struct SSHKeyDocumentPicker: UIViewControllerRepresentable {
+    var onPick: (URL) -> Void
+
+    func makeCoordinator() -> SSHKeyDocumentPickerDelegate {
+        let delegate = SSHKeyDocumentPickerDelegate()
+        delegate.onPick = onPick
+        return delegate
+    }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        // Allow all file types — SSH keys have no standardised UTI
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item])
+        picker.allowsMultipleSelection = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController,
+                                context: Context) {}
+}
+
 struct SSHConnectionView: View {
     @ObservedObject var terminal: TerminalManager
     @Binding var isPresented: Bool
     @StateObject private var connectionStore = SSHConnectionStore.shared
+    @StateObject private var importedKeyStore = SSHImportedKeyStore.shared
     @StateObject private var themeManager = ThemeManager.shared
-    
+
     @State private var connectionName = ""
     @State private var host = ""
     @State private var port = "22"
@@ -1218,6 +1254,8 @@ struct SSHConnectionView: View {
     @State private var saveConnection = true
     @State private var showSavedConnections = true
     @State private var errorMessage: String?
+    @State private var showDocumentPicker = false
+    @State private var importSuccessMessage: String?
     
     var body: some View {
         NavigationView {
@@ -1281,13 +1319,87 @@ struct SSHConnectionView: View {
                         Text("SSH Key").tag(true)
                     }
                     .pickerStyle(.segmented)
-                    
+
                     if useKey {
+                        // Stored keys picker
+                        if !importedKeyStore.keys.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Saved Keys")
+                                    .font(.caption)
+                                    .foregroundColor(themeManager.currentTheme.comment)
+                                ForEach(importedKeyStore.keys) { storedKey in
+                                    Button(action: {
+                                        if let pem = importedKeyStore.pem(for: storedKey) {
+                                            privateKey = pem
+                                        }
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "key.fill")
+                                                .foregroundColor(Color(UIColor.systemOrange))
+                                                .font(.caption)
+                                            Text(storedKey.name)
+                                                .font(.caption)
+                                                .foregroundColor(themeManager.currentTheme.editorForeground)
+                                            Spacer()
+                                            Text(storedKey.addedDate, style: .date)
+                                                .font(.caption2)
+                                                .foregroundColor(themeManager.currentTheme.comment)
+                                        }
+                                    }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            importedKeyStore.delete(storedKey)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Import Key button
+                        Button(action: { showDocumentPicker = true }) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.down")
+                                Text("Import Key from Files…")
+                            }
+                            .font(.subheadline)
+                        }
+                        .sheet(isPresented: $showDocumentPicker) {
+                            SSHKeyDocumentPicker { url in
+                                showDocumentPicker = false
+                                Task {
+                                    do {
+                                        let name = try await SSHManager.shared.importAndStoreKey(from: url)
+                                        await MainActor.run {
+                                            importSuccessMessage = "Key \"\(name)\" imported and saved."
+                                            errorMessage = nil
+                                            // Auto-fill the text editor with the newly imported key
+                                            if let pem = importedKeyStore.keys.last.flatMap({ importedKeyStore.pem(for: $0) }) {
+                                                privateKey = pem
+                                            }
+                                        }
+                                    } catch {
+                                        await MainActor.run {
+                                            errorMessage = error.localizedDescription
+                                            importSuccessMessage = nil
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if let msg = importSuccessMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundColor(Color(UIColor.systemGreen))
+                        }
+
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Private Key (PEM format)")
                                 .font(.caption)
                                 .foregroundColor(themeManager.currentTheme.comment)
-                            
+
                             TextEditor(text: $privateKey)
                                 .font(.system(.caption, design: .monospaced))
                                 .frame(height: 120)
@@ -1295,7 +1407,7 @@ struct SSHConnectionView: View {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(themeManager.currentTheme.editorForeground.opacity(0.2), lineWidth: 1)
                                 )
-                            
+
                             SecureField("Key Passphrase (if encrypted)", text: $keyPassphrase)
                         }
                     } else {

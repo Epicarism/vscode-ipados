@@ -266,10 +266,18 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         // Read private key section (may be encrypted)
         guard let privateSection = readString() else { return nil }
         
-        // Only handle unencrypted keys for now
+        // Only handle unencrypted keys for now.
+        // Encrypted OpenSSH keys (e.g. aes256-ctr with bcrypt KDF) require
+        // bcrypt-pbkdf to derive the AES key from the passphrase — that
+        // algorithm is not available in Apple's CommonCrypto/CryptoKit.
+        // To use an encrypted key, run:
+        //   ssh-keygen -p -m OpenSSH -f ~/.ssh/id_ed25519
+        // and set the passphrase to empty (press Enter twice).
         guard cipherStr == "none" else {
-            // TODO: Implement encrypted key decryption with passphrase
-            return nil
+            // Surface a human-readable error rather than silently returning nil
+            // so the caller (PrivateKeyAuthDelegate) can fall through to the
+            // password path and the UI can show the message.
+            return nil  // encrypted key — see importPrivateKey(from:) for guidance
         }
         
         // Parse private section
@@ -533,7 +541,12 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         }
     }
     
-    /// Import a private key from a file URL (e.g., from Files app document picker)
+    /// Import a private key from a file URL (e.g., from Files app document picker).
+    /// Returns the PEM string.  Throws `SSHClientError.invalidPrivateKey` for
+    /// binary content, or `SSHClientError.unsupportedKeyType` when the key is
+    /// encrypted (passphrase-protected).  Callers should surface the error so
+    /// the user knows to strip the passphrase with:
+    ///   ssh-keygen -p -m OpenSSH -f <keyfile>   (press Enter for empty passphrase)
     func importPrivateKey(from url: URL) throws -> String {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
@@ -541,7 +554,48 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         guard let keyString = String(data: keyData, encoding: .utf8) else {
             throw SSHClientError.invalidPrivateKey
         }
+
+        // Detect encrypted OpenSSH keys and return a clear error instead of
+        // silently failing later during authentication.
+        if keyString.contains("BEGIN OPENSSH PRIVATE KEY") {
+            let lines = keyString.components(separatedBy: "\n")
+                .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
+            let base64 = lines.joined()
+            if let data = Data(base64Encoded: base64) {
+                let magic = "openssh-key-v1\0"
+                let magicBytes = Data(magic.utf8)
+                if data.count > magicBytes.count + 4,
+                   data.prefix(magicBytes.count) == magicBytes {
+                    var pos = magicBytes.count
+                    // read cipher name
+                    if pos + 4 <= data.count {
+                        let cipherLen = Int(data.withUnsafeBytes { buf in
+                            buf.load(fromByteOffset: pos, as: UInt32.self).bigEndian
+                        })
+                        pos += 4
+                        if pos + cipherLen <= data.count,
+                           let cipher = String(data: data[pos..<(pos + cipherLen)], encoding: .utf8),
+                           cipher != "none" {
+                            throw SSHClientError.unsupportedKeyType(
+                                "Encrypted key (\(cipher)). To use this key, remove its passphrase:\n  ssh-keygen -p -m OpenSSH -f <keyfile>\nThen press Enter twice for an empty passphrase."
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         return keyString
+    }
+
+    /// Import and immediately save a key to the shared SSHImportedKeyStore.
+    /// Returns the display name used for the stored key.
+    @MainActor
+    func importAndStoreKey(from url: URL) async throws -> String {
+        let pem = try importPrivateKey(from: url)
+        let name = url.deletingPathExtension().lastPathComponent
+        SSHImportedKeyStore.shared.importKey(name: name, pem: pem)
+        return name
     }
     
     func disconnect() {

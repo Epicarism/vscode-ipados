@@ -378,17 +378,62 @@ final class InlineSuggestionManager: ObservableObject {
         .eraseToAnyPublisher()
     }
     
-    /// Fetches a suggestion from the completion service.
+    /// Fetches a suggestion from the completion service via AIManager.
     private func fetchSuggestion(for context: SuggestionContext) async throws -> String? {
-        // Simulate network delay - replace with actual API call
-        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-        
-        // Check for cancellation before returning
+        let aiManager = AIManager.shared
+
+        // Skip if no API key configured
+        guard aiManager.hasValidAPIKey() else {
+            return nil
+        }
+
+        // Check for cancellation before making the network request
         try Task.checkCancellation()
-        
-        // Placeholder: Return nil or mock suggestion based on context
-        // This should be replaced with actual LLM or completion service integration
-        return nil
+
+        // Build a focused code-completion prompt
+        let languageHint = context.language.map { " \($0)" } ?? ""
+        let precedingSnippet: String
+        if context.precedingCode.count > 2000 {
+            // Keep only the last ~2000 chars so the prompt stays concise
+            let startIndex = context.precedingCode.index(context.precedingCode.endIndex, offsetBy: -2000)
+            precedingSnippet = "...\n" + String(context.precedingCode[startIndex...])
+        } else {
+            precedingSnippet = context.precedingCode
+        }
+
+        let prompt = """
+        You are a code completion engine. Complete the\(languageHint) code below at the cursor position marked with <CURSOR>.
+        Return ONLY the completion text that should be inserted at <CURSOR> — no explanation, no markdown fences, no surrounding context.
+        If you cannot produce a useful completion, return an empty string.
+
+        Code before cursor:
+        \(precedingSnippet)
+        \(context.currentLine)<CURSOR>
+        """
+
+        let rawResponse = try await aiManager.getCodeCompletion(prompt: prompt)
+
+        // Check for cancellation after the network round-trip
+        try Task.checkCancellation()
+
+        return Self.parseCompletionResponse(rawResponse)
+    }
+
+    /// Strips any markdown code fences, leading/trailing blank lines, and explanation
+    /// paragraphs that start with common prose markers, returning just the code text.
+    private static func parseCompletionResponse(_ response: String) -> String? {
+        var text = response
+
+        // Strip ```lang ... ``` fences if the model wrapped the answer
+        let fencePattern = #"^```[^\n]*\n([\s\S]*?)```\s*$"#
+        if let regex = try? NSRegularExpression(pattern: fencePattern, options: .anchorsMatchLines),
+           let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+           let innerRange = Range(match.range(at: 1), in: text) {
+            text = String(text[innerRange])
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     

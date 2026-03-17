@@ -287,15 +287,244 @@ class NativeGitReader {
     }
     
     private func readPackedObject(sha: String) -> GitObject? {
-        // Pack file reading is complex - for now return nil
-        // Full implementation would:
-        // 1. Read .git/objects/pack/*.idx files
-        // 2. Find SHA in index
-        // 3. Read corresponding .pack file
-        // 4. Handle delta compression
-        
-        // For MVP, rely on loose objects + SSH fallback for packed repos
+        let packDir = gitDir.appendingPathComponent("objects").appendingPathComponent("pack")
+        guard let packFiles = try? FileManager.default.contentsOfDirectory(atPath: packDir.path) else {
+            return nil
+        }
+        let idxFiles = packFiles.filter { $0.hasSuffix(".idx") }
+        for idxName in idxFiles {
+            let idxURL = packDir.appendingPathComponent(idxName)
+            let packName = String(idxName.dropLast(4)) + ".pack"
+            let packURL = packDir.appendingPathComponent(packName)
+            guard let idxData = try? Data(contentsOf: idxURL),
+                  let packData = try? Data(contentsOf: packURL) else { continue }
+            if let offset = findOffsetInIndex(idxData: idxData, sha: sha) {
+                return readObjectFromPack(packData: packData, offset: offset, allPackData: packData)
+            }
+        }
         return nil
+    }
+
+    // MARK: - Pack Index Parsing
+
+    /// Parse a pack index (.idx) file and return the pack-file offset for `sha`, or nil.
+    /// Supports v1 and v2 index formats.
+    private func findOffsetInIndex(idxData: Data, sha: String) -> Int? {
+        guard idxData.count >= 8 else { return nil }
+        // v2 magic: 0xff 0x74 0x4f 0x63
+        let isV2 = idxData[0] == 0xff && idxData[1] == 0x74 &&
+                   idxData[2] == 0x4f && idxData[3] == 0x63
+        if isV2 {
+            let version = packReadUInt32BE(idxData, offset: 4)
+            guard version == 2 else { return nil }
+            return findOffsetInIndexV2(idxData: idxData, sha: sha)
+        } else {
+            return findOffsetInIndexV1(idxData: idxData, sha: sha)
+        }
+    }
+
+    private func findOffsetInIndexV2(idxData: Data, sha: String) -> Int? {
+        guard let shaBytes = packHexToBytes(sha) else { return nil }
+        // Layout: 4 magic + 4 version + 256*4 fanout + N*20 SHAs + N*4 CRCs + N*4 offsets [+ large offsets]
+        let fanoutBase = 8
+        let totalObjects = Int(packReadUInt32BE(idxData, offset: fanoutBase + 255 * 4))
+        let shaTableBase = fanoutBase + 256 * 4
+        let firstByte = Int(shaBytes[0])
+        let lo = firstByte == 0 ? 0 : Int(packReadUInt32BE(idxData, offset: fanoutBase + (firstByte - 1) * 4))
+        let hi = Int(packReadUInt32BE(idxData, offset: fanoutBase + firstByte * 4))
+        // Binary search over SHA table
+        var foundIndex: Int? = nil
+        var left = lo
+        var right = hi
+        while left < right {
+            let mid = (left + right) / 2
+            let midOff = shaTableBase + mid * 20
+            guard midOff + 20 <= idxData.count else { break }
+            let cmp = packCompareSHA(idxData[midOff..<midOff + 20], shaBytes)
+            if cmp == 0 { foundIndex = mid; break }
+            else if cmp < 0 { left = mid + 1 }
+            else { right = mid }
+        }
+        guard let idx = foundIndex else { return nil }
+        let crcTableBase    = shaTableBase + totalObjects * 20
+        let offsetTableBase = crcTableBase + totalObjects * 4
+        guard offsetTableBase + idx * 4 + 4 <= idxData.count else { return nil }
+        let rawOffset = packReadUInt32BE(idxData, offset: offsetTableBase + idx * 4)
+        if rawOffset & 0x80000000 != 0 {
+            // Large (>2 GB) offset stored in auxiliary 8-byte table
+            let largeIdx  = Int(rawOffset & 0x7FFFFFFF)
+            let largeBase = offsetTableBase + totalObjects * 4
+            guard largeBase + largeIdx * 8 + 8 <= idxData.count else { return nil }
+            let hi32 = UInt64(packReadUInt32BE(idxData, offset: largeBase + largeIdx * 8))
+            let lo32 = UInt64(packReadUInt32BE(idxData, offset: largeBase + largeIdx * 8 + 4))
+            return Int((hi32 << 32) | lo32)
+        }
+        return Int(rawOffset)
+    }
+
+    private func findOffsetInIndexV1(idxData: Data, sha: String) -> Int? {
+        // v1: 256*4 fanout then N * (4-byte-offset + 20-byte-SHA)
+        guard idxData.count >= 1024, let shaBytes = packHexToBytes(sha) else { return nil }
+        let firstByte = Int(shaBytes[0])
+        let lo = firstByte == 0 ? 0 : Int(packReadUInt32BE(idxData, offset: (firstByte - 1) * 4))
+        let hi = Int(packReadUInt32BE(idxData, offset: firstByte * 4))
+        let entryBase = 256 * 4
+        let entrySize = 24 // 4 bytes offset + 20 bytes SHA
+        for i in lo..<hi {
+            let eOff = entryBase + i * entrySize
+            guard eOff + entrySize <= idxData.count else { break }
+            if packCompareSHA(idxData[eOff + 4..<eOff + 24], shaBytes) == 0 {
+                return Int(packReadUInt32BE(idxData, offset: eOff))
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Pack File Object Reading
+
+    /// Read and return a single git object from `packData` at byte `offset`.
+    /// `allPackData` is the complete pack (needed for OFS_DELTA base resolution).
+    private func readObjectFromPack(packData: Data, offset: Int, allPackData: Data) -> GitObject? {
+        var pos = offset
+        guard pos < packData.count else { return nil }
+        // Variable-length type+size header
+        let firstByte = Int(packData[pos]); pos += 1
+        let typeCode  = (firstByte >> 4) & 0x7
+        var size      = firstByte & 0xF
+        var shift     = 4
+        var b         = firstByte
+        while b & 0x80 != 0 {
+            guard pos < packData.count else { return nil }
+            b = Int(packData[pos]); pos += 1
+            size |= (b & 0x7F) << shift
+            shift += 7
+        }
+        _ = size // header-declared size; actual size is from decompressed length
+        switch typeCode {
+        case 1, 2, 3, 4: // commit, tree, blob, tag
+            guard let raw = packDecompressZlib(packData, from: pos) else { return nil }
+            return packMakeObject(typeCode: typeCode, data: raw)
+        case 6: // OFS_DELTA
+            guard pos < packData.count else { return nil }
+            var negOffset = Int(packData[pos]) & 0x7F
+            while packData[pos] & 0x80 != 0 {
+                pos += 1
+                guard pos < packData.count else { return nil }
+                negOffset = ((negOffset + 1) << 7) | Int(packData[pos] & 0x7F)
+            }
+            pos += 1
+            let baseOffset = offset - negOffset
+            guard baseOffset >= 0,
+                  let base  = readObjectFromPack(packData: allPackData, offset: baseOffset, allPackData: allPackData),
+                  let delta = packDecompressZlib(packData, from: pos) else { return nil }
+            return applyDelta(base: base, deltaData: delta)
+        case 7: // REF_DELTA
+            guard pos + 20 <= packData.count else { return nil }
+            let baseSha = packData[pos..<pos + 20].map { String(format: "%02x", $0) }.joined()
+            pos += 20
+            guard let base  = readObject(sha: baseSha),
+                  let delta = packDecompressZlib(packData, from: pos) else { return nil }
+            return applyDelta(base: base, deltaData: delta)
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - Delta Application
+
+    private func applyDelta(base: GitObject, deltaData: Data) -> GitObject? {
+        var pos = 0
+        guard let (srcSize, n1)    = packReadVarint(deltaData, offset: pos) else { return nil }
+        pos += n1
+        guard let (targetSize, n2) = packReadVarint(deltaData, offset: pos) else { return nil }
+        pos += n2
+        guard srcSize == base.data.count else { return nil }
+        var result = Data()
+        result.reserveCapacity(targetSize)
+        while pos < deltaData.count {
+            let cmd = Int(deltaData[pos]); pos += 1
+            if cmd & 0x80 != 0 {
+                // Copy from base object
+                var cpOff = 0, cpSz = 0
+                if cmd & 0x01 != 0 { guard pos < deltaData.count else { return nil }; cpOff |= Int(deltaData[pos]) << 0;  pos += 1 }
+                if cmd & 0x02 != 0 { guard pos < deltaData.count else { return nil }; cpOff |= Int(deltaData[pos]) << 8;  pos += 1 }
+                if cmd & 0x04 != 0 { guard pos < deltaData.count else { return nil }; cpOff |= Int(deltaData[pos]) << 16; pos += 1 }
+                if cmd & 0x08 != 0 { guard pos < deltaData.count else { return nil }; cpOff |= Int(deltaData[pos]) << 24; pos += 1 }
+                if cmd & 0x10 != 0 { guard pos < deltaData.count else { return nil }; cpSz  |= Int(deltaData[pos]) << 0;  pos += 1 }
+                if cmd & 0x20 != 0 { guard pos < deltaData.count else { return nil }; cpSz  |= Int(deltaData[pos]) << 8;  pos += 1 }
+                if cmd & 0x40 != 0 { guard pos < deltaData.count else { return nil }; cpSz  |= Int(deltaData[pos]) << 16; pos += 1 }
+                if cpSz == 0 { cpSz = 0x10000 }
+                guard cpOff + cpSz <= base.data.count else { return nil }
+                result.append(base.data[cpOff..<cpOff + cpSz])
+            } else if cmd != 0 {
+                // Insert `cmd` literal bytes from the delta stream
+                guard pos + cmd <= deltaData.count else { return nil }
+                result.append(deltaData[pos..<pos + cmd])
+                pos += cmd
+            } else {
+                return nil // cmd == 0 is reserved/invalid
+            }
+        }
+        guard result.count == targetSize else { return nil }
+        return GitObject(type: base.type, size: targetSize, data: result)
+    }
+
+    // MARK: - Pack Low-Level Helpers
+
+    private func packDecompressZlib(_ data: Data, from offset: Int) -> Data? {
+        guard offset < data.count else { return nil }
+        return decompressZlib(Data(data[offset...]))
+    }
+
+    private func packMakeObject(typeCode: Int, data: Data) -> GitObject? {
+        let type: GitObjectType
+        switch typeCode {
+        case 1: type = .commit
+        case 2: type = .tree
+        case 3: type = .blob
+        case 4: type = .tag
+        default: return nil
+        }
+        return GitObject(type: type, size: data.count, data: data)
+    }
+
+    /// LSB-first variable-length integer (used in delta header for source/target sizes).
+    private func packReadVarint(_ data: Data, offset: Int) -> (Int, Int)? {
+        var value = 0, shift = 0, pos = offset
+        while pos < data.count {
+            let b = Int(data[pos]); pos += 1
+            value |= (b & 0x7F) << shift; shift += 7
+            if b & 0x80 == 0 { break }
+        }
+        guard pos > offset else { return nil }
+        return (value, pos - offset)
+    }
+
+    private func packReadUInt32BE(_ data: Data, offset: Int) -> UInt32 {
+        guard offset + 4 <= data.count else { return 0 }
+        return data[offset..<offset + 4].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+    }
+
+    private func packHexToBytes(_ hex: String) -> [UInt8]? {
+        guard hex.count == 40 else { return nil }
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(20)
+        var idx = hex.startIndex
+        while idx < hex.endIndex {
+            let next = hex.index(idx, offsetBy: 2)
+            guard let b = UInt8(hex[idx..<next], radix: 16) else { return nil }
+            bytes.append(b); idx = next
+        }
+        return bytes
+    }
+
+    /// Returns negative/zero/positive like C strcmp.
+    private func packCompareSHA(_ a: Data.SubSequence, _ b: [UInt8]) -> Int {
+        let aArr = Array(a)
+        for i in 0..<min(aArr.count, b.count) {
+            if aArr[i] != b[i] { return Int(aArr[i]) - Int(b[i]) }
+        }
+        return aArr.count - b.count
     }
     
     private func parseGitObject(data: Data) -> GitObject? {

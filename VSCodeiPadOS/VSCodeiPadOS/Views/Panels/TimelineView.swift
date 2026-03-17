@@ -8,6 +8,7 @@
 import SwiftUI
 import Foundation
 import Combine
+import UIKit
 
 // MARK: - Timeline Models
 
@@ -464,6 +465,7 @@ struct TimelineView: View {
 
 private struct TimelineRow: View {
     let entry: TimelineEntry
+    @State private var isHighlighted = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -517,12 +519,121 @@ private struct TimelineRow: View {
             }
         }
         .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.accentColor.opacity(isHighlighted ? 0.15 : 0))
+        )
         .contentShape(Rectangle())
+        .onTapGesture {
+            handleTap()
+        }
+        .contextMenu {
+            contextMenuContent
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Timeline entry: \(entry.message). By \(entry.author). \(entry.source.label). \(Self.timestampFormatter.string(from: entry.timestamp))")
         .accessibilityHint("Timeline entry")
-        // Future: selection / open diff action hook.
     }
+
+    // MARK: - Actions
+
+    private func handleTap() {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            isHighlighted = true
+        }
+        // Reset highlight after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHighlighted = false
+            }
+        }
+
+        switch entry.source {
+        case .git:
+            if let sha = entry.commitSHA {
+                NotificationCenter.default.post(
+                    name: .showCommitDiff,
+                    object: nil,
+                    userInfo: ["commitSHA": sha]
+                )
+            }
+        case .local:
+            NotificationCenter.default.post(
+                name: .restoreLocalVersion,
+                object: nil,
+                userInfo: ["entryId": entry.id.uuidString]
+            )
+        }
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        switch entry.source {
+        case .git:
+            gitContextMenu
+        case .local:
+            localContextMenu
+        }
+    }
+
+    @ViewBuilder
+    private var gitContextMenu: some View {
+        if let sha = entry.commitSHA {
+            Button {
+                UIPasteboard.general.string = sha
+            } label: {
+                Label("Copy Commit Hash", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                NotificationCenter.default.post(
+                    name: .showCommitDiff,
+                    object: nil,
+                    userInfo: ["commitSHA": sha]
+                )
+            } label: {
+                Label("Show Changes", systemImage: "arrow.left.arrow.right")
+            }
+
+            Button {
+                NotificationCenter.default.post(
+                    name: .checkoutCommit,
+                    object: nil,
+                    userInfo: ["commitSHA": sha]
+                )
+            } label: {
+                Label("Checkout", systemImage: "arrow.triangle.branch")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var localContextMenu: some View {
+        Button {
+            NotificationCenter.default.post(
+                name: .restoreLocalVersion,
+                object: nil,
+                userInfo: ["entryId": entry.id.uuidString]
+            )
+        } label: {
+            Label("Restore This Version", systemImage: "arrow.uturn.backward")
+        }
+
+        Button {
+            NotificationCenter.default.post(
+                name: .compareLocalVersion,
+                object: nil,
+                userInfo: ["entryId": entry.id.uuidString]
+            )
+        } label: {
+            Label("Compare with Current", systemImage: "arrow.left.arrow.right")
+        }
+    }
+
+    // MARK: - Source Icon
 
     private var sourceIcon: some View {
         ZStack {

@@ -263,6 +263,7 @@ struct RunMenuCommands: Commands {
             }
             .keyboardShortcut("b", modifiers: [.command, .shift])
             
+            #if DEBUG
             Divider()
             
             Button("Run Sample WASM") {
@@ -272,6 +273,7 @@ struct RunMenuCommands: Commands {
             Button("Run JavaScript") {
                 NotificationCenter.default.post(name: .runJavaScript, object: nil)
             }
+            #endif
         }
     }
 }
