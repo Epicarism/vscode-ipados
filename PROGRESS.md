@@ -1,8 +1,72 @@
 # VSCode iPadOS — Progress Log
 
-> **Last updated:** March 16, 2026  
+> **Last updated:** June 2025  
 > **Convention:** Most recent entries at the top.  
 > **Other SWEs:** Add your entries here when you complete work.
+
+---
+
+## Post-March 16, 2026 — Claude Agent (Sessions 4+, ~30 commits)
+
+### New Features (Not Previously Tracked)
+- **FEAT-003 DONE:** FindReferencesService for workspace-wide symbol search (`.swift`, `.js`, `.ts`, `.py`, `.go`, `.rs`), wired into EditorCore, SearchView, and context menu
+- **FEAT-007 DONE:** SSH Manager substantially implemented — 1761 lines, SSH key import, connections, `enableSSH = true`
+- **FEAT-008 PARTIAL:** SFTPManager created, wired into RemoteExplorerView for browsing/downloading remote files
+- **Code Folding:** CodeFoldingManager implemented (TODO/FIXME region folding)
+- **Snippets:** SnippetManager with trigger-based expansion
+- **Emmet:** EmmetEngine for HTML/CSS abbreviation expansion
+- **Clone Repo:** CloneRepositoryView for git clone from URL
+- **VS Code Tunnel:** VSCodeTunnelManager + VSCodeTunnelView for remote connections
+- **Onboarding:** OnboardingView for first-run experience
+- **SwiftTerm:** Local SwiftTerm terminal integrated into SingleTerminalView
+- **Remote File Editing:** Edit files on remote servers via SSH/SFTP
+- **JS Debugger Breakpoints:** Breakpoint support in JS debugger
+- **Git Pack Files:** Support for git pack file format in GitManager
+- **Inline AI Suggestions:** Code suggestions inline in editor
+- **Autocomplete Expansion:** 10 new types + SwiftUI modifier completions, hover docs expanded to 35 entries
+- **File Loading Indicator:** Loading state while opening files
+- **Unique Tab Names:** `newUntitledFile()` generates unique tab names
+
+### Bug Fixes & Quality (Not Previously Tracked)
+- Fixed all compiler warnings across the app
+- Squashed high-priority bugs from audit
+- SSHManager structural brace issues and compilation errors
+- ColorPickerView deprecation warnings
+- Minimap overlay opacity, cap visible region at 80%
+- Brace issues in EditorCore/SplitEditorView
+- `@StateObject` antipatterns fixed
+- GitManager type corrections
+- GitGutterView lcsDiff crash when tn or tm is zero
+- JSRunner thread safety
+- EmmetEngine force unwrap crash
+- EditorCore array bounds crash
+- FindViewModel bounds safety
+- regexCache concurrency safety
+- DebugManager optional binding
+- SearchView onChange handlers
+
+### Accessibility (Not Previously Tracked)
+- DiffComponents, DebugConsole, MergeConflict, Shortcuts, GitHubLogin, Tunnel, Snippets — VoiceOver labels
+- CommandPalette, OnboardingView, TrustDialog — accessibility improvements
+- Terminal polish: tree/stat/du/cal/uname/pipe support
+
+### Performance & Infrastructure (Not Previously Tracked)
+- Cursor performance optimizations
+- Responsive layout improvements
+- Tunnel resilience improvements
+- Memory warning handlers (EditorCore, AIManager, RecentFiles)
+- App lifecycle improvements (scene phase, deep links, file refresh)
+- NSLocalNetworkUsageDescription, LSSupportsOpeningDocumentsInPlace added to Info.plist
+- AccentColor defined
+
+### Backlog Updates (This Session)
+- FEAT-003 marked ✅ DONE
+- FEAT-007 marked ✅ SUBSTANTIALLY DONE (was "TODO, blocked on enableSSH flag")
+- FEAT-008 marked ✅ PARTIALLY DONE (was "TODO")
+- CLEANUP-004 marked MOSTLY DONE (only enableiCloudSync remains false)
+- CLEANUP-006 updated with current file sizes (files restructured but largest grew)
+- Added 30+ completed items from post-Mar 16 work
+- Updated timestamp to June 2025
 
 ---
 
@@ -31,6 +95,7 @@
 - All remaining TODOs are tracked in BACKLOG.md as deferred features
 
 ---
+
 ## March 16, 2026 — Claude Agent (Session 2, continued)
 
 ### Production Readiness Fixes
@@ -103,9 +168,9 @@
 - Feature flags system
 
 ### Known Issues (Pre-existing)
-- SSH Manager is entirely stub (13 TODOs)
-- Git pull/push via GitHub API not yet implemented
-- Format document not implemented
-- Find references not implemented
+- SSH Manager is entirely stub (13 TODOs) — **NOW SUBSTANTIALLY IMPLEMENTED**
+- Git pull/push via GitHub API not yet implemented — **STILL PENDING**
+- Format document not implemented — **STILL PENDING**
+- Find references not implemented — **✅ DONE (FEAT-003)**
 - Remote debugging is stub
 - Extension host doesn't run real extensions

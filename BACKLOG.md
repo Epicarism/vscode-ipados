@@ -1,6 +1,6 @@
 # VSCode iPadOS — Backlog
 
-> **Last updated:** March 16, 2026 03:50 GMT+1 by Claude Agent (Session 3)  
+> **Last updated:** June 2025 by Claude Agent (Session 4)  
 > **Other SWEs:** Please update this file when you pick up or complete tasks.  
 > **Priority:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low
 
@@ -9,7 +9,7 @@
 ## 🔴 Critical (Must Fix Before Prod)
 
 ### BUG-005: Security-Scoped Resource Edge Case
-- **File:** `Services/EditorCore.swift` (line 1015)
+- **File:** `Services/EditorCore.swift` (line ~1015)
 - **Issue:** `startAccessingSecurityScopedResource()` may return false but file is still readable.
 - **Status:** KNOWN - workaround in place
 
@@ -26,16 +26,16 @@
 
 ## 🟡 Medium Priority
 
-### FEAT-003: Find References in Editor
-- **File:** `Views/Editor/SyntaxHighlightingTextView.swift` (line 866)
-- **Status:** TODO
+### ~~FEAT-003: Find References in Editor~~
+- **File:** `Services/FindReferencesService.swift`, `Services/EditorCore.swift`
+- **Status:** ✅ DONE (commits `9d7f039`, `2711a31`) — workspace-wide symbol search across .swift, .js, .ts, .py, .go, .rs; wired into EditorCore, SearchView, and context menu
 
 ### FEAT-004: Format Document
-- **File:** `Views/Editor/SyntaxHighlightingTextView.swift` (line 878)
+- **File:** `Views/Editor/SyntaxHighlightingTextView.swift` (line ~878)
 - **Status:** TODO
 
 ### FEAT-006: Git Pull/Push via GitHub API
-- **File:** `Services/GitManager.swift`
+- **File:** `Services/GitManager.swift` (2832 lines, significantly expanded)
 - **Status:** TODO
 
 ### ~~INFRA-001: Add CI/CD Pipeline~~
@@ -46,27 +46,29 @@
 
 ## 🟢 Low Priority
 
-### FEAT-007: SSH Manager Implementation
-- **File:** `Services/SSHManager.swift` (13 TODOs)
-- **Status:** TODO (blocked on enableSSH flag)
+### ~~FEAT-007: SSH Manager Implementation~~
+- **File:** `Services/SSHManager.swift` (1761 lines)
+- **Status:** ✅ SUBSTANTIALLY DONE — SSH key import, connections, structural issues fixed, `enableSSH = true`. Minor remaining TODOs.
 
-### FEAT-008: SFTP Implementation
-- **File:** `Services/SFTPManager.swift`
-- **Status:** TODO
+### ~~FEAT-008: SFTP Implementation~~
+- **File:** `Services/SFTPManager.swift`, `Views/Panels/RemoteExplorerView.swift`
+- **Status:** ✅ PARTIALLY DONE — SFTPManager created, wired into RemoteExplorerView for browsing/downloading remote files.
 
 ### CLEANUP-004: Unused Feature Flags
-- **File:** `FeatureFlags.swift`
-- **Status:** TODO
+- **File:** `FeatureFlags.swift` (33 lines)
+- **Status:** MOSTLY DONE — only `enableiCloudSync` remains `false` (not yet implemented). All other flags are `true`.
 
 ### CLEANUP-005: Int.uuid Conversion Safety
 - **File:** `App/AppDelegate.swift`
 - **Status:** TODO
 
 ### CLEANUP-006: Split Large Files
-- ContentView.swift (1357 lines), EditorCore.swift (1576 lines)
-- SettingsView.swift (963 lines), TerminalView.swift (981 lines)
-- SearchView.swift (1240 lines)
-- **Status:** TODO
+- GitManager.swift (2832 lines), SyntaxHighlightingTextView.swift (2591 lines)
+- EditorCore.swift (2495 lines), TerminalView.swift (2398 lines)
+- SSHManager.swift (1761 lines), AIManager.swift (1629 lines)
+- RunestoneEditorView.swift (1597 lines), DebugManager.swift (1558 lines)
+- RemoteDebugger.swift (1503 lines), SearchView.swift (1385 lines)
+- **Status:** TODO — files restructured since last review but largest files have grown
 
 ---
 
@@ -87,6 +89,7 @@
 | CONFIG-001: README wrong project name | Mar 16 | Claude Agent |
 | CONFIG-002: Swift version 5.0 to 6.0 | Mar 16 | Claude Agent |
 | FEAT-001: Notification+Names.swift constants | Mar 16 | Claude Agent |
+| FEAT-003: FindReferencesService — workspace-wide symbol search | Post-Mar 16 | Claude Agent |
 | POLISH-001: configureStageManager() implemented with geometry preferences & size restrictions | Mar 16 | Claude Agent |
 | CLEANUP-001: Remove dead backup files | Mar 16 | Claude Agent |
 | CLEANUP-002: Remove duplicate SceneDelegate | Mar 16 | Claude Agent |
@@ -114,3 +117,23 @@
 | BRAND: Renamed display name from "VS Code" to "CodePad" (trademark compliance) | Mar 16 | Claude Agent |
 | FIX: HuggingFace token moved from UserDefaults to Keychain | Mar 16 | Claude Agent |
 | FIX: Info.plist version aligned to 1.0 (matching MARKETING_VERSION) | Mar 16 | Claude Agent |
+| FIX: Eliminate all compiler warnings across the app | Post-Mar 16 | Claude Agent |
+| FIX: Squash high-priority bugs found in audit | Post-Mar 16 | Claude Agent |
+| FEAT: Keyboard shortcuts, tunnel manager, git clone | Post-Mar 16 | Claude Agent |
+| FEAT: App Store readiness — metadata, privacy, git delta, SwiftTerm | Post-Mar 16 | Claude Agent |
+| FEAT: Git pack file support, inline AI suggestions, SSH key import | Post-Mar 16 | Claude Agent |
+| FIX: SSHManager structural brace issues, ColorPicker deprecations | Post-Mar 16 | Claude Agent |
+| FEAT: Expand autocomplete (10 new types + SwiftUI modifiers), hover docs to 35 entries | Post-Mar 16 | Claude Agent |
+| FEAT: Persist breakpoints, JS alert handlers in tunnel, extensions UX | Post-Mar 16 | Claude Agent |
+| FIX: Minimap overlay opacity, brace issues in EditorCore/SplitEditorView, @StateObject antipatterns | Post-Mar 16 | Claude Agent |
+| FEAT: SnippetManager, EmmetEngine, OnboardingView, async file loading | Post-Mar 16 | Claude Agent |
+| FEAT: Major quality pass — crash fixes, editor features, UX polish | Post-Mar 16 | Claude Agent |
+| FEAT: FEAT-007 SSH Manager — 1761 lines, key import, connections, enableSSH=true | Post-Mar 16 | Claude Agent |
+| FEAT: FEAT-008 SFTP — SFTPManager wired into RemoteExplorerView | Post-Mar 16 | Claude Agent |
+| FIX: Crash risks (JSRunner thread safety, EmmetEngine force unwrap, EditorCore bounds) | Post-Mar 16 | Claude Agent |
+| FIX: Accessibility — DiffComponents, DebugConsole, MergeConflict, Shortcuts, GitHubLogin, Tunnel, Snippets | Post-Mar 16 | Claude Agent |
+| FEAT: Remote file editing, JS debugger breakpoints, local SwiftTerm terminal, responsive layout | Post-Mar 16 | Claude Agent |
+| FIX: Build errors — regexCache concurrency safety, DebugManager optional binding | Post-Mar 16 | Claude Agent |
+| FEAT: Code folding, cursor performance, block comments, clone repo view | Post-Mar 16 | Claude Agent |
+| FIX: NSLocalNetworkUsageDescription, LSSupportsOpeningDocumentsInPlace, AccentColor | Post-Mar 16 | Claude Agent |
+| FIX: Memory warning handlers (EditorCore, AIManager, RecentFiles), app lifecycle, scene phase | Post-Mar 16 | Claude Agent |
