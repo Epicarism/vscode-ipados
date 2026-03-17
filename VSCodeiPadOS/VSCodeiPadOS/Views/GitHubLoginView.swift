@@ -70,6 +70,8 @@ struct GitHubLoginView: View {
                 .cornerRadius(8)
             }
             .disabled(authManager.isLoading)
+            .accessibilityLabel(authManager.isLoading ? "Connecting to GitHub" : "Sign in with GitHub")
+            .accessibilityHint("Starts the GitHub Device Flow authentication")
             .padding(.top, 8)
         }
         .padding()
@@ -92,6 +94,7 @@ struct GitHubLoginView: View {
                 Text(deviceCode.userCode)
                     .font(.system(size: 28, weight: .bold, design: .monospaced))
                     .tracking(2)
+                    .accessibilityLabel("Authentication code: \(deviceCode.userCode)")
                 
                 Button(action: {
                     UIPasteboard.general.string = deviceCode.userCode
@@ -100,6 +103,7 @@ struct GitHubLoginView: View {
                         .font(.title3)
                         .foregroundColor(.accentColor)
                 }
+                .accessibilityLabel("Copy authentication code to clipboard")
             }
             .padding(.vertical, 8)
             
@@ -117,6 +121,8 @@ struct GitHubLoginView: View {
                     .foregroundColor(.accentColor)
                     .underline()
             }
+            .accessibilityLabel("Open GitHub verification page: \(deviceCode.verificationUri)")
+            .accessibilityHint("Opens in Safari to complete authentication")
             
             if authManager.isPolling {
                 HStack(spacing: 8) {
@@ -126,6 +132,7 @@ struct GitHubLoginView: View {
                     Text("Waiting for authorization...")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("Waiting for GitHub authorization")
                 }
                 .padding(.top, 4)
             }
@@ -137,6 +144,7 @@ struct GitHubLoginView: View {
                     .font(.callout)
                     .foregroundColor(.secondary)
             }
+            .accessibilityLabel("Cancel GitHub login")
             .padding(.top, 4)
         }
         .padding()
@@ -220,6 +228,8 @@ struct GitHubLoginView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
             }
+            .accessibilityLabel("Sign out of GitHub")
+            .accessibilityHint("Removes your GitHub credentials from this app")
         }
         .padding()
     }
@@ -233,11 +243,13 @@ struct GitHubLoginView: View {
             Text(message)
                 .font(.caption)
                 .foregroundColor(.orange)
+                .accessibilityLabel("Error: \(message)")
             Spacer()
             Button(action: { authManager.errorMessage = nil }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)
             }
+            .accessibilityLabel("Dismiss error")
         }
         .padding(8)
         .background(Color(UIColor.systemOrange).opacity(0.1))

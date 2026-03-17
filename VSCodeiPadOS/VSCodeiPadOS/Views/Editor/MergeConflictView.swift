@@ -48,6 +48,7 @@ public struct MergeConflictView: View {
                             .foregroundColor(.blue)
                         Spacer()
                     }
+                    .accessibilityLabel("Current branch changes")
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.blue.opacity(0.15))
@@ -57,6 +58,7 @@ public struct MergeConflictView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
                         .background(Color.blue.opacity(0.05))
+                        .accessibilityLabel("Current change: \(currentChange)")
                 }
                 
                 // Divider Marker
@@ -78,6 +80,7 @@ public struct MergeConflictView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
                         .background(Color.green.opacity(0.05))
+                        .accessibilityLabel("Incoming change: \(incomingChange)")
                     
                     HStack {
                         Text(">>>>>>> Incoming")
@@ -86,6 +89,7 @@ public struct MergeConflictView: View {
                             .foregroundColor(.green)
                         Spacer()
                     }
+                    .accessibilityLabel("Incoming branch changes")
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.green.opacity(0.15))
@@ -106,5 +110,18 @@ public struct MergeConflictView: View {
                 .foregroundColor(.blue)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(accessibilityHint(for: action))
+    }
+
+    private func accessibilityHint(for action: MergeConflictAction) -> String {
+        switch action {
+        case .acceptCurrent:
+            return "Resolves the conflict by keeping the current branch changes and discarding incoming changes"
+        case .acceptIncoming:
+            return "Resolves the conflict by applying the incoming branch changes and discarding current changes"
+        case .acceptBoth:
+            return "Resolves the conflict by keeping both current and incoming changes"
+        }
     }
 }

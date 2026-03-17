@@ -28,10 +28,36 @@ final class RecentFileManager: ObservableObject {
     /// (e.g. after the app is backgrounded and the security scope expires).
     private var bookmarkCache: [URL: Data] = [:]
 
+    // MARK: – Memory Warning
+
+    /// NotificationCenter token for the memory-warning observer.
+    private var memoryWarningObserver: NSObjectProtocol?
+
     // MARK: – Init
 
     private init() {
         loadRecentFiles()
+
+        // On memory warning, trim the list down to the 5 most-recent entries
+        // and flush the bookmark cache for the dropped entries to free memory.
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: .didReceiveMemoryWarning,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let trimLimit = 5
+                guard self.recentFiles.count > trimLimit else { return }
+                AppLogger.editor.warning("[RecentFileManager] Memory warning — trimming recent files list to \(trimLimit) entries.")
+                let dropped = self.recentFiles.suffix(from: trimLimit)
+                for url in dropped {
+                    self.bookmarkCache.removeValue(forKey: url)
+                }
+                self.recentFiles = Array(self.recentFiles.prefix(trimLimit))
+                self.saveRecentFiles()
+            }
+        }
     }
 
     // MARK: – Public API

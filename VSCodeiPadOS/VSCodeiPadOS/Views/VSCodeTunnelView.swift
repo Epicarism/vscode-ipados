@@ -238,6 +238,7 @@ struct VSCodeTunnelView: View {
                         .scaleEffect(0.8)
                     Text("Reconnecting (\(attempt)/3)...")
                         .font(.caption)
+                        .accessibilityLabel("Reconnecting, attempt \(attempt) of 3")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -283,16 +284,20 @@ struct VSCodeTunnelView: View {
                         .foregroundColor(.orange)
                     Text("Connection Failed")
                         .font(.headline)
+                        .accessibilityLabel("Connection failed")
                     Text(error)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                        .accessibilityLabel("Error: \(error)")
                     
                     Button("Disconnect") {
                         tunnelManager.disconnect()
                     }
                     .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Disconnect from server")
+                    .accessibilityHint("Returns to the server list")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(themeManager.currentTheme.editorBackground)
@@ -313,6 +318,8 @@ struct VSCodeTunnelView: View {
                         .cornerRadius(16)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Exit VS Code session")
+                    .accessibilityHint("Disconnects and returns to the server list")
                     .padding(8)
                     
                     Spacer()
@@ -341,6 +348,8 @@ struct VSCodeTunnelView: View {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
                 }
+                .accessibilityLabel("Add server")
+                .accessibilityHint("Configure a new VS Code tunnel, code-server, or Codespace")
             }
             .padding()
             .background(themeManager.currentTheme.sidebarBackground)
@@ -380,6 +389,8 @@ struct VSCodeTunnelView: View {
                 Label("Add Server", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityLabel("Add server")
+            .accessibilityHint("Configure a new VS Code tunnel, code-server, or Codespace")
             
             Spacer()
             
@@ -446,6 +457,8 @@ struct VSCodeTunnelView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Connect to \(config.name)")
+                .accessibilityHint("Opens \(config.url) in the VS Code web view")
             }
             .onDelete { indexSet in
                 for index in indexSet {

@@ -243,6 +243,9 @@ final class AIManager: ObservableObject {
     /// The currently running AI request task, used for cancellation.
     private var currentStreamingTask: Task<Void, Never>?
 
+    /// NotificationCenter token for the memory-warning observer.
+    private var memoryWarningObserver: NSObjectProtocol?
+
     /// Tracks the last API call timestamp for rate limiting
     private var lastAPICallTime: Date?
     /// Minimum interval between API calls (2 seconds)
@@ -283,6 +286,28 @@ final class AIManager: ObservableObject {
             createNewSession()
         } else {
             currentSession = sessions[0]
+        }
+
+        // On memory warning, drop all but the current session's messages to free RAM.
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: .didReceiveMemoryWarning,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                AppLogger.editor.warning("[AIManager] Memory warning — trimming conversation history cache.")
+                // Retain only the most recent 4 messages in the current session;
+                // drop all non-current sessions from the in-memory array.
+                let keepCount = 4
+                if self.currentSession.messages.count > keepCount {
+                    let trimmed = Array(self.currentSession.messages.suffix(keepCount))
+                    self.currentSession.messages = trimmed
+                    self.updateSession()
+                }
+                // Release all non-active sessions from memory (they remain on disk).
+                self.sessions = self.sessions.filter { $0.id == self.currentSession.id }
+            }
         }
     }
     

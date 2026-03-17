@@ -217,6 +217,7 @@ class EditorCore: ObservableObject {
     var diagnosticErrorCount: Int = 0
     var diagnosticWarningCount: Int = 0
     private nonisolated(unsafe) var diagnosticsObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var memoryWarningObserver: NSObjectProtocol?
     
     /// Batch update diagnostic counts with a single change notification
     func updateDiagnosticCounts(errorCount: Int, warningCount: Int) {
@@ -390,6 +391,27 @@ class EditorCore: ObservableObject {
             }
         }
 
+        // Observe memory warnings: clear syntax-highlight caches and non-visible tab content
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: .didReceiveMemoryWarning,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                AppLogger.editor.warning("[EditorCore] Memory warning — purging non-visible tab content caches.")
+                // Keep the active tab's content intact; drop oversized cached content
+                // from background tabs that are file-backed (can reload from disk).
+                let activeId = self.activeTabId
+                for index in self.tabs.indices where self.tabs[index].id != activeId {
+                    if self.tabs[index].url != nil,
+                       self.tabs[index].content.count > 10_000 {
+                        self.tabs[index].content = ""
+                    }
+                }
+            }
+        }
+
         // Observe diagnostics updates from ProblemsView / ErrorParser
         diagnosticsObserver = NotificationCenter.default.addObserver(
             forName: .diagnosticsUpdated,
@@ -446,6 +468,9 @@ class EditorCore: ObservableObject {
         }
         if let diagObs = diagnosticsObserver {
             NotificationCenter.default.removeObserver(diagObs)
+        }
+        if let memObs = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memObs)
         }
         // Release any remaining security-scoped resources.
         // deinit is nonisolated on @MainActor classes, so we use assumeIsolated

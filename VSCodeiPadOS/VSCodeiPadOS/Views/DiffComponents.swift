@@ -220,6 +220,7 @@ struct DiffViewer: View {
                 .padding(.vertical, 4)
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(6)
+                .accessibilityLabel("Change type: \(file.status)")
         }
         .padding(12)
         .background(Color(UIColor.secondarySystemBackground))
@@ -313,6 +314,8 @@ struct InlineDiffLineView: View {
                 .padding(.vertical, 1)
         }
         .background(backgroundColor)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(lineAccessibilityLabel)
     }
     
     var backgroundColor: Color {
@@ -322,6 +325,20 @@ struct InlineDiffLineView: View {
         case .header: return themeManager.currentTheme.diffHeaderBackground
         case .context: return Color.clear
         }
+    }
+
+    var lineAccessibilityLabel: String {
+        let typeLabel: String
+        switch line.type {
+        case .addition: typeLabel = "Added"
+        case .deletion: typeLabel = "Removed"
+        case .header:   typeLabel = "Header"
+        case .context:  typeLabel = "Context"
+        }
+        let old = line.oldLineNumber.map { "old line \($0)" } ?? ""
+        let new = line.newLineNumber.map { "new line \($0)" } ?? ""
+        let lineInfo = [old, new].filter { !$0.isEmpty }.joined(separator: ", ")
+        return "\(typeLabel) \(lineInfo.isEmpty ? "" : "(\(lineInfo))"), \(line.content)"
     }
 }
 
@@ -396,6 +413,8 @@ struct SideBySideDiffLineView: View {
             .background(rightBackgroundColor)
         }
         .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(sideAccessibilityLabel)
     }
     
     var leftBackgroundColor: Color {
@@ -408,6 +427,20 @@ struct SideBySideDiffLineView: View {
         if line.type == .addition { return themeManager.currentTheme.diffAddedBackground }
         if line.type == .deletion { return Color(UIColor.systemGray6) }
         return Color.clear
+    }
+
+    var sideAccessibilityLabel: String {
+        let typeLabel: String
+        switch line.type {
+        case .addition: typeLabel = "Added"
+        case .deletion: typeLabel = "Removed"
+        case .header:   typeLabel = "Header"
+        case .context:  typeLabel = "Context"
+        }
+        let old = line.oldLineNumber.map { "old line \($0)" } ?? ""
+        let new = line.newLineNumber.map { "new line \($0)" } ?? ""
+        let lineInfo = [old, new].filter { !$0.isEmpty }.joined(separator: ", ")
+        return "\(typeLabel) \(lineInfo.isEmpty ? "" : "(\(lineInfo))"), \(line.content)"
     }
 }
 
@@ -425,6 +458,7 @@ struct HunkHeaderView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(themeManager.currentTheme.diffHeaderBackground)
             .foregroundColor(themeManager.currentTheme.infoForeground)
+            .accessibilityLabel("Diff hunk: \(text)")
     }
 }
 

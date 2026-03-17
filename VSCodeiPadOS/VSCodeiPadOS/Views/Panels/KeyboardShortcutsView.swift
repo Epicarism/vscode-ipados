@@ -267,6 +267,8 @@ struct KeyboardShortcutsView: View {
             keyCapsView(shortcut.keys)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(shortcut.name), \(shortcut.keys), \(shortcut.description)")
     }
     
     private func keyCapsView(_ keys: String) -> some View {

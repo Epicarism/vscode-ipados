@@ -61,6 +61,8 @@ struct DebugConsoleEntryView: View {
             .id(entry.id)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(entry.kind.rawValue): \(entry.text)")
     }
     
     private var prefixColor: Color {
@@ -285,6 +287,8 @@ struct DebugConsoleView: View {
                     .onAppear {
                         isInputFocused = true
                     }
+                    .accessibilityLabel("Expression input")
+                    .accessibilityHint("Type a JavaScript expression and press Return or Run to evaluate")
 
                 // History navigation buttons
                 if !commandHistory.isEmpty {
@@ -295,6 +299,8 @@ struct DebugConsoleView: View {
                                 .foregroundColor(theme.comment)
                         }
                         .disabled(historyIndex >= commandHistory.count - 1)
+                        .accessibilityLabel("Previous command")
+                        .accessibilityHint("Navigate to the previous command in history")
                         
                         Button(action: navigateHistoryDown) {
                             Image(systemName: "chevron.down")
@@ -302,6 +308,8 @@ struct DebugConsoleView: View {
                                 .foregroundColor(theme.comment)
                         }
                         .disabled(historyIndex < 0)
+                        .accessibilityLabel("Next command")
+                        .accessibilityHint("Navigate to the next command in history")
                     }
                 }
                 
@@ -311,6 +319,8 @@ struct DebugConsoleView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Run expression")
+                .accessibilityHint("Evaluate the expression in the input field")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)

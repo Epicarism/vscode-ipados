@@ -52,6 +52,7 @@ struct SnippetPickerView: View {
                     .font(.system(size: 14))
                     .textFieldStyle(.plain)
                     .focused($isSearchFocused)
+                    .accessibilityLabel("Search snippets")
                     .onSubmit {
                         if let snippet = filteredSnippets[safe: selectedIndex] {
                             insert(snippet)
@@ -64,6 +65,7 @@ struct SnippetPickerView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, 16)
@@ -95,6 +97,9 @@ struct SnippetPickerView: View {
                                     isSelected: index == selectedIndex
                                 )
                                 .id(index)
+                                .accessibilityLabel("\(snippet.name), prefix: \(snippet.prefix)\(snippet.description.isEmpty ? "" : ", \(snippet.description)")")
+                                .accessibilityHint("Double-tap to insert snippet")
+                                .accessibilityAddTraits(.isButton)
                                 .onTapGesture {
                                     insert(snippet)
                                 }
@@ -119,6 +124,7 @@ struct SnippetPickerView: View {
                 Text("\(filteredSnippets.count) snippets")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
+                    .accessibilityLabel("\(filteredSnippets.count) snippet\(filteredSnippets.count == 1 ? "" : "s") available")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
