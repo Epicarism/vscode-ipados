@@ -1419,6 +1419,20 @@ class EditorTextView: MultiCursorTextView {
         // NOTE: Cmd+Shift+P, Cmd+Shift+A, Cmd+J, Cmd+B are now handled
         // globally via AppDelegate.buildMenu() so they work regardless of focus.
         
+        // Undo: Cmd+Z
+        commands.append(UIKeyCommand(
+            input: "z",
+            modifierFlags: .command,
+            action: #selector(handleUndo)
+        ))
+        
+        // Redo: Cmd+Shift+Z
+        commands.append(UIKeyCommand(
+            input: "z",
+            modifierFlags: [.command, .shift],
+            action: #selector(handleRedo)
+        ))
+        
         return commands
     }
     

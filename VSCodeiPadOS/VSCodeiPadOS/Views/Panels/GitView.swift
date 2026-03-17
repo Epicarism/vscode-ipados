@@ -16,6 +16,10 @@ struct GitView: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var isOperationInProgress = false
+    @State private var showDiscardConfirmation = false
+    @State private var pendingDiscardPath: String?
+    @State private var showCommitPushConfirmation = false
+    @State private var gitConfigError: String?
 
     private var theme: Theme { themeManager.currentTheme }
 
@@ -265,7 +269,7 @@ struct GitView: View {
             }
             .padding(12)
         }
-        .background(Color(UIColor.systemBackground))
+        .background(Color(theme.editorBackground))
         .alert("Git Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -280,8 +284,24 @@ struct GitView: View {
         .fullScreenCover(item: $showingDiffEntry) { entry in
             GitDiffSheet(entry: entry)
         }
+        .alert("Discard Changes?", isPresented: $showDiscardConfirmation) {
+            Button("Discard", role: .destructive) {
+                if let path = pendingDiscardPath {
+                    Task { await performGitOp { try await gitManager.discardChanges(file: path) } }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingDiscardPath = nil }
+        } message: {
+            Text("This will permanently discard all changes to \(pendingDiscardPath?.components(separatedBy: "/").last ?? "this file"). This cannot be undone.")
+        }
+        .alert("Commit & Push?", isPresented: $showCommitPushConfirmation) {
+            Button("Commit & Push") { executeCommitAndPush() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Commit \"\(commitMessage)\" and push to remote?")
+        }
     }
-    
+
     private var canCommit: Bool {
         !commitMessage.isEmpty && !gitManager.stagedChanges.isEmpty
     }
@@ -356,7 +376,8 @@ struct GitView: View {
             
             if !isStaged && entry.kind != .untracked {
                 Button(role: .destructive, action: {
-                    Task { await performGitOp { try await gitManager.discardChanges(file: entry.path) } }
+                    pendingDiscardPath = entry.path
+                    showDiscardConfirmation = true
                 }) {
                     Label("Discard Changes", systemImage: "trash")
                 }
@@ -441,6 +462,10 @@ struct GitView: View {
     }
     
     private func commitAndPush() {
+        showCommitPushConfirmation = true
+    }
+    
+    private func executeCommitAndPush() {
         guard canCommit else { return }
         let message = commitMessage
         commitMessage = ""
@@ -488,9 +513,12 @@ struct GitView: View {
                 await MainActor.run {
                     gitConfigName = name
                     gitConfigEmail = email
+                    gitConfigError = nil
                 }
             } catch {
-                print("[GitView] Failed to load git config: \(error.localizedDescription)")
+                await MainActor.run {
+                    gitConfigError = "Failed to load git config: \(error.localizedDescription)"
+                }
             }
         }
     }
