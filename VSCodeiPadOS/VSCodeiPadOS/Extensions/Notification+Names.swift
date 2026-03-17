@@ -211,4 +211,9 @@ extension Notification.Name {
 
     /// App received a memory warning — views should release caches.
     static let didReceiveMemoryWarning = Notification.Name("AppDidReceiveMemoryWarning")
+
+    // MARK: - Diagnostics
+
+    /// Diagnostics (problems) were updated.
+    static let diagnosticsUpdated = Notification.Name("diagnosticsUpdated")
 }

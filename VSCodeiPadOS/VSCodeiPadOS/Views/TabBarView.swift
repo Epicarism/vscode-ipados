@@ -139,7 +139,7 @@ struct TabItemView: View {
                 ZStack {
                     // Show modified dot for unsaved files when NOT hovering
                     // (show for both active and inactive tabs when not hovering)
-                    if tab.isUnsaved && !isHovering {
+                    if tab.isUnsaved {
                         Circle()
                             .fill(isActive ? themeManager.currentTheme.tabActiveForeground : themeManager.currentTheme.tabInactiveForeground)
                             .frame(width: 8, height: 8)
@@ -154,7 +154,7 @@ struct TabItemView: View {
                             .cornerRadius(4)
                     }
                     .buttonStyle(.plain)
-                    .opacity(isActive ? 1.0 : (isHovering ? 1.0 : (tab.isUnsaved ? 0 : 0.4)))
+                    .opacity(isActive ? 1.0 : (isHovering ? 1.0 : (tab.isUnsaved ? 0.5 : 0.7)))
                     .accessibilityLabel("Close tab \(tab.fileName)")
                     .accessibilityHint("Closes this tab")
                 }

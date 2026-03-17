@@ -9,7 +9,7 @@ struct AIAssistantView: View {
     @State private var userInput = ""
     @State private var showSettings = false
     @State private var showHistory = false
-    @State private var showTools = false
+
     @FocusState private var isInputFocused: Bool
     
     // Tool executor - created per-use in sendMessage() to strongly capture fileNavigator

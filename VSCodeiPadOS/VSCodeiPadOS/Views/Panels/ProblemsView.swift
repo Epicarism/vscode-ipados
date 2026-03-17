@@ -51,12 +51,6 @@ enum DiagnosticSeverity: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-// MARK: - Notification Name
-
-extension Notification.Name {
-    static let diagnosticsUpdated = Notification.Name("diagnosticsUpdated")
-}
-
 // MARK: - Problem Row View
 
 struct ProblemRowView: View {
