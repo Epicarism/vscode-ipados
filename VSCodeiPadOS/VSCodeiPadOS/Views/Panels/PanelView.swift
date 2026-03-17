@@ -33,6 +33,7 @@ struct PanelView: View {
     @State private var previousHeight: CGFloat = 200
     @State private var problemCount: Int = 0
     @StateObject private var themeManager = ThemeManager.shared
+    @EnvironmentObject var editorCore: EditorCore
 
     private var theme: Theme { themeManager.currentTheme }
 
@@ -123,7 +124,7 @@ struct PanelView: View {
                     case .ports:
                         PortsView()
                     case .timeline:
-                        TimelineView()
+                        TimelineView(filePath: editorCore.activeTab?.url?.path, workingDirectory: editorCore.fileNavigator?.rootPath)
                     case .sourceControl:
                         GitView()
                     }
