@@ -28,6 +28,8 @@ enum MergeConflictResolution {
 
 import SwiftUI
 import Combine
+import Compression
+import CommonCrypto
 
 // MARK: - Shell Escaping
 
@@ -47,6 +49,7 @@ enum GitManagerError: Error, LocalizedError {
     case notAvailableOnIOS
     case sshNotConnected
     case invalidRepository
+    case cloneFailed(String)
     
     var errorDescription: String? {
         switch self {
@@ -62,6 +65,8 @@ enum GitManagerError: Error, LocalizedError {
             return "SSH connection required for git operations"
         case .invalidRepository:
             return "Invalid git repository"
+        case .cloneFailed(let reason):
+            return "Clone failed: \(reason)"
         }
     }
 }
@@ -1002,6 +1007,618 @@ final class GitManager: ObservableObject {
         // Remove the file from the tracked conflict list.
         mergeConflicts.removeAll { $0 == file }
         await refresh()
+    }
+    
+    // MARK: - Clone Repository (HTTPS Smart Protocol)
+    
+    /// Clone a git repository via HTTPS smart protocol.
+    /// - Parameters:
+    ///   - url: The repository URL (HTTPS)
+    ///   - destination: Local directory to clone into
+    ///   - branch: Optional branch name (defaults to remote HEAD)
+    ///   - authToken: Optional auth token for private repos
+    ///   - progress: Callback for progress messages
+    func cloneRepository(
+        url: String,
+        to destination: URL,
+        branch: String? = nil,
+        authToken: String? = nil,
+        progress: ((String) -> Void)? = nil
+    ) async throws {
+        progress?("Initializing clone...")
+        
+        // Normalize URL for smart HTTP
+        let baseURL = url.hasSuffix(".git") ? url : url + ".git"
+        
+        guard let _ = URL(string: baseURL) else {
+            throw GitManagerError.cloneFailed("Invalid URL: \(url)")
+        }
+        
+        // 1. Discover refs via smart HTTP protocol
+        progress?("Discovering refs...")
+        let refs = try await discoverRefs(baseURL: baseURL, authToken: authToken)
+        
+        guard !refs.isEmpty else {
+            throw GitManagerError.cloneFailed("No refs found at \(url)")
+        }
+        
+        // Find default branch from symref or first refs/heads
+        let symrefHead = refs.first { $0.isSymref }?.symrefTarget
+        let defaultBranch: String
+        if let branch = branch {
+            defaultBranch = branch
+        } else if let symTarget = symrefHead {
+            defaultBranch = symTarget.replacingOccurrences(of: "refs/heads/", with: "")
+        } else {
+            defaultBranch = refs.first { $0.name.hasPrefix("refs/heads/") }?.name
+                .replacingOccurrences(of: "refs/heads/", with: "") ?? "main"
+        }
+        
+        // 2. Create .git directory structure
+        progress?("Creating repository structure...")
+        let gitDir = destination.appendingPathComponent(".git")
+        try createGitDirectoryStructure(at: gitDir)
+        
+        // 3. Collect SHAs to fetch
+        let wantSHAs = Array(Set(refs.filter { $0.sha.count == 40 }.map { $0.sha }))
+        guard !wantSHAs.isEmpty else {
+            throw GitManagerError.cloneFailed("No valid object SHAs found")
+        }
+        
+        // 4. Fetch pack file
+        progress?("Downloading objects (\(wantSHAs.count) refs)...")
+        let packData = try await fetchPackFile(baseURL: baseURL, wants: wantSHAs, authToken: authToken)
+        
+        // 5. Parse pack file and write objects
+        progress?("Unpacking objects...")
+        let objectCount = try parseAndWritePackFile(packData: packData, gitDir: gitDir)
+        progress?("Unpacked \(objectCount) objects")
+        
+        // 6. Write refs
+        progress?("Writing refs...")
+        for ref in refs where ref.name.hasPrefix("refs/") {
+            // Write remote tracking refs
+            let remoteName = ref.name.hasPrefix("refs/heads/")
+                ? ref.name.replacingOccurrences(of: "refs/heads/", with: "refs/remotes/origin/")
+                : ref.name
+            let refPath = gitDir.appendingPathComponent(remoteName)
+            try FileManager.default.createDirectory(
+                at: refPath.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try (ref.sha + "\n").write(to: refPath, atomically: true, encoding: .utf8)
+        }
+        
+        // Also write local branch ref
+        let headBranchRef = refs.first { $0.name == "refs/heads/\(defaultBranch)" }
+        if let headRef = headBranchRef {
+            let localRef = gitDir.appendingPathComponent("refs/heads/\(defaultBranch)")
+            try FileManager.default.createDirectory(
+                at: localRef.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try (headRef.sha + "\n").write(to: localRef, atomically: true, encoding: .utf8)
+        }
+        
+        // 7. Write HEAD
+        try "ref: refs/heads/\(defaultBranch)\n".write(
+            to: gitDir.appendingPathComponent("HEAD"),
+            atomically: true,
+            encoding: .utf8
+        )
+        
+        // 8. Write config
+        progress?("Writing config...")
+        let config = """
+        [core]
+            repositoryformatversion = 0
+            filemode = false
+            bare = false
+            logallrefupdates = true
+        [remote "origin"]
+            url = \(url)
+            fetch = +refs/heads/*:refs/remotes/origin/*
+        [branch "\(defaultBranch)"]
+            remote = origin
+            merge = refs/heads/\(defaultBranch)
+        """
+        try config.write(to: gitDir.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        
+        // 9. Checkout working tree
+        progress?("Checking out files...")
+        let fileCount = try checkoutWorkingTree(gitDir: gitDir, to: destination)
+        progress?("Checked out \(fileCount) files")
+        
+        progress?("Clone complete!")
+    }
+    
+    // MARK: - Clone Helpers
+    
+    private struct GitRef {
+        let sha: String
+        let name: String
+        var isSymref = false
+        var symrefTarget: String?
+    }
+    
+    private func createGitDirectoryStructure(at gitDir: URL) throws {
+        let fm = FileManager.default
+        let dirs = [
+            "", "objects", "objects/pack", "objects/info",
+            "refs", "refs/heads", "refs/tags", "refs/remotes", "refs/remotes/origin",
+            "hooks", "info"
+        ]
+        for dir in dirs {
+            try fm.createDirectory(
+                at: gitDir.appendingPathComponent(dir),
+                withIntermediateDirectories: true
+            )
+        }
+        // Write description and info/exclude
+        try "Unnamed repository; edit this file 'description' to name the repository.\n"
+            .write(to: gitDir.appendingPathComponent("description"), atomically: true, encoding: .utf8)
+        try "# git ls-files --others --exclude-from=.git/info/exclude\n"
+            .write(to: gitDir.appendingPathComponent("info/exclude"), atomically: true, encoding: .utf8)
+    }
+    
+    /// Discover refs from a smart HTTP git server
+    private func discoverRefs(baseURL: String, authToken: String? = nil) async throws -> [GitRef] {
+        guard let url = URL(string: "\(baseURL)/info/refs?service=git-upload-pack") else {
+            throw GitManagerError.cloneFailed("Invalid refs URL")
+        }
+        
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            throw GitManagerError.cloneFailed("Server returned \(httpResponse.statusCode)")
+        }
+        
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw GitManagerError.cloneFailed("Invalid response encoding")
+        }
+        
+        return parseSmartHTTPRefs(text)
+    }
+    
+    /// Parse pkt-line formatted ref discovery response
+    private func parseSmartHTTPRefs(_ text: String) -> [GitRef] {
+        var refs: [GitRef] = []
+        let lines = text.components(separatedBy: "\n")
+        
+        for line in lines {
+            // Skip pkt-line length prefixes, flush packets, and service lines
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed == "0000" || trimmed.contains("# service=") {
+                continue
+            }
+            
+            // Extract SHA and ref name from pkt-line
+            // Format: XXXX<sha> <refname>\0<capabilities> or XXXX<sha> <refname>
+            var content = trimmed
+            // Strip 4-char pkt-line length prefix if present
+            if content.count > 4, content.prefix(4).allSatisfy({ $0.isHexDigit }) {
+                content = String(content.dropFirst(4))
+            }
+            
+            // Split on null byte (capabilities) and take first part
+            let parts = content.components(separatedBy: "\0")
+            let refPart = parts[0]
+            let capabilities = parts.count > 1 ? parts[1] : ""
+            
+            // Parse SHA and name
+            let components = refPart.split(separator: " ", maxSplits: 1)
+            guard components.count == 2 else { continue }
+            
+            let sha = String(components[0])
+            let name = String(components[1])
+            
+            // Validate SHA (40 hex chars)
+            guard sha.count == 40, sha.allSatisfy({ $0.isHexDigit }) else { continue }
+            
+            var ref = GitRef(sha: sha, name: name)
+            
+            // Check for symref capability (HEAD -> refs/heads/main)
+            if name == "HEAD", capabilities.contains("symref=HEAD:") {
+                if let symrefRange = capabilities.range(of: "symref=HEAD:") {
+                    let afterSymref = capabilities[symrefRange.upperBound...]
+                    let target = afterSymref.prefix(while: { $0 != " " && $0 != "\0" })
+                    ref.isSymref = true
+                    ref.symrefTarget = String(target)
+                }
+            }
+            
+            refs.append(ref)
+        }
+        
+        return refs
+    }
+    
+    /// Fetch pack file from smart HTTP server
+    private func fetchPackFile(baseURL: String, wants: [String], authToken: String? = nil) async throws -> Data {
+        guard let url = URL(string: "\(baseURL)/git-upload-pack") else {
+            throw GitManagerError.cloneFailed("Invalid upload-pack URL")
+        }
+        
+        // Build request body in pkt-line format
+        var body = ""
+        for (i, sha) in wants.enumerated() {
+            if i == 0 {
+                // First want includes capabilities
+                let line = "want \(sha) multi_ack_detailed no-done side-band-64k thin-pack ofs-delta agent=codepad/1.0\n"
+                body += pktLine(line)
+            } else {
+                body += pktLine("want \(sha)\n")
+            }
+        }
+        body += "0000" // flush
+        body += pktLine("done\n")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-git-upload-pack-request", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body.data(using: .utf8)
+        request.timeoutInterval = 120
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            throw GitManagerError.cloneFailed("Upload-pack failed with status \(httpResponse.statusCode)")
+        }
+        
+        // Extract pack data from side-band response
+        return extractPackFromSideBand(data)
+    }
+    
+    /// Format a pkt-line string
+    private func pktLine(_ content: String) -> String {
+        let length = content.utf8.count + 4
+        return String(format: "%04x", length) + content
+    }
+    
+    /// Extract PACK data from side-band-64k response
+    private func extractPackFromSideBand(_ data: Data) -> Data {
+        var packData = Data()
+        var offset = 0
+        
+        while offset < data.count {
+            // Read 4 hex chars for pkt-line length
+            guard offset + 4 <= data.count else { break }
+            let lengthBytes = data[offset..<offset+4]
+            guard let lengthStr = String(data: lengthBytes, encoding: .ascii),
+                  let length = Int(lengthStr, radix: 16) else {
+                // Not a valid pkt-line, try to find PACK header directly
+                if let packRange = data.range(of: Data("PACK".utf8), in: offset..<data.count) {
+                    return Data(data[packRange.lowerBound...])
+                }
+                break
+            }
+            
+            if length == 0 {
+                // Flush packet
+                offset += 4
+                continue
+            }
+            
+            if length <= 4 {
+                offset += 4
+                continue
+            }
+            
+            let payloadStart = offset + 4
+            let payloadEnd = min(offset + length, data.count)
+            guard payloadStart < payloadEnd else {
+                offset += 4
+                continue
+            }
+            
+            let band = data[payloadStart]
+            
+            switch band {
+            case 1:
+                // Pack data channel
+                if payloadStart + 1 < payloadEnd {
+                    packData.append(data[payloadStart+1..<payloadEnd])
+                }
+            case 2:
+                // Progress channel - ignore
+                break
+            case 3:
+                // Error channel
+                if let errorMsg = String(data: data[payloadStart+1..<payloadEnd], encoding: .utf8) {
+                    AppLogger.git.error("Server error: \(errorMsg)")
+                }
+            default:
+                // No side-band, raw data
+                packData.append(data[payloadStart..<payloadEnd])
+            }
+            
+            offset += length
+        }
+        
+        // If we couldn't parse side-band, look for raw PACK header
+        if packData.isEmpty, let packRange = data.range(of: Data("PACK".utf8)) {
+            return Data(data[packRange.lowerBound...])
+        }
+        
+        return packData
+    }
+    
+    /// Parse a pack file and write objects to .git/objects as loose objects
+    @discardableResult
+    private func parseAndWritePackFile(packData: Data, gitDir: URL) throws -> Int {
+        guard packData.count >= 12 else {
+            throw GitManagerError.cloneFailed("Pack data too small (\(packData.count) bytes)")
+        }
+        
+        // Verify PACK header
+        let header = packData.prefix(4)
+        guard String(data: header, encoding: .ascii) == "PACK" else {
+            throw GitManagerError.cloneFailed("Invalid pack header")
+        }
+        
+        // Read version (4 bytes, big-endian)
+        let version = packData.withUnsafeBytes { buf -> UInt32 in
+            buf.load(fromByteOffset: 4, as: UInt32.self).bigEndian
+        }
+        guard version == 2 || version == 3 else {
+            throw GitManagerError.cloneFailed("Unsupported pack version \(version)")
+        }
+        
+        // Read object count (4 bytes, big-endian)
+        let objectCount = packData.withUnsafeBytes { buf -> UInt32 in
+            buf.load(fromByteOffset: 8, as: UInt32.self).bigEndian
+        }
+        
+        var offset = 12
+        var writtenCount = 0
+        let objectsDir = gitDir.appendingPathComponent("objects")
+        
+        for _ in 0..<objectCount {
+            guard offset < packData.count else { break }
+            
+            // Read object header (variable-length encoding)
+            var byte = packData[offset]
+            let objectType = (byte >> 4) & 0x07
+            var size: UInt64 = UInt64(byte & 0x0F)
+            var shift: UInt64 = 4
+            offset += 1
+            
+            while byte & 0x80 != 0 {
+                guard offset < packData.count else { break }
+                byte = packData[offset]
+                size |= UInt64(byte & 0x7F) << shift
+                shift += 7
+                offset += 1
+            }
+            
+            switch objectType {
+            case 1, 2, 3, 4:
+                // commit, tree, blob, tag — zlib compressed data
+                let typeStr: String
+                switch objectType {
+                case 1: typeStr = "commit"
+                case 2: typeStr = "tree"
+                case 3: typeStr = "blob"
+                case 4: typeStr = "tag"
+                default: typeStr = "unknown"
+                }
+                
+                // Decompress zlib data
+                let remaining = Data(packData[offset...])
+                guard let (decompressed, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) else {
+                    // Skip this object if decompression fails
+                    offset += Int(size) // rough skip
+                    continue
+                }
+                offset += consumed
+                
+                // Write as loose object
+                try writeLooseObject(
+                    type: typeStr,
+                    data: decompressed,
+                    objectsDir: objectsDir
+                )
+                writtenCount += 1
+                
+            case 6:
+                // OFS_DELTA — skip for now
+                // Read negative offset
+                var oByte = packData[offset]
+                var negOffset: UInt64 = UInt64(oByte & 0x7F)
+                offset += 1
+                while oByte & 0x80 != 0 {
+                    guard offset < packData.count else { break }
+                    oByte = packData[offset]
+                    negOffset = ((negOffset + 1) << 7) | UInt64(oByte & 0x7F)
+                    offset += 1
+                }
+                // Skip the zlib data
+                let remaining = Data(packData[offset...])
+                if let (_, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) {
+                    offset += consumed
+                } else {
+                    offset = packData.count // bail
+                }
+                
+            case 7:
+                // REF_DELTA — skip for now
+                offset += 20 // skip base object SHA
+                let remaining = Data(packData[offset...])
+                if let (_, consumed) = zlibDecompress(remaining, expectedSize: Int(size)) {
+                    offset += consumed
+                } else {
+                    offset = packData.count
+                }
+                
+            default:
+                break
+            }
+        }
+        
+        return writtenCount
+    }
+    
+    /// Decompress zlib data, returning (decompressed, bytesConsumed)
+    private func zlibDecompress(_ data: Data, expectedSize: Int) -> (Data, Int)? {
+        // Use Compression framework
+        let bufferSize = max(expectedSize, 4096)
+        var decompressed = Data(count: bufferSize)
+        
+        // Try progressively larger chunks of input
+        for trySize in stride(from: min(data.count, max(expectedSize + 64, 256)), through: data.count, by: 256) {
+            let inputSize = min(trySize, data.count)
+            let result = decompressed.withUnsafeMutableBytes { destBuf -> Int in
+                data.withUnsafeBytes { srcBuf -> Int in
+                    guard let destPtr = destBuf.baseAddress,
+                          let srcPtr = srcBuf.baseAddress else { return 0 }
+                    return compression_decode_buffer(
+                        destPtr.assumingMemoryBound(to: UInt8.self),
+                        bufferSize,
+                        srcPtr.assumingMemoryBound(to: UInt8.self),
+                        inputSize,
+                        nil,
+                        COMPRESSION_ZLIB
+                    )
+                }
+            }
+            
+            if result > 0 {
+                decompressed = decompressed.prefix(result)
+                return (decompressed, inputSize)
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Write a loose git object (type + data → SHA1 → .git/objects/xx/yyyy)
+    private func writeLooseObject(type: String, data: Data, objectsDir: URL) throws {
+        
+        // Build git object: "<type> <size>\0<data>"
+        let header = "\(type) \(data.count)\0"
+        guard let headerData = header.data(using: .utf8) else { return }
+        var objectData = headerData + data
+        
+        // SHA1 hash
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
+        objectData.withUnsafeBytes { buf in
+            _ = CC_SHA1(buf.baseAddress, CC_LONG(objectData.count), &hash)
+        }
+        let sha = hash.map { String(format: "%02x", $0) }.joined()
+        
+        let prefix = String(sha.prefix(2))
+        let suffix = String(sha.dropFirst(2))
+        let objectDir = objectsDir.appendingPathComponent(prefix)
+        let objectPath = objectDir.appendingPathComponent(suffix)
+        
+        // Skip if already exists
+        guard !FileManager.default.fileExists(atPath: objectPath.path) else { return }
+        
+        // Create directory
+        try FileManager.default.createDirectory(at: objectDir, withIntermediateDirectories: true)
+        
+        // Compress with zlib
+        let compressedSize = objectData.count + 512
+        var compressed = Data(count: compressedSize)
+        let result = compressed.withUnsafeMutableBytes { destBuf -> Int in
+            objectData.withUnsafeBytes { srcBuf -> Int in
+                guard let destPtr = destBuf.baseAddress,
+                      let srcPtr = srcBuf.baseAddress else { return 0 }
+                return compression_encode_buffer(
+                    destPtr.assumingMemoryBound(to: UInt8.self),
+                    compressedSize,
+                    srcPtr.assumingMemoryBound(to: UInt8.self),
+                    objectData.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+        
+        if result > 0 {
+            compressed = compressed.prefix(result)
+            try compressed.write(to: objectPath)
+        }
+    }
+    
+    /// Checkout the HEAD tree to the working directory
+    @discardableResult
+    private func checkoutWorkingTree(gitDir: URL, to destination: URL) throws -> Int {
+        // NativeGitReader expects the repo root (parent of .git)
+        let repoRoot = gitDir.deletingLastPathComponent()
+        guard let reader = NativeGitReader(repositoryURL: repoRoot) else {
+            throw GitManagerError.cloneFailed("Could not open repository at \(repoRoot.path)")
+        }
+        
+        // Get HEAD commit SHA
+        guard let headSHA = reader.headSHA() else {
+            throw GitManagerError.cloneFailed("Could not resolve HEAD")
+        }
+        
+        // Read commit to get tree SHA
+        guard let commitObj = reader.readObject(sha: headSHA),
+              commitObj.type == .commit,
+              let commitStr = String(data: commitObj.data, encoding: .utf8),
+              let treeLine = commitStr.components(separatedBy: "\n").first(where: { $0.hasPrefix("tree ") }) else {
+            throw GitManagerError.cloneFailed("Could not read HEAD commit")
+        }
+        
+        let treeSHA = String(treeLine.dropFirst(5))
+        
+        // Recursively checkout tree
+        return try checkoutTree(sha: treeSHA, at: destination, reader: reader)
+    }
+    
+    /// Recursively checkout a tree object
+    private func checkoutTree(sha: String, at directory: URL, reader: NativeGitReader) throws -> Int {
+        guard let treeObj = reader.readObject(sha: sha), treeObj.type == .tree else { return 0 }
+        
+        var fileCount = 0
+        var offset = 0
+        let bytes = [UInt8](treeObj.data)
+        
+        while offset < bytes.count {
+            // Parse tree entry: "<mode> <name>\0<20-byte-sha>"
+            // Find space (end of mode)
+            guard let spaceIdx = bytes[offset...].firstIndex(of: 0x20) else { break }
+            let modeStr = String(bytes: Array(bytes[offset..<spaceIdx]), encoding: .ascii) ?? ""
+            offset = spaceIdx + 1
+            
+            // Find null (end of name)
+            guard let nullIdx = bytes[offset...].firstIndex(of: 0x00) else { break }
+            let name = String(bytes: Array(bytes[offset..<nullIdx]), encoding: .utf8) ?? ""
+            offset = nullIdx + 1
+            
+            // Read 20-byte SHA
+            guard offset + 20 <= bytes.count else { break }
+            let entrySHA = bytes[offset..<offset+20].map { String(format: "%02x", $0) }.joined()
+            offset += 20
+            
+            let entryPath = directory.appendingPathComponent(name)
+            
+            if modeStr.hasPrefix("4") {
+                // Directory (tree) — recurse
+                try FileManager.default.createDirectory(at: entryPath, withIntermediateDirectories: true)
+                fileCount += try checkoutTree(sha: entrySHA, at: entryPath, reader: reader)
+            } else {
+                // File (blob) — write
+                if let blobObj = reader.readObject(sha: entrySHA), blobObj.type == .blob {
+                    try blobObj.data.write(to: entryPath)
+                    fileCount += 1
+                }
+            }
+        }
+        
+        return fileCount
     }
     
     // MARK: - Missing Functionality TODOs

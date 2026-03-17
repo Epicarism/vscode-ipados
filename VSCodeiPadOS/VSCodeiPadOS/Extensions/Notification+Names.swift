@@ -216,4 +216,25 @@ extension Notification.Name {
 
     /// Diagnostics (problems) were updated.
     static let diagnosticsUpdated = Notification.Name("diagnosticsUpdated")
+
+    // MARK: - Selection & Editing (Keyboard Shortcuts)
+
+    /// Add the next occurrence of the current selection to multi-cursor.
+    static let addNextOccurrence = Notification.Name("AddNextOccurrence")
+    /// Select all occurrences of the current selection.
+    static let selectAllOccurrences = Notification.Name("SelectAllOccurrences")
+    /// Toggle line comment on the current line(s).
+    static let toggleComment = Notification.Name("ToggleComment")
+    /// Delete the current line(s).
+    static let deleteLine = Notification.Name("DeleteLine")
+    /// Show global search (search in files).
+    static let showGlobalSearch = Notification.Name("ShowGlobalSearch")
+    /// Move the current line up.
+    static let moveLineUp = Notification.Name("MoveLineUp")
+    /// Move the current line down.
+    static let moveLineDown = Notification.Name("MoveLineDown")
+    /// Duplicate the current line upward.
+    static let duplicateLineUp = Notification.Name("DuplicateLineUp")
+    /// Duplicate the current line downward.
+    static let duplicateLineDown = Notification.Name("DuplicateLineDown")
 }

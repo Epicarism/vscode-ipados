@@ -8,6 +8,9 @@
 
 import SwiftUI
 import WebKit
+import os
+
+private let logger = Logger(subsystem: "com.codepad.app", category: "VSCodeWebView")
 
 // MARK: - WebView Wrapper
 
@@ -30,8 +33,50 @@ struct VSCodeWebView: UIViewRepresentable {
         // Enable JavaScript
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         
+        // Persist cookies and storage across sessions
+        config.websiteDataStore = .default()
+        
+        // Add JS console capture handler
+        let contentController = config.userContentController
+        contentController.add(context.coordinator, name: "consoleLog")
+        contentController.add(context.coordinator, name: "consoleError")
+        contentController.add(context.coordinator, name: "consoleWarn")
+        
+        // Inject console capture script
+        let consoleScript = WKUserScript(
+            source: """
+            (function() {
+                var origLog = console.log;
+                var origError = console.error;
+                var origWarn = console.warn;
+                console.log = function() {
+                    origLog.apply(console, arguments);
+                    window.webkit.messageHandlers.consoleLog.postMessage(Array.from(arguments).map(String).join(' '));
+                };
+                console.error = function() {
+                    origError.apply(console, arguments);
+                    window.webkit.messageHandlers.consoleError.postMessage(Array.from(arguments).map(String).join(' '));
+                };
+                console.warn = function() {
+                    origWarn.apply(console, arguments);
+                    window.webkit.messageHandlers.consoleWarn.postMessage(Array.from(arguments).map(String).join(' '));
+                };
+                window.onerror = function(msg, url, line, col, error) {
+                    window.webkit.messageHandlers.consoleError.postMessage('JS Error: ' + msg + ' at ' + url + ':' + line);
+                };
+                window.onunhandledrejection = function(event) {
+                    window.webkit.messageHandlers.consoleError.postMessage('Unhandled Promise: ' + event.reason);
+                };
+            })();
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        contentController.addUserScript(consoleScript)
+        
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.isScrollEnabled = true
         webView.scrollView.bounces = false
@@ -52,12 +97,36 @@ struct VSCodeWebView: UIViewRepresentable {
         }
     }
     
-    class Coordinator: NSObject, WKNavigationDelegate {
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleLog")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleError")
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleWarn")
+    }
+    
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: VSCodeWebView
         
         init(_ parent: VSCodeWebView) {
             self.parent = parent
         }
+        
+        // MARK: - WKScriptMessageHandler
+        
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let body = message.body as? String else { return }
+            switch message.name {
+            case "consoleLog":
+                logger.debug("[WebView] \(body)")
+            case "consoleError":
+                logger.error("[WebView] \(body)")
+            case "consoleWarn":
+                logger.warning("[WebView] \(body)")
+            default:
+                break
+            }
+        }
+        
+        // MARK: - WKNavigationDelegate
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             parent.isLoading = true
@@ -77,6 +146,25 @@ struct VSCodeWebView: UIViewRepresentable {
             parent.isLoading = false
             parent.errorMessage = error.localizedDescription
         }
+        
+        // MARK: - WKUIDelegate
+        
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
+            logger.info("[WebView Alert] \(message)")
+        }
+        
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async -> Bool {
+            logger.info("[WebView Confirm] \(message)")
+            return true
+        }
+        
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            // Handle popup windows by loading in the same webview
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
+        }
     }
 }
 
@@ -92,13 +180,29 @@ struct VSCodeTunnelView: View {
     
     var body: some View {
         Group {
+        Group {
             if let config = tunnelManager.activeConfig, tunnelManager.isConnected {
                 connectedView(config: config)
             } else {
                 disconnectedView
             }
         }
-    }
+        .overlay(alignment: .bottom) {
+            // Connection state banner
+            if case .reconnecting(let attempt) = tunnelManager.connectionState {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Reconnecting (\(attempt)/3)...")
+                        .font(.caption)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .cornerRadius(8)
+                .padding(.bottom, 8)
+            }
+        }
     
     // MARK: - Connected View (WebView)
     

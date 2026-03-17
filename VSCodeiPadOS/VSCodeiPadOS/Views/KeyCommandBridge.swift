@@ -126,7 +126,22 @@ class KeyCommandController: UIViewController {
             // MARK: - Multi-Cursor
             ("Add Cursor Above", UIKeyCommand.inputUpArrow, [.command, .alternate], #selector(cmdAddCursorAbove)),
             ("Add Cursor Below", UIKeyCommand.inputDownArrow, [.command, .alternate], #selector(cmdAddCursorBelow)),
-        ]
+            
+            // MARK: - Selection
+            ("Add Next Occurrence", "d", [.command], #selector(cmdAddNextOccurrence)),
+            ("Select All Occurrences", "l", [.command, .shift], #selector(cmdSelectAllOccurrences)),
+            
+            // MARK: - Editing
+            ("Toggle Comment", "/", [.command], #selector(cmdToggleComment)),
+            ("Delete Line", "k", [.command, .shift], #selector(cmdDeleteLine)),
+            ("Move Line Up", UIKeyCommand.inputUpArrow, [.alternate], #selector(cmdMoveLineUp)),
+            ("Move Line Down", UIKeyCommand.inputDownArrow, [.alternate], #selector(cmdMoveLineDown)),
+            ("Duplicate Line Up", UIKeyCommand.inputUpArrow, [.shift, .alternate], #selector(cmdDuplicateLineUp)),
+            ("Duplicate Line Down", UIKeyCommand.inputDownArrow, [.shift, .alternate], #selector(cmdDuplicateLineDown)),
+            
+            // MARK: - Panels
+            ("Search in Files", "f", [.command, .shift], #selector(cmdSearchInFiles)),
+            ("Settings", ",", [.command], #selector(cmdSettings)),
         return defs.map { (title, input, mods, action) in
             let cmd = UIKeyCommand(title: title, action: action, input: input, modifierFlags: mods)
             cmd.wantsPriorityOverSystemBehavior = true
@@ -207,6 +222,45 @@ class KeyCommandController: UIViewController {
     }
     @objc func cmdAddCursorBelow() {
         NotificationCenter.default.post(name: .addCursorBelow, object: nil)
+    }
+    
+    // MARK: - Selection
+    
+    @objc func cmdAddNextOccurrence() {
+        NotificationCenter.default.post(name: .addNextOccurrence, object: nil)
+    }
+    @objc func cmdSelectAllOccurrences() {
+        NotificationCenter.default.post(name: .selectAllOccurrences, object: nil)
+    }
+    
+    // MARK: - Editing
+    
+    @objc func cmdToggleComment() {
+        NotificationCenter.default.post(name: .toggleComment, object: nil)
+    }
+    @objc func cmdDeleteLine() {
+        NotificationCenter.default.post(name: .deleteLine, object: nil)
+    }
+    @objc func cmdMoveLineUp() {
+        NotificationCenter.default.post(name: .moveLineUp, object: nil)
+    }
+    @objc func cmdMoveLineDown() {
+        NotificationCenter.default.post(name: .moveLineDown, object: nil)
+    }
+    @objc func cmdDuplicateLineUp() {
+        NotificationCenter.default.post(name: .duplicateLineUp, object: nil)
+    }
+    @objc func cmdDuplicateLineDown() {
+        NotificationCenter.default.post(name: .duplicateLineDown, object: nil)
+    }
+    
+    // MARK: - Panels
+    
+    @objc func cmdSearchInFiles() {
+        NotificationCenter.default.post(name: .showGlobalSearch, object: nil)
+    }
+    @objc func cmdSettings() {
+        NotificationCenter.default.post(name: .showSettings, object: nil)
     }
 }
 

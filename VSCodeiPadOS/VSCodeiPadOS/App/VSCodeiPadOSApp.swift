@@ -103,6 +103,13 @@ struct EditMenuCommands: Commands {
         CommandGroup(after: .pasteboard) {
             Divider()
             
+            Button("Toggle Comment") {
+                NotificationCenter.default.post(name: .toggleComment, object: nil)
+            }
+            .keyboardShortcut("/", modifiers: .command)
+            
+            Divider()
+            
             Button("Find") {
                 NotificationCenter.default.post(name: .showFind, object: nil)
             }
@@ -111,7 +118,12 @@ struct EditMenuCommands: Commands {
             Button("Replace") {
                 NotificationCenter.default.post(name: .showReplace, object: nil)
             }
-            .keyboardShortcut("h", modifiers: [.command, .option])
+            .keyboardShortcut("f", modifiers: [.command, .option])
+            
+            Button("Search in Files") {
+                NotificationCenter.default.post(name: .showGlobalSearch, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
         }
     }
 }
@@ -121,7 +133,17 @@ struct EditMenuCommands: Commands {
 struct SelectionMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Selection") {
-            // Note: Select All removed - conflicts with UITextView Cmd+A
+            Button("Add Next Occurrence") {
+                NotificationCenter.default.post(name: .addNextOccurrence, object: nil)
+            }
+            .keyboardShortcut("d", modifiers: .command)
+            
+            Button("Select All Occurrences") {
+                NotificationCenter.default.post(name: .selectAllOccurrences, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+            
+            Divider()
             
             Button("Add Cursor Above") {
                 NotificationCenter.default.post(name: .addCursorAbove, object: nil)
@@ -287,7 +309,7 @@ struct HelpMenuCommands: Commands {
             Button("Keyboard Shortcuts") {
                 NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
             }
-            .keyboardShortcut("/", modifiers: [.command])
+            .keyboardShortcut("/", modifiers: [.command, .shift])
             
             Divider()
             
