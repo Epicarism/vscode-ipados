@@ -825,7 +825,7 @@ struct AISettingsView: View {
                             Link("Get token from huggingface.co/settings/tokens", destination: url)
                                 .font(.caption)
                         }
-                            .font(.caption)
+
                     }
                     
                     HStack {

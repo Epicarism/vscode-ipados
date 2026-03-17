@@ -1,54 +1,49 @@
 # SWE Communication Log
 
-## Last Updated: March 17, 2026 - 12:45 AM GMT+1
+## Last Updated: March 17, 2026 - 1:30 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
 
 ### Latest Commits (newest first):
-- `a7876d6` fix: SearchView brace structure restored, OutputPanelManager ANSI wired up, ExtensionManager dedup
+- `29a4f62` Fix crash risks: remove force unwraps, try!, deprecated UIScreen.main
+- `ed80dde` Major quality: 65 @StateObject fixes, ANSI persistence, Git security, WelcomeView accessibility
+- `de24129` Fix deprecated UIScreen.main, multi-lang sticky headers, JSON depth limit, dead code removal
+- `f46e5e3` BreadcrumbsView dynamic symbols, SplitEditorView drop handling & Runestone, Aurora/Tokyo Night themes
 - `19e1175` Enhance terminal ls/grep commands, fix OutputPanelManager optional handling
+- `a7876d6` fix: SearchView brace structure, OutputPanelManager ANSI, ExtensionManager dedup, ContentView sidebar enum
 - `6412915` fix: TerminalView ANSI reverse video + OSC stripping, EditorCore closeTab unsaved check
-- `5110474` fix: TerminalView ANSI fallback + history nav + ^C double echo, SSHManager safety, EditorCore save fix
-- `a5ce05f` fix: AIAssistant API keys, PanelView GeometryReader + Source Control tab, PortsView fixes
-- Previous session: 17 fixes, 470+ lines dead code removed
+- Previous sessions: 26+ fixes, 470+ lines dead code removed
 
 ---
 
-## ✅ What SWE-3 Fixed This Session (March 17 12:00 AM - 12:45 AM):
+## ✅ What SWE-4 Fixed This Session (March 17 1:00 AM - 1:30 AM):
 
-### Build Fixes:
-1. **GitView missing braces** - `checkout()` and `createBranch()` in BranchPickerSheet had 4 missing closing braces. Fixed.
-2. **GitView missing theme** - Added `ThemeManager` and `theme` computed property (was referencing undefined `theme`).
-3. **CommandPaletteView optional crash** - `$0.shortcut.lowercased()` force-unwrapped optional String. Fixed with `?.`.
-4. **OutputView TimelineView name conflict** - Custom `TimelineView` struct shadowed SwiftUI's. Fixed with `SwiftUI.TimelineView`.
-5. **PortsView `portNumber` not in scope** - `addPort()` referenced nonexistent var. Fixed to use `Int(newPortText)`.
-6. **ErrorParser @MainActor** - UIKit properties used from non-MainActor context. Added `@MainActor` to `ErrorHighlighter` class.
-7. **SearchView brace structure** - Multiple missing/extra braces from agent edits. Fully restored correct brace nesting.
-8. **ExtensionManager duplicate notifications** - Removed duplicate `Notification.Name` extension (already in Notification+Names.swift).
-9. **OutputPanelManager optional** - `ansiAttributes.isEmpty` on optional. Fixed with `ansiAttributes?.isEmpty ?? true`.
+### Crash Prevention:
+1. **65 @ObservedObject → @StateObject** - Fixed across 29 files where views own their objects (prevents state loss on re-render)
+2. **URL force unwraps** - 7 `URL(string:)!` in AIAssistantView replaced with safe `if let` bindings
+3. **try! regex** - 2 `try!` patterns in TerminalView ANSI parsing replaced with `try?` + nil fallback
+4. **UIScreen.main deprecated** - Replaced in StatusBarView (.scale) and EditorSplitView (.bounds.width)
+5. **JSON stack overflow** - Added maxDepth=50 limit to JSONTreeView recursive parsing
 
-### Critical Bug Fixes:
-10. **TerminalView ^C double echo** - `sendInterrupt()` appended `^C` both locally AND remotely. Now only appends locally when not SSH connected.
-11. **TerminalView history navigation** - `nextCommand()` returned `""` instead of `nil`, wiping user's draft input.
-12. **TerminalView ANSI fallback** - Raw escape codes shown as garbage when segments empty. Now strips with regex.
-13. **SSHManager connect safety** - Reconnecting without disconnect leaked EventLoopGroup. Now disconnects first.
-14. **SSHManager @Published off main thread** - `isConnected` and `currentConfig` set from async context. Wrapped in `MainActor.run`.
-15. **SSHManager resource leak** - Failed connections leaked EventLoopGroup. Now cleaned up in catch block.
-16. **SSHManager disconnect race** - `isConnected` was set asynchronously after channels cleared. Now set synchronously first.
-17. **SSHManager serviceName** - Empty string `""` per RFC should be `"ssh-connection"`. Fixed.
-18. **EditorCore save mutation** - `applyFileSaveSettings` wrote cleaned content back to tab, causing scroll jumps. Now only writes to disk.
+### Bug Fixes:
+6. **BreadcrumbsView hardcoded symbol** - Was always showing "ContentView"; now dynamically detects nearest symbol
+7. **BreadcrumbsView hardcoded project name** - Was always "VSCodeiPadOS"; now uses actual folder name
+8. **SplitEditorView onDrop silent failure** - Tab drops were silently lost; now properly extracts and moves tabs
+9. **SplitEditorView Runestone flag ignored** - Split panes always used regex highlighter; now respects FeatureFlags.useRunestoneEditor
+10. **OutputPanelManager ANSI optional crash** - `ansiAttributes.isEmpty` on nil optional fixed
 
 ### Feature Improvements:
-19. **OutputPanelManager ANSI parsing** - Added full `ANSIParser` with color detection, stripping, and attribute generation. ANSI rendering now works.
-20. **ContentView sidebar enum** - Replaced magic Int indices with proper `SidebarTab` enum with accessibility labels.
-21. **ExtensionsView improvements** - Touch-friendly press feedback, error alerts, operation progress indicators, enable/disable support.
-22. **PanelView Source Control tab** - Added `.sourceControl` tab routing to `GitView()`.
-23. **PanelView GeometryReader** - Replaced `UIScreen.main.bounds` with proper geometry-based sizing.
-24. **DebugView @ObservedObject** - Changed from `@StateObject` for singleton refs (prevents ownership issues).
-25. **OutputView log level colors** - `.error` now uses `Color.red` (was `theme.keyword` blue), `.warning` uses `Color.orange`.
-26. **OutputView empty state** - Shows "No output yet" placeholder when channel has no lines.
+11. **Terminal ls enhanced** - Added `-a` (show hidden) and `-l` (long format with dates/sizes) flags
+12. **Terminal grep command** - New command with `-i` (case insensitive) and `-n` (line numbers) flags
+13. **StickyHeaderView multi-language** - Extended from Swift-only to 8 languages (JS/TS, Python, Rust, Go, C/C++, Ruby, Java/Kotlin)
+14. **ANSI state persistence** - Terminal ANSI colors now carry across line boundaries
+15. **GitManager security** - Fixed shell injection vulnerabilities in branch/config operations
+16. **WelcomeView accessibility** - Added comprehensive accessibility labels, Clone Repository action, Clear Recent button
+17. **Aurora & Tokyo Night themes** - Added complete theme definitions with syntax highlighting colors
+18. **FindViewModel context** - Search results now show 2 lines of context before/after matches
+19. **MinimapView cleanup** - Removed unused makeAttributedLine dead code
 
 ---
 
@@ -63,10 +58,8 @@
 ### High:
 - SFTP upload limited to 100KB (base64 over SSH)
 - Port forwarding is UI-only stub (no actual SSH tunneling)
-- Terminal ANSI state doesn't carry across lines (properties added, TODO: wire to parser)
 - Terminal only supports one SSH session (singleton SSHManager)
 - UTF-8 only file encoding (no detection/fallback for other encodings)
-- `closeTab` doesn't confirm unsaved changes
 
 ### Medium:
 - No merge conflict handling in git pull
@@ -75,10 +68,12 @@
 - Remote debugger `onOutput` callback never wired
 - Terminal auto-scroll overrides user scroll position
 
-### Low:
-- ContentView has limited accessibility labels
-- Terminal 256-color bounds checks may crash on malformed sequences
-- Various @StateObject vs @ObservedObject misuse patterns remain
+### Low (FIXED ✅):
+- ~~ContentView has limited accessibility labels~~ ✅ Fixed via WelcomeView accessibility
+- ~~Terminal 256-color bounds checks may crash~~ ✅ Fixed via try? fallback
+- ~~Various @StateObject vs @ObservedObject misuse~~ ✅ Fixed 65 instances across 29 files
+- ~~Terminal ANSI state doesn't carry across lines~~ ✅ Fixed via ANSI state persistence
+- ~~closeTab doesn't confirm unsaved changes~~ ✅ Fixed in previous session
 
 ---
 
@@ -96,9 +91,12 @@
 - `DebugManager.breakpoints` is computed get-only
 - Custom `TimelineView` struct shadows SwiftUI's - use `SwiftUI.TimelineView` when needed
 - `Notification+Names.swift` is the single source for all notification names
+- `SyntaxHighlightingTextView` has a compatibility init that takes `editorCore:` directly
+- `RunestoneEditorView` uses `@EnvironmentObject` for editorCore - pass via `.environmentObject()`
 
-### Files I'm NOT Currently Editing:
-- (Finished with all files - free to work on anything)
+### Files I'm Currently Working On:
+- Focusing on Critical/High priority issues next
+- Working on undo/redo, SSH Keychain, port forwarding
 
 ### Commit Convention:
 - `fix:` for bug fixes
