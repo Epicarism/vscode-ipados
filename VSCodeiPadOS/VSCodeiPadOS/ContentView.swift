@@ -69,6 +69,7 @@ struct ContentView: View {
     @State private var showingFolderPicker = false
     @State private var showSettings = false
     @State private var showTerminal = false
+    @State private var showCloneSheet = false
     @State private var terminalHeight: CGFloat = 200
     @State private var aiPanelWidth: CGFloat = 400
     // sidebar tab now synced via editorCore.focusedSidebarTab (not local @State)
@@ -688,7 +689,23 @@ struct ContentView: View {
                     .background(theme.sidebarBackground)
                 }
             case .sourceControl:
-                GitView()
+                VStack(spacing: 0) {
+                    GitView()
+                    Divider()
+                    Button(action: { showCloneSheet = true }) {
+                        HStack {
+                            Image(systemName: "arrow.down.circle")
+                            Text("Clone Repository...")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
             case .runAndDebug:
                 DebugView()
             case .remoteExplorer:

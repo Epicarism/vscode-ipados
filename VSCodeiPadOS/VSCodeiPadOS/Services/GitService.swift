@@ -185,6 +185,20 @@ final class GitService: ObservableObject {
         }
     }
 
+    func fetch() {
+        busyCount += 1
+        Task {
+            do {
+                try await gitManager.fetch()
+                await gitManager.refresh()
+                lastErrorMessage = nil
+            } catch {
+                lastErrorMessage = error.localizedDescription
+            }
+            busyCount -= 1
+        }
+    }
+
     // MARK: - Stash
 
     func stashSave(message: String?) {
