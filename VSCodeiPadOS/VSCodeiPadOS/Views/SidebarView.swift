@@ -11,7 +11,7 @@ struct IDEActivityBar: View {
     @ObservedObject var editorCore: EditorCore
     @Binding var selectedTab: Int
     @Binding var showSettings: Bool
-    @Binding var showTerminal: Bool
+
     @State private var showGitHubLogin = false
     @StateObject private var gitManager = GitManager.shared
     

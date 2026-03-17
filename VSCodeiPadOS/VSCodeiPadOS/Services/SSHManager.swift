@@ -241,7 +241,8 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             
             // Notify delegate and post notification on main thread
             let delegate = self.delegate
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
                 delegate?.sshManagerDidConnect(self)
                 NotificationCenter.default.post(name: .sshDidConnect, object: self)
             }
@@ -289,7 +290,8 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         group = nil
         
         let delegate = self.delegate
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.isConnected = false
             self.currentConfig = nil
             delegate?.sshManagerDidDisconnect(self, error: nil)
@@ -427,7 +429,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         }
         
         nonisolated(unsafe) let delegate = self.delegate
-        let manager = self
+        weak var weakManager = self
         
         let childChannel: Channel = try await channel.pipeline.handler(type: NIOSSHHandler.self).flatMap { sshHandler in
             let childPromise = channel.eventLoop.makePromise(of: Channel.self)
@@ -438,6 +440,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                 return childChannel.pipeline.addHandlers([
                     ShellDataHandler { text, isStderr in
                         DispatchQueue.main.async {
+                            guard let manager = weakManager else { return }
                             if isStderr {
                                 delegate?.sshManager(manager, didReceiveError: text)
                             } else {

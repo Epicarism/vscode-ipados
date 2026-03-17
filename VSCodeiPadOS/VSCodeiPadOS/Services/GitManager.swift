@@ -798,7 +798,16 @@ final class GitManager: ObservableObject {
         }
         let section = String(parts[0])
         let keyName = String(parts[1])
-        var content = (try? String(contentsOf: configPath, encoding: .utf8)) ?? ""
+        var content: String
+        if FileManager.default.fileExists(atPath: configPath.path) {
+            do {
+                content = try String(contentsOf: configPath, encoding: .utf8)
+            } catch {
+                throw GitManagerError.commandFailed(args: "config", exitCode: 1, message: "Failed to read .git/config: \(error.localizedDescription)")
+            }
+        } else {
+            content = ""
+        }
         
         // Check if section exists
         let sectionHeader = "[\(section)]"

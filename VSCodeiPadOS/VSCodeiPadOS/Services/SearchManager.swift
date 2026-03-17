@@ -377,6 +377,11 @@ public final class SearchManager: ObservableObject {
         let compiled = try compilePattern(for: query)
         let data: Data
         do {
+            // Skip files larger than 10MB to prevent OOM during search
+            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+            if let fileSize = attrs?[.size] as? Int, fileSize > 10_000_000 {
+                return nil
+            }
             data = try Data(contentsOf: url)
         } catch {
             // ignore unreadable files
@@ -508,8 +513,13 @@ public final class SearchManager: ObservableObject {
         guard reps > 0 else { return (false, 0) }
 
         do {
-            // Atomic write.
-            try newText.data(using: .utf8)?.write(to: url, options: [.atomic])
+            // Explicitly unwrap to avoid silent failure from optional chaining
+            guard let writeData = newText.data(using: .utf8) else {
+                throw SearchError.ioError("Failed to encode replacement text for: \(url.path)")
+            }
+            try writeData.write(to: url, options: [.atomic])
+        } catch let error as SearchError {
+            throw error
         } catch {
             throw SearchError.ioError("Failed to write file: \(url.path)")
         }

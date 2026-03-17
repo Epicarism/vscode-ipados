@@ -299,7 +299,7 @@ struct ContentView: View {
     private var mainLayout: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                IDEActivityBar(editorCore: editorCore, selectedTab: $editorCore.focusedSidebarTab, showSettings: $showSettings, showTerminal: $showTerminal)
+                IDEActivityBar(editorCore: editorCore, selectedTab: $editorCore.focusedSidebarTab, showSettings: $showSettings)
                 
                 if editorCore.showSidebar {
                     sidebarContent.frame(width: editorCore.sidebarWidth)
@@ -1059,7 +1059,7 @@ struct IDEWelcomeView: View {
                         WelcomeLink(icon: "folder", title: "Open Folder...", shortcut: "\u{2318}\u{21E7}O", theme: theme) { showFolderPicker = true }
                         WelcomeLink(icon: "doc", title: "Open File...", shortcut: "\u{2318}O", theme: theme) { editorCore.showFilePicker = true }
                         WelcomeLink(icon: "arrow.triangle.branch", title: "Clone Repository...", shortcut: nil, theme: theme) {
-                            editorCore.focusedSidebarTab = 1
+                            editorCore.focusedSidebarTab = 2
                             editorCore.showSidebar = true
                         }
                         WelcomeLink(icon: "network", title: "Connect to SSH Host...", shortcut: nil, theme: theme) {

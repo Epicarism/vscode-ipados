@@ -241,8 +241,10 @@ class EditorCore: ObservableObject {
     @Published var showKeyboardShortcuts = false
     @Published var focusedSidebarTab = 0
 
-    // Debug state
+    // Error display
+    @Published var lastErrorMessage: String?
 
+    // Debug state
     // Reference to file navigator for workspace search
     weak var fileNavigator: FileSystemNavigator?
 
@@ -1192,8 +1194,10 @@ mod tests {
         // Force the editor view to sync any pending text changes immediately
         NotificationCenter.default.post(name: .forceEditorSync, object: nil)
 
-        // Small delay to allow sync to complete before reading content
-        DispatchQueue.main.async { [weak self] in
+        // Brief delay to allow the sync notification to be processed by the editor view
+        // before we read the (now-updated) tab content. 50ms provides enough time for
+        // the synchronous notification handler to complete on the main run loop.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?._performSave(tabId: capturedTabId, index: capturedIndex)
         }
     }
@@ -1235,6 +1239,7 @@ mod tests {
             )
         } catch {
             AppLogger.editor.error("Error saving file: \(error)")
+            lastErrorMessage = "Failed to save: \(error.localizedDescription)"
         }
     }
     
@@ -1368,6 +1373,14 @@ mod tests {
         let retained = retainSecurityScopedAccess(to: url)
 
         do {
+            // Guard against loading extremely large files that could cause OOM on iPadOS
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            if fileSize > 50_000_000 { // 50MB limit
+                lastErrorMessage = "File is too large to open (\(fileSize / 1_000_000)MB). Maximum supported size is 50MB."
+                if retained { releaseSecurityScopedAccess(to: url) }
+                return
+            }
+            
             let data = try Data(contentsOf: url)
             guard let result = detectEncodedContent(from: data) else {
                 AppLogger.editor.error("Error opening file: unable to decode contents of \(url.lastPathComponent)")
