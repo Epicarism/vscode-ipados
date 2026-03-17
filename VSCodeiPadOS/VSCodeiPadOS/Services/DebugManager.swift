@@ -1496,9 +1496,10 @@ final class JSDebugSession {
         """
 
         guard let raw = try? await runner.executeToString(code: script),
-              let text = raw, !text.isEmpty else {
+              !raw.isEmpty else {
             return []
         }
+        let text = raw
 
         return text.components(separatedBy: ";;;").compactMap { entry -> DebugManager.Variable? in
             let parts = entry.components(separatedBy: "|||")

@@ -8,6 +8,10 @@
 import SwiftUI
 import UIKit
 
+/// File-level regex cache: NSRegularExpression is thread-safe once created,
+/// so we compile each pattern+options pair exactly once and reuse across all highlight passes.
+private nonisolated(unsafe) var syntaxRegexCache: [String: NSRegularExpression] = [:]
+
 /// UITextView wrapper with syntax highlighting support
 struct SyntaxHighlightingTextView: UIViewRepresentable {
     @Binding var text: String
@@ -2490,18 +2494,18 @@ struct VSCodeSyntaxHighlighter {
     // Static cache: NSRegularExpression is thread-safe once created, so we compile each
     // pattern+options pair exactly once and reuse it across all highlight passes.
     // With 50-100 calls per highlight pass this eliminates nearly all regex compilation cost.
-    private static var regexCache: [String: NSRegularExpression] = [:]
+    // regexCache moved to file-level private global to satisfy concurrency safety
 
     private func highlightPattern(_ attributed: NSMutableAttributedString, pattern: String, color: UIColor, text: String, options: NSRegularExpression.Options = [], captureGroup: Int = 0) {
         // Cache key encodes both the pattern and the option flags so different option
         // combinations don't collide.
         let cacheKey = "\(options.rawValue):\(pattern)"
         let regex: NSRegularExpression
-        if let cached = SyntaxHighlightingTextView.regexCache[cacheKey] {
+        if let cached = syntaxRegexCache[cacheKey] {
             regex = cached
         } else {
             guard let compiled = try? NSRegularExpression(pattern: pattern, options: options) else { return }
-            SyntaxHighlightingTextView.regexCache[cacheKey] = compiled
+            syntaxRegexCache[cacheKey] = compiled
             regex = compiled
         }
         let range = NSRange(location: 0, length: text.utf16.count)
