@@ -101,12 +101,12 @@ struct ColorPickerView: View {
                     )
                     .shadow(color: Color.black.opacity(0.4), radius: 20, x: 0, y: 8)
                     .position(x: manager.state.position.x, y: manager.state.position.y + 30)
-                    .onChange(of: manager.state.selectedColor) { newValue in
-                        syncSlidersFromColor(newValue)
-                        syncHexFromColor(newValue)
+                    .onChange(of: manager.state.selectedColor) {
+                        syncSlidersFromColor(manager.state.selectedColor)
+                        syncHexFromColor(manager.state.selectedColor)
                     }
-                    .onChange(of: manager.state.isVisible) { newValue in
-                        if newValue {
+                    .onChange(of: manager.state.isVisible) {
+                        if manager.state.isVisible {
                             syncSlidersFromColor(manager.state.selectedColor)
                             syncHexFromColor(manager.state.selectedColor)
                         }
@@ -217,8 +217,8 @@ struct ColorPickerView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .stroke(theme.border, lineWidth: 0.5)
                 )
-                .onChange(of: hexText) { newValue in
-                    applyHexText(newValue)
+                .onChange(of: hexText) {
+                    applyHexText(hexText)
                 }
                 .onSubmit {
                     applyHexText(hexText)
@@ -254,9 +254,9 @@ struct ColorPickerView: View {
             sliderRow(label: "G", value: $greenValue, range: 0...255, color: .green)
             sliderRow(label: "B", value: $blueValue, range: 0...255, color: .blue)
         }
-        .onChange(of: redValue) { _ in updateColorFromSliders() }
-        .onChange(of: greenValue) { _ in updateColorFromSliders() }
-        .onChange(of: blueValue) { _ in updateColorFromSliders() }
+        .onChange(of: redValue) { updateColorFromSliders() }
+        .onChange(of: greenValue) { updateColorFromSliders() }
+        .onChange(of: blueValue) { updateColorFromSliders() }
     }
     
     private func sliderRow(label: String, value: Binding<Double>, range: ClosedRange<Double>, color: Color) -> some View {
@@ -293,7 +293,7 @@ struct ColorPickerView: View {
                 .foregroundStyle(theme.disabledForeground)
                 .frame(width: 32, alignment: .trailing)
         }
-        .onChange(of: opacityValue) { _ in updateColorFromSliders() }
+        .onChange(of: opacityValue) { updateColorFromSliders() }
     }
     
     // MARK: - Preset Colors
