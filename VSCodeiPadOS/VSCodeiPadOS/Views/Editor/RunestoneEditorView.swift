@@ -135,6 +135,11 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         // Store reference for coordinator
         context.coordinator.textView = textView
+
+        // Accessibility
+        textView.accessibilityLabel = "Code editor"
+        textView.accessibilityHint = "Edit code here. Use rotor to navigate by line."
+        textView.isAccessibilityElement = true
         
         // Initial line count
         DispatchQueue.main.async {
@@ -566,6 +571,21 @@ struct RunestoneEditorView: UIViewRepresentable {
                 }
                 if accepted == true { return false }
 
+                // Emmet abbreviation expansion (HTML/CSS files only)
+                if let (expansion, abbrevRange) = EmmetEngine.shared.tryExpand(
+                    in: textView.text,
+                    cursorLocation: range.location,
+                    filename: parent.filename
+                ) {
+                    let ms = NSMutableString(string: textView.text)
+                    ms.replaceCharacters(in: abbrevRange, with: expansion)
+                    textView.text = ms as String
+                    let cursorPos = abbrevRange.location + (expansion as NSString).length
+                    textView.selectedRange = NSRange(location: cursorPos, length: 0)
+                    textViewDidChange(textView)
+                    return false
+                }
+
                 // Insert spaces (or a real tab) according to settings
                 let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
                                         ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
@@ -705,6 +725,113 @@ struct RunestoneEditorView: UIViewRepresentable {
 
             // Handle Escape key for autocomplete dismissal
             // Note: Escape key events are typically handled via key commands, not here
+
+            // ---------------------------------------------------------------
+            // MARK: Smart Paste — re-indent pasted text to match cursor indent
+            // ---------------------------------------------------------------
+            // Detect a paste: replacement contains newlines AND is longer than a
+            // single keystroke could produce (> 2 chars that include a newline).
+            let isPaste = text.contains("\n") && text.count > 2
+            if isPaste {
+                // --- 1. Read tab/space settings ---
+                let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
+                                        ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
+                let spaces = (UserDefaults.standard.object(forKey: "insertSpaces") == nil)
+                                ? true
+                                : UserDefaults.standard.bool(forKey: "insertSpaces")
+
+                // --- 2. Get indentation of the current line at the cursor ---
+                let nsText = textView.text as NSString
+                let lineRange = nsText.lineRange(for: NSRange(location: range.location, length: 0))
+                let lineUpToCursor = nsText.substring(with:
+                    NSRange(location: lineRange.location,
+                            length: range.location - lineRange.location))
+
+                var targetIndent = ""
+                for ch in lineUpToCursor {
+                    if ch == " " || ch == "\t" { targetIndent.append(ch) } else { break }
+                }
+
+                // --- 3. Helper: measure indent width in spaces ---
+                func indentWidth(_ s: String) -> Int {
+                    var w = 0
+                    for ch in s {
+                        if ch == " "  { w += 1 }
+                        else if ch == "\t" { w += tabSz }
+                        else { break }
+                    }
+                    return w
+                }
+
+                // --- 4. Find the leading indent of the first non-blank pasted line ---
+                let pastedLines = text.components(separatedBy: "\n")
+                var firstNonBlankIndent = ""
+                for line in pastedLines {
+                    if !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                        var ind = ""
+                        for ch in line {
+                            if ch == " " || ch == "\t" { ind.append(ch) } else { break }
+                        }
+                        firstNonBlankIndent = ind
+                        break
+                    }
+                }
+
+                let sourceWidth = indentWidth(firstNonBlankIndent)
+                let targetWidth = indentWidth(targetIndent)
+                let delta       = targetWidth - sourceWidth   // positive = add indent, negative = remove
+
+                // --- 5. Helper: build an indent string for a given column width ---
+                func buildIndent(width: Int) -> String {
+                    let w = max(0, width)
+                    if spaces {
+                        return String(repeating: " ", count: w)
+                    } else {
+                        let tabs     = w / tabSz
+                        let leftover = w % tabSz
+                        return String(repeating: "\t", count: tabs) + String(repeating: " ", count: leftover)
+                    }
+                }
+
+                // --- 6. Re-indent every line of the pasted text ---
+                var reindentedLines: [String] = []
+                for (idx, line) in pastedLines.enumerated() {
+                    // The very first segment sits right at the cursor column, so we
+                    // leave it untouched — the surrounding code already has the right
+                    // indentation context.
+                    if idx == 0 {
+                        reindentedLines.append(line)
+                        continue
+                    }
+
+                    let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: " \t"))
+                    if trimmed.isEmpty {
+                        // Keep blank lines empty
+                        reindentedLines.append("")
+                        continue
+                    }
+
+                    // Measure this line's own current indent
+                    var lineIndentStr = ""
+                    for ch in line {
+                        if ch == " " || ch == "\t" { lineIndentStr.append(ch) } else { break }
+                    }
+                    let lineWidth = indentWidth(lineIndentStr)
+                    let newWidth  = lineWidth + delta
+                    reindentedLines.append(buildIndent(width: newWidth) + trimmed)
+                }
+
+                let reindentedText = reindentedLines.joined(separator: "\n")
+
+                // --- 7. Insert re-indented text and position cursor at its end ---
+                let ms = NSMutableString(string: nsText)
+                ms.replaceCharacters(in: range, with: reindentedText)
+                textView.text = ms as String
+                let newCursorPos = range.location + (reindentedText as NSString).length
+                textView.selectedRange = NSRange(location: newCursorPos, length: 0)
+                textViewDidChange(textView)
+                return false
+            }
 
             return true
         }

@@ -6,6 +6,7 @@ import Combine
 final class FileSystemNavigator: ObservableObject {
     @Published var fileTree: FileTreeNode?
     @Published var expandedPaths: Set<String> = []
+    @Published var isLoading: Bool = false
 
     /// The currently opened workspace root URL (if any).
     @Published private(set) var rootURL: URL?
@@ -16,17 +17,23 @@ final class FileSystemNavigator: ObservableObject {
     func loadFileTree(at url: URL) {
         // Treat this as the workspace root.
         rootURL = url
+        isLoading = true
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // Run the heavy directory enumeration on the cooperative thread pool,
+        // then publish results back on MainActor.
+        Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let tree = self.buildFileTree(at: url)
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.fileTree = tree
-                if let tree = tree {
-                    self.expandedPaths.insert(tree.url.path)
-                }
+
+            // buildFileTree is nonisolated — runs on a background thread.
+            let tree = await Task.detached(priority: .userInitiated) { [self] in
+                self.buildFileTree(at: url)
+            }.value
+
+            self.fileTree = tree
+            if let tree = tree {
+                self.expandedPaths.insert(tree.url.path)
             }
+            self.isLoading = false
         }
     }
 
@@ -60,7 +67,7 @@ final class FileSystemNavigator: ObservableObject {
             throw NSError(domain: "FileSystemNavigator", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create file"])
         }
 
-        DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+        Task { [weak self] in self?.refreshFileTree() }
         return finalURL
     }
 
@@ -95,15 +102,19 @@ final class FileSystemNavigator: ObservableObject {
             throw NSError(domain: "FileSystemNavigator", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create file"])
         }
 
-        DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+        Task { [weak self] in self?.refreshFileTree() }
         return fileURL
     }
 
     /// Backwards-compatible async API.
     func createFile(name: String, in folder: URL) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard self != nil else { return }
-            let didStart = folder.startAccessingSecurityScopedResource()
+        // Security-scoped access must begin on the calling (main) thread.
+        let didStart = folder.startAccessingSecurityScopedResource()
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else {
+                if didStart { folder.stopAccessingSecurityScopedResource() }
+                return
+            }
             defer { if didStart { folder.stopAccessingSecurityScopedResource() } }
 
             let fileURL = folder.appendingPathComponent(name, isDirectory: false)
@@ -115,7 +126,7 @@ final class FileSystemNavigator: ObservableObject {
                 }
             }
 
-            DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+            self.refreshFileTree()
         }
     }
 
@@ -132,27 +143,30 @@ final class FileSystemNavigator: ObservableObject {
         }
 
         try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: false, attributes: nil)
-        DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+        Task { [weak self] in self?.refreshFileTree() }
         return folderURL
     }
 
     /// Backwards-compatible async API.
     func createFolder(name: String, in folder: URL) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard self != nil else { return }
-            let didStart = folder.startAccessingSecurityScopedResource()
+        // Security-scoped access must begin on the calling (main) thread.
+        let didStart = folder.startAccessingSecurityScopedResource()
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else {
+                if didStart { folder.stopAccessingSecurityScopedResource() }
+                return
+            }
             defer { if didStart { folder.stopAccessingSecurityScopedResource() } }
 
             let folderURL = folder.appendingPathComponent(name, isDirectory: true)
             let fileManager = FileManager.default
-
             do {
                 try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: false, attributes: nil)
             } catch {
                 AppLogger.fileSystem.error("Error creating folder at \(folderURL): \(error)")
             }
 
-            DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+            self.refreshFileTree()
         }
     }
 
@@ -171,7 +185,7 @@ final class FileSystemNavigator: ObservableObject {
         let destination = parent.appendingPathComponent(newName, isDirectory: isDirectory)
 
         try FileManager.default.moveItem(at: url, to: destination)
-        DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+        Task { [weak self] in self?.refreshFileTree() }
         return destination
     }
 
@@ -206,7 +220,7 @@ final class FileSystemNavigator: ObservableObject {
             try fileManager.removeItem(at: source)
         }
 
-        DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+        Task { [weak self] in self?.refreshFileTree() }
         return finalDest
     }
 
@@ -230,7 +244,7 @@ final class FileSystemNavigator: ObservableObject {
                 }
 
                 try FileManager.default.moveItem(at: source, to: destination)
-                DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+                Task { [weak self] in self?.refreshFileTree() }
             }
             return true
         } catch {
@@ -262,7 +276,7 @@ final class FileSystemNavigator: ObservableObject {
             success = false
         }
 
-        DispatchQueue.main.async { [weak self] in self?.refreshFileTree() }
+        Task { [weak self] in self?.refreshFileTree() }
         return success
     }
 

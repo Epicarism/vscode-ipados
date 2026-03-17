@@ -786,6 +786,59 @@ class SSHManager: ObservableObject, @unchecked Sendable {
 
     private init() {}
     
+    // MARK: - RSA Detection Helper
+
+    /// Returns `true` if the raw openssh-key-v1 binary blob contains an RSA key type.
+    /// This lets us surface a clear user-facing error *before* attempting the
+    /// network connection, instead of silently falling back and failing with a
+    /// generic "authentication failed".
+    private static func opensshBlobContainsRSA(_ data: Data) -> Bool {
+        let magic = "openssh-key-v1\0"
+        let magicBytes = Data(magic.utf8)
+        guard data.count > magicBytes.count,
+              data.prefix(magicBytes.count) == magicBytes else { return false }
+
+        var pos = magicBytes.count
+
+        func readUInt32() -> UInt32? {
+            guard pos + 4 <= data.count else { return nil }
+            let val = data.withUnsafeBytes { buf -> UInt32 in
+                buf.load(fromByteOffset: pos, as: UInt32.self).bigEndian
+            }
+            pos += 4
+            return val
+        }
+
+        func skipString() -> Bool {
+            guard let length = readUInt32() else { return false }
+            let len = Int(length)
+            guard pos + len <= data.count else { return false }
+            pos += len
+            return true
+        }
+
+        // Skip cipher name, kdf name, kdf options
+        guard skipString(), skipString(), skipString() else { return false }
+        // Skip number-of-keys field
+        guard readUInt32() != nil else { return false }
+        // Skip public key blob(s) — there is at least one
+        guard skipString() else { return false }
+        // Skip the (possibly encrypted) private section length prefix
+        guard let privLen = readUInt32() else { return false }
+        // We need at least 8 bytes (two check ints) + 4 bytes (key-type length)
+        guard Int(privLen) >= 12, pos + 8 <= data.count else { return false }
+        // Skip the two check-number uint32s
+        pos += 8
+        // Read key-type string
+        guard let ktLen = readUInt32() else { return false }
+        let ktInt = Int(ktLen)
+        guard pos + ktInt <= data.count else { return false }
+        if let keyType = String(data: data[pos..<(pos + ktInt)], encoding: .utf8) {
+            return keyType == "ssh-rsa" || keyType == "rsa-sha2-256" || keyType == "rsa-sha2-512"
+        }
+        return false
+    }
+
     // MARK: - Connection Methods
     
     func connect(config: SSHConnectionConfig) async throws {
@@ -796,6 +849,29 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         self.currentConfig = config
         
+        // ── Early RSA detection ──────────────────────────────────────────────
+        // NIOSSH does not support RSA keys.  Catch this *before* attempting
+        // the network connection so the user gets a clear, actionable error
+        // instead of a generic "authentication failed".
+        if case .privateKey(let keyString, _) = config.authMethod {
+            let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isRSAPEM = trimmed.contains("BEGIN RSA PRIVATE KEY")
+            var isRSAOpenSSH = false
+            if !isRSAPEM, trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
+                // Decode and peek at the key-type string inside the binary blob
+                let lines = trimmed.components(separatedBy: "\n")
+                    .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
+                if let data = Data(base64Encoded: lines.joined()) {
+                    isRSAOpenSSH = SSHManager.opensshBlobContainsRSA(data)
+                }
+            }
+            if isRSAPEM || isRSAOpenSSH {
+                print("[SSHManager] ⚠️ RSA key detected for host \(config.host). RSA is NOT supported by NIOSSH. Surfacing user-facing error.")
+                throw SSHClientError.unsupportedKeyType("RSA")
+            }
+        }
+        // ────────────────────────────────────────────────────────────────────
+
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.group = group
         
@@ -839,6 +915,15 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             // Start interactive shell
             try await startInteractiveShell()
             
+        } catch let sshError as SSHClientError {
+            self.isConnected = false
+            // Clean up leaked EventLoopGroup on failure — must not block main thread
+            let failedGroup = group
+            self.group = nil
+            DispatchQueue.global().async { try? failedGroup.syncShutdownGracefully() }
+            // Re-throw SSHClientError as-is so callers see the exact typed error
+            // (e.g. .unsupportedKeyType for RSA keys) rather than a generic message.
+            throw sshError
         } catch {
             self.isConnected = false
             // Clean up leaked EventLoopGroup on failure — must not block main thread

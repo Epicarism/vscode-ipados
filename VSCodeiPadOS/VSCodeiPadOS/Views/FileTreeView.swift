@@ -68,6 +68,8 @@ struct FileTreeRowView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "Collapse \(node.name)" : "Expand \(node.name)")
+                    .accessibilityHint("Double tap to \(isExpanded ? "collapse" : "expand") this folder")
                 } else {
                     Spacer().frame(width: 12)
                 }
@@ -101,6 +103,14 @@ struct FileTreeRowView: View {
             .onHover { hovering in
                 isHovered = hovering
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(node.isDirectory
+                ? "\(node.name), folder\(isExpanded ? ", expanded" : ", collapsed")"
+                : "\(node.name), \((node.url.pathExtension.isEmpty ? "file" : "\(node.url.pathExtension.uppercased()) file"))")
+            .accessibilityHint(node.isDirectory
+                ? "Double tap to \(isExpanded ? "collapse" : "expand")"
+                : "Double tap to open")
+            .accessibilityAddTraits(node.isDirectory ? [] : .isButton)
             .contextMenu {
                 // New File
                 Button {

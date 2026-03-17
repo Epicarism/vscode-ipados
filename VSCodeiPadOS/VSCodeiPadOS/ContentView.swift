@@ -694,14 +694,23 @@ struct IDESidebarFiles: View {
                 Spacer()
                 Button(action: { showFolderPicker = true }) {
                     Image(systemName: "folder.badge.plus").font(.caption)
-                }.foregroundColor(theme.sidebarForeground.opacity(0.7))
+                }
+                .foregroundColor(theme.sidebarForeground.opacity(0.7))
+                .accessibilityLabel("Open folder")
+                .accessibilityHint("Double tap to open a folder in the explorer")
                 Button(action: { editorCore.showFilePicker = true }) {
                     Image(systemName: "doc.badge.plus").font(.caption)
-                }.foregroundColor(theme.sidebarForeground.opacity(0.7))
+                }
+                .foregroundColor(theme.sidebarForeground.opacity(0.7))
+                .accessibilityLabel("Open file")
+                .accessibilityHint("Double tap to open a file")
                 if fileNavigator.fileTree != nil {
                     Button(action: { fileNavigator.refreshFileTree() }) {
                         Image(systemName: "arrow.clockwise").font(.caption)
-                    }.foregroundColor(theme.sidebarForeground.opacity(0.7))
+                    }
+                    .foregroundColor(theme.sidebarForeground.opacity(0.7))
+                    .accessibilityLabel("Refresh file tree")
+                    .accessibilityHint("Double tap to refresh the file explorer")
                 }
             }.padding(.horizontal, 12).padding(.vertical, 8)
             
@@ -758,6 +767,10 @@ struct DemoFileRow: View {
                 editorCore.selectTab(id: tab.id)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name), \((name as NSString).pathExtension.isEmpty ? "file" : (name as NSString).pathExtension.uppercased() + " file")")
+        .accessibilityHint("Double tap to open")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -844,6 +857,7 @@ struct IDEEditorView: View {
                         )
                         .frame(width: 58)
                         .background(theme.sidebarBackground.opacity(0.5))
+                        .accessibilityHidden(true)
                     }
                     
                     // Editor content
@@ -1204,6 +1218,10 @@ struct AutocompletePopup: View {
                 .background(index == selectedIndex ? theme.selection : Color.clear)
                 .contentShape(Rectangle())
                 .onTapGesture { onSelectIndex(index) }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(s.displayText), \(s.kind == .keyword ? "keyword" : s.kind == .symbol ? "symbol" : s.kind == .stdlib ? "standard library" : "member")")
+                .accessibilityHint("Double tap to insert")
+                .accessibilityAddTraits(index == selectedIndex ? [.isButton, .isSelected] : .isButton)
             }
         }
         .frame(width: 260)

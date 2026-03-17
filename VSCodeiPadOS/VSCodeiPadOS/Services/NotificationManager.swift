@@ -106,9 +106,16 @@ final class NotificationManager: ObservableObject {
     }
     
     private var dismissTimers: [UUID: Task<Void, Never>] = [:]
+    nonisolated(unsafe) private var extensionObservers: [NSObjectProtocol] = []
     
     init() {
         setupObservers()
+    }
+
+    deinit {
+        for observer in extensionObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     // MARK: - Public API
@@ -215,24 +222,28 @@ final class NotificationManager: ObservableObject {
     
     private func setupObservers() {
         // Extension events
-        NotificationCenter.default.addObserver(
-            forName: .extensionInstalled, object: nil, queue: .main
-        ) { [weak self] notif in
-            if let name = notif.userInfo?["extension"] as? String {
-                Task { @MainActor in
-                    self?.info("Extension '\(name)' installed successfully")
+        extensionObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .extensionInstalled, object: nil, queue: .main
+            ) { [weak self] notif in
+                if let name = notif.userInfo?["extension"] as? String {
+                    Task { @MainActor in
+                        self?.info("Extension '\(name)' installed successfully")
+                    }
                 }
             }
-        }
-        
-        NotificationCenter.default.addObserver(
-            forName: .extensionUninstalled, object: nil, queue: .main
-        ) { [weak self] notif in
-            if let name = notif.userInfo?["extension"] as? String {
-                Task { @MainActor in
-                    self?.info("Extension '\(name)' uninstalled")
+        )
+
+        extensionObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .extensionUninstalled, object: nil, queue: .main
+            ) { [weak self] notif in
+                if let name = notif.userInfo?["extension"] as? String {
+                    Task { @MainActor in
+                        self?.info("Extension '\(name)' uninstalled")
+                    }
                 }
             }
-        }
+        )
     }
 }

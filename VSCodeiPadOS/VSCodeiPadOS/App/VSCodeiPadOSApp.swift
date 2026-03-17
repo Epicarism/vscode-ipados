@@ -8,6 +8,7 @@ struct VSCodeiPadOSApp: App {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showSettings = false
     @State private var showTerminal = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
     @State private var windowTitle: String = "CodePad"
     
     var body: some Scene {
@@ -28,6 +29,14 @@ struct VSCodeiPadOSApp: App {
                     }
                     .onAppear {
                         themeManager.applySystemAppearance(colorScheme)
+                    }
+                    // ── First-launch onboarding ──────────────────────
+                    .fullScreenCover(isPresented: Binding(
+                        get: { !hasCompletedOnboarding },
+                        set: { _ in }
+                    )) {
+                        OnboardingView()
+                            .environmentObject(themeManager)
                     }
             }
         }
