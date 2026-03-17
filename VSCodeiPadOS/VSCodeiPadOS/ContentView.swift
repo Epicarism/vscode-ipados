@@ -61,7 +61,7 @@ enum SidebarTab: Int, CaseIterable {
 struct ContentView: View {
     @EnvironmentObject var editorCore: EditorCore
     @StateObject private var fileNavigator = FileSystemNavigator()
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     
     @State private var showingDocumentPicker = false
     @State private var showingFolderPicker = false
@@ -74,7 +74,7 @@ struct ContentView: View {
     @FocusState private var isTerminalFocused: Bool
 
     
-    @ObservedObject private var trustManager = WorkspaceTrustManager.shared
+    @StateObject private var trustManager = WorkspaceTrustManager.shared
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -275,7 +275,7 @@ struct ContentView: View {
     
     // MARK: - Extracted View Components
     
-    @ObservedObject private var tunnelManager = TunnelManager.shared
+    @StateObject private var tunnelManager = TunnelManager.shared
     
     @ViewBuilder
     private var mainContentView: some View {
@@ -619,7 +619,7 @@ struct IDEEditorView: View {
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
-    @ObservedObject private var foldingManager = CodeFoldingManager.shared
+    @StateObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
     
     // MARK: - Shared Autocomplete Handlers
@@ -1023,7 +1023,7 @@ struct AutocompletePopup: View {
 
 struct IDEWelcomeView: View {
     @ObservedObject var editorCore: EditorCore
-    @ObservedObject var recentFiles: RecentFileManager = .shared
+    @StateObject var recentFiles: RecentFileManager = .shared
     @Binding var showFolderPicker: Bool
     let theme: Theme
     

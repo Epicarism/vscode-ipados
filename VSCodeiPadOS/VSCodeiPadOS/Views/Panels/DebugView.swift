@@ -11,8 +11,8 @@ struct DebugVariable: Identifiable {
 
 // MARK: - Debug View
 struct DebugView: View {
-    @ObservedObject private var debugManager = DebugManager.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var debugManager = DebugManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     
     private var variables: [DebugVariable] {
         debugManager.variables.map { convertToDebugVariable($0) }
@@ -743,7 +743,7 @@ struct BreakpointRow: View {
     let breakpoint: DebugManager.Breakpoint
     let theme: Theme
     
-    @ObservedObject private var debugManager = DebugManager.shared
+    @StateObject private var debugManager = DebugManager.shared
     
     var body: some View {
         HStack(spacing: 6) {

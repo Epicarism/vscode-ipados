@@ -4,8 +4,8 @@ import SwiftUI
 
 struct RemoteExplorerView: View {
     @ObservedObject var editorCore: EditorCore
-    @ObservedObject private var connectionStore = SSHConnectionStore.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @StateObject private var connectionStore = SSHConnectionStore.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var remoteFileNavigator = RemoteFileNavigator()
     
     @State private var showConnectionSheet = false

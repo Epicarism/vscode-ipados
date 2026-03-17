@@ -108,7 +108,7 @@ class TunnelManager: ObservableObject, @unchecked Sendable {
 
 struct AddTunnelSheet: View {
     @Environment(\.dismiss) var dismiss
-    @ObservedObject var tunnelManager = TunnelManager.shared
+    @StateObject var tunnelManager = TunnelManager.shared
     
     @State private var name = ""
     @State private var url = ""
@@ -259,7 +259,7 @@ struct SettingsDetailView: View {
     let searchText: String
     @ObservedObject var themeManager: ThemeManager
 
-    @ObservedObject private var aiManager = AIManager.shared
+    @StateObject private var aiManager = AIManager.shared
     @State private var showAISettings = false
     
     @AppStorage("fontSize") private var fontSize: Double = 14
@@ -661,7 +661,7 @@ struct ThemePreviewView: View {
 // MARK: - Connected Mode Settings Section
 
 struct ConnectedModeSettingsSection: View {
-    @ObservedObject var tunnelManager = TunnelManager.shared
+    @StateObject var tunnelManager = TunnelManager.shared
     @State private var showingAddTunnel = false
     
     var body: some View {

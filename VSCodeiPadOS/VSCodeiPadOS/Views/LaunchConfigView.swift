@@ -2,7 +2,7 @@ import SwiftUI
 
 /// UI for selecting and editing debug launch configurations.
 struct LaunchConfigView: View {
-    @ObservedObject private var launchManager = LaunchManager.shared
+    @StateObject private var launchManager = LaunchManager.shared
 
     /// When `true`, only shows the dropdown + play button (for toolbar usage).
     var compact: Bool = false

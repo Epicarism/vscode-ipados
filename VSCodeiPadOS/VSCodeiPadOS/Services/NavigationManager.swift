@@ -685,7 +685,7 @@ extension EditorCore {
 
 /// View for selecting from multiple definition locations
 struct GoToDefinitionPicker: View {
-    @ObservedObject var navigationManager = NavigationManager.shared
+    @StateObject var navigationManager = NavigationManager.shared
     @ObservedObject var editorCore: EditorCore
 
     @State private var selectedIndex = 0

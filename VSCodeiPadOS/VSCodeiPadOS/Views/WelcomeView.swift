@@ -24,7 +24,7 @@ struct WelcomeView: View {
     @State private var hoveredAction: String? = nil
     @State private var hoveredRecentFile: String? = nil
     @State private var showAllRecent = false
-    @ObservedObject private var recentFileManager = RecentFileManager.shared
+    @StateObject private var recentFileManager = RecentFileManager.shared
 
     private var theme: Theme { themeManager.currentTheme }
 

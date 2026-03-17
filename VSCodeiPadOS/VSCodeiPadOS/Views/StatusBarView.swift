@@ -2,9 +2,9 @@ import SwiftUI
 
 struct StatusBarView: View {
     @ObservedObject var editorCore: EditorCore
-    @ObservedObject var themeManager = ThemeManager.shared
-    @ObservedObject private var git = GitManager.shared
-    @ObservedObject private var sshManager = SSHManager.shared
+    @StateObject var themeManager = ThemeManager.shared
+    @StateObject private var git = GitManager.shared
+    @StateObject private var sshManager = SSHManager.shared
 
     // Sheet / popover state
 
@@ -17,7 +17,7 @@ struct StatusBarView: View {
     @AppStorage("editor.encoding") private var encoding: String = "UTF-8"
     @AppStorage("editor.eol") private var eolSetting: String = "LF"
 
-    @ObservedObject private var notifications = NotificationManager.shared
+    @StateObject private var notifications = NotificationManager.shared
 
     var theme: Theme { themeManager.currentTheme }
 
@@ -348,7 +348,7 @@ struct SSHStatusIndicator: View {
     let theme: Theme
     let action: () -> Void
     
-    @ObservedObject private var sshManager = SSHManager.shared
+    @StateObject private var sshManager = SSHManager.shared
     @State private var isHovering = false
     
     private var displayText: String {

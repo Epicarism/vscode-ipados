@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Quick actions sheet wired to GitManager for Pull/Push + Stash operations.
 struct GitQuickActionsView: View {
-    @ObservedObject private var git = GitManager.shared
+    @StateObject private var git = GitManager.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var stashMessage: String = ""
