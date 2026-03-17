@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TasksView: View {
-    @StateObject private var tasksManager = TasksManager.shared
+    @ObservedObject private var tasksManager = TasksManager.shared
 
     /// When `true`, renders a simpler header suitable for embedding.
     var compact: Bool = false
@@ -61,8 +61,8 @@ struct TasksView: View {
 private struct TaskRow: View {
     let task: VSCodeTask
 
-    @StateObject private var tasksManager = TasksManager.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var tasksManager = TasksManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     private var theme: Theme { themeManager.currentTheme }
 

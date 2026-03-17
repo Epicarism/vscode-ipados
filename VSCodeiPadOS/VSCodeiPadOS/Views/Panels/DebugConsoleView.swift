@@ -5,7 +5,7 @@ import UIKit
 
 struct DebugConsoleEntryView: View {
     let entry: DebugManager.ConsoleEntry
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var isExpanded: Bool = false
     
     private var theme: Theme { themeManager.currentTheme }
@@ -102,8 +102,8 @@ struct DebugConsoleEntryView: View {
 
 /// Debug Console (REPL-style) panel with enhanced debugging features.
 struct DebugConsoleView: View {
-    @StateObject private var debugManager = DebugManager.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var debugManager = DebugManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var input: String = ""
     @State private var commandHistory: [String] = []
     @State private var historyIndex: Int = -1

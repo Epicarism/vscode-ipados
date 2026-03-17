@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SnippetPickerView: View {
     @ObservedObject var editorCore: EditorCore
-    @StateObject private var snippetsManager = SnippetsManager.shared
+    @ObservedObject private var snippetsManager = SnippetsManager.shared
 
     @State private var searchText = ""
     @State private var selectedIndex = 0

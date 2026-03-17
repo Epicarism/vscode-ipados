@@ -32,7 +32,7 @@ struct PanelView: View {
     @State private var isMaximized: Bool = false
     @State private var previousHeight: CGFloat = 200
     @State private var problemCount: Int = 0
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     private var theme: Theme { themeManager.currentTheme }
 

@@ -61,7 +61,7 @@ enum SidebarTab: Int, CaseIterable {
 struct ContentView: View {
     @EnvironmentObject var editorCore: EditorCore
     @StateObject private var fileNavigator = FileSystemNavigator()
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     @State private var showingDocumentPicker = false
     @State private var showingFolderPicker = false
@@ -74,7 +74,7 @@ struct ContentView: View {
     @FocusState private var isTerminalFocused: Bool
 
     
-    @StateObject private var trustManager = WorkspaceTrustManager.shared
+    @ObservedObject private var trustManager = WorkspaceTrustManager.shared
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -275,7 +275,7 @@ struct ContentView: View {
     
     // MARK: - Extracted View Components
     
-    @StateObject private var tunnelManager = TunnelManager.shared
+    @ObservedObject private var tunnelManager = TunnelManager.shared
     
     @ViewBuilder
     private var mainContentView: some View {

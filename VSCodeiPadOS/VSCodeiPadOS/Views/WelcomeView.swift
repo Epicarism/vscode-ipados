@@ -17,13 +17,14 @@ struct WelcomeView: View {
     var onOpenFolder: (() -> Void)?
     var onOpenFile: (() -> Void)?
     var onNewFile: (() -> Void)?
+    var onCloneRepository: (() -> Void)?
     var onOpenRecentFile: ((URL) -> Void)?
 
     // ── Local state ────────────────────────────────────────
     @State private var hoveredAction: String? = nil
     @State private var hoveredRecentFile: String? = nil
     @State private var showAllRecent = false
-    @StateObject private var recentFileManager = RecentFileManager.shared
+    @ObservedObject private var recentFileManager = RecentFileManager.shared
 
     private var theme: Theme { themeManager.currentTheme }
 
@@ -89,6 +90,7 @@ struct WelcomeView: View {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
                 .font(.system(size: 38, weight: .thin))
                 .foregroundColor(theme.keyword)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("CodePad")
@@ -112,6 +114,8 @@ struct WelcomeView: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("CodePad v1.0.0 - Code editing. Redefined.")
     }
 
     // MARK: - Section Header
@@ -124,6 +128,7 @@ struct WelcomeView: View {
             .tracking(0.5)
             .padding(.top, 18)
             .padding(.bottom, 10)
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Start Section
@@ -171,6 +176,20 @@ struct WelcomeView: View {
                     NotificationCenter.default.post(name: .newFile, object: nil)
                 }
             }
+
+            actionRow(
+                icon: "arrow.down.circle",
+                title: "Clone Repository…",
+                subtitle: "Clone a Git repository from URL",
+                shortcut: nil,
+                actionKey: "clone"
+            ) {
+                if let onCloneRepository = onCloneRepository {
+                    onCloneRepository()
+                } else {
+                    NotificationCenter.default.post(name: .cloneRepository, object: nil)
+                }
+            }
         }
     }
 
@@ -183,34 +202,55 @@ struct WelcomeView: View {
                     Image(systemName: "clock")
                         .font(.system(size: 13))
                         .foregroundColor(theme.lineNumber)
+                        .accessibilityHidden(true)
 
                     Text("No recent files")
                         .font(.system(size: 14))
                         .foregroundColor(theme.lineNumber)
                 }
                 .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
 
                 Text("Files you open will appear here for quick access.")
                     .font(.system(size: 12))
                     .foregroundColor(theme.lineNumber)
+                    .accessibilityLabel("Hint: Files you open will appear here for quick access.")
             } else {
                 let filesToShow = showAllRecent ? recentFileManager.recentFiles : Array(recentFileManager.recentFiles.prefix(8))
                 ForEach(filesToShow, id: \.absoluteString) { url in
                     recentFileRow(url)
                 }
 
-                if recentFileManager.recentFiles.count > 8 {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showAllRecent.toggle()
+                HStack(spacing: 12) {
+                    if recentFileManager.recentFiles.count > 8 {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showAllRecent.toggle()
+                            }
+                        } label: {
+                            Text(showAllRecent ? "Show Less…" : "Show More…")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(theme.activityBarForeground)
+                                .padding(.top, 4)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(showAllRecent ? "Show fewer recent files" : "Show all recent files")
+                        .accessibilityHint("Currently showing \(filesToShow.count) of \(recentFileManager.recentFiles.count) files")
+                    }
+
+                    Spacer()
+
+                    Button {
+                        recentFileManager.clearRecentFiles()
                     } label: {
-                        Text(showAllRecent ? "Show Less…" : "Show More…")
+                        Text("Clear Recent")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.activityBarForeground)
+                            .foregroundColor(theme.lineNumber)
                             .padding(.top, 4)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear recent files list")
+                    .accessibilityHint("Removes all files from the recent files list")
                 }
             }
         }
@@ -237,6 +277,7 @@ struct WelcomeView: View {
                                   ? theme.sidebarSelection
                                   : theme.sidebarSectionHeader)
                     )
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(url.lastPathComponent)
@@ -255,6 +296,7 @@ struct WelcomeView: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.lineNumber)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -326,6 +368,8 @@ struct WelcomeView: View {
             shortcutHintRow(key: "⌥⌘F", description: "Find and Replace")
             shortcutHintRow(key: "⌘G", description: "Go to Line")
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Keyboard shortcuts reference")
     }
 
     // MARK: - Shortcut Hint Row
@@ -348,6 +392,8 @@ struct WelcomeView: View {
                 .foregroundColor(theme.lineNumber)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(description): \(key)")
     }
 
     // MARK: - Toggle Section
@@ -364,7 +410,7 @@ struct WelcomeView: View {
                     .foregroundColor(theme.lineNumber)
             }
         }
-        .tint(theme.statusBarBackground)
+        .tint(theme.keyword)
         .toggleStyle(.switch)
         .accessibilityLabel("Show Welcome on Startup")
         .accessibilityHint("Double tap to toggle whether this page shows on launch")
@@ -392,6 +438,7 @@ struct WelcomeView: View {
                                   ? theme.sidebarSelection
                                   : theme.sidebarSectionHeader)
                     )
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -415,11 +462,13 @@ struct WelcomeView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(theme.sidebarSectionHeader)
                         )
+                        .accessibilityLabel("Keyboard shortcut: \(shortcut)")
                 }
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.lineNumber)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)

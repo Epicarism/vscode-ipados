@@ -295,8 +295,8 @@ final class PortForwardingManager: ObservableObject {
 // MARK: - Ports View
 
 struct PortsView: View {
-    @StateObject private var portManager = PortForwardingManager.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var portManager = PortForwardingManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     
     @State private var showAddPort = false
     @State private var newPortText = ""
@@ -586,7 +586,7 @@ struct PortRowView: View {
     let port: ForwardedPort
     let theme: Theme
     
-    @StateObject private var portManager = PortForwardingManager.shared
+    @ObservedObject private var portManager = PortForwardingManager.shared
     @State private var isHovering = false
     
     var body: some View {

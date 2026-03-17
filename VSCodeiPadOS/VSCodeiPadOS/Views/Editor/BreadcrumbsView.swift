@@ -6,10 +6,54 @@ struct BreadcrumbsView: View {
     
     var pathComponents: [String] {
         if let url = tab.url {
-            // Use standard components
             return url.pathComponents.filter { $0 != "/" }
         }
-        return ["VSCodeiPadOS", "Views", tab.fileName]
+        // For untitled files, use the first path component from the URL or a generic name
+        let folderName = tab.url?.deletingLastPathComponent().lastPathComponent ?? "Workspace"
+        return [folderName, tab.fileName]
+    }
+    
+    /// Attempt to detect the current symbol name from the file content near the cursor
+    var currentSymbolName: String {
+        let content = tab.content
+        guard !content.isEmpty else { return tab.fileName.components(separatedBy: ".").first ?? tab.fileName }
+        
+        let lines = content.components(separatedBy: .newlines)
+        let cursorLine = max(0, min(editorCore.cursorPosition.line, lines.count - 1))
+        
+        // Search backwards from cursor to find the nearest symbol declaration
+        let symbolPatterns = [
+            // Swift
+            "(class|struct|enum|protocol|extension|func|var|let)\\s+(\\w+)",
+            // JS/TS
+            "(function|class|const|let|var|interface|type)\\s+(\\w+)",
+            // Python
+            "(def|class)\\s+(\\w+)",
+            // Rust
+            "(fn|struct|enum|impl|trait|mod)\\s+(\\w+)",
+        ]
+        let combinedPattern = symbolPatterns.joined(separator: "|")
+        guard let regex = try? NSRegularExpression(pattern: combinedPattern) else {
+            return tab.fileName.components(separatedBy: ".").first ?? tab.fileName
+        }
+        
+        // Search backwards from cursor line
+        for lineIdx in stride(from: cursorLine, through: max(0, cursorLine - 100), by: -1) {
+            guard lineIdx < lines.count else { continue }
+            let line = lines[lineIdx]
+            let nsLine = line as NSString
+            if let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+                // Find the last non-empty capture group (the name)
+                for groupIdx in stride(from: match.numberOfRanges - 1, through: 1, by: -1) {
+                    let range = match.range(at: groupIdx)
+                    if range.location != NSNotFound {
+                        return nsLine.substring(with: range)
+                    }
+                }
+            }
+        }
+        
+        return tab.fileName.components(separatedBy: ".").first ?? tab.fileName
     }
     
     var body: some View {
@@ -71,7 +115,7 @@ struct BreadcrumbsView: View {
                     Image(systemName: "curlybraces")
                         .font(.caption2)
                         .foregroundColor(.purple)
-                    Text("ContentView")
+                    Text(currentSymbolName)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }

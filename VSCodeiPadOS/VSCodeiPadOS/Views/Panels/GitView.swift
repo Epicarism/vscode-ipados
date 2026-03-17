@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Git View (Source Control Panel)
 
 struct GitView: View {
-    @StateObject private var gitManager = GitManager.shared
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var gitManager = GitManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @EnvironmentObject var editorCore: EditorCore
     @State private var commitMessage = ""
     @State private var selectedEntry: GitStatusEntry?

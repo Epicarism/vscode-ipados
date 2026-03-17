@@ -424,6 +424,11 @@ final class GitManager: ObservableObject {
             throw GitManagerError.noRepository
         }
         
+        // Validate branch name to prevent path traversal
+        guard !branch.contains("..") else {
+            throw GitManagerError.commandFailed(args: "checkout", exitCode: 1, message: "Invalid branch name")
+        }
+        
         let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(branch)")
         guard FileManager.default.fileExists(atPath: refPath.path) else {
             throw GitManagerError.invalidRepository
@@ -461,6 +466,11 @@ final class GitManager: ObservableObject {
             throw GitManagerError.invalidRepository
         }
         
+        // Validate branch name to prevent path traversal
+        guard !name.contains("..") && !name.contains("/") && !name.isEmpty else {
+            throw GitManagerError.commandFailed(args: "branch", exitCode: 1, message: "Invalid branch name")
+        }
+        
         // Create branch ref file
         let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(name)")
         try headSHA.write(to: refPath, atomically: true, encoding: .utf8)
@@ -476,6 +486,11 @@ final class GitManager: ObservableObject {
         // Can't delete current branch
         guard name != currentBranch else {
             throw GitManagerError.invalidRepository
+        }
+        
+        // Validate branch name to prevent path traversal
+        guard !name.contains("..") && !name.contains("/") else {
+            throw GitManagerError.commandFailed(args: "branch -d", exitCode: 1, message: "Invalid branch name")
         }
         
         let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(name)")
@@ -550,7 +565,7 @@ final class GitManager: ObservableObject {
     func stashPush(message: String?) async throws {
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let msg = (message ?? "Stash from CodePad").replacingOccurrences(of: "'", with: "'\\''")
+            let msg = (message ?? "Stash from CodePad").shellEscaped
             let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git stash push -m '\(msg)'")
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "stash push", exitCode: result.exitCode, message: result.stderr)
@@ -562,6 +577,9 @@ final class GitManager: ObservableObject {
     }
     
     func stashPop(index: Int) async throws {
+        guard index >= 0 else {
+            throw GitManagerError.invalidRepository
+        }
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
             let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git stash pop stash@{\(index)}")
@@ -575,6 +593,9 @@ final class GitManager: ObservableObject {
     }
     
     func stashDrop(index: Int) async throws {
+        guard index >= 0 else {
+            throw GitManagerError.invalidRepository
+        }
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
             let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git stash drop stash@{\(index)}")
@@ -688,7 +709,8 @@ final class GitManager: ObservableObject {
         // Fallback: try SSH if connected
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd '\(dir)' && git config \(key)", timeout: 10)
+            let escapedKey = key.shellEscaped
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git config \(escapedKey)", timeout: 10)
             if result.exitCode == 0 {
                 let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
                 return value.isEmpty ? nil : value
@@ -703,7 +725,9 @@ final class GitManager: ObservableObject {
         // Try SSH first for real git config
         let ssh = SSHManager.shared
         if ssh.isConnected, let dir = workingDirectory?.path {
-            let result = try await ssh.executeCommand("cd '\(dir)' && git config \(key) '\(value)'", timeout: 10)
+            let escapedKey = key.shellEscaped
+            let escapedValue = value.shellEscaped
+            let result = try await ssh.executeCommand("cd '\(dir.shellEscaped)' && git config \(escapedKey) '\(escapedValue)'", timeout: 10)
             if result.exitCode != 0 {
                 throw GitManagerError.commandFailed(args: "config \(key)", exitCode: result.exitCode, message: result.stderr)
             }
@@ -717,10 +741,11 @@ final class GitManager: ObservableObject {
         let configPath = gitDir.appendingPathComponent(".git/config")
         
         let parts = key.split(separator: ".")
-        guard parts.count == 2 else { return }
+        guard parts.count == 2 else {
+            throw GitManagerError.commandFailed(args: "config", exitCode: 1, message: "Invalid config key format: \(key)")
+        }
         let section = String(parts[0])
         let keyName = String(parts[1])
-        
         var content = (try? String(contentsOf: configPath, encoding: .utf8)) ?? ""
         
         // Check if section exists
@@ -770,4 +795,33 @@ final class GitManager: ObservableObject {
     var error: String? {
         return lastError
     }
+    
+    // MARK: - Missing Functionality TODOs
+    
+    // TODO: Merge conflict detection and resolution
+    // - Detect when repository is in merge conflict state
+    // - List conflicted files with theirs/ours/both options
+    // - Provide resolveConflict(file:resolution:) method
+    
+    // TODO: Git blame/annotate
+    // - func blame(file: String) async throws -> [BlameLine]
+    // - Show line-by-line commit information for a file
+    
+    // TODO: Tag management
+    // - func listTags() async throws -> [GitTag]
+    // - func createTag(name: String, message: String?) async throws
+    // - func deleteTag(name: String) async throws
+    // - func pushTag(name: String) async throws
+    
+    // TODO: Revert commit
+    // - func revertCommit(sha: String) async throws
+    // - Create a new commit that undoes a previous commit
+    
+    // TODO: Cherry-pick
+    // - func cherryPick(sha: String) async throws
+    // - Apply changes from a specific commit to current branch
+    
+    // TODO: Branch name validation
+    // - Validate branch names don't contain path traversal (e.g., "../..")
+    // - Validate branch names are valid git ref names
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HoverInfoView: View {
-    @StateObject var manager = HoverInfoManager.shared
+    @ObservedObject var manager = HoverInfoManager.shared
     
     var body: some View {
         Group {

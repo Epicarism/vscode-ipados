@@ -847,6 +847,91 @@ struct Theme: Identifiable, Equatable, Hashable {
         variable: Color(hex: "#9CDCFE")
     )
     
+
+    static let aurora = Theme(
+        id: "aurora",
+        name: "Aurora",
+        isDark: true,
+        editorBackground: Color(hex: "#2E3440"),
+        editorForeground: Color(hex: "#ECEFF4"),
+        selection: Color(hex: "#434C5E"),
+        cursor: Color(hex: "#ECEFF4"),
+        lineNumber: Color(hex: "#4C566A"),
+        lineNumberActive: Color(hex: "#ECEFF4"),
+        currentLineHighlight: Color(hex: "#3B4252"),
+        bracketPair1: Color(hex: "#88C0D0"),
+        bracketPair2: Color(hex: "#B48EAD"),
+        bracketPair3: Color(hex: "#A3BE8C"),
+        bracketPair4: Color(hex: "#88C0D0"),
+        bracketPair5: Color(hex: "#B48EAD"),
+        bracketPair6: Color(hex: "#A3BE8C"),
+        indentGuide: Color(hex: "#434C5E"),
+        indentGuideActive: Color(hex: "#4C566A"),
+        sidebarBackground: Color(hex: "#2E3440"),
+        sidebarForeground: Color(hex: "#ECEFF4"),
+        sidebarSectionHeader: Color(hex: "#3B4252"),
+        sidebarSelection: Color(hex: "#3B4252"),
+        activityBarBackground: Color(hex: "#2E3440"),
+        activityBarForeground: Color(hex: "#ECEFF4"),
+        activityBarSelection: Color(hex: "#88C0D0"),
+        tabBarBackground: Color(hex: "#2E3440"),
+        tabActiveBackground: Color(hex: "#3B4252"),
+        tabInactiveBackground: Color(hex: "#2E3440"),
+        tabActiveForeground: Color(hex: "#ECEFF4"),
+        tabInactiveForeground: Color(hex: "#4C566A"),
+        statusBarBackground: Color(hex: "#3B4252"),
+        statusBarForeground: Color(hex: "#ECEFF4"),
+        keyword: Color(hex: "#81A1C1"),
+        string: Color(hex: "#A3BE8C"),
+        number: Color(hex: "#B48EAD"),
+        comment: Color(hex: "#616E88"),
+        function: Color(hex: "#88C0D0"),
+        type: Color(hex: "#8FBCBB"),
+        variable: Color(hex: "#D08770")
+    )
+
+    static let tokyoNight = Theme(
+        id: "tokyo_night",
+        name: "Tokyo Night",
+        isDark: true,
+        editorBackground: Color(hex: "#1A1B26"),
+        editorForeground: Color(hex: "#A9B1D6"),
+        selection: Color(hex: "#283457"),
+        cursor: Color(hex: "#C0CAF5"),
+        lineNumber: Color(hex: "#3B4261"),
+        lineNumberActive: Color(hex: "#A9B1D6"),
+        currentLineHighlight: Color(hex: "#1E2030"),
+        bracketPair1: Color(hex: "#7AA2F7"),
+        bracketPair2: Color(hex: "#BB9AF7"),
+        bracketPair3: Color(hex: "#9ECE6A"),
+        bracketPair4: Color(hex: "#7AA2F7"),
+        bracketPair5: Color(hex: "#BB9AF7"),
+        bracketPair6: Color(hex: "#9ECE6A"),
+        indentGuide: Color(hex: "#292E42"),
+        indentGuideActive: Color(hex: "#3B4261"),
+        sidebarBackground: Color(hex: "#16161E"),
+        sidebarForeground: Color(hex: "#A9B1D6"),
+        sidebarSectionHeader: Color(hex: "#1A1B26"),
+        sidebarSelection: Color(hex: "#283457"),
+        activityBarBackground: Color(hex: "#1A1B26"),
+        activityBarForeground: Color(hex: "#A9B1D6"),
+        activityBarSelection: Color(hex: "#7AA2F7"),
+        tabBarBackground: Color(hex: "#16161E"),
+        tabActiveBackground: Color(hex: "#1A1B26"),
+        tabInactiveBackground: Color(hex: "#16161E"),
+        tabActiveForeground: Color(hex: "#A9B1D6"),
+        tabInactiveForeground: Color(hex: "#565F89"),
+        statusBarBackground: Color(hex: "#16161E"),
+        statusBarForeground: Color(hex: "#A9B1D6"),
+        keyword: Color(hex: "#BB9AF7"),
+        string: Color(hex: "#9ECE6A"),
+        number: Color(hex: "#FF9E64"),
+        comment: Color(hex: "#565F89"),
+        function: Color(hex: "#7AA2F7"),
+        type: Color(hex: "#7DCFFF"),
+        variable: Color(hex: "#C0CAF5")
+    )
+
     // MARK: - All Themes
     static let allThemes: [Theme] = [
         .darkPlus,
@@ -867,6 +952,8 @@ struct Theme: Identifiable, Equatable, Hashable {
         .red,
         .tomorrowNight,
         .tomorrowNightBlue,
-        .highContrast
+        .highContrast,
+        .aurora,
+        .tokyoNight
     ]
 }

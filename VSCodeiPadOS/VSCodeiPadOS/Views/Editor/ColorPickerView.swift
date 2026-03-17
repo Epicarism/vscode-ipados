@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ColorPickerView: View {
-    @StateObject var manager = ColorPickerManager.shared
+    @ObservedObject var manager = ColorPickerManager.shared
     
     var body: some View {
         Group {

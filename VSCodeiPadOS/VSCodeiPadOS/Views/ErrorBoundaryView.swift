@@ -33,7 +33,7 @@ struct ErrorBoundaryView<Content: View>: View {
 
     // MARK: - Theme
 
-    @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
 
     /// Convenience accessor matching the project convention.
     private var theme: Theme { themeManager.currentTheme }

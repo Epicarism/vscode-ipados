@@ -377,6 +377,42 @@ struct SearchResult: Identifiable {
                 let lineRange = nsText.lineRange(for: r)
                 var lineContent = nsText.substring(with: lineRange)
                 lineContent = lineContent.trimmingCharacters(in: .newlines)
+                // --- Surrounding-line context extraction ---
+                // contextBefore: up to 2 lines immediately before the match line
+                var contextBefore: String? = nil
+                if lineRange.location > 0 {
+                    let beforeEnd = lineRange.location
+                    let beforeStart = max(0, beforeEnd - 500)
+                    let beforeRange = NSRange(location: beforeStart, length: beforeEnd - beforeStart)
+                    let beforeText = nsText.substring(with: beforeRange)
+                    let lines = beforeText.components(separatedBy: "\n")
+                    let tail = lines.suffix(3)
+                    let contextLines = tail.dropLast()
+                    let trimmed = contextLines
+                        .map { $0.trimmingCharacters(in: .newlines) }
+                        .filter { !$0.isEmpty }
+                        .suffix(2)
+                    if !trimmed.isEmpty {
+                        contextBefore = trimmed.joined(separator: "\n")
+                    }
+                }
+
+                // contextAfter: up to 2 lines immediately after the match line
+                var contextAfter: String? = nil
+                let afterStart = NSMaxRange(lineRange)
+                if afterStart < nsText.length {
+                    let afterEnd = min(nsText.length, afterStart + 500)
+                    let afterRange = NSRange(location: afterStart, length: afterEnd - afterStart)
+                    let afterText = nsText.substring(with: afterRange)
+                    let lines = afterText.components(separatedBy: "\n")
+                    let trimmed = lines
+                        .map { $0.trimmingCharacters(in: .newlines) }
+                        .filter { !$0.isEmpty }
+                        .prefix(2)
+                    if !trimmed.isEmpty {
+                        contextAfter = trimmed.joined(separator: "\n")
+                    }
+                }
 
                 results.append(
                     SearchResult(
@@ -387,8 +423,8 @@ struct SearchResult: Identifiable {
                         lineContent: lineContent,
                         matchRange: swiftRange,
                         matchNSRange: r,
-                        contextBefore: nil,
-                        contextAfter: nil
+                        contextBefore: contextBefore,
+                        contextAfter: contextAfter
                     )
                 )
             }

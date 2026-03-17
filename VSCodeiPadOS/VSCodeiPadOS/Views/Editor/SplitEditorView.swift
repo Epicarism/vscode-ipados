@@ -336,7 +336,14 @@ struct SinglePaneView: View {
             splitManager.activePaneId = pane.id
         }
         .onDrop(of: [.text], isTargeted: $dragOverPane) { providers in
-            // Handle tab drop
+            // Extract tab identifier from drop providers
+            guard let provider = providers.first else { return false }
+            provider.loadObject(ofClass: NSString.self) { reading, _ in
+                guard let tabId = reading as? String else { return }
+                DispatchQueue.main.async {
+                    splitManager.moveTab(id: tabId, toPane: pane.id)
+                }
+            }
             return true
         }
     }
@@ -492,8 +499,8 @@ struct PaneEditorView: View {
     let tab: Tab
     @ObservedObject var splitManager: SplitEditorManager
     @ObservedObject var editorCore: EditorCore
-    @StateObject private var debugManager = DebugManager.shared
-    @StateObject private var foldingManager = CodeFoldingManager.shared
+    @ObservedObject private var debugManager = DebugManager.shared
+    @ObservedObject private var foldingManager = CodeFoldingManager.shared
     @State private var text: String = ""
     @State private var scrollPosition: Int = 0
     @State private var scrollOffset: CGFloat = 0
@@ -578,20 +585,34 @@ struct PaneEditorView: View {
                 }
 
                 // Editor
-                SyntaxHighlightingTextView(
-                    text: $text,
-                    filename: tab.fileName,
-                    scrollPosition: $scrollPosition,
-                    scrollOffset: $scrollOffset,
-                    totalLines: $totalLines,
-                    visibleLines: $visibleLines,
-                    currentLineNumber: $currentLineNumber,
-                    currentColumn: $currentColumn,
-                    lineHeight: $lineHeight,
-                    isActive: splitManager.activePaneId == pane.id,
-                    editorCore: editorCore,
-                    requestedLineSelection: $requestedLineSelection
-                )
+                if useRunestoneEditor {
+                    RunestoneEditorView(
+                        text: $text,
+                        filename: tab.fileName,
+                        scrollOffset: $scrollOffset,
+                        totalLines: $totalLines,
+                        currentLineNumber: $currentLineNumber,
+                        currentColumn: $currentColumn,
+                        cursorIndex: $cursorIndex,
+                        isActive: splitManager.activePaneId == pane.id
+                    )
+                    .environmentObject(editorCore)
+                } else {
+                    SyntaxHighlightingTextView(
+                        text: $text,
+                        filename: tab.fileName,
+                        scrollPosition: $scrollPosition,
+                        scrollOffset: $scrollOffset,
+                        totalLines: $totalLines,
+                        visibleLines: $visibleLines,
+                        currentLineNumber: $currentLineNumber,
+                        currentColumn: $currentColumn,
+                        lineHeight: $lineHeight,
+                        isActive: splitManager.activePaneId == pane.id,
+                        editorCore: editorCore,
+                        requestedLineSelection: $requestedLineSelection
+                    )
+                }
                 .onChange(of: text) { _, newValue in
                     pane.updateTabContent(newValue)
                 }
