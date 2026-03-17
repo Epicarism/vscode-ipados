@@ -109,8 +109,13 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
         
         lock.withLock { currentStatus = .completed }
         
-        // Return predefined response or default success value
-        return createJSValue(from: predefinedResponse ?? "mock-result")
+        // Return predefined response or default success value.
+        // createJSValue returns nil if JSContext cannot be created; surface as an error.
+        guard let jsValue = createJSValue(from: predefinedResponse ?? "mock-result") else {
+            lock.withLock { currentStatus = .failed }
+            throw MockRunnerError.executionFailed("MockJSRunner: Failed to create JSContext")
+        }
+        return jsValue
     }
     
     public func cancel() async {
@@ -150,9 +155,10 @@ public final class MockJSRunner: CodeRunner, MockConfigurable {
         return callCount == expected
     }
     
-    private func createJSValue(from value: Any) -> JSValue {
+    private func createJSValue(from value: Any) -> JSValue? {
         guard let ctx = JSContext() else {
-            fatalError("MockJSRunner: Failed to create JSContext")
+            // JSContext creation failed (e.g. low memory). Return nil instead of crashing.
+            return nil
         }
         return JSValue(object: value, in: ctx)
     }

@@ -32,6 +32,8 @@ extension Notification.Name {
     static let showFind = Notification.Name("ShowFind")
     /// Show the Replace bar.
     static let showReplace = Notification.Name("ShowReplace")
+    /// Hide the Find/Replace bar (Escape key).
+    static let hideSearch = Notification.Name("HideSearch")
     /// Add a cursor on the line above.
     static let addCursorAbove = Notification.Name("AddCursorAbove")
     /// Add a cursor on the line below.

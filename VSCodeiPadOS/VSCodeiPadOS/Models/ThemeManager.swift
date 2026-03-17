@@ -4,6 +4,7 @@ import Combine
 @MainActor
 final class ThemeManager: ObservableObject {
     @AppStorage("selectedThemeId") var selectedThemeId: String = "dark_plus"
+    @AppStorage("followSystemAppearance") var followSystemAppearance: Bool = true
     @Published var currentTheme: Theme
     
     static let shared = ThemeManager()
@@ -27,6 +28,33 @@ final class ThemeManager: ObservableObject {
     
     func switchTheme(to theme: Theme) {
         switchTheme(to: theme.id)
+    }
+    
+    // MARK: - System Appearance
+    
+    /// Called when system color scheme changes. Auto-switches theme if followSystemAppearance is enabled.
+    func applySystemAppearance(_ colorScheme: ColorScheme) {
+        guard followSystemAppearance else { return }
+        if colorScheme == .dark {
+            // Switch to a dark theme if we're currently on a light one
+            if !currentTheme.isDark {
+                let preferred = Theme.allThemes.first(where: { $0.id == "monokai" }) ?? .darkPlus
+                switchTheme(to: preferred)
+            }
+        } else {
+            // Switch to a light theme if we're currently on a dark one
+            if currentTheme.isDark {
+                let preferred = Theme.allThemes.first(where: { $0.id == "github_light" })
+                    ?? Theme.allThemes.first(where: { !$0.isDark })
+                    ?? .lightPlus
+                switchTheme(to: preferred)
+            }
+        }
+    }
+    
+    /// Preferred color scheme to propagate to SwiftUI based on the current theme.
+    var preferredColorScheme: ColorScheme? {
+        currentTheme.isDark ? .dark : .light
     }
     
     // Cycle to next theme

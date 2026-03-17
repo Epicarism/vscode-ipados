@@ -472,6 +472,7 @@ struct SearchResult: Identifiable {
 
 struct FindReplaceView: View {
     @ObservedObject var viewModel: FindViewModel
+    var onDismiss: (() -> Void)? = nil
     @FocusState private var searchFieldFocused: Bool
     
     var body: some View {
@@ -529,7 +530,10 @@ struct FindReplaceView: View {
                 }
                 
                 // Close button
-                Button(action: viewModel.clearSearch) {
+                Button(action: {
+                    viewModel.clearSearch()
+                    onDismiss?()
+                }) {
                     Image(systemName: "xmark")
                 }
                 .buttonStyle(PlainButtonStyle())

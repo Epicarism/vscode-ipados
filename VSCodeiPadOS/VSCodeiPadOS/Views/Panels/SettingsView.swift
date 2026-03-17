@@ -173,6 +173,7 @@ struct SettingsDetailView: View {
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
     @AppStorage("trimTrailingWhitespace") private var trimTrailingWhitespace: Bool = false
     @AppStorage("insertFinalNewline") private var insertFinalNewline: Bool = false
+    @AppStorage("showInvisibleCharacters") private var showInvisibleCharacters: Bool = false
     
     var body: some View {
         Form {
@@ -242,11 +243,20 @@ struct SettingsDetailView: View {
                         Toggle("Insert Final Newline", isOn: $insertFinalNewline)
                             .accessibilityHint("Insert a newline at end of file on save")
                     }
+
+                    if matchesSearch("Show Invisible Characters") {
+                        Toggle("Show Invisible Characters", isOn: $showInvisibleCharacters)
+                            .accessibilityHint("Show tabs, spaces, and line breaks as visible glyphs in the editor")
+                    }
                 }
             }
             
             if shouldShow(category: .workbench) {
                 Section(header: Text("Workbench").accessibilityAddTraits(.isHeader)) {
+                    if matchesSearch("Follow System Appearance") || matchesSearch("System") || matchesSearch("Appearance") || matchesSearch("Theme") {
+                        Toggle("Follow System Appearance", isOn: $themeManager.followSystemAppearance)
+                            .accessibilityHint("Automatically switch between light and dark themes based on the system appearance setting")
+                    }
                     if matchesSearch("Theme") {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Color Theme").font(.headline)
@@ -352,10 +362,10 @@ struct SettingsDetailView: View {
     private func shouldShow(category: SettingsView.SettingsCategory) -> Bool {
         if !searchText.isEmpty {
             if category == .editor {
-                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Line Numbers") || matchesSearch("Trim Whitespace") || matchesSearch("Final Newline")
+                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Line Numbers") || matchesSearch("Trim Whitespace") || matchesSearch("Final Newline") || matchesSearch("Show Invisible Characters")
             }
             if category == .workbench {
-                return matchesSearch("Theme")
+                return matchesSearch("Theme") || matchesSearch("Follow System Appearance") || matchesSearch("System") || matchesSearch("Appearance")
             }
             if category == .connectedMode {
                 return matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected")

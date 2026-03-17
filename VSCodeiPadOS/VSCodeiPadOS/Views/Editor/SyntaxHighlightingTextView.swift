@@ -197,6 +197,17 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         textView.tintColor = UIColor(ThemeManager.shared.currentTheme.cursor)
         textView.keyboardType = .default
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+
+        // Apply tab size via paragraph style tab stops
+        let tabSizeValue = UserDefaults.standard.integer(forKey: "tabSize")
+        let resolvedTabSize = tabSizeValue > 0 ? tabSizeValue : 4
+        let monoFont = textView.font ?? UIFont.monospacedSystemFont(ofSize: editorCore.editorFontSize, weight: .regular)
+        let charWidth = (" " as NSString).size(withAttributes: [.font: monoFont]).width
+        let tabInterval = CGFloat(resolvedTabSize) * charWidth
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.tabStops = []
+        paragraphStyle.defaultTabInterval = tabInterval
+        textView.typingAttributes[.paragraphStyle] = paragraphStyle
         
         // Enable line wrapping
         textView.textContainer.lineBreakMode = .byCharWrapping
@@ -253,6 +264,17 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 self.lineHeight = font.lineHeight
             }
         }
+
+        // Re-apply tab interval whenever font or tab size may have changed
+        let tabSizeValue = UserDefaults.standard.integer(forKey: "tabSize")
+        let resolvedTabSize = tabSizeValue > 0 ? tabSizeValue : 4
+        let monoFont2 = textView.font ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let charWidth2 = (" " as NSString).size(withAttributes: [.font: monoFont2]).width
+        let tabInterval2 = CGFloat(resolvedTabSize) * charWidth2
+        let paragraphStyle2 = NSMutableParagraphStyle()
+        paragraphStyle2.tabStops = []
+        paragraphStyle2.defaultTabInterval = tabInterval2
+        textView.typingAttributes[.paragraphStyle] = paragraphStyle2
         
         // Update text if changed externally
         if textView.text != text {
@@ -308,6 +330,22 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             context.coordinator.updateScrollPosition(textView)
         }
         
+        // Handle find/replace selection requests (jump to match)
+        if let range = editorCore.requestedSelection,
+           range != context.coordinator.lastHandledSelection {
+            context.coordinator.lastHandledSelection = range
+            let textLength = (textView.text as NSString?)?.length ?? 0
+            let safeRange = NSRange(
+                location: min(range.location, textLength),
+                length: min(range.length, max(0, textLength - range.location))
+            )
+            textView.selectedRange = safeRange
+            textView.scrollRangeToVisible(safeRange)
+            DispatchQueue.main.async {
+                editorCore.requestedSelection = nil
+            }
+        }
+
         // Note: updateLineCount is called in textViewDidChange, no need to call here
         // as it causes unnecessary state churn on every updateUIView
     }
@@ -320,6 +358,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         var lastThemeId: String = ""
         var lastRequestedLineSelection: Int? = nil
         var lastRequestedCursorIndex: Int? = nil
+        var lastHandledSelection: NSRange? = nil
         private var isUpdatingFromMinimap = false
         private var highlightDebouncer: Timer?
         weak var pinchGesture: UIPinchGestureRecognizer?
@@ -352,6 +391,10 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         // Track if we have pending full highlight (for large files)
         private var hasPendingFullHighlight = false
         
+        // PERF: Debounce SwiftUI binding updates to avoid view re-renders on every keystroke
+        private var textUpdateWorkItem: DispatchWorkItem?
+        private let textUpdateDebounceInterval: TimeInterval = 0.3  // 300ms
+        
         init(_ parent: SyntaxHighlightingTextView) {
             self.parent = parent
         }
@@ -370,9 +413,25 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             applySyntaxHighlighting(to: textView)
         }
         
+        func textViewDidEndEditing(_ textView: UITextView) {
+            // Flush any pending debounced text update immediately when the user stops editing.
+            // This ensures auto-save, tab content syncing, etc. always see the latest text.
+            textUpdateWorkItem?.cancel()
+            textUpdateWorkItem = nil
+            parent.text = textView.text ?? ""
+        }
+        
         func textViewDidChange(_ textView: UITextView) {
-            // Update parent text
-            parent.text = textView.text
+            // PERF: Debounce SwiftUI binding update — cancel previous, schedule new with 300ms delay.
+            // Immediate propagation is handled by textViewDidEndEditing and syncTextImmediately().
+            textUpdateWorkItem?.cancel()
+            let capturedText = textView.text ?? ""
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.parent.text = capturedText
+            }
+            textUpdateWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + textUpdateDebounceInterval, execute: workItem)
             
             // Set typing attributes IMMEDIATELY so new characters have proper base styling
             // This prevents flicker during the debounce period

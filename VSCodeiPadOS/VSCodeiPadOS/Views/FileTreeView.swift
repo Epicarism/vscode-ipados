@@ -1,5 +1,6 @@
 import os
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 // MARK: - File Tree View
@@ -189,6 +190,7 @@ struct FileTreeRowView: View {
             .alert("Delete \"\(node.name)\"?", isPresented: $showingDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { }
                 Button("Delete", role: .destructive) {
+                    HapticManager.notification(.warning)
                     _ = fileNavigator.deleteItem(at: node.url)
                 }
             } message: {

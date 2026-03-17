@@ -115,6 +115,7 @@ class KeyCommandController: UIViewController {
             // MARK: - Search
             ("Find", "f", [.command], #selector(cmdFind)),
             ("Replace", "f", [.command, .alternate], #selector(cmdShowReplace)),
+            ("Close Find Bar", UIKeyCommand.inputEscape, [], #selector(cmdHideSearch)),
             
             // MARK: - Navigation
             ("Go to Line", "g", [.control], #selector(cmdGoToLine)),
@@ -196,6 +197,9 @@ class KeyCommandController: UIViewController {
     }
     @objc func cmdShowReplace() {
         NotificationCenter.default.post(name: .showReplace, object: nil)
+    }
+    @objc func cmdHideSearch() {
+        NotificationCenter.default.post(name: .hideSearch, object: nil)
     }
     
     // MARK: - Navigation

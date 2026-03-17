@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Git View (Source Control Panel)
 
@@ -21,11 +22,111 @@ struct GitView: View {
     @State private var showDiscardAllAlert = false
     @State private var showCommitPushConfirmation = false
     @State private var gitConfigError: String?
+    @State private var showStashDropAlert = false
+    @State private var showBranchDeleteAlert = false
+    @State private var pendingDeleteBranchName: String?
 
     private var theme: Theme { themeManager.currentTheme }
 
     
     var body: some View {
+        ZStack {
+            mainContent
+            
+            // Full-screen loading overlay during commit/push/pull
+            if isOperationInProgress {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .scaleEffect(1.4)
+                        .tint(.white)
+                    Text("Working…")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                .padding(24)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Git operation in progress, please wait")
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
+        if !gitManager.isRepository {
+            gitEmptyState
+        } else {
+            gitRepositoryContent
+        }
+    }
+    
+    // MARK: - Empty State (no repository)
+    private var gitEmptyState: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("SOURCE CONTROL")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            
+            Divider()
+            
+            Spacer()
+            
+            VStack(spacing: 16) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 48, weight: .light))
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .accessibilityHidden(true)
+                
+                VStack(spacing: 6) {
+                    Text("No Repository Found")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Open a folder containing a Git repository\nto see source control")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                }
+                
+                Button(action: {
+                    Task { await initializeRepository() }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle")
+                        Text("Initialize Repository")
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Initialize Repository")
+                .accessibilityHint("Double tap to initialize a new Git repository in the current folder")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            
+            Spacer()
+        }
+        .background(Color(theme.editorBackground))
+    }
+    
+    // MARK: - Repository Content
+    @ViewBuilder
+    private var gitRepositoryContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
@@ -320,7 +421,7 @@ struct GitView: View {
                         Task { try? await gitManager.stashPop(index: 0); await gitManager.refresh() }
                     }
                     Button("Drop Stash", role: .destructive) {
-                        Task { try? await gitManager.stashDrop(index: 0); await gitManager.refresh() }
+                        showStashDropAlert = true
                     }
                 } label: {
                     Image(systemName: "tray.and.arrow.down.fill")
@@ -372,6 +473,27 @@ struct GitView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("This will permanently discard all unstaged changes and untracked files. This cannot be undone.")
+        }
+        .alert("Drop Stash?", isPresented: $showStashDropAlert) {
+            Button("Drop Stash", role: .destructive) {
+                HapticManager.notification(.warning)
+                Task { try? await gitManager.stashDrop(index: 0); await gitManager.refresh() }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will permanently delete the stash. This cannot be undone.")
+        }
+        .alert("Delete Branch?", isPresented: $showBranchDeleteAlert) {
+            Button("Delete", role: .destructive) {
+                HapticManager.notification(.warning)
+                if let name = pendingDeleteBranchName {
+                    Task { try? await gitManager.deleteBranch(name: name); await gitManager.refresh() }
+                }
+                pendingDeleteBranchName = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeleteBranchName = nil }
+        } message: {
+            Text("Delete branch \"\(pendingDeleteBranchName ?? "")\"? This cannot be undone.")
         }
     }
 
@@ -611,6 +733,30 @@ struct GitView: View {
         Task { await gitManager.refresh() }
     }
     
+    private func initializeRepository() async {
+        guard let workingDir = editorCore.restoreWorkspaceURL() else { return }
+        isOperationInProgress = true
+        defer { isOperationInProgress = false }
+        do {
+            // Create a .git directory structure to initialize a bare repository
+            let gitDir = workingDir.appendingPathComponent(".git")
+            let fm = FileManager.default
+            if !fm.fileExists(atPath: gitDir.path) {
+                try fm.createDirectory(at: gitDir, withIntermediateDirectories: true)
+                try fm.createDirectory(at: gitDir.appendingPathComponent("objects"), withIntermediateDirectories: true)
+                try fm.createDirectory(at: gitDir.appendingPathComponent("refs/heads"), withIntermediateDirectories: true)
+                try fm.createDirectory(at: gitDir.appendingPathComponent("refs/tags"), withIntermediateDirectories: true)
+                try "ref: refs/heads/main\n".write(to: gitDir.appendingPathComponent("HEAD"), atomically: true, encoding: .utf8)
+                let configContent = "[core]\n\trepositoryformatversion = 0\n\tfilemode = false\n\tbare = false\n\tlogallrefupdates = true\n"
+                try configContent.write(to: gitDir.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+            }
+            gitManager.setWorkingDirectory(workingDir)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+    
     private func stageFile(_ path: String) {
         Task { await performGitOp { try await gitManager.stage(file: path) } }
     }
@@ -625,14 +771,20 @@ struct GitView: View {
     
     private func commitChanges() {
         guard canCommit else { return }
+        HapticManager.impact(.light)
         let message = commitMessage
         commitMessage = ""
         Task {
             await performGitOp {
                 try await gitManager.commit(message: message)
             }
-            if showError {
-                await MainActor.run { commitMessage = message }
+            await MainActor.run {
+                if showError {
+                    commitMessage = message
+                    HapticManager.notification(.error)
+                } else {
+                    HapticManager.notification(.success)
+                }
             }
         }
     }
@@ -643,6 +795,7 @@ struct GitView: View {
     
     private func executeCommitAndPush() {
         guard canCommit else { return }
+        HapticManager.impact(.light)
         let message = commitMessage
         commitMessage = ""
         Task {
@@ -650,18 +803,33 @@ struct GitView: View {
                 try await gitManager.commit(message: message)
                 try await gitManager.push()
             }
-            if showError {
-                await MainActor.run { commitMessage = message }
+            await MainActor.run {
+                if showError {
+                    commitMessage = message
+                    HapticManager.notification(.error)
+                } else {
+                    HapticManager.notification(.success)
+                }
             }
         }
     }
     
     private func pullChanges() {
-        Task { await performGitOp { try await gitManager.pull() } }
+        Task {
+            await performGitOp { try await gitManager.pull() }
+            await MainActor.run {
+                if showError { HapticManager.notification(.error) } else { HapticManager.notification(.success) }
+            }
+        }
     }
-    
+
     private func pushChanges() {
-        Task { await performGitOp { try await gitManager.push() } }
+        Task {
+            await performGitOp { try await gitManager.push() }
+            await MainActor.run {
+                if showError { HapticManager.notification(.error) } else { HapticManager.notification(.success) }
+            }
+        }
     }
     
     private func fetchChanges() {
@@ -677,6 +845,7 @@ struct GitView: View {
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+            HapticManager.notification(.error)
             AppLogger.git.debug("[GitView] Git operation failed: \(error.localizedDescription)")
         }
     }
@@ -709,6 +878,8 @@ struct BranchPickerSheet: View {
     @State private var showCreateBranch = false
     @State private var branchError: String?
     @State private var showBranchError = false
+    @State private var showDeleteConfirmation = false
+    @State private var pendingDeleteName: String?
     
     var localBranches: [GitBranch] {
         gitManager.branches.filter { !$0.isRemote }
@@ -762,10 +933,8 @@ struct BranchPickerSheet: View {
                             .swipeActions(edge: .trailing) {
                                 if !branch.isCurrent {
                                     Button(role: .destructive) {
-                                        Task {
-                                            try? await gitManager.deleteBranch(name: branch.name)
-                                            await gitManager.refresh()
-                                        }
+                                        pendingDeleteName = branch.name
+                                        showDeleteConfirmation = true
                                     } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -804,9 +973,24 @@ struct BranchPickerSheet: View {
             } message: {
                 Text(branchError ?? "An unknown error occurred")
             }
+            .alert("Delete Branch?", isPresented: $showDeleteConfirmation) {
+                Button("Delete", role: .destructive) {
+                    HapticManager.notification(.warning)
+                    if let name = pendingDeleteName {
+                        Task {
+                            try? await gitManager.deleteBranch(name: name)
+                            await gitManager.refresh()
+                        }
+                    }
+                    pendingDeleteName = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDeleteName = nil }
+            } message: {
+                Text("Delete branch \"\(pendingDeleteName ?? "")\"? This cannot be undone.")
+            }
         }
     }
-    
+
     private func checkout(_ branch: String) {
         Task {
             do {

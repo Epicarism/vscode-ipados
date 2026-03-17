@@ -476,7 +476,11 @@ class ErrorParser {
         do {
             return try NSRegularExpression(pattern: pattern, options: options)
         } catch {
-            preconditionFailure("Invalid regex pattern: \(pattern) — \(error)")
+            // Invalid pattern: log in debug builds, but never crash in production.
+            // Return a no-op regex ("(?!x)x") that is guaranteed valid and matches nothing.
+            assertionFailure("Invalid regex pattern: \(pattern) — \(error)")
+            // "(?!x)x" is always a valid pattern; force-try is safe here.
+            return try! NSRegularExpression(pattern: "(?!x)x", options: [])
         }
     }
     

@@ -47,10 +47,12 @@ struct StatusBarView: View {
                 // ── Right side ─────────────────────────────────────────
                 if hasActiveTab {
                     rightSide
+                } else {
+                    idleRightSide
                 }
             }
             .padding(.horizontal, 4)
-            .frame(height: 22)
+            .frame(height: 28)
             .background(theme.statusBarBackground)
             .foregroundColor(theme.statusBarForeground)
             .font(.system(size: 11))
@@ -293,6 +295,54 @@ struct StatusBarView: View {
         }
     }
     
+    // MARK: - Idle Right Side (no tab open)
+
+    @ViewBuilder
+    private var idleRightSide: some View {
+        HStack(spacing: 0) {
+            // Notification bell with unread badge
+            ZStack(alignment: .topTrailing) {
+                StatusBarItem(text: "", icon: "bell", theme: theme) {
+                    showNotificationCenter.toggle()
+                    notifications.markAllRead()
+                }
+                .accessibilityLabel("Notifications\(notifications.unreadCount > 0 ? ", \(notifications.unreadCount) unread" : "")")
+                .accessibilityHint("Double tap to show notifications")
+                if notifications.unreadCount > 0 {
+                    Text("\(min(notifications.unreadCount, 99))")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Color.accentColor)
+                        .cornerRadius(6)
+                        .offset(x: -2, y: 2)
+                }
+            }
+            .popover(isPresented: $showNotificationCenter) {
+                NotificationCenterView(manager: notifications)
+            }
+
+            // "Ready" / "Welcome" indicator
+            StatusBarLabel(
+                text: "Ready",
+                icon: "checkmark.circle",
+                theme: theme
+            )
+            .foregroundColor(.green)
+            .accessibilityLabel("Ready")
+
+            // App version (subtle, far right)
+            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                Text("v\(version)")
+                    .font(.system(size: 9))
+                    .foregroundColor(theme.statusBarForeground.opacity(0.45))
+                    .padding(.horizontal, 6)
+                    .accessibilityLabel("Version \(version)")
+            }
+        }
+    }
+
     // MARK: - Encoding Helpers
     
     private func stringEncodingFromName(_ name: String) -> String.Encoding? {
@@ -377,10 +427,18 @@ struct StatusBarLabel: View {
 struct SSHStatusIndicator: View {
     let theme: Theme
     let action: () -> Void
-    
+
     @StateObject private var sshManager = SSHManager.shared
+    @StateObject private var connectionStore = SSHConnectionStore.shared
     @State private var isHovering = false
-    
+
+    /// Only render the indicator when the user has at least one saved SSH connection
+    /// OR is currently connected (handles the edge case of an in-session connection
+    /// whose config was deleted while connected).
+    private var shouldShow: Bool {
+        !connectionStore.savedConnections.isEmpty || sshManager.isConnected
+    }
+
     private var displayText: String {
         if sshManager.isConnected, let config = sshManager.currentConfig {
             return config.name.isEmpty ? config.host : config.name
@@ -388,27 +446,29 @@ struct SSHStatusIndicator: View {
             return "No Remote"
         }
     }
-    
+
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: sshManager.isConnected ? "server.rack" : "circle")
-                    .font(.system(size: 10))
-                    .foregroundColor(sshManager.isConnected ? .green : theme.statusBarForeground.opacity(0.5))
-                
-                Text(displayText)
-                    .font(.system(size: 11))
+        if shouldShow {
+            Button(action: action) {
+                HStack(spacing: 4) {
+                    Image(systemName: sshManager.isConnected ? "server.rack" : "circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(sshManager.isConnected ? .green : theme.statusBarForeground.opacity(0.5))
+
+                    Text(displayText)
+                        .font(.system(size: 11))
+                }
+                .padding(.horizontal, 8)
+                .frame(maxHeight: .infinity)
+                .background(isHovering ? theme.statusBarForeground.opacity(0.12) : Color.clear)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 8)
-            .frame(maxHeight: .infinity)
-            .background(isHovering ? theme.statusBarForeground.opacity(0.12) : Color.clear)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .accessibilityLabel(displayText)
+            .accessibilityHint("Double tap to manage SSH connections")
         }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .accessibilityLabel(displayText)
-        .accessibilityHint("Double tap to manage SSH connections")
     }
 }

@@ -4,6 +4,8 @@ import SwiftUI
 struct VSCodeiPadOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var editorCore = EditorCore()
+    @StateObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showSettings = false
     @State private var showTerminal = false
     @State private var windowTitle: String = "CodePad"
@@ -13,12 +15,19 @@ struct VSCodeiPadOSApp: App {
             KeyCommandBridge {
                 ContentView()
                     .environmentObject(editorCore)
+                    .preferredColorScheme(themeManager.preferredColorScheme)
                     .onReceive(NotificationCenter.default.publisher(for: .windowTitleDidChange)) { notification in
                         if let userInfo = notification.userInfo,
                            let title = userInfo["title"] as? String {
                             windowTitle = title
                             updateWindowTitle(title)
                         }
+                    }
+                    .onChange(of: colorScheme) { _, newScheme in
+                        themeManager.applySystemAppearance(newScheme)
+                    }
+                    .onAppear {
+                        themeManager.applySystemAppearance(colorScheme)
                     }
             }
         }

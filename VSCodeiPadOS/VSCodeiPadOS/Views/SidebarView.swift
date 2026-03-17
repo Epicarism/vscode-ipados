@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Activity Bar Components
 //
@@ -91,8 +92,10 @@ struct ActivityBarIcon: View {
         Button(action: {
             if isSelected {
                 // Toggle sidebar visibility if clicking already selected tab
+                HapticManager.impact(.light)
                 editorCore.toggleSidebar()
             } else {
+                HapticManager.selection()
                 selectedTab = index
                 if !editorCore.showSidebar { editorCore.toggleSidebar() }
             }

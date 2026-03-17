@@ -39,6 +39,9 @@ struct RunestoneEditorView: UIViewRepresentable {
     // Settings from AppStorage
     @AppStorage("wordWrap") private var wordWrapEnabled: Bool = true
     @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
+    @AppStorage("tabSize") private var tabSize: Int = 4
+    @AppStorage("insertSpaces") private var insertSpaces: Bool = true
+    @AppStorage("showInvisibleCharacters") private var showInvisibleCharacters: Bool = false
     
     /// Autocomplete key handling hooks (return true if handled)
     let onAcceptAutocomplete: (() -> Bool)?
@@ -86,7 +89,17 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         // Configure line wrapping (from settings)
         textView.isLineWrappingEnabled = wordWrapEnabled
-        
+
+        // Apply tab size (indentStrategy controls how Tab key inserts indent)
+        textView.indentStrategy = insertSpaces
+            ? .space(length: tabSize)
+            : .tab(length: tabSize)
+
+        // Show/hide invisible characters (tabs, spaces, line breaks)
+        textView.showTabs = showInvisibleCharacters
+        textView.showSpaces = showInvisibleCharacters
+        textView.showLineBreaks = showInvisibleCharacters
+
         // Configure editing
         textView.isEditable = true
         textView.isSelectable = true
@@ -154,7 +167,25 @@ struct RunestoneEditorView: UIViewRepresentable {
         if textView.isLineWrappingEnabled != wordWrapEnabled {
             textView.isLineWrappingEnabled = wordWrapEnabled
         }
-        
+
+        // Tab size / indent strategy
+        let expectedStrategy: IndentStrategy = insertSpaces
+            ? .space(length: tabSize)
+            : .tab(length: tabSize)
+        // IndentStrategy isn't Equatable — always re-apply; it's cheap
+        textView.indentStrategy = expectedStrategy
+
+        // Invisible characters toggle
+        if textView.showTabs != showInvisibleCharacters {
+            textView.showTabs = showInvisibleCharacters
+        }
+        if textView.showSpaces != showInvisibleCharacters {
+            textView.showSpaces = showInvisibleCharacters
+        }
+        if textView.showLineBreaks != showInvisibleCharacters {
+            textView.showLineBreaks = showInvisibleCharacters
+        }
+
         // CRITICAL: Only call setState() when safe (not during active editing)
         // Calling setState() during editing corrupts Runestone's lineManager
         // and causes crash at TextEditHelper.swift:27 (force unwrap on linePosition)
@@ -230,6 +261,23 @@ struct RunestoneEditorView: UIViewRepresentable {
         if lineHeight != 0 && abs(lineHeight - computedLineHeight) > 0.5 {
             DispatchQueue.main.async {
                 self.lineHeight = computedLineHeight
+            }
+        }
+
+        // MARK: Find/Replace - jump to match
+        // When FindViewModel sets editorCore.requestedSelection, scroll to and select that range.
+        if let range = editorCore.requestedSelection,
+           range != context.coordinator.lastHandledSelection {
+            context.coordinator.lastHandledSelection = range
+            let textLength = (textView.text as NSString).length
+            let safeRange = NSRange(
+                location: min(range.location, textLength),
+                length: min(range.length, max(0, textLength - range.location))
+            )
+            textView.selectedRange = safeRange
+            textView.scrollRangeToVisible(safeRange)
+            DispatchQueue.main.async {
+                editorCore.requestedSelection = nil
             }
         }
     }
@@ -366,12 +414,26 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Track file identity to know when to call setState()
         var lastFilename: String = ""
         var hasBeenEdited: Bool = false
+
+        // Find/Replace: track last handled selection to avoid re-applying
+        var lastHandledSelection: NSRange? = nil
         
         // Debounced text sync to avoid SwiftUI re-renders on every keystroke
         private var textSyncWorkItem: DispatchWorkItem?
         private let debounceInterval: TimeInterval = 0.5 // 500ms
         private var forceSyncObserver: NSObjectProtocol?
         private var editorActionObservers: [NSObjectProtocol] = []
+
+        // MARK: - Bracket Matching Highlight
+        /// Overlay layer used to draw subtle background boxes on matched bracket pairs.
+        private let bracketHighlightLayer: CAShapeLayer = {
+            let layer = CAShapeLayer()
+            layer.fillColor = UIColor.systemYellow.withAlphaComponent(0.22).cgColor
+            layer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.50).cgColor
+            layer.lineWidth = 1.0
+            layer.zPosition = 100
+            return layer
+        }()
         
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
@@ -379,7 +441,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             self.lastThemeId = ""  // Will be set on first update from MainActor
             self.lastFilename = parent.filename
             super.init()
-            
+
+            // bracketHighlightLayer is installed lazily in textViewDidBeginEditing
+            // so we have a valid superlayer before trying to draw.
+
             // Listen for force sync requests (e.g., before save)
             forceSyncObserver = NotificationCenter.default.addObserver(
                 forName: .forceEditorSync,
@@ -475,10 +540,14 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         func textViewDidChangeSelection(_ textView: TextView) {
             updateCursorPosition(in: textView)
+            updateBracketHighlight(in: textView)
         }
         
         func textViewDidBeginEditing(_ textView: TextView) {
-            // Could be used for focus handling
+            // Install the bracket-highlight overlay layer once the view is in the hierarchy
+            if bracketHighlightLayer.superlayer == nil {
+                textView.layer.addSublayer(bracketHighlightLayer)
+            }
         }
         
         func textViewDidEndEditing(_ textView: TextView) {
@@ -486,19 +555,157 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         
         func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-            // Handle Tab key for autocomplete acceptance
+
+            // ---------------------------------------------------------------
+            // MARK: Tab key
+            // ---------------------------------------------------------------
             if text == "\t" {
+                // First give autocomplete a chance to accept
                 let accepted = MainActor.assumeIsolated {
                     parent.onAcceptAutocomplete?()
                 }
-                if accepted == true {
-                    return false
+                if accepted == true { return false }
+
+                // Insert spaces (or a real tab) according to settings
+                let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
+                                        ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
+                let spaces = (UserDefaults.standard.object(forKey: "insertSpaces") == nil)
+                                ? true
+                                : UserDefaults.standard.bool(forKey: "insertSpaces")
+                let indentStr = spaces ? String(repeating: " ", count: tabSz) : "\t"
+                let ms = NSMutableString(string: textView.text)
+                ms.replaceCharacters(in: range, with: indentStr)
+                textView.text = ms as String
+                textView.selectedRange = NSRange(location: range.location + indentStr.count, length: 0)
+                textViewDidChange(textView)
+                return false
+            }
+
+            // ---------------------------------------------------------------
+            // MARK: Auto-indent on Enter
+            // ---------------------------------------------------------------
+            if text == "\n" {
+                let nsText = textView.text as NSString
+                // Range of the current line
+                let lineRange = nsText.lineRange(for: NSRange(location: range.location, length: 0))
+                // Text from line-start up to cursor
+                let lineUpToCursor = nsText.substring(with:
+                    NSRange(location: lineRange.location,
+                            length: range.location - lineRange.location))
+
+                // Leading whitespace of current line
+                var indent = ""
+                for ch in lineUpToCursor {
+                    if ch == " " || ch == "\t" { indent.append(ch) } else { break }
+                }
+
+                // Does the (trimmed) line end with an opener?
+                let trimmed = lineUpToCursor.trimmingCharacters(in: .whitespaces)
+                let endsWithOpener = trimmed.hasSuffix("{") || trimmed.hasSuffix("(")
+                                  || trimmed.hasSuffix("[") || trimmed.hasSuffix(":")
+
+                let tabSz  = max(1, UserDefaults.standard.integer(forKey: "tabSize") > 0
+                                        ? UserDefaults.standard.integer(forKey: "tabSize") : 4)
+                let spaces = (UserDefaults.standard.object(forKey: "insertSpaces") == nil)
+                                ? true
+                                : UserDefaults.standard.bool(forKey: "insertSpaces")
+                let oneLevel = spaces ? String(repeating: " ", count: tabSz) : "\t"
+
+                let ms = NSMutableString(string: nsText)
+                let insertion: String
+                var newCursor: Int
+
+                if endsWithOpener {
+                    // Peek at the character immediately after the cursor
+                    let afterCursor: String = range.location < nsText.length
+                        ? nsText.substring(with: NSRange(location: range.location, length: 1))
+                        : ""
+                    let isCloser = (afterCursor == "}" || afterCursor == ")" || afterCursor == "]")
+                    if isCloser {
+                        // Split: <newline><indent+1>  <cursor>  <newline><indent>
+                        insertion = "\n" + indent + oneLevel + "\n" + indent
+                        ms.replaceCharacters(in: range, with: insertion)
+                        textView.text = ms as String
+                        newCursor = range.location + 1 + indent.count + oneLevel.count
+                    } else {
+                        insertion = "\n" + indent + oneLevel
+                        ms.replaceCharacters(in: range, with: insertion)
+                        textView.text = ms as String
+                        newCursor = range.location + insertion.count
+                    }
+                } else {
+                    insertion = "\n" + indent
+                    ms.replaceCharacters(in: range, with: insertion)
+                    textView.text = ms as String
+                    newCursor = range.location + insertion.count
+                }
+
+                textView.selectedRange = NSRange(location: newCursor, length: 0)
+                textViewDidChange(textView)
+                return false
+            }
+
+            // ---------------------------------------------------------------
+            // MARK: Bracket / Quote Auto-Close
+            // ---------------------------------------------------------------
+            let pairs: [(open: String, close: String)] = [
+                ("{", "}"), ("(", ")"), ("[", "]"),
+                ("\"", "\""), ("'", "'"), ("`", "`")
+            ]
+            let allClosers = Set(pairs.map { $0.close })
+
+            // Skip-over: if the user types the closing char and the next char is already that closer
+            if allClosers.contains(text) && range.length == 0 {
+                let nsText = textView.text as NSString
+                if range.location < nsText.length {
+                    let nextChar = nsText.substring(with: NSRange(location: range.location, length: 1))
+                    if nextChar == text {
+                        textView.selectedRange = NSRange(location: range.location + 1, length: 0)
+                        return false
+                    }
                 }
             }
-            
+
+            // Auto-insert matching closer when an opener is typed
+            if let pair = pairs.first(where: { $0.open == text }), range.length == 0 {
+                let nsText = textView.text as NSString
+
+                // For symmetric pairs (quotes), skip auto-close if we're already inside one.
+                // Heuristic: count unescaped occurrences of the same quote before cursor.
+                // Odd count → inside a string → don't double-close.
+                if text == "\"" || text == "'" || text == "`" {
+                    let before = nsText.substring(to: range.location)
+                    var count = 0
+                    var i = before.startIndex
+                    while i < before.endIndex {
+                        let c = String(before[i])
+                        if c == "\\" {
+                            // skip the escaped character
+                            let ni = before.index(after: i)
+                            if ni < before.endIndex { i = before.index(after: ni) } else { break }
+                            continue
+                        }
+                        if c == text { count += 1 }
+                        i = before.index(after: i)
+                    }
+                    if count % 2 == 1 {
+                        // Inside a string — just insert the raw character
+                        return true
+                    }
+                }
+
+                let insertion = text + pair.close
+                let ms = NSMutableString(string: nsText)
+                ms.replaceCharacters(in: range, with: insertion)
+                textView.text = ms as String
+                textView.selectedRange = NSRange(location: range.location + text.count, length: 0)
+                textViewDidChange(textView)
+                return false
+            }
+
             // Handle Escape key for autocomplete dismissal
             // Note: Escape key events are typically handled via key commands, not here
-            
+
             return true
         }
         
@@ -512,8 +719,92 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
         }
         
+        // MARK: - Bracket Matching Highlight
+
+        /// Returns the rect (in the text view's own coordinate space) for one UTF-16 character.
+        private func charRect(at offset: Int, in textView: TextView) -> CGRect? {
+            guard let textInput = textView as? UITextInput else { return nil }
+            guard
+                let start = textInput.position(from: textInput.beginningOfDocument, offset: offset),
+                let end   = textInput.position(from: start, offset: 1),
+                let tRange = textInput.textRange(from: start, to: end)
+            else { return nil }
+            return textInput.firstRect(for: tRange)
+        }
+
+        /// Walks the string to find the bracket that matches the one at `pos`.
+        private func matchingBracketOffset(in str: NSString, pos: Int) -> Int? {
+            let opens:  [unichar] = [
+                UInt16(UnicodeScalar("{").value),
+                UInt16(UnicodeScalar("(").value),
+                UInt16(UnicodeScalar("[").value)
+            ]
+            let closes: [unichar] = [
+                UInt16(UnicodeScalar("}").value),
+                UInt16(UnicodeScalar(")").value),
+                UInt16(UnicodeScalar("]").value)
+            ]
+            let ch = str.character(at: pos)
+            if let idx = opens.firstIndex(of: ch) {
+                let close = closes[idx]
+                var depth = 1; var i = pos + 1
+                while i < str.length {
+                    let c = str.character(at: i)
+                    if c == ch { depth += 1 } else if c == close { depth -= 1; if depth == 0 { return i } }
+                    i += 1
+                }
+            } else if let idx = closes.firstIndex(of: ch) {
+                let open = opens[idx]
+                var depth = 1; var i = pos - 1
+                while i >= 0 {
+                    let c = str.character(at: i)
+                    if c == ch { depth += 1 } else if c == open { depth -= 1; if depth == 0 { return i } }
+                    i -= 1
+                }
+            }
+            return nil
+        }
+
+        private func updateBracketHighlight(in textView: TextView) {
+            // Make sure the layer is installed
+            guard bracketHighlightLayer.superlayer != nil else { return }
+
+            let cursor = textView.selectedRange.location
+            let nsText = textView.text as NSString
+
+            let bracketChars: [unichar] = [
+                UInt16(UnicodeScalar("{").value), UInt16(UnicodeScalar("}").value),
+                UInt16(UnicodeScalar("(").value), UInt16(UnicodeScalar(")").value),
+                UInt16(UnicodeScalar("[").value), UInt16(UnicodeScalar("]").value)
+            ]
+
+            // Check character to the left of cursor, then to the right
+            var sourcePos: Int? = nil
+            for candidate in [cursor - 1, cursor] where candidate >= 0 && candidate < nsText.length {
+                if bracketChars.contains(nsText.character(at: candidate)) {
+                    sourcePos = candidate
+                    break
+                }
+            }
+
+            guard let src = sourcePos, let matchPos = matchingBracketOffset(in: nsText, pos: src) else {
+                bracketHighlightLayer.path = nil
+                return
+            }
+
+            let path = CGMutablePath()
+            let inset: CGFloat = 1.0
+            for offset in [src, matchPos] {
+                if let r = charRect(at: offset, in: textView) {
+                    path.addRoundedRect(in: r.insetBy(dx: inset, dy: inset),
+                                        cornerWidth: 2, cornerHeight: 2)
+                }
+            }
+            bracketHighlightLayer.path = path
+        }
+
         // MARK: - Cursor Position Calculation
-        
+
         private func updateCursorPosition(in textView: TextView) {
             MainActor.assumeIsolated {
                 let selectedRange = textView.selectedRange

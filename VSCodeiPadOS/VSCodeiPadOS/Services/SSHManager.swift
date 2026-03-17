@@ -55,7 +55,7 @@ enum SSHClientError: Error, LocalizedError {
     case invalidPrivateKey
     case unsupportedKeyType(String)
     case commandFailed(String)
-    case notImplemented
+    case notImplemented  // NOTE: No code in SSHManager.swift currently throws this error; reserved for future SSH features
     case portForwardFailed(String)
     case passphraseRequired
     
@@ -494,8 +494,9 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         
         // Detect RSA keys and warn — NIOSSH doesn't support RSA
         if trimmed.contains("BEGIN RSA PRIVATE KEY") {
-            // RSA keys cannot be used with NIOSSH
+            // RSA keys cannot be used with NIOSSH.
             // User should run: ssh-keygen -t ed25519
+            print("[SSHManager] ⚠️ RSA private key (PEM/PKCS#1 format) detected. RSA keys are NOT supported by the NIOSSH library. Authentication will fail. Please generate a supported key: ssh-keygen -t ed25519")
             return nil
         }
         
@@ -679,8 +680,10 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             }
             
         case "ssh-rsa", "rsa-sha2-256", "rsa-sha2-512":
-            // RSA keys are not supported by NIOSSH library
-            // Users should generate Ed25519 keys: ssh-keygen -t ed25519
+            // RSA keys are not supported by NIOSSH library.
+            // Users must generate a supported key instead:
+            //   ssh-keygen -t ed25519
+            print("[SSHManager] ⚠️ RSA key type '\(keyType)' is NOT supported by NIOSSH. Authentication will always fail with RSA keys. Please generate a supported key: ssh-keygen -t ed25519")
             return nil
             
         default:
@@ -791,7 +794,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             disconnect()
         }
         
-        await MainActor.run { self.currentConfig = config }
+        self.currentConfig = config
         
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.group = group
@@ -827,22 +830,18 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             ).get()
             
             self.channel = connection
-            await MainActor.run { self.isConnected = true }
+            self.isConnected = true
             
-            // Notify delegate and post notification on main thread
-            let delegate = self.delegate
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                delegate?.sshManagerDidConnect(self)
-                NotificationCenter.default.post(name: .sshDidConnect, object: self)
-            }
+            // Notify delegate and post notification (already on MainActor)
+            delegate?.sshManagerDidConnect(self)
+            NotificationCenter.default.post(name: .sshDidConnect, object: self)
             
             // Start interactive shell
             try await startInteractiveShell()
             
         } catch {
-            await MainActor.run { self.isConnected = false }
-            // Clean up leaked EventLoopGroup on failure
+            self.isConnected = false
+            // Clean up leaked EventLoopGroup on failure — must not block main thread
             let failedGroup = group
             self.group = nil
             DispatchQueue.global().async { try? failedGroup.syncShutdownGracefully() }
@@ -961,20 +960,21 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         shellChannel?.close(mode: .all, promise: nil)
         channel?.close(mode: .all, promise: nil)
-        try? group?.syncShutdownGracefully()
+        
+        // syncShutdownGracefully blocks — run it off the main thread
+        if let grp = group {
+            group = nil
+            DispatchQueue.global().async { try? grp.syncShutdownGracefully() }
+        }
         
         shellChannel = nil
         channel = nil
-        group = nil
         
-        let delegate = self.delegate
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.isConnected = false
-            self.currentConfig = nil
-            delegate?.sshManagerDidDisconnect(self, error: nil)
-            NotificationCenter.default.post(name: .sshDidDisconnect, object: nil)
-        }
+        // Already on @MainActor — set state directly
+        isConnected = false
+        currentConfig = nil
+        delegate?.sshManagerDidDisconnect(self, error: nil)
+        NotificationCenter.default.post(name: .sshDidDisconnect, object: nil)
     }
 
     
@@ -1106,8 +1106,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             throw SSHClientError.notConnected
         }
         
-        nonisolated(unsafe) let delegate = self.delegate
-        weak var weakManager: SSHManager? = self
+        let capturedManager: SSHManager = self
         
         let childChannel: Channel = try await channel.pipeline.handler(type: NIOSSHHandler.self).flatMap { sshHandler in
             let childPromise = channel.eventLoop.makePromise(of: Channel.self)
@@ -1117,12 +1116,11 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                 }
                 return childChannel.pipeline.addHandlers([
                     ShellDataHandler { text, isStderr in
-                        DispatchQueue.main.async {
-                            guard let manager = weakManager else { return }
+                        Task { @MainActor in
                             if isStderr {
-                                delegate?.sshManager(manager, didReceiveError: text)
+                                capturedManager.delegate?.sshManager(capturedManager, didReceiveError: text)
                             } else {
-                                delegate?.sshManager(manager, didReceiveOutput: text)
+                                capturedManager.delegate?.sshManager(capturedManager, didReceiveOutput: text)
                             }
                         }
                     }
@@ -1399,9 +1397,14 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     }
     
     deinit {
+        // deinit is implicitly nonisolated on @MainActor classes.
+        // @unchecked Sendable suppresses Sendable checking; accessing stored properties
+        // here is safe because deinit is called exactly once with no other references.
         shellChannel?.close(mode: .all, promise: nil)
         channel?.close(mode: .all, promise: nil)
-        try? group?.syncShutdownGracefully()
+        if let grp = group {
+            DispatchQueue.global().async { try? grp.syncShutdownGracefully() }
+        }
     }
 }
 

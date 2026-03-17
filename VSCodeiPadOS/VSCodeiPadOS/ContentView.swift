@@ -225,7 +225,7 @@ struct ContentView: View {
                     switch action {
                     case "showCommandPalette": editorCore.showCommandPalette = true
                     case "toggleTerminal": showTerminal.toggle()
-                    case "toggleSidebar": editorCore.toggleSidebar()
+                    case "toggleSidebar": HapticManager.impact(.light); editorCore.toggleSidebar()
                     case "showQuickOpen": editorCore.showQuickOpen = true
                     case "showGoToSymbol": editorCore.showGoToSymbol = true
                     case "showGoToLine": editorCore.showGoToLine = true
@@ -257,11 +257,11 @@ struct ContentView: View {
                 ) { _, action in
                     switch action {
                     case "newFile": editorCore.addTab()
-                    case "saveFile": editorCore.saveActiveTab()
+                    case "saveFile": HapticManager.impact(.light); editorCore.saveActiveTab()
                     case "closeTab": if let id = editorCore.activeTabId { editorCore.closeTab(id: id) }
                     case "showFind": editorCore.showSearch = true
                     case "showReplace": editorCore.showSearch = true; editorCore.showReplace = true
-                    case "saveAllFiles": editorCore.saveAllTabs()
+                    case "saveAllFiles": HapticManager.impact(.light); editorCore.saveAllTabs()
                     case "goToDefinition": editorCore.goToDefinitionAtCursor()
                     case "showGlobalSearch":
                         editorCore.focusedSidebarTab = 1
@@ -818,8 +818,11 @@ struct IDEEditorView: View {
         VStack(spacing: 0) {
             // Find/Replace bar
             if editorCore.showSearch {
-                FindReplaceView(viewModel: findViewModel)
-                    .background(theme.tabBarBackground)
+                FindReplaceView(viewModel: findViewModel, onDismiss: {
+                    editorCore.showSearch = false
+                    editorCore.showReplace = false
+                })
+                .background(theme.tabBarBackground)
             }
             
             BreadcrumbsView(editorCore: editorCore, tab: tab)
@@ -1017,8 +1020,16 @@ struct IDEEditorView: View {
         .onChange(of: editorCore.showReplace) { _, show in
             if show {
                 findViewModel.isReplaceMode = true
+                editorCore.showReplace = false  // consume the flag
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .hideSearch)) { _ in
+            if editorCore.showSearch {
+                editorCore.showSearch = false
+                findViewModel.clearSearch()
+            }
+        }
+
     }
     
     // Autocomplete insertion is handled by AutocompleteManager.acceptSuggestion(...)
@@ -1264,8 +1275,8 @@ struct IDEWelcomeView: View {
                             editorCore.showSidebar = true
                         }
                         WelcomeLink(icon: "network", title: "Connect to SSH Host...", shortcut: nil, theme: theme) {
-                            // Show terminal panel for SSH connection
-                            NotificationCenter.default.post(name: .toggleTerminal, object: nil)
+                            editorCore.focusedSidebarTab = 4
+                            withAnimation { editorCore.showSidebar = true }
                         }
                     }
                     .frame(width: 260)
@@ -1285,9 +1296,15 @@ struct IDEWelcomeView: View {
                         } else {
                             ForEach(recentFiles.recentFiles.prefix(8), id: \.absoluteString) { url in
                                 Button(action: {
-                                    let content = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-                                    editorCore.addTab(fileName: url.lastPathComponent, content: content, url: url)
-                                    RecentFileManager.shared.addRecentFile(url)
+                                    Task {
+                                        let content = await Task.detached {
+                                            (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                                        }.value
+                                        await MainActor.run {
+                                            editorCore.addTab(fileName: url.lastPathComponent, content: content, url: url)
+                                            RecentFileManager.shared.addRecentFile(url)
+                                        }
+                                    }
                                 }) {
                                     HStack(spacing: 8) {
                                         Image(systemName: url.hasDirectoryPath ? "folder.fill" : "doc.fill")

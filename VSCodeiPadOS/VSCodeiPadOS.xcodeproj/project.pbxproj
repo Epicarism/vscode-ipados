@@ -99,6 +99,7 @@
 		1140 /* FileHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2140 /* FileHelpers.swift */; };
 		1141 /* Notification+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2141 /* Notification+Search.swift */; };
 		1142 /* SSHManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2142 /* SSHManager.swift */; };
+		AA01BB02CC03DD04EE05FF07 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */; };
 		1143 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143 /* AppDelegate.swift */; };
 		1144 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2144 /* SceneDelegate.swift */; };
 		1145 /* NativeGitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2145 /* NativeGitReader.swift */; };
@@ -302,6 +303,7 @@
 		9002 /* AIAgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAgentTools.swift; sourceTree = "<group>"; };
 		9004 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Notification+Names.swift"; path = "Extensions/Notification+Names.swift"; sourceTree = "<group>"; };
 		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
+		AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticManager.swift; path = Utils/HapticManager.swift; sourceTree = "<group>"; };
 		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
 		9911 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsView.swift; sourceTree = "<group>"; };
 		9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionView.swift; path = Views/Editor/InlineSuggestionView.swift; sourceTree = "<group>"; };
@@ -339,6 +341,7 @@
 			children = (
 				9004 /* Notification+Names.swift */,
 				9102 /* AppLogger.swift */,
+				AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */,
 				2001 /* ContentView.swift */,
 				2099 /* Assets.xcassets */,
 				2100 /* test.wasm */,
@@ -707,6 +710,7 @@
 				88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */,
 				9003 /* Notification+Names.swift in Sources */,
 				9101 /* AppLogger.swift in Sources */,
+				AA01BB02CC03DD04EE05FF07 /* HapticManager.swift in Sources */,
 				1001 /* ContentView.swift in Sources */,
 				1002 /* VSCodeiPadOSApp.swift in Sources */,
 				1003 /* AppCommands.swift in Sources */,

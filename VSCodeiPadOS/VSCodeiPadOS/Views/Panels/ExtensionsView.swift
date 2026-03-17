@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Main Extensions View
 
@@ -15,6 +16,8 @@ struct ExtensionsPanel: View {
     @ObservedObject private var themeManager = ThemeManager.shared
     @State private var selectedExtensionId: String? = nil
     @State private var showingDetail: Bool = false
+    @State private var showingUninstallConfirm: Bool = false
+    @State private var pendingUninstallExtension: IDEExtension? = nil
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -52,6 +55,24 @@ struct ExtensionsPanel: View {
             Button("OK", role: .cancel) { manager.clearError() }
         } message: {
             Text(manager.lastError?.errorDescription ?? "Unknown error")
+        }
+        .confirmationDialog(
+            "Uninstall \"\(pendingUninstallExtension?.displayName ?? "")\"?",
+            isPresented: $showingUninstallConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Uninstall", role: .destructive) {
+                HapticManager.notification(.warning)
+                if let ext = pendingUninstallExtension {
+                    manager.uninstall(ext)
+                }
+                pendingUninstallExtension = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingUninstallExtension = nil
+            }
+        } message: {
+            Text("This will remove the extension and all its data.")
         }
     }
     
@@ -192,7 +213,8 @@ struct ExtensionsPanel: View {
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         if ext.isInstalled {
                             Button(role: .destructive) {
-                                manager.uninstall(ext)
+                                pendingUninstallExtension = ext
+                                showingUninstallConfirm = true
                             } label: {
                                 Label("Uninstall", systemImage: "trash")
                             }
