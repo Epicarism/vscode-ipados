@@ -860,7 +860,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             updateScrollPosition(textView)
         }
 
-        private var isApplyingHighlighting = false
+        /// Lock protecting `_isApplyingHighlighting` across threads.
+        private let highlightingLock = NSLock()
+        private var _isApplyingHighlighting = false
+        private var isApplyingHighlighting: Bool {
+            get { highlightingLock.lock(); defer { highlightingLock.unlock() }; return _isApplyingHighlighting }
+            set { highlightingLock.lock(); defer { highlightingLock.unlock() }; _isApplyingHighlighting = newValue }
+        }
         
         func applySyntaxHighlighting(to textView: UITextView) {
             // Guard against reentrancy - this can happen if attributedText assignment

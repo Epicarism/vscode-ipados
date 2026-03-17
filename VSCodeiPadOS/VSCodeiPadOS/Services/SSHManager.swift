@@ -496,7 +496,7 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         if trimmed.contains("BEGIN RSA PRIVATE KEY") {
             // RSA keys cannot be used with NIOSSH.
             // User should run: ssh-keygen -t ed25519
-            print("[SSHManager] ⚠️ RSA private key (PEM/PKCS#1 format) detected. RSA keys are NOT supported by the NIOSSH library. Authentication will fail. Please generate a supported key: ssh-keygen -t ed25519")
+            AppLogger.ssh.warning("RSA private key (PEM/PKCS#1 format) detected. RSA keys are NOT supported by the NIOSSH library. Authentication will fail. Please generate a supported key: ssh-keygen -t ed25519")
             return nil
         }
         
@@ -683,7 +683,7 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             // RSA keys are not supported by NIOSSH library.
             // Users must generate a supported key instead:
             //   ssh-keygen -t ed25519
-            print("[SSHManager] ⚠️ RSA key type '\(keyType)' is NOT supported by NIOSSH. Authentication will always fail with RSA keys. Please generate a supported key: ssh-keygen -t ed25519")
+            AppLogger.ssh.warning("RSA key type '\(keyType)' is NOT supported by NIOSSH. Authentication will always fail with RSA keys. Please generate a supported key: ssh-keygen -t ed25519")
             return nil
             
         default:
@@ -866,7 +866,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                 }
             }
             if isRSAPEM || isRSAOpenSSH {
-                print("[SSHManager] ⚠️ RSA key detected for host \(config.host). RSA is NOT supported by NIOSSH. Surfacing user-facing error.")
+                AppLogger.ssh.warning("RSA key detected for host \(config.host). RSA is NOT supported by NIOSSH. Surfacing user-facing error.")
                 throw SSHClientError.unsupportedKeyType("RSA")
             }
         }

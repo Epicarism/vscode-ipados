@@ -964,7 +964,9 @@ final class GitManager: ObservableObject {
         }
         
         // 3. Collect objects to send (walk from local HEAD to remote SHA)
-        let reader = NativeGitReader(gitDir: gitDir)
+        guard let reader = NativeGitReader(repositoryURL: repoURL) else {
+            throw GitManagerError.invalidRepository
+        }
         let objectSHAs = collectObjectsForPush(reader: reader, localSHA: localSHA, remoteSHA: remoteSHA)
         
         guard !objectSHAs.isEmpty else {
@@ -1040,7 +1042,7 @@ final class GitManager: ObservableObject {
             guard let obj = reader.readObject(sha: sha) else { continue }
             objectSHAs.insert(sha)
             
-            if obj.type == "commit" {
+            if obj.type == .commit {
                 // Parse commit to get tree and parents
                 if let content = String(data: obj.data, encoding: .utf8) {
                     for line in content.components(separatedBy: "\n") {
@@ -1069,7 +1071,7 @@ final class GitManager: ObservableObject {
         guard let obj = reader.readObject(sha: sha) else { return }
         objects.insert(sha)
         
-        if obj.type == "tree" {
+        if obj.type == .tree {
             // Parse tree entries
             var offset = 0
             let data = obj.data
@@ -1111,7 +1113,7 @@ final class GitManager: ObservableObject {
                 throw GitManagerError.commandFailed(args: "push", exitCode: 1, message: "Cannot read object \(sha)")
             }
             
-            let typeNum = typeMap[obj.type] ?? 3 // default to blob
+            let typeNum = typeMap[obj.type.rawValue] ?? 3 // default to blob
             let rawData = obj.data
             
             // Compress the data
@@ -2233,7 +2235,7 @@ final class GitManager: ObservableObject {
     private func computeGitObjectSHA(type: String, data: Data) -> String {
         let header = "\(type) \(data.count)\0"
         guard let headerData = header.data(using: .utf8) else { return "" }
-        var objectData = headerData + data
+        let objectData = headerData + data
         
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
         objectData.withUnsafeBytes { buf in
@@ -2396,7 +2398,7 @@ final class GitManager: ObservableObject {
         // Build git object: "<type> <size>\0<data>"
         let header = "\(type) \(data.count)\0"
         guard let headerData = header.data(using: .utf8) else { return }
-        var objectData = headerData + data
+        let objectData = headerData + data
         
         // SHA1 hash
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA1_DIGEST_LENGTH))
@@ -2519,7 +2521,7 @@ final class GitManager: ObservableObject {
     /// - Parameter file: Path to the file relative to repository root
     /// - Returns: Array of BlameLine with commit info for each line
     func blame(file: String) async throws -> [BlameLine] {
-        guard let repoURL = workingDirectory,
+        guard let _ = workingDirectory,
               let reader = nativeReader else {
             throw GitManagerError.noRepository
         }

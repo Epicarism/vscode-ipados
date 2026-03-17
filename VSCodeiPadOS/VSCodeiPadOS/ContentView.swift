@@ -87,13 +87,19 @@ struct ContentView: View {
             .modifier(NavigationHandlers(editorCore: editorCore, showTerminal: $showTerminal, showSettings: $showSettings))
             .modifier(EditorActionHandlers(editorCore: editorCore))
             .modifier(CursorAndZoomHandlers(editorCore: editorCore))
-            .modifier(TimelineHandlers(editorCore: editorCore))
+            .modifier(UndoRedoSelectAllHandlers())
             .environmentObject(themeManager)
             .environmentObject(editorCore)
             .onChange(of: horizontalSizeClass) { _, newValue in
                 if newValue == .compact {
                     withAnimation { editorCore.showSidebar = false }
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .cloneRepository)) { _ in
+                showCloneSheet = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .newTerminal)) { _ in
+                showTerminal = true
             }
             .onAppear {
                 if horizontalSizeClass == .compact {
@@ -459,8 +465,26 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Undo / Redo / Select All Handlers
+    
+    private struct UndoRedoSelectAllHandlers: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .onReceive(NotificationCenter.default.publisher(for: .performUndo)) { _ in
+                    UIApplication.shared.sendAction(#selector(UndoManager.undo), to: nil, from: nil, for: nil)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .performRedo)) { _ in
+                    UIApplication.shared.sendAction(#selector(UndoManager.redo), to: nil, from: nil, for: nil)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .selectAll)) { _ in
+                    UIApplication.shared.sendAction(#selector(UIResponder.selectAll(_:)), to: nil, from: nil, for: nil)
+                }
+        }
+    }
+    
     // MARK: - Extracted View Components
     
+
     @StateObject private var tunnelManager = TunnelManager.shared
     
     @ViewBuilder
@@ -1132,6 +1156,7 @@ struct IDEEditorView: View {
             }
         }
 
+
     }
     
     // Autocomplete insertion is handled by AutocompleteManager.acceptSuggestion(...)
@@ -1150,38 +1175,68 @@ struct LineNumbers: View {
     var filePath: String? = nil
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
+    private static let viewportBuffer = 10
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(visibleLineIndices, id: \.self) { lineIndex in
-                    lineRow(for: lineIndex)
+        GeometryReader { geometry in
+            let viewportHeight = geometry.size.height
+            let firstVisRow = max(0, Int(floor((scrollOffset - 8) / lineHeight)) - Self.viewportBuffer)
+            let maxRows = Int(ceil(viewportHeight / lineHeight)) + 2 * Self.viewportBuffer
+            let indices = self.computeVisibleLineIndices(firstRow: firstVisRow, maxRows: maxRows)
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(indices, id: \.self) { lineIndex in
+                        lineRow(for: lineIndex)
+                    }
                 }
+                .padding(.top, 8)
+                .offset(y: CGFloat(firstVisRow) * lineHeight - scrollOffset)
             }
-            .padding(.top, 8)
-            .offset(y: -scrollOffset)
+            .scrollDisabled(true)
         }
-        .scrollDisabled(true)
     }
 
-    // Compute visible lines, skipping those hidden by folds
-    private var visibleLineIndices: [Int] {
+    /// Compute visible line indices — O(viewport) without folds, early-terminating with folds.
+    /// Replaces the previous O(n) implementation that iterated all lines every scroll frame.
+    private func computeVisibleLineIndices(firstRow: Int, maxRows: Int) -> [Int] {
+        let lastRow = firstRow + maxRows
+
+        // Fast path: no fold manager means direct 1:1 line-to-row mapping — O(viewport)
+        guard let fm = foldingManager else {
+            let first = max(0, firstRow)
+            let last = min(totalLines - 1, lastRow)
+            guard first <= last else { return [] }
+            return Array(first...last)
+        }
+
+        // Fold-aware path: iterate lines counting visual rows, with early termination
         var indices: [Int] = []
+        indices.reserveCapacity(maxRows + 1)
+        var visualRow = 0
         var skipUntil: Int? = nil
+
         for i in 0..<totalLines {
             if let skip = skipUntil {
-                if i <= skip {
-                    continue
-                } else {
-                    skipUntil = nil
-                }
+                if i <= skip { continue }
+                else { skipUntil = nil }
             }
-            indices.append(i)
+
+            if visualRow >= firstRow {
+                indices.append(i)
+            }
+
             // If this line starts a folded region, skip to endLine
-            if let fm = foldingManager, let region = fm.getRegion(at: i), region.isFolded {
+            if let region = fm.getRegion(at: i), region.isFolded {
                 skipUntil = region.endLine
             }
+
+            visualRow += 1
+
+            // Early termination: past the visible range
+            if visualRow > lastRow { break }
         }
+
         return indices
     }
 

@@ -224,6 +224,9 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Reset cursor to start for new file
             textView.selectedRange = NSRange(location: 0, length: 0)
             
+            // Rebuild newline offset cache for the new file
+            context.coordinator.rebuildNewlineOffsets(for: text as NSString)
+            
             // Update line count
             DispatchQueue.main.async {
                 self.totalLines = self.countLines(in: text)
@@ -240,6 +243,9 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             // CRITICAL: Re-apply theme AFTER setState - setState may reset rendering state
             textView.theme = makeRunestoneTheme()
+            
+            // Rebuild newline offset cache for externally changed text
+            context.coordinator.rebuildNewlineOffsets(for: text as NSString)
             
             // Update line count
             DispatchQueue.main.async {
@@ -431,6 +437,15 @@ struct RunestoneEditorView: UIViewRepresentable {
         private var forceSyncObserver: NSObjectProtocol?
         private var editorActionObservers: [NSObjectProtocol] = []
 
+        // MARK: - Newline Index Cache for O(log n) Cursor Position
+        /// Sorted array of character offsets where each newline ('\n') occurs.
+        /// Built once on file load / setState, updated incrementally on edits.
+        /// Binary-searched in updateCursorPosition to find line number in O(log n).
+        private var newlineOffsets: [Int] = []
+        /// The text length when newlineOffsets was last fully rebuilt.
+        /// Used to detect when a full rebuild is needed (e.g. file switch).
+        private var newlineOffsetsTextLength: Int = -1
+
         // MARK: - Bracket Matching Highlight
         /// Overlay layer used to draw subtle background boxes on matched bracket pairs.
         private let bracketHighlightLayer: CAShapeLayer = {
@@ -466,7 +481,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Listen for editor action notifications (keyboard shortcuts)
             let actions: [Notification.Name] = [
                 .toggleComment, .deleteLine, .moveLineUp, .moveLineDown,
-                .duplicateLineUp, .duplicateLineDown, .addNextOccurrence, .selectAllOccurrences
+                .duplicateLineUp, .duplicateLineDown, .addNextOccurrence, .selectAllOccurrences,
+                .selectLine, .indentLines, .outdentLines, .joinLines
             ]
             for name in actions {
                 editorActionObservers.append(
@@ -568,6 +584,87 @@ struct RunestoneEditorView: UIViewRepresentable {
         func cancelPendingTextSync() {
             textSyncWorkItem?.cancel()
             textSyncWorkItem = nil
+        }
+
+        // MARK: - Newline Index Helpers
+
+        /// Fully rebuild the newline offset cache from scratch.
+        /// Called on file load, file switch, or when the cache is invalidated.
+        func rebuildNewlineOffsets(for text: NSString) {
+            newlineOffsets.removeAll()
+            var searchRange = NSRange(location: 0, length: text.length)
+            while searchRange.location < text.length {
+                let found = text.range(of: "\n", range: searchRange)
+                if found.location == NSNotFound { break }
+                newlineOffsets.append(found.location)
+                searchRange.location = found.location + 1
+                searchRange.length = text.length - searchRange.location
+            }
+            newlineOffsetsTextLength = text.length
+        }
+
+        /// Incrementally update the newline offset cache after a text edit.
+        /// `editRange` is the range that was replaced, `replacementLength` is the length
+        /// of the replacement string. This avoids a full O(n) rescan on every keystroke.
+        func updateNewlineOffsets(editRange: NSRange, replacementText: NSString, in fullText: NSString) {
+            let editEnd = editRange.location + editRange.length
+            let delta = replacementText.length - editRange.length
+
+            // 1. Remove offsets that fell inside the deleted range
+            //    Find the index range of newlines within [editRange.location, editEnd)
+            let removeStart = lowerBound(for: editRange.location)
+            let removeEnd = lowerBound(for: editEnd)
+            if removeStart < removeEnd {
+                newlineOffsets.removeSubrange(removeStart..<removeEnd)
+            }
+
+            // 2. Shift all offsets after the edit by delta
+            if delta != 0 {
+                for i in removeStart..<newlineOffsets.count {
+                    newlineOffsets[i] += delta
+                }
+            }
+
+            // 3. Insert new newline offsets from the replacement text
+            if replacementText.length > 0 {
+                var insertOffsets: [Int] = []
+                var sr = NSRange(location: 0, length: replacementText.length)
+                while sr.location < replacementText.length {
+                    let found = replacementText.range(of: "\n", range: sr)
+                    if found.location == NSNotFound { break }
+                    insertOffsets.append(editRange.location + found.location)
+                    sr.location = found.location + 1
+                    sr.length = replacementText.length - sr.location
+                }
+                if !insertOffsets.isEmpty {
+                    // Insert at the correct position (removeStart) to maintain sorted order
+                    newlineOffsets.insert(contentsOf: insertOffsets, at: removeStart)
+                }
+            }
+
+            newlineOffsetsTextLength = fullText.length + delta
+        }
+
+        /// Binary search: find index of first element >= value
+        private func lowerBound(for value: Int) -> Int {
+            var lo = 0, hi = newlineOffsets.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if newlineOffsets[mid] < value {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            return lo
+        }
+
+        /// Find line number (1-based) for a given character offset using binary search. O(log n).
+        private func lineNumber(forOffset offset: Int) -> Int {
+            // The line number is 1 + (number of newlines before offset)
+            // lowerBound gives us the first newline at or after offset,
+            // so the count of newlines strictly before offset is lowerBound(offset).
+            return lowerBound(for: offset) + 1
         }
 
         // MARK: - Code Folding
@@ -914,6 +1011,12 @@ struct RunestoneEditorView: UIViewRepresentable {
                 return false
             }
 
+            // Incrementally update newline cache for the edit Runestone will apply
+            updateNewlineOffsets(
+                editRange: range,
+                replacementText: text as NSString,
+                in: (textView.text as NSString)  // pre-edit text; updateNewlineOffsets accounts for delta
+            )
             return true
         }
         
@@ -1019,27 +1122,36 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let text = textView.text as NSString
                 let cursorLocation = selectedRange.location
                 
-                var lineNumber = 1
-                var columnNumber = 1
-                
-                // Get line range for cursor position - O(1) via NSString
-                let lineRange = text.lineRange(for: NSRange(location: cursorLocation, length: 0))
-                columnNumber = cursorLocation - lineRange.location + 1
-                
-                // Count newlines before this line's start using NSString range search - O(lines) not O(chars)
-                let lineStart = lineRange.location
-                var searchPos = 0
-                while searchPos < lineStart {
-                    let r = text.range(of: "\n", options: [], range: NSRange(location: searchPos, length: lineStart - searchPos))
-                    if r.location == NSNotFound { break }
-                    lineNumber += 1
-                    searchPos = r.location + r.length
+                // Lazily rebuild the newline cache if it hasn't been built yet
+                // (e.g. first cursor move after app launch, or after an external
+                // text replacement that bypassed shouldChangeTextIn)
+                if newlineOffsetsTextLength != text.length {
+                    rebuildNewlineOffsets(for: text)
                 }
+                
+                // O(log n) line number via binary search on cached newline offsets
+                let line = lineNumber(forOffset: cursorLocation)
+                
+                // Column: distance from the start of the current line
+                // The start of line N (1-based) is either 0 (line 1) or
+                // newlineOffsets[N-2] + 1 (the character after the previous newline)
+                let lineStartOffset: Int
+                if line <= 1 {
+                    lineStartOffset = 0
+                } else {
+                    let idx = line - 2  // index into newlineOffsets for previous line's newline
+                    if idx < newlineOffsets.count {
+                        lineStartOffset = newlineOffsets[idx] + 1
+                    } else {
+                        lineStartOffset = 0
+                    }
+                }
+                let columnNumber = cursorLocation - lineStartOffset + 1
                 
                 // Update bindings
                 parent.cursorIndex = cursorLocation
-                parent.currentLineNumber = lineNumber
-                parent.currentColumn = columnNumber
+                parent.currentLineNumber = line
+                parent.currentColumn = max(1, columnNumber)
             }
         }
         
@@ -1056,6 +1168,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             case .duplicateLineDown: performDuplicateLine(textView, above: false)
             case .addNextOccurrence: performAddNextOccurrence(textView)
             case .selectAllOccurrences: performSelectAllOccurrences(textView)
+            case .selectLine: performSelectLine(textView)
+            case .indentLines: performIndentLines(textView)
+            case .outdentLines: performOutdentLines(textView)
+            case .joinLines: performJoinLines(textView)
             default: break
             }
         }
@@ -1345,6 +1461,128 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Without true multi-cursor, jump to last occurrence
             textView.selectedRange = lastFound
         }
+        
+        private func performSelectLine(_ textView: TextView) {
+            let text = textView.text as NSString
+            let lineRange = text.lineRange(for: textView.selectedRange)
+            textView.selectedRange = lineRange
+        }
+        
+        private func performIndentLines(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            let linesText = text.substring(with: lineRange)
+            var lines = linesText.components(separatedBy: "\n")
+            
+            let hadTrailingNewline = linesText.hasSuffix("\n")
+            if hadTrailingNewline && lines.last == "" { lines.removeLast() }
+            
+            let indent = "    " // 4 spaces
+            lines = lines.map { line in
+                if line.trimmingCharacters(in: .whitespaces).isEmpty { return line }
+                return indent + line
+            }
+            
+            var newText = lines.joined(separator: "\n")
+            if hadTrailingNewline { newText += "\n" }
+            
+            let fullText = NSMutableString(string: textView.text)
+            fullText.replaceCharacters(in: lineRange, with: newText)
+            textView.text = fullText as String
+            
+            // Adjust selection to cover the indented lines
+            let lengthDiff = newText.count - linesText.count
+            textView.selectedRange = NSRange(
+                location: selectedRange.location + indent.count,
+                length: max(0, selectedRange.length + lengthDiff - indent.count)
+            )
+            textViewDidChange(textView)
+        }
+        
+        private func performOutdentLines(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: selectedRange)
+            let linesText = text.substring(with: lineRange)
+            var lines = linesText.components(separatedBy: "\n")
+            
+            let hadTrailingNewline = linesText.hasSuffix("\n")
+            if hadTrailingNewline && lines.last == "" { lines.removeLast() }
+            
+            // Track how many chars removed from the first line (for cursor adjustment)
+            var firstLineRemoved = 0
+            var totalRemoved = 0
+            
+            lines = lines.enumerated().map { (index, line) in
+                var removed = 0
+                var result = line
+                // Remove up to 4 leading spaces or 1 leading tab
+                if result.hasPrefix("\t") {
+                    result = String(result.dropFirst())
+                    removed = 1
+                } else {
+                    while removed < 4 && result.hasPrefix(" ") {
+                        result = String(result.dropFirst())
+                        removed += 1
+                    }
+                }
+                if index == 0 { firstLineRemoved = removed }
+                totalRemoved += removed
+                return result
+            }
+            
+            guard totalRemoved > 0 else { return } // Nothing to outdent
+            
+            var newText = lines.joined(separator: "\n")
+            if hadTrailingNewline { newText += "\n" }
+            
+            let fullText = NSMutableString(string: textView.text)
+            fullText.replaceCharacters(in: lineRange, with: newText)
+            textView.text = fullText as String
+            
+            // Adjust selection
+            let newLocation = max(lineRange.location, selectedRange.location - firstLineRemoved)
+            let lengthDiff = newText.count - linesText.count
+            textView.selectedRange = NSRange(
+                location: newLocation,
+                length: max(0, selectedRange.length + lengthDiff + firstLineRemoved)
+            )
+            textViewDidChange(textView)
+        }
+        
+        private func performJoinLines(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+            
+            let lineEnd = lineRange.location + lineRange.length
+            guard lineEnd < text.length else { return } // No next line to join
+            
+            // Find the newline at the end of the current line and remove it,
+            // along with leading whitespace on the next line, replacing with a single space.
+            let nextLineRange = text.lineRange(for: NSRange(location: lineEnd, length: 0))
+            let nextLineText = text.substring(with: nextLineRange)
+            let trimmedNextLine = nextLineText.replacingOccurrences(of: "^\\s+", with: "", options: .regularExpression)
+            
+            // Current line without its trailing newline
+            var currentLineText = text.substring(with: lineRange)
+            if currentLineText.hasSuffix("\n") {
+                currentLineText = String(currentLineText.dropLast())
+            }
+            
+            // Join with a single space (unless next line is empty)
+            let joined = trimmedNextLine.isEmpty ? currentLineText + "\n" : currentLineText + " " + trimmedNextLine
+            
+            let combinedRange = NSUnionRange(lineRange, nextLineRange)
+            let fullText = NSMutableString(string: textView.text)
+            fullText.replaceCharacters(in: combinedRange, with: joined)
+            textView.text = fullText as String
+            
+            // Place cursor at the join point
+            textView.selectedRange = NSRange(location: currentLineText.count, length: 0)
+            textViewDidChange(textView)
+        }
     }
 }
 
@@ -1481,10 +1719,6 @@ class RunestoneEditorTheme: Runestone.Theme {
         // Map TreeSitter highlight names to colors
         // See: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#highlights
         let highlightName = rawHighlightName.lowercased()
-        
-        #if DEBUG
-        AppLogger.editor.debug("HIGHLIGHT: '\(rawHighlightName, privacy: .public)'")
-        #endif
         
         // Keywords
         if highlightName.contains("keyword") {

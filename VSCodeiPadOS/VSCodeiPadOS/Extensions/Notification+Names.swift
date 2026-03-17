@@ -241,6 +241,14 @@ extension Notification.Name {
     static let duplicateLineDown = Notification.Name("DuplicateLineDown")
     /// Format the active document.
     static let formatDocument = Notification.Name("FormatDocument")
+    /// Select the entire current line.
+    static let selectLine = Notification.Name("SelectLine")
+    /// Indent the current line(s).
+    static let indentLines = Notification.Name("IndentLines")
+    /// Outdent (un-indent) the current line(s).
+    static let outdentLines = Notification.Name("OutdentLines")
+    /// Join the current line with the next line.
+    static let joinLines = Notification.Name("JoinLines")
 
     // MARK: - Timeline
 

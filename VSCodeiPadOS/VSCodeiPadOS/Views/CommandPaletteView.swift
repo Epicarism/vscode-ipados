@@ -378,7 +378,7 @@ struct CommandPaletteView: View {
                                 isRecent: recentManager.recentCommands.contains(command.name)
                             )
                             .id(index)
-                            .accessibilityLabel("\(command.name), \(command.category.rawValue) command\(command.shortcut != nil ? ", shortcut \(command.shortcut!)" : "")\(recentManager.recentCommands.contains(command.name) ? ", recently used" : "")")
+                            .accessibilityLabel("\(command.name), \(command.category.rawValue) command\(command.shortcut != nil ? ", shortcut \(command.shortcut ?? "")" : "")\(recentManager.recentCommands.contains(command.name) ? ", recently used" : "")")
                             .accessibilityHint("Double-tap to execute \(command.name).")
                             .accessibilityAddTraits(.isButton)
                             .onTapGesture {

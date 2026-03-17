@@ -327,6 +327,10 @@ class EditorCore: ObservableObject {
     /// Retained SFTP manager for in-flight remote saves (prevents ARC deallocation before callback)
     private var activeSFTPManager: SFTPManager?
 
+    /// Serializes save dispatches — cancels any pending save when a new one is requested,
+    /// preventing concurrent saves from interleaving and corrupting/losing data.
+    private var pendingSaveWorkItem: DispatchWorkItem?
+
     var activeTab: Tab? {
         tabs.first { $0.id == activeTabId }
     }
@@ -1311,12 +1315,18 @@ mod tests {
         // Force the editor view to sync any pending text changes immediately
         NotificationCenter.default.post(name: .forceEditorSync, object: nil)
 
+        // Cancel any previously scheduled save to prevent concurrent/duplicate saves.
+        pendingSaveWorkItem?.cancel()
+
         // Brief delay to allow the sync notification to be processed by the editor view
         // before we read the (now-updated) tab content. 50ms provides enough time for
         // the synchronous notification handler to complete on the main run loop.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.pendingSaveWorkItem = nil
             self?._performSave(tabId: capturedTabId, index: capturedIndex)
         }
+        pendingSaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: workItem)
     }
 
     private func _performSave(tabId: UUID? = nil, index: Int? = nil) {

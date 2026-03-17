@@ -140,6 +140,19 @@ class KeyCommandController: UIViewController {
             ("Duplicate Line Up", UIKeyCommand.inputUpArrow, [.shift, .alternate], #selector(cmdDuplicateLineUp)),
             ("Duplicate Line Down", UIKeyCommand.inputDownArrow, [.shift, .alternate], #selector(cmdDuplicateLineDown)),
             ("Format Document", "f", [.shift, .alternate], #selector(cmdFormatDocument)),
+            // Undo/Redo (as fallback - UIKit handles these natively, but add explicit ones)
+            ("Undo", "z", [.command], #selector(cmdUndo)),
+            ("Redo", "z", [.command, .shift], #selector(cmdRedo)),
+            // Select Line
+            ("Select Line", "l", [.control], #selector(cmdSelectLine)),
+            // Indent/Outdent
+            ("Indent Line", "]", [.command], #selector(cmdIndentLines)),
+            ("Outdent Line", "[", [.command], #selector(cmdOutdentLines)),
+            // Join Lines
+            ("Join Lines", "j", [.control], #selector(cmdJoinLines)),
+            // Fold/Unfold All
+            ("Fold All", "0", [.command, .shift], #selector(cmdFoldAll)),
+            ("Unfold All", "9", [.command, .shift], #selector(cmdUnfoldAll)),
             
             // MARK: - Panels
             ("Search in Files", "f", [.command, .shift], #selector(cmdSearchInFiles)),
@@ -262,7 +275,16 @@ class KeyCommandController: UIViewController {
     @objc func cmdFormatDocument() {
         NotificationCenter.default.post(name: .formatDocument, object: nil)
     }
+    @objc func cmdUndo() { NotificationCenter.default.post(name: .performUndo, object: nil) }
+    @objc func cmdRedo() { NotificationCenter.default.post(name: .performRedo, object: nil) }
+    @objc func cmdSelectLine() { NotificationCenter.default.post(name: .selectLine, object: nil) }
+    @objc func cmdIndentLines() { NotificationCenter.default.post(name: .indentLines, object: nil) }
+    @objc func cmdOutdentLines() { NotificationCenter.default.post(name: .outdentLines, object: nil) }
+    @objc func cmdJoinLines() { NotificationCenter.default.post(name: .joinLines, object: nil) }
+    @objc func cmdFoldAll() { NotificationCenter.default.post(name: .collapseAllFolds, object: nil) }
+    @objc func cmdUnfoldAll() { NotificationCenter.default.post(name: .expandAllFolds, object: nil) }
     
+
     // MARK: - Panels
     
     @objc func cmdSearchInFiles() {

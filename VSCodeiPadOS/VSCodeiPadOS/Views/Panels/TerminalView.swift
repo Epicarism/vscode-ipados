@@ -598,6 +598,9 @@ extension TerminalTab: Equatable {}
 
     init() {
         addTab() // start with one
+        NotificationCenter.default.addObserver(forName: .clearTerminal, object: nil, queue: .main) { [weak self] _ in
+            self?.activePane?.clear()
+        }
     }
 
     func addTab() {
