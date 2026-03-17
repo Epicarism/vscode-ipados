@@ -36,6 +36,7 @@ struct GitView: View {
                 if gitManager.isLoading {
                     ProgressView()
                         .scaleEffect(0.6)
+                        .accessibilityLabel("Loading git status")
                 }
                 
                 Button(action: refreshGit) {
@@ -44,12 +45,16 @@ struct GitView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(gitManager.isLoading)
+                .accessibilityLabel("Refresh")
+                .accessibilityHint("Double tap to refresh git status")
                 
                 Button(action: { loadGitConfig(); showGitConfig = true }) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Git settings")
+                .accessibilityHint("Double tap to configure git settings")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -71,6 +76,8 @@ struct GitView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Branch: \(gitManager.currentBranch)")
+                .accessibilityHint("Double tap to switch branch")
                 
                 Spacer()
                 
@@ -84,6 +91,7 @@ struct GitView: View {
                             }
                             .font(.system(size: 10))
                             .foregroundColor(.orange)
+                            .accessibilityLabel("\(gitManager.aheadCount) commit\(gitManager.aheadCount == 1 ? "" : "s") ahead of remote")
                         }
                         if gitManager.behindCount > 0 {
                             HStack(spacing: 2) {
@@ -92,8 +100,11 @@ struct GitView: View {
                             }
                             .font(.system(size: 10))
                             .foregroundColor(.blue)
+                            .accessibilityLabel("\(gitManager.behindCount) commit\(gitManager.behindCount == 1 ? "" : "s") behind remote")
                         }
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Sync status: \(gitManager.aheadCount) ahead, \(gitManager.behindCount) behind")
                 }
             }
             .padding(.horizontal, 12)
@@ -128,6 +139,8 @@ struct GitView: View {
                     .disabled(!canCommit || isOperationInProgress)
                     .buttonStyle(.plain)
                     .keyboardShortcut(.return, modifiers: .command)
+                    .accessibilityLabel("Commit changes")
+                    .accessibilityHint(canCommit ? "Double tap to commit staged changes" : "Add a commit message and stage changes to commit")
                     
                     Menu {
                         Button(action: { stageAll() }) {
@@ -141,6 +154,8 @@ struct GitView: View {
                             .font(.system(size: 16))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("More commit actions")
+                    .accessibilityHint("Double tap for stage all or commit and push")
                 }
             }
             .padding(12)
@@ -238,6 +253,8 @@ struct GitView: View {
                 .background(Color.red.opacity(0.1))
                 .cornerRadius(6)
                 .padding(.horizontal, 12)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Git error: \(error)")
             }
             
             Divider()
@@ -257,6 +274,8 @@ struct GitView: View {
                 .font(.system(size: 11))
                 .buttonStyle(.plain)
                 .disabled(isOperationInProgress)
+                .accessibilityLabel("Pull changes")
+                .accessibilityHint(gitManager.behindCount > 0 ? "Double tap to pull \(gitManager.behindCount) commit\(gitManager.behindCount == 1 ? "" : "s") from remote" : "Double tap to pull changes from remote")
                 
                 Button(action: pushChanges) {
                     HStack(spacing: 4) {
@@ -271,6 +290,8 @@ struct GitView: View {
                 .font(.system(size: 11))
                 .buttonStyle(.plain)
                 .disabled(isOperationInProgress)
+                .accessibilityLabel("Push changes")
+                .accessibilityHint(gitManager.aheadCount > 0 ? "Double tap to push \(gitManager.aheadCount) commit\(gitManager.aheadCount == 1 ? "" : "s") to remote" : "Double tap to push changes to remote")
                 
                 Button(action: fetchChanges) {
                     Image(systemName: "arrow.triangle.2.circlepath")
@@ -278,6 +299,8 @@ struct GitView: View {
                 .font(.system(size: 11))
                 .buttonStyle(.plain)
                 .disabled(isOperationInProgress)
+                .accessibilityLabel("Fetch")
+                .accessibilityHint("Double tap to fetch from remote without merging")
                 
                 Spacer()
             }
@@ -335,6 +358,8 @@ struct GitView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(count) item\(count == 1 ? "" : "s")")
     }
     
     private func changeRow(_ entry: GitStatusEntry, isStaged: Bool) -> some View {
@@ -344,6 +369,7 @@ struct GitView: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundColor(entry.kind.color)
                 .frame(width: 16)
+                .accessibilityHidden(true)
             
             // File name
             Text(entry.path.components(separatedBy: "/").last ?? entry.path)
@@ -360,6 +386,8 @@ struct GitView: View {
                         .foregroundColor(.red)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Unstage \(entry.path.components(separatedBy: "/").last ?? entry.path)")
+                .accessibilityHint("Double tap to unstage this file")
             } else {
                 Button(action: { stageFile(entry.path) }) {
                     Image(systemName: "plus")
@@ -367,12 +395,17 @@ struct GitView: View {
                         .foregroundColor(.green)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Stage \(entry.path.components(separatedBy: "/").last ?? entry.path)")
+                .accessibilityHint("Double tap to stage this file")
             }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .background(selectedEntry?.id == entry.id ? Color.accentColor.opacity(0.2) : Color.clear)
         .cornerRadius(4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(entry.kind.rawValue), \(entry.path.components(separatedBy: "/").last ?? entry.path), \(isStaged ? "staged" : "unstaged")")
+        .accessibilityHint("Double tap to view diff")
         .onTapGesture {
             selectedEntry = entry
             showingDiffEntry = entry
@@ -429,6 +462,8 @@ struct GitView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.yellow.opacity(0.1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Warning: \(gitManager.mergeConflicts.count) merge conflict\(gitManager.mergeConflicts.count == 1 ? "" : "s") detected")
     }
     
     private func conflictRow(_ path: String) -> some View {
@@ -437,6 +472,7 @@ struct GitView: View {
                 .font(.system(size: 10))
                 .foregroundColor(.yellow)
                 .frame(width: 16)
+                .accessibilityHidden(true)
             
             Text(path.components(separatedBy: "/").last ?? path)
                 .font(.system(size: 12))
@@ -467,11 +503,15 @@ struct GitView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Resolve conflict options for \(path.components(separatedBy: "/").last ?? path)")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .background(Color.yellow.opacity(0.08))
         .cornerRadius(4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Merge conflict in \(path.components(separatedBy: "/").last ?? path)")
+        .accessibilityHint("Double tap for resolve options")
         .contextMenu {
             Button(action: {
                 Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .ours) } }
@@ -525,6 +565,8 @@ struct GitView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Commit \(commit.shortSHA): \(commit.message), by \(commit.author)")
     }
     
     // MARK: - Actions
@@ -599,7 +641,7 @@ struct GitView: View {
         } catch {
             errorMessage = error.localizedDescription
             showError = true
-            print("[GitView] Git operation failed: \(error.localizedDescription)")
+            AppLogger.git.debug("[GitView] Git operation failed: \(error.localizedDescription)")
         }
     }
     
@@ -654,6 +696,8 @@ struct BranchPickerSheet: View {
                                 createBranch()
                             }
                             .disabled(newBranchName.isEmpty)
+                            .accessibilityLabel("Create branch")
+                            .accessibilityHint("Double tap to create branch with the entered name")
                         }
                     } else {
                         Button(action: { showCreateBranch = true }) {
@@ -677,6 +721,8 @@ struct BranchPickerSheet: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("\(branch.name)\(branch.isCurrent ? ", current branch" : "")")
+                        .accessibilityHint(branch.isCurrent ? "Currently selected branch" : "Double tap to switch to this branch")
                     }
                 }
                 
@@ -692,6 +738,8 @@ struct BranchPickerSheet: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("\(branch.name), remote")
+                            .accessibilityHint("Double tap to checkout this remote branch")
                         }
                     }
                 }
@@ -769,6 +817,7 @@ struct GitConfigSheet: View {
                         Image(systemName: "person")
                             .foregroundColor(.secondary)
                             .frame(width: 20)
+                            .accessibilityHidden(true)
                         TextField("Name", text: $editingName)
                             .textContentType(.name)
                     }
@@ -777,6 +826,7 @@ struct GitConfigSheet: View {
                         Image(systemName: "envelope")
                             .foregroundColor(.secondary)
                             .frame(width: 20)
+                            .accessibilityHidden(true)
                         TextField("Email", text: $editingEmail)
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)

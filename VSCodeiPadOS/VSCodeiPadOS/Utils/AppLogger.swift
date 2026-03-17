@@ -10,6 +10,7 @@ struct AppLogger {
     static let editor = os.Logger(subsystem: subsystem, category: "editor")
     static let git = os.Logger(subsystem: subsystem, category: "git")
     static let ai = os.Logger(subsystem: subsystem, category: "ai")
+    static let ssh = os.Logger(subsystem: subsystem, category: "ssh")
     static let network = os.Logger(subsystem: subsystem, category: "network")
     static let fileSystem = os.Logger(subsystem: subsystem, category: "fileSystem")
     static let ui = os.Logger(subsystem: subsystem, category: "ui")

@@ -152,7 +152,7 @@ final class PortForwardingManager: ObservableObject {
                 try await SSHManager.shared.cancelPortForward(localPort: port.port)
             } catch {
                 // Log but don't crash — tunnel may already be gone
-                print("PortForwardingManager: failed to cancel tunnel for port \(port.port): \(error.localizedDescription)")
+                AppLogger.ssh.debug("PortForwardingManager: failed to cancel tunnel for port \(port.port): \(error.localizedDescription)")
             }
         }
     }

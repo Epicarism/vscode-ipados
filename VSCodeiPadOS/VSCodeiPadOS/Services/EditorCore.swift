@@ -1195,6 +1195,30 @@ mod tests {
         return result
     }
 
+    // MARK: - Encoding & EOL
+    
+    /// Updates the active tab's file encoding (called from StatusBar when user changes encoding)
+    func setActiveTabEncoding(_ encoding: String.Encoding) {
+        guard let index = activeTabIndex else { return }
+        tabs[index].stringEncoding = encoding
+        tabs[index].isUnsaved = true
+    }
+    
+    /// Converts the active tab's line endings to the specified EOL sequence
+    func convertActiveTabEOL(to eol: String) {
+        guard let index = activeTabIndex else { return }
+        var content = tabs[index].content
+        // Normalize all line endings first (CRLF -> LF, CR -> LF)
+        content = content.replacingOccurrences(of: "\r\n", with: "\n")
+        content = content.replacingOccurrences(of: "\r", with: "\n")
+        // Then convert to target EOL
+        if eol != "\n" {
+            content = content.replacingOccurrences(of: "\n", with: eol)
+        }
+        tabs[index].content = content
+        tabs[index].isUnsaved = true
+    }
+
     func saveAllTabs() {
         // Force the editor view to sync any pending text changes immediately
         NotificationCenter.default.post(name: .forceEditorSync, object: nil)

@@ -399,6 +399,8 @@ struct SearchView: View {
         .padding(.vertical, 2)
         .background(Color.accentColor.opacity(0.15))
         .cornerRadius(4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Regular expression mode enabled")
     }
     
     // MARK: - Search Inputs Section
@@ -537,6 +539,8 @@ struct SearchView: View {
                     .foregroundColor(.red.opacity(0.7))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss error")
+            .accessibilityHint("Double tap to dismiss this error")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -592,7 +596,8 @@ struct SearchView: View {
                 .padding(.trailing, 6)
                 .disabled(searchManager.isSearching || searchManager.results.isEmpty)
                 .keyboardShortcut(.return, modifiers: [.command])
-                .accessibilityLabel("Replace all button")
+                .accessibilityLabel("Replace all")
+                .accessibilityHint("Double tap to replace all matches with the replacement text")
             }
         }
     }

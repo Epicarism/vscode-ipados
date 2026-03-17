@@ -199,7 +199,13 @@ struct StatusBarView: View {
             // Encoding (from active tab's fileEncoding)
             Menu {
                 ForEach(["UTF-8", "UTF-16", "ASCII", "ISO-8859-1", "Windows-1252", "Shift_JIS", "EUC-KR", "GB2312"], id: \.self) { enc in
-                    Button(encoding == enc ? "✓ \(enc)" : "  \(enc)") { encoding = enc }
+                    Button(encoding == enc ? "✓ \(enc)" : "  \(enc)") {
+                        encoding = enc
+                        // Apply encoding change to active tab so saves use the new encoding
+                        if let encodingValue = stringEncodingFromName(enc) {
+                            editorCore.setActiveTabEncoding(encodingValue)
+                        }
+                    }
                 }
             } label: {
                 StatusBarLabel(text: editorCore.activeTab?.stringEncoding.displayName ?? encoding, theme: theme)
@@ -210,9 +216,18 @@ struct StatusBarView: View {
 
             // EOL
             Menu {
-                Button(eolSetting == "LF" ? "✓ LF (Unix)" : "  LF (Unix)") { eolSetting = "LF" }
-                Button(eolSetting == "CRLF" ? "✓ CRLF (Windows)" : "  CRLF (Windows)") { eolSetting = "CRLF" }
-                Button(eolSetting == "CR" ? "✓ CR (Classic Mac)" : "  CR (Classic Mac)") { eolSetting = "CR" }
+                Button(eolSetting == "LF" ? "✓ LF (Unix)" : "  LF (Unix)") {
+                    eolSetting = "LF"
+                    editorCore.convertActiveTabEOL(to: "\n")
+                }
+                Button(eolSetting == "CRLF" ? "✓ CRLF (Windows)" : "  CRLF (Windows)") {
+                    eolSetting = "CRLF"
+                    editorCore.convertActiveTabEOL(to: "\r\n")
+                }
+                Button(eolSetting == "CR" ? "✓ CR (Classic Mac)" : "  CR (Classic Mac)") {
+                    eolSetting = "CR"
+                    editorCore.convertActiveTabEOL(to: "\r")
+                }
             } label: {
                 StatusBarLabel(text: eolSetting, theme: theme)
             }
@@ -256,7 +271,7 @@ struct StatusBarView: View {
                 if notifications.unreadCount > 0 {
                     Text("\(min(notifications.unreadCount, 99))")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(Color(.systemBackground))
+                        .foregroundColor(.white)
                         .padding(.horizontal, 3)
                         .padding(.vertical, 1)
                         .background(Color.accentColor)
@@ -276,6 +291,22 @@ struct StatusBarView: View {
                     .padding(.horizontal, 6)
                     .accessibilityLabel("Version \(version)")
             }
+        }
+    }
+    
+    // MARK: - Encoding Helpers
+    
+    private func stringEncodingFromName(_ name: String) -> String.Encoding? {
+        switch name {
+        case "UTF-8": return .utf8
+        case "UTF-16": return .utf16
+        case "ASCII": return .ascii
+        case "ISO-8859-1": return .isoLatin1
+        case "Windows-1252": return .windowsCP1252
+        case "Shift_JIS": return .shiftJIS
+        case "EUC-KR": return String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.EUC_KR.rawValue)))
+        case "GB2312": return String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+        default: return nil
         }
     }
 }

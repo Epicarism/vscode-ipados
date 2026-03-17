@@ -481,7 +481,7 @@ final class GitManager: ObservableObject {
         } else {
             // No SSH — HEAD is updated but working tree is not.
             // Post a warning so the user knows a full checkout requires SSH.
-            print("[GitManager] checkout: SSH not connected — HEAD updated but working tree may be stale. Connect SSH for full checkout.")
+            AppLogger.git.warning("[GitManager] checkout: SSH not connected — HEAD updated but working tree may be stale. Connect SSH for full checkout.")
         }
         
         currentBranch = branch
