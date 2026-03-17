@@ -114,10 +114,10 @@ struct MinimapView: View {
         let offset = visibleRegionOffset(minimapHeight: minimapHeight, visibleHeight: height)
 
         Rectangle()
-            .fill(Color.accentColor.opacity(isInteracting ? 0.22 : 0.16))
+            .fill(Color.accentColor.opacity(isInteracting ? 0.08 : 0.04))
             .overlay(
                 Rectangle()
-                    .stroke(Color.accentColor.opacity(0.65), lineWidth: 1)
+                    .stroke(Color.accentColor.opacity(isInteracting ? 0.5 : 0.35), lineWidth: 1.5)
             )
             .frame(width: minimapWidth, height: height)
             .offset(y: offset)
@@ -151,7 +151,8 @@ struct MinimapView: View {
     private func visibleRegionHeight(minimapHeight: CGFloat) -> CGFloat {
         guard totalContentHeight > 0 else { return 0 }
         let ratio = scrollViewHeight / totalContentHeight
-        return minimapHeight * min(max(ratio, 0), 1.0)
+        // Cap at 80% so the overlay never covers the entire minimap
+        return minimapHeight * min(max(ratio, 0), 0.8)
     }
 
     private func visibleRegionOffset(minimapHeight: CGFloat, visibleHeight: CGFloat) -> CGFloat {
