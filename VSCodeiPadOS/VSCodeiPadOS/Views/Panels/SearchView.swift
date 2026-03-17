@@ -1154,7 +1154,7 @@ struct DirectoryGroupHeader: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(theme.sidebarBackground).opacity(0.5))
+        .background(Color(ThemeManager.shared.currentTheme.sidebarBackground).opacity(0.5))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Directory: \(directory), \(count) files")
     }
@@ -1231,7 +1231,7 @@ struct SearchResultsHeader: View {
             limitRow
         }
         .padding(8)
-        .background(Color(theme.sidebarBackground).opacity(0.5))
+        .background(Color(ThemeManager.shared.currentTheme.sidebarBackground).opacity(0.5))
         .cornerRadius(6)
     }
     
