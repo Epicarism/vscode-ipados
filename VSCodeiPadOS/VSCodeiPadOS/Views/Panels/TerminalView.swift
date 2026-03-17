@@ -282,39 +282,9 @@ struct SingleTerminalView: View {
     var body: some View {
         VStack(spacing: 0) {
             #if canImport(SwiftTerm)
-            if terminal.isConnected {
-                // Real terminal via SwiftTerm for SSH sessions
-                VStack(spacing: 0) {
-                    SwiftTerminalView(terminalManager: terminal)
-                    
-                    // Mobile helper bar for SwiftTerm
-                    HStack(spacing: 12) {
-                        Button("Tab") {
-                            Task { try? await SSHManager.shared.sendInput("\t") }
-                        }
-                        Button("Esc") {
-                            Task { try? await SSHManager.shared.sendInput("\u{1b}") }
-                        }
-                        Button("Ctrl+C") {
-                            Task { try? await SSHManager.shared.sendInput("\u{03}") }
-                        }
-                        .foregroundColor(Color(UIColor.systemRed))
-                        Button("↑") {
-                            Task { try? await SSHManager.shared.sendInput("\u{1b}[A") }
-                        }
-                        Button("↓") {
-                            Task { try? await SSHManager.shared.sendInput("\u{1b}[B") }
-                        }
-                        Spacer()
-                    }
-                    .font(.caption)
-                    .padding(.horizontal)
-                    .padding(.vertical, 6)
-                    .background(themeManager.currentTheme.editorForeground.opacity(0.1))
-                }
-            } else {
-                legacyTerminalContent
-            }
+            // Always use SwiftTerm for proper VT100 rendering, scrollback, and text selection.
+            // SSH sessions route keystrokes through SSHManager; local sessions use localCommandHandler.
+            swiftTermContent
             #else
             legacyTerminalContent
             #endif
@@ -338,6 +308,62 @@ struct SingleTerminalView: View {
             if !newValue {
                 isInputFocused = false
             }
+        }
+    }
+
+    @ViewBuilder
+    private var swiftTermContent: some View {
+        VStack(spacing: 0) {
+            if terminal.isConnected {
+                // SSH session — SwiftTerminalView routes input through SSHManager
+                SwiftTerminalView(terminalManager: terminal)
+            } else {
+                // Local session — keystrokes are handled by localCommandHandler
+                SwiftTerminalView(
+                    terminalManager: terminal,
+                    localCommandHandler: { [weak terminal] command in
+                        guard let terminal else { return }
+                        let output = terminal.processLocalCommandForSwiftTerm(command)
+                        // Feed the result back into SwiftTerm via the swiftTermFeedHandler
+                        terminal.swiftTermFeedHandler?(output)
+                    }
+                )
+            }
+
+            // Mobile helper bar — adapts to SSH vs local mode
+            HStack(spacing: 12) {
+                Button("Tab") {
+                    if terminal.isConnected {
+                        Task { try? await SSHManager.shared.sendInput("\t") }
+                    }
+                }
+                Button("Esc") {
+                    if terminal.isConnected {
+                        Task { try? await SSHManager.shared.sendInput("\u{1b}") }
+                    }
+                }
+                Button("Ctrl+C") {
+                    if terminal.isConnected {
+                        Task { try? await SSHManager.shared.sendInput("\u{03}") }
+                    }
+                }
+                .foregroundColor(Color(UIColor.systemRed))
+                Button("↑") {
+                    if terminal.isConnected {
+                        Task { try? await SSHManager.shared.sendInput("\u{1b}[A") }
+                    }
+                }
+                Button("↓") {
+                    if terminal.isConnected {
+                        Task { try? await SSHManager.shared.sendInput("\u{1b}[B") }
+                    }
+                }
+                Spacer()
+            }
+            .font(.caption)
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+            .background(themeManager.currentTheme.editorForeground.opacity(0.1))
         }
     }
 
@@ -815,6 +841,55 @@ extension TerminalTab: Equatable {}
                 appendOutput(line, type: result.isError ? .error : .output)
             }
         }
+    }
+
+    /// Execute a local command and return its output as a VT100-friendly string
+    /// suitable for feeding directly into SwiftTerm via feedData().
+    /// Lines are joined with \r\n and a prompt is appended at the end.
+    func processLocalCommandForSwiftTerm(_ rawCommand: String) -> String {
+        guard !rawCommand.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return promptString
+        }
+        // Echo the command
+        commandHistory.append(rawCommand)
+        if commandHistory.count > 1000 { commandHistory.removeFirst(commandHistory.count - 1000) }
+        historyIndex = commandHistory.count
+
+        let segments = rawCommand.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+        var outputLines: [String] = []
+        var isError = false
+
+        if segments.count > 1 {
+            var pipedLines: [String]? = nil
+            for (idx, segment) in segments.enumerated() {
+                let isLast = idx == segments.count - 1
+                let result = executeBuiltinCommand(segment, stdinLines: pipedLines)
+                if isLast {
+                    outputLines = result.output
+                    isError = result.isError
+                } else {
+                    pipedLines = result.output
+                }
+            }
+        } else {
+            let result = executeBuiltinCommand(rawCommand.trimmingCharacters(in: .whitespaces), stdinLines: nil)
+            outputLines = result.output
+            isError = result.isError
+        }
+
+        // Build VT100 output string
+        var vt = ""
+        if isError {
+            vt += "\u{1b}[31m" // red for errors
+        }
+        for line in outputLines {
+            vt += line + "\r\n"
+        }
+        if isError {
+            vt += "\u{1b}[0m" // reset colour
+        }
+        vt += promptString
+        return vt
     }
 
     // Result wrapper for built-in command execution

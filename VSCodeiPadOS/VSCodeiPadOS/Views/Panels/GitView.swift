@@ -266,7 +266,7 @@ struct GitView: View {
             
             // Changes list
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     // Merge Conflicts section
                     if !gitManager.mergeConflicts.isEmpty {
                         sectionHeader("Merge Conflicts", count: gitManager.mergeConflicts.count, color: .yellow)

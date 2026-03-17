@@ -28,6 +28,12 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     /// File system URL (nil for unsaved new files)
     var url: URL?
     
+    /// Remote path on the SSH server (nil for local files)
+    var remotePath: String?
+    
+    /// Remote host identifier (nil for local files)
+    var remoteHost: String?
+    
     /// Whether the file has unsaved changes
     var isUnsaved: Bool
     
@@ -44,6 +50,15 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     /// Defaults to UTF-8. When saving, the same encoding is used to preserve the
     /// original file encoding.
     var fileEncoding: UInt
+
+    // MARK: - Per-Tab Editor State (not persisted, transient UI state)
+
+    /// Saved scroll offset (pixels) — restored when switching back to this tab.
+    /// Not included in Codable encoding because it is a transient UI value.
+    var savedScrollOffset: CGFloat = 0
+
+    /// Saved cursor character index — restored when switching back to this tab.
+    var savedCursorIndex: Int = 0
     
     /// Convenience accessor for the encoding as a Foundation String.Encoding
     var stringEncoding: String.Encoding {
@@ -65,6 +80,8 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     ///   - isPinned: Whether the tab is pinned (false by default)
     ///   - isPreview: Whether the tab is in preview mode (false by default)
     ///   - fileEncoding: Encoding used when reading the file (defaults to UTF-8)
+    ///   - remotePath: Remote server path (nil for local files)
+    ///   - remoteHost: Remote host identifier (nil for local files)
     init(
         id: UUID = UUID(),
         fileName: String,
@@ -75,7 +92,9 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         isActive: Bool = false,
         isPinned: Bool = false,
         isPreview: Bool = false,
-        fileEncoding: UInt = String.Encoding.utf8.rawValue
+        fileEncoding: UInt = String.Encoding.utf8.rawValue,
+        remotePath: String? = nil,
+        remoteHost: String? = nil
     ) {
         self.id = id
         self.fileName = fileName
@@ -86,6 +105,8 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         self.isPinned = isPinned
         self.isPreview = isPreview
         self.fileEncoding = fileEncoding
+        self.remotePath = remotePath
+        self.remoteHost = remoteHost
         
         // Auto-detect language from file extension if not provided
         if let language = language {
@@ -107,7 +128,9 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         isActive: Bool = false,
         isPinned: Bool = false,
         isPreview: Bool = false,
-        fileEncoding: UInt = String.Encoding.utf8.rawValue
+        fileEncoding: UInt = String.Encoding.utf8.rawValue,
+        remotePath: String? = nil,
+        remoteHost: String? = nil
     ) {
         self.init(
             id: id,
@@ -119,7 +142,9 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
             isActive: isActive,
             isPinned: isPinned,
             isPreview: isPreview,
-            fileEncoding: fileEncoding
+            fileEncoding: fileEncoding,
+            remotePath: remotePath,
+            remoteHost: remoteHost
         )
     }
     

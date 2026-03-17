@@ -18,6 +18,7 @@ struct VSCodeWebView: UIViewRepresentable {
     let url: URL
     @Binding var isLoading: Bool
     @Binding var errorMessage: String?
+    @Binding var needsReload: Bool
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -94,6 +95,13 @@ struct VSCodeWebView: UIViewRepresentable {
         // Only reload if URL changed
         if webView.url != url {
             webView.load(URLRequest(url: url))
+        }
+        // Handle explicit reload request from parent
+        if needsReload {
+            webView.reload()
+            DispatchQueue.main.async {
+                self.needsReload = false
+            }
         }
     }
     
@@ -221,11 +229,21 @@ struct VSCodeTunnelView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showingAddTunnel = false
+    @State private var webViewNeedsReload = false
     
     var body: some View {
         Group {
-            if let config = tunnelManager.activeConfig, tunnelManager.isConnected {
-                connectedView(config: config)
+            if let config = tunnelManager.activeConfig {
+                switch tunnelManager.connectionState {
+                case .connected, .reconnecting:
+                    connectedView(config: config)
+                case .connecting:
+                    connectingView(config: config)
+                case .error(let message):
+                    errorView(message: message, config: config)
+                case .disconnected:
+                    disconnectedView
+                }
             } else {
                 disconnectedView
             }
@@ -258,7 +276,8 @@ struct VSCodeTunnelView: View {
                 VSCodeWebView(
                     url: url,
                     isLoading: $isLoading,
-                    errorMessage: $errorMessage
+                    errorMessage: $errorMessage,
+                    needsReload: $webViewNeedsReload
                 )
                 .ignoresSafeArea()
             }
@@ -303,7 +322,7 @@ struct VSCodeTunnelView: View {
                 .background(themeManager.currentTheme.editorBackground)
             }
             
-            // Disconnect button (top-left corner)
+            // Toolbar overlay (top bar with Exit + Reload)
             VStack {
                 HStack {
                     Button(action: { tunnelManager.disconnect() }) {
@@ -323,10 +342,71 @@ struct VSCodeTunnelView: View {
                     .padding(8)
                     
                     Spacer()
+                    
+                    Button(action: { webViewNeedsReload = true }) {
+                        Image(systemName: "arrow.clockwise")
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(16)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Reload VS Code")
+                    .accessibilityHint("Reloads the VS Code web view")
+                    .padding(8)
                 }
                 Spacer()
             }
         }
+    }
+    
+    // MARK: - Connecting View
+    
+    private func connectingView(config: TunnelConfig) -> some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Connecting to \(config.name)...")
+                .font(.headline)
+            Text("Validating server connection")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Cancel") {
+                tunnelManager.disconnect()
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Error View
+    
+    private func errorView(message: String, config: TunnelConfig) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.yellow)
+            Text("Connection Failed")
+                .font(.headline)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 12) {
+                Button("Retry") {
+                    tunnelManager.connect(to: config)
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Disconnect") {
+                    tunnelManager.disconnect()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
     
     // MARK: - Disconnected View (Server List)

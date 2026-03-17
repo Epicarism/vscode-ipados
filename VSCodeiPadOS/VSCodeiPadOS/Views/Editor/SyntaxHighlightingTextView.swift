@@ -737,14 +737,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
         
         func updateLineCount(_ textView: UITextView) {
-            // PERF: Count newlines directly instead of creating array copy
             let text = textView.text ?? ""
-            var lineCount = 1
-            for char in text {
-                if char == "\n" {
-                    lineCount += 1
-                }
-            }
+            // PERF: Single Objective-C call — far faster than iterating every Swift Character
+            let lineCount = (text as NSString).components(separatedBy: "\n").count
             DispatchQueue.main.async {
                 self.parent.totalLines = lineCount
             }
@@ -2492,10 +2487,25 @@ struct VSCodeSyntaxHighlighter {
         }
     }
     
+    // Static cache: NSRegularExpression is thread-safe once created, so we compile each
+    // pattern+options pair exactly once and reuse it across all highlight passes.
+    // With 50-100 calls per highlight pass this eliminates nearly all regex compilation cost.
+    private static var regexCache: [String: NSRegularExpression] = [:]
+
     private func highlightPattern(_ attributed: NSMutableAttributedString, pattern: String, color: UIColor, text: String, options: NSRegularExpression.Options = [], captureGroup: Int = 0) {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
+        // Cache key encodes both the pattern and the option flags so different option
+        // combinations don't collide.
+        let cacheKey = "\(options.rawValue):\(pattern)"
+        let regex: NSRegularExpression
+        if let cached = SyntaxHighlightingTextView.regexCache[cacheKey] {
+            regex = cached
+        } else {
+            guard let compiled = try? NSRegularExpression(pattern: pattern, options: options) else { return }
+            SyntaxHighlightingTextView.regexCache[cacheKey] = compiled
+            regex = compiled
+        }
         let range = NSRange(location: 0, length: text.utf16.count)
-        
+
         regex.enumerateMatches(in: text, options: [], range: range) { match, _, _ in
             guard let match = match else { return }
             let matchRange = captureGroup > 0 && match.numberOfRanges > captureGroup

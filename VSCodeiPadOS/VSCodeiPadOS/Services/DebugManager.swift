@@ -132,6 +132,9 @@ final class DebugManager: ObservableObject {
     /// Active JSRunner instance for the current debug session (used by console eval).
     private var activeJSRunner: JSRunner?
 
+    /// Active JavaScript debug session (breakpoint-aware execution).
+    private var activeDebugSession: JSDebugSession?
+
     /// Tracks whether all breakpoints are globally enabled/disabled via toggleAllBreakpoints().
     @Published var allBreakpointsEnabled = true
 
@@ -529,103 +532,155 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // No remote debugger connected — show guidance instead of simulating.
+    // Local JS session — resume if paused.
+    if state == .paused, let session = activeDebugSession {
+        state = .running
+        session.resume(mode: .continue)
+        return
+    }
     if state == .paused {
-        // Already paused; nothing to do.
+        // No session but UI says paused — reset.
+        state = .stopped
         return
     }
     consoleEntries.append(ConsoleEntry(
-        message: "Local JavaScript debugging: Use the Debug Console to evaluate JavaScript expressions. For full step debugging, connect a remote debugger via SSH.",
+        message: "Local JavaScript debugging: Use 'Run File' to start a debug session with breakpoints.",
         kind: .info
     ))
     }
 
-        /// Start a real JavaScript debug session
+        /// Start a real JavaScript debug session with breakpoint support.
         func startDebugging(code: String, fileName: String, fileId: String) {
+            // Cancel any existing session
+            activeDebugSession?.cancel()
+            activeDebugSession = nil
+
             // Clear previous state
             consoleEntries.removeAll()
             callStack.removeAll()
             variables.removeAll()
+            currentLine = nil
+            currentFile = nil
 
-            // Add system message
             consoleEntries.append(ConsoleEntry(
-                message: "Starting debug session for \(fileName)...",
+                message: "Starting debug session for \(fileName)…",
                 kind: .system
             ))
 
-            // Set up initial call stack
-            callStack = [
-                StackFrame(function: "<module>", file: fileName, line: 1)
-            ]
+            // Collect enabled breakpoint line numbers (0-based) for this file.
+            let bpLines: Set<Int> = {
+                let fid = canonicalFileId(fileId)
+                let raw = breakpointsByFile[fid] ?? []
+                if !allBreakpointsEnabled { return [] }
+                return raw.filter { line in
+                    let id = "\(fid)::\(line)"
+                    return breakpointEnabledStates[id] ?? true
+                }
+            }()
+
+            // Set up call stack frame
+            callStack = [StackFrame(function: "<module>", file: fileName, line: 1)]
             selectedFrameId = callStack.first?.id
             state = .running
 
-            // Run JavaScript with JSRunner
-            Task {
-                let runner = JSRunner()
-                self.activeJSRunner = runner
+            // Create and start the debug session
+            let session = JSDebugSession(
+                code: code,
+                fileName: fileName,
+                breakpointLines: bpLines
+            )
+            activeDebugSession = session
+            activeJSRunner = session.runner
 
-                // Capture console output
-                runner.setConsoleHandler { [weak self] message in
-                    Task { @MainActor in
-                        guard let self = self else { return }
-                        let kind: ConsoleEntry.Kind
-                        if message.hasPrefix("[ERROR]") {
-                            kind = .error
-                        } else if message.hasPrefix("[WARN]") {
-                            kind = .warning
-                        } else if message.hasPrefix("[INFO]") {
-                            kind = .info
-                        } else {
-                            kind = .output
-                        }
-                        // Strip prefix for cleaner output
-                        let cleanMessage = message
-                            .replacingOccurrences(of: "[LOG] ", with: "")
-                            .replacingOccurrences(of: "[ERROR] ", with: "")
-                            .replacingOccurrences(of: "[WARN] ", with: "")
-                            .replacingOccurrences(of: "[INFO] ", with: "")
-                        self.consoleEntries.append(ConsoleEntry(message: cleanMessage, kind: kind))
-                        OutputPanelManager.shared.appendLine(cleanMessage, to: .debug, streamType: .stdout)
-                    }
+            // Forward console output from JSRunner
+            session.runner.setConsoleHandler { [weak self] message in
+                Task { @MainActor in
+                    guard let self else { return }
+                    let kind: ConsoleEntry.Kind
+                    if message.hasPrefix("[ERROR]") { kind = .error }
+                    else if message.hasPrefix("[WARN]") { kind = .warning }
+                    else if message.hasPrefix("[INFO]") { kind = .info }
+                    else { kind = .output }
+                    let clean = message
+                        .replacingOccurrences(of: "[LOG] ", with: "")
+                        .replacingOccurrences(of: "[ERROR] ", with: "")
+                        .replacingOccurrences(of: "[WARN] ", with: "")
+                        .replacingOccurrences(of: "[INFO] ", with: "")
+                    self.consoleEntries.append(ConsoleEntry(message: clean, kind: kind))
+                    OutputPanelManager.shared.appendLine(clean, to: .debug, streamType: .stdout)
                 }
+            }
 
-                do {
-                    let result = try await runner.execute(code: code, timeout: 30.0)
-                    let resultString = result.toString() ?? ""
-                    await MainActor.run {
-                        if !resultString.isEmpty && resultString != "undefined" {
-                            self.consoleEntries.append(ConsoleEntry(
-                                message: "→ \(resultString)",
-                                kind: .output
-                            ))
-                            OutputPanelManager.shared.appendLine("→ \(resultString)", to: .debug, streamType: .stdout)
+            Task {
+                for await event in session.eventStream {
+                    switch event {
+                    case .paused(let line, let vars):
+                        // line is 0-based internally; display as 1-based
+                        let displayLine = line + 1
+                        currentLine = displayLine
+                        currentFile = fileName
+                        var cs = callStack
+                        if !cs.isEmpty { cs[0].line = displayLine }
+                        callStack = cs
+                        selectedFrameId = callStack.first?.id
+                        variables = vars
+                        state = .paused
+                        consoleEntries.append(ConsoleEntry(
+                            message: "Paused at \(fileName):\(displayLine)",
+                            kind: .system
+                        ))
+                        // Refresh watch expressions
+                        await refreshWatchExpressions(using: session.runner)
+
+                    case .resumed:
+                        state = .running
+
+                    case .finished(let resultString):
+                        if let r = resultString, !r.isEmpty, r != "undefined" {
+                            consoleEntries.append(ConsoleEntry(message: "→ \(r)", kind: .output))
+                            OutputPanelManager.shared.appendLine("→ \(r)", to: .debug, streamType: .stdout)
                         }
-                        self.consoleEntries.append(ConsoleEntry(
-                            message: "Debug session ended.",
-                            kind: .system
-                        ))
-                        self.state = .stopped
-                        self.callStack.removeAll()
-                        self.activeJSRunner = nil
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.consoleEntries.append(ConsoleEntry(
-                            message: "Error: \(error.localizedDescription)",
-                            kind: .error
-                        ))
-                        OutputPanelManager.shared.appendLine("Error: \(error.localizedDescription)", to: .debug, streamType: .stderr)
-                        self.consoleEntries.append(ConsoleEntry(
-                            message: "Debug session ended with error.",
-                            kind: .system
-                        ))
-                        self.state = .stopped
-                        self.callStack.removeAll()
-                        self.activeJSRunner = nil
+                        consoleEntries.append(ConsoleEntry(message: "Debug session ended.", kind: .system))
+                        state = .stopped
+                        callStack.removeAll()
+                        variables.removeAll()
+                        currentLine = nil
+                        currentFile = nil
+                        activeDebugSession = nil
+                        activeJSRunner = nil
+
+                    case .error(let message):
+                        consoleEntries.append(ConsoleEntry(message: "Error: \(message)", kind: .error))
+                        OutputPanelManager.shared.appendLine("Error: \(message)", to: .debug, streamType: .stderr)
+                        consoleEntries.append(ConsoleEntry(message: "Debug session ended with error.", kind: .system))
+                        state = .stopped
+                        callStack.removeAll()
+                        variables.removeAll()
+                        currentLine = nil
+                        currentFile = nil
+                        activeDebugSession = nil
+                        activeJSRunner = nil
                     }
                 }
             }
+
+            // Launch execution
+            Task { await session.run() }
+        }
+
+        /// Evaluate all watch expressions using the current JS context.
+        private func refreshWatchExpressions(using runner: JSRunner) async {
+            guard !watchExpressions.isEmpty else { return }
+            var updated = watchExpressions
+            for i in updated.indices {
+                let expr = updated[i].expression
+                if let val = try? await runner.executeToString(code: expr) {
+                    updated[i].value = val ?? "undefined"
+                } else {
+                    updated[i].value = "<error>"
+                }
+            }
+            watchExpressions = updated
         }
 
     func stop() {
@@ -655,12 +710,16 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // Simulated mode fallback
+    // Local JS session fallback
     let wasActive = state != .stopped
+    activeDebugSession?.cancel()
+    activeDebugSession = nil
     state = .stopped
     callStack = []
     variables = []
     selectedFrameId = nil
+    currentLine = nil
+    currentFile = nil
     activeJSRunner = nil
     if wasActive {
     consoleEntries.append(ConsoleEntry(
@@ -724,9 +783,15 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // No remote debugger — step debugging is not available locally.
+    // Local JS debug session — advance to next breakpoint.
+    if let session = activeDebugSession {
+        state = .running
+        session.resume(mode: .stepOver)
+        return
+    }
+
     consoleEntries.append(ConsoleEntry(
-        message: "Step debugging requires a remote debugger connection. Use 'Connect' to attach via SSH.",
+        message: "No active debug session. Use Run to start debugging.",
         kind: .info
     ))
     }
@@ -755,9 +820,15 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // No remote debugger — step debugging is not available locally.
+    // Local JS debug session — stepInto behaves like stepOver at top level.
+    if let session = activeDebugSession {
+        state = .running
+        session.resume(mode: .stepInto)
+        return
+    }
+
     consoleEntries.append(ConsoleEntry(
-        message: "Step debugging requires a remote debugger connection. Use 'Connect' to attach via SSH.",
+        message: "No active debug session. Use Run to start debugging.",
         kind: .info
     ))
     }
@@ -786,9 +857,15 @@ final class DebugManager: ObservableObject {
     return
     }
 
-    // No remote debugger — step debugging is not available locally.
+    // Local JS debug session — stepOut runs to next breakpoint or end.
+    if let session = activeDebugSession {
+        state = .running
+        session.resume(mode: .stepOut)
+        return
+    }
+
     consoleEntries.append(ConsoleEntry(
-        message: "Step debugging requires a remote debugger connection. Use 'Connect' to attach via SSH.",
+        message: "No active debug session. Use Run to start debugging.",
         kind: .info
     ))
     }
@@ -1196,6 +1273,242 @@ final class DebugManager: ObservableObject {
         breakpointsByFile       = dict
         breakpointEnabledStates = enabledStates
         breakpointConditions    = conditions
+    }
+}
+
+// MARK: - JSDebugSession
+
+/// A self-contained JavaScript debug session that supports real breakpoint pausing.
+///
+/// ## How it works
+/// 1. The source is split into lines.
+/// 2. Lines are grouped into *segments*: each segment ends just before a breakpoint line
+///    (or at the last line of the file).
+/// 3. Segments are executed sequentially on a **shared** `JSRunner` context so variables
+///    declared in earlier segments remain visible in later ones.
+/// 4. Before executing a segment that ends at a breakpoint line, the runner pauses by
+///    suspending via an `AsyncStream`. Resuming (stepOver / stepInto / stepOut / continue)
+///    unblocks the awaiting task and proceeds to the next segment.
+///
+/// ### Limitations (deliberate simplification)
+/// - Breakpoints inside function bodies only fire when the function is called sequentially in
+///   the top-level execution flow (i.e., not in callbacks/promises resolved later).
+/// - `stepInto` is equivalent to `stepOver` at the module level.
+/// - `stepOut` runs straight to the next breakpoint.
+@MainActor
+final class JSDebugSession {
+
+    // MARK: - Public types
+
+    enum ResumeMode {
+        case `continue`   // run to next breakpoint or end
+        case stepOver     // same as continue at top-level
+        case stepInto     // same as stepOver here
+        case stepOut      // same as continue here
+    }
+
+    enum Event {
+        case paused(line: Int, variables: [DebugManager.Variable])
+        case resumed
+        case finished(result: String?)
+        case error(String)
+    }
+
+    // MARK: - Public properties
+
+    let runner: JSRunner
+
+    /// Async stream of events consumed by DebugManager.
+    private(set) var eventStream: AsyncStream<Event>!
+
+    // MARK: - Private state
+
+    private let source: String
+    private let fileName: String
+    private let breakpointLines: Set<Int>   // 0-based line indices
+    private var isCancelled = false
+
+    /// Continuation used to suspend execution until the UI resumes the session.
+    private var resumeContinuation: CheckedContinuation<ResumeMode, Never>?
+
+    /// AsyncStream continuation used to push events to DebugManager.
+    private var streamContinuation: AsyncStream<Event>.Continuation?
+
+    // MARK: - Init
+
+    init(code: String, fileName: String, breakpointLines: Set<Int>) {
+        self.source = code
+        self.fileName = fileName
+        self.breakpointLines = breakpointLines
+        self.runner = JSRunner()
+
+        eventStream = AsyncStream { [weak self] continuation in
+            self?.streamContinuation = continuation
+        }
+    }
+
+    // MARK: - Public API
+
+    /// Resume execution after a breakpoint pause.
+    func resume(mode: ResumeMode) {
+        resumeContinuation?.resume(returning: mode)
+        resumeContinuation = nil
+    }
+
+    /// Cancel the session immediately.
+    func cancel() {
+        isCancelled = true
+        resumeContinuation?.resume(returning: .continue)
+        resumeContinuation = nil
+        streamContinuation?.finish()
+    }
+
+    // MARK: - Execution
+
+    /// Start executing the instrumented source. Call this from a detached Task.
+    func run() async {
+        guard !isCancelled else { return }
+
+        let lines = source.components(separatedBy: "\n")
+        let totalLines = lines.count
+
+        // Build segments: a segment is a half-open range [start, end) of line indices.
+        // A new segment begins after each breakpoint line; we pause *before* the breakpoint line.
+        var segments: [(range: Range<Int>, pauseLine: Int?)] = []
+        var segStart = 0
+
+        // Sorted 0-based breakpoint indices that exist in the source
+        let sortedBPs = breakpointLines
+            .filter { $0 >= 0 && $0 < totalLines }
+            .sorted()
+
+        if sortedBPs.isEmpty {
+            // No breakpoints — single segment, no pausing
+            segments.append((range: 0..<totalLines, pauseLine: nil))
+        } else {
+            for bp in sortedBPs {
+                if bp > segStart {
+                    // Lines before the breakpoint (no pause at end of this group)
+                    segments.append((range: segStart..<bp, pauseLine: nil))
+                }
+                // The breakpoint line itself is its own segment; we pause before running it
+                segments.append((range: bp..<(bp + 1), pauseLine: bp))
+                segStart = bp + 1
+            }
+            // Remaining lines after last breakpoint
+            if segStart < totalLines {
+                segments.append((range: segStart..<totalLines, pauseLine: nil))
+            }
+        }
+
+        // Execute each segment in order
+        for segment in segments {
+            guard !isCancelled else { break }
+
+            // If this segment has a pause line, pause first
+            if let pauseLine = segment.pauseLine {
+                // Snapshot variables from the JS context
+                let vars = await captureVariables()
+
+                // Emit paused event
+                streamContinuation?.yield(.paused(line: pauseLine, variables: vars))
+
+                // Suspend here until UI resumes
+                let mode = await withCheckedContinuation { (cont: CheckedContinuation<ResumeMode, Never>) in
+                    resumeContinuation = cont
+                }
+
+                guard !isCancelled else { break }
+                streamContinuation?.yield(.resumed)
+
+                // For stepOver/stepInto we still execute this line then stop at next BP.
+                // For stepOut / continue we run through to next BP.
+                // In all cases we just continue running the segment as normal —
+                // the segment loop will naturally pause again at the next breakpoint.
+                _ = mode  // All modes behave identically at top-level: run to next BP
+            }
+
+            // Build the code for this segment
+            let segmentLines = Array(lines[segment.range])
+            let segmentCode = segmentLines.joined(separator: "\n")
+
+            guard !segmentCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
+
+            do {
+                let result = try await runner.execute(code: segmentCode, timeout: 30.0)
+                // Only emit the final result on the last segment
+                if segment.range.upperBound >= totalLines {
+                    let str = result.isUndefined ? nil : result.toString()
+                    streamContinuation?.yield(.finished(result: str))
+                    streamContinuation?.finish()
+                    return
+                }
+            } catch {
+                streamContinuation?.yield(.error(error.localizedDescription))
+                streamContinuation?.finish()
+                return
+            }
+        }
+
+        if !isCancelled {
+            streamContinuation?.yield(.finished(result: nil))
+        }
+        streamContinuation?.finish()
+    }
+
+    // MARK: - Variable capture
+
+    /// Snapshot the current JS global/local variables from the runner context.
+    private func captureVariables() async -> [DebugManager.Variable] {
+        // We ask the JS context for all non-builtin keys on the global object.
+        // This is a best-effort inspection using Object.keys on the global scope.
+        let script = """
+        (function() {
+          var __builtins = ['undefined','NaN','Infinity','eval','isFinite','isNaN',
+            'parseFloat','parseInt','decodeURI','decodeURIComponent','encodeURI',
+            'encodeURIComponent','Object','Function','Array','Number','parseFloat',
+            'parseInt','Boolean','String','Symbol','BigInt','Math','Date','RegExp',
+            'Error','Map','Set','WeakMap','WeakSet','Promise','Proxy','Reflect',
+            'JSON','console','__builtins'];
+          var keys = [];
+          try { keys = Object.getOwnPropertyNames(this).filter(function(k){
+            return __builtins.indexOf(k) === -1 && k[0] !== '_';
+          }); } catch(e) {}
+          var result = [];
+          for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            try {
+              var v = this[k];
+              var t = typeof v;
+              var s;
+              if (v === null) { s = 'null'; t = 'null'; }
+              else if (t === 'function') { s = '[Function]'; }
+              else if (t === 'object') {
+                try { s = JSON.stringify(v); } catch(e) { s = String(v); }
+              } else { s = String(v); }
+              result.push(k + '|||' + t + '|||' + s);
+            } catch(e) { result.push(k + '|||unknown|||<error>'); }
+          }
+          return result.join(';;;');
+        }).call(this);
+        """
+
+        guard let raw = try? await runner.executeToString(code: script),
+              let text = raw, !text.isEmpty else {
+            return []
+        }
+
+        return text.components(separatedBy: ";;;").compactMap { entry -> DebugManager.Variable? in
+            let parts = entry.components(separatedBy: "|||")
+            guard parts.count == 3 else { return nil }
+            let name = parts[0]
+            let type_ = parts[1]
+            let value = parts[2]
+            guard !name.isEmpty else { return nil }
+            return DebugManager.Variable(name: name, value: value, type: type_)
+        }
     }
 }
 

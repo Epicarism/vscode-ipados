@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import Network
 import os
 
 // MARK: - Tunnel Configuration
@@ -96,11 +97,14 @@ class TunnelManager: ObservableObject {
     @Published var isConnected = false
     @Published var connectionState: TunnelConnectionState = .disconnected
     @Published var lastError: String?
+    @Published var connectionWarning: String?
     
     private let configsKey = "tunnelConfigs"
     private let activeConfigKey = "activeTunnelConfigId"
     private let maxReconnectAttempts = 3
     private var healthTimer: Timer?
+    private var networkMonitor: NWPathMonitor?
+    private var connectionTask: Task<Void, Never>?
     private var reconnectAttempts = 0
     
     private init() {
@@ -169,8 +173,12 @@ class TunnelManager: ObservableObject {
         activeConfig = updatedConfig
         UserDefaults.standard.set(config.id.uuidString, forKey: activeConfigKey)
         
+        // Cancel any previous connection attempt to prevent concurrent connections
+        connectionTask?.cancel()
+        connectionTask = nil
+
         // Check reachability
-        Task {
+        connectionTask = Task {
             await validateAndConnect(url: url)
         }
     }
@@ -197,6 +205,9 @@ class TunnelManager: ObservableObject {
                     lastError = msg
                     isConnected = false
                 }
+            } else {
+                connectionState = .error("Unexpected response from server")
+                isConnected = false
             }
         } catch {
             Self.logger.error("Connection failed: \(error.localizedDescription)")
@@ -206,6 +217,7 @@ class TunnelManager: ObservableObject {
                 Self.logger.info("Timed out but allowing WebView connection attempt")
                 connectionState = .connected
                 isConnected = true
+                connectionWarning = "Server took too long to respond. The page may not load correctly."
                 startHealthMonitoring(url: url)
             } else {
                 connectionState = .error(error.localizedDescription)
@@ -217,11 +229,16 @@ class TunnelManager: ObservableObject {
     
     func disconnect() {
         Self.logger.info("Disconnecting tunnel")
+        connectionTask?.cancel()
+        connectionTask = nil
+        networkMonitor?.cancel()
+        networkMonitor = nil
         stopHealthMonitoring()
         connectionState = .disconnected
         isConnected = false
         activeConfig = nil
         lastError = nil
+        connectionWarning = nil
         reconnectAttempts = 0
         UserDefaults.standard.removeObject(forKey: activeConfigKey)
     }
@@ -236,6 +253,22 @@ class TunnelManager: ObservableObject {
                 await self?.checkHealth(url: url)
             }
         }
+
+        // NWPathMonitor: detect network drops and restores
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if path.status == .unsatisfied {
+                    self.connectionState = .error("Network connection lost")
+                } else if !self.isConnected, let config = self.activeConfig {
+                    // Network restored — try reconnecting
+                    self.connect(to: config)
+                }
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "tunnel.network.monitor"))
+        networkMonitor = monitor
     }
     
     private func stopHealthMonitoring() {
@@ -254,7 +287,7 @@ class TunnelManager: ObservableObject {
             let (_, response) = try await URLSession.shared.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse,
-               (200...499).contains(httpResponse.statusCode) {
+               (200...399).contains(httpResponse.statusCode) {
                 // Server is responding — reset reconnect counter
                 reconnectAttempts = 0
             }

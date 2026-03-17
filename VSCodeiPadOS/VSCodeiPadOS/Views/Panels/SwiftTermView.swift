@@ -21,6 +21,8 @@ struct SwiftTerminalView: UIViewRepresentable {
     var fontSize: CGFloat = 14
     var fontFamily: String = "Menlo"
     var theme: TerminalTheme = .default
+    /// When set, keystrokes are handled locally instead of forwarded to SSH.
+    var localCommandHandler: ((String) -> Void)?
     
     struct TerminalTheme {
         var foreground: UIColor
@@ -40,6 +42,8 @@ struct SwiftTerminalView: UIViewRepresentable {
         var parent: SwiftTerminalView
         weak var terminalView: SwiftTerm.TerminalView?
         private nonisolated(unsafe) var sshOutputObserver: NSObjectProtocol?
+        /// Line buffer for local (non-SSH) mode
+        private var localLineBuffer: String = ""
         
         init(_ parent: SwiftTerminalView) {
             self.parent = parent
@@ -69,19 +73,48 @@ struct SwiftTerminalView: UIViewRepresentable {
         }
         
         nonisolated func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
-            // Forward user keystrokes to SSH
             let bytes = Array(data)
-            guard let str = String(bytes: bytes, encoding: .utf8), !str.isEmpty else {
-                // Send raw bytes for non-UTF8 sequences
+            guard let str = String(bytes: bytes, encoding: .utf8) else {
+                // Raw bytes with no UTF-8 decode: forward to SSH only
                 let rawStr = bytes.map { String(format: "%c", $0) }.joined()
                 Task { @MainActor in
                     SSHManager.shared.send(command: rawStr)
                 }
                 return
             }
-            // Use sendInput for raw data (no newline appended)
-            Task {
-                try? await SSHManager.shared.sendInput(str)
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // LOCAL MODE: localCommandHandler overrides SSH routing
+                if let handler = self.parent.localCommandHandler {
+                    if str == "\r" || str == "\n" {
+                        // Enter: echo newline, dispatch buffered line
+                        let line = self.localLineBuffer
+                        self.localLineBuffer = ""
+                        self.feedData("\r\n")
+                        handler(line)
+                    } else if str == "\u{7f}" || str == "\u{8}" {
+                        // Backspace: erase last character from buffer and screen
+                        if !self.localLineBuffer.isEmpty {
+                            self.localLineBuffer.removeLast()
+                            self.feedData("\u{8} \u{8}") // BS SPACE BS
+                        }
+                    } else if str == "\u{3}" {
+                        // Ctrl+C: clear buffer, show ^C
+                        self.localLineBuffer = ""
+                        self.feedData("^C\r\n")
+                    } else if str.unicodeScalars.allSatisfy({ $0.value >= 32 || $0.value == 9 }) {
+                        // Printable / Tab: echo and accumulate
+                        self.localLineBuffer += str
+                        self.feedData(str)
+                    }
+                    return
+                }
+                // SSH MODE (original behaviour)
+                guard !str.isEmpty else { return }
+                Task {
+                    try? await SSHManager.shared.sendInput(str)
+                }
             }
         }
         
@@ -208,7 +241,9 @@ struct SwiftTerminalView: View {
     @ObservedObject var terminalManager: TerminalManager
     var fontSize: CGFloat = 14
     var fontFamily: String = "Menlo"
-    
+    /// Ignored in fallback mode — present for API compatibility with the SwiftTerm variant.
+    var localCommandHandler: ((String) -> Void)? = nil
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "terminal")

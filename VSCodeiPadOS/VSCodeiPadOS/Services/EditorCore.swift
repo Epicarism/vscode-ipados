@@ -319,6 +319,9 @@ class EditorCore: ObservableObject {
     /// This avoids losing access after opening a document (common on iPadOS).
     private var securityScopedAccessCounts: [URL: Int] = [:]
 
+    /// Retained SFTP manager for in-flight remote saves (prevents ARC deallocation before callback)
+    private var activeSFTPManager: SFTPManager?
+
     var activeTab: Tab? {
         tabs.first { $0.id == activeTabId }
     }
@@ -1088,7 +1091,7 @@ mod tests {
 
     // MARK: - Tab Management
 
-    func addTab(fileName: String = "Untitled.swift", content: String = "", url: URL? = nil) {
+    func addTab(fileName: String = "Untitled.swift", content: String = "", url: URL? = nil, remotePath: String? = nil, remoteHost: String? = nil) {
         // Check if file is already open by URL
         if let url = url, let existingTab = tabs.first(where: { $0.url == url }) {
             activeTabId = existingTab.id
@@ -1096,14 +1099,21 @@ mod tests {
             return
         }
         
+        // Check if remote file is already open by remotePath
+        if let remotePath = remotePath, let existingTab = tabs.first(where: { $0.remotePath == remotePath }) {
+            activeTabId = existingTab.id
+            updateLargeFileStatus()
+            return
+        }
+        
         // For tabs without URLs (demo/untitled), check by fileName to avoid duplicates
-        if url == nil, let existingTab = tabs.first(where: { $0.url == nil && $0.fileName == fileName }) {
+        if url == nil && remotePath == nil, let existingTab = tabs.first(where: { $0.url == nil && $0.remotePath == nil && $0.fileName == fileName }) {
             activeTabId = existingTab.id
             updateLargeFileStatus()
             return
         }
 
-        let newTab = Tab(fileName: fileName, content: content, url: url)
+        let newTab = Tab(fileName: fileName, content: content, url: url, remotePath: remotePath, remoteHost: remoteHost)
         tabs.append(newTab)
         activeTabId = newTab.id
         updateLargeFileStatus()
@@ -1315,11 +1325,35 @@ mod tests {
             saveIndex = idx
         }
 
-        guard tabs.indices.contains(saveIndex),
-              let url = tabs[saveIndex].url else { return }
+        guard tabs.indices.contains(saveIndex) else { return }
+
         // Apply file cleanup settings to a local copy only — don't mutate tab content
         var contentToSave = tabs[saveIndex].content
         contentToSave = applyFileSaveSettings(to: contentToSave)
+
+        // --- Remote file save ---
+        if let remotePath = tabs[saveIndex].remotePath {
+            let sftpManager = SFTPManager(sshManager: SSHManager.shared)
+            self.activeSFTPManager = sftpManager  // Retain until callback completes
+            sftpManager.writeTextFile(remotePath: remotePath, content: contentToSave) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.activeSFTPManager = nil  // Release after callback
+                    guard self.tabs.indices.contains(saveIndex) else { return }
+                    switch result {
+                    case .success:
+                        self.tabs[saveIndex].isUnsaved = false
+                    case .failure(let error):
+                        AppLogger.editor.error("Error saving remote file: \(error)")
+                        self.lastErrorMessage = "Failed to save remote file: \(error.localizedDescription)"
+                    }
+                }
+            }
+            return
+        }
+
+        // --- Local file save ---
+        guard let url = tabs[saveIndex].url else { return }
 
         do {
             if let fileNavigator {

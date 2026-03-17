@@ -46,7 +46,7 @@ struct FileTreeRowView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             // Row content
             HStack(spacing: 4) {
                 // Indentation

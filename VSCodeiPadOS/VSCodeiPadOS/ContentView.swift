@@ -61,6 +61,7 @@ enum SidebarTab: Int, CaseIterable {
 
 struct ContentView: View {
     @EnvironmentObject var editorCore: EditorCore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var fileNavigator = FileSystemNavigator()
     @StateObject private var themeManager = ThemeManager.shared
     
@@ -88,6 +89,16 @@ struct ContentView: View {
             .modifier(TimelineHandlers(editorCore: editorCore))
             .environmentObject(themeManager)
             .environmentObject(editorCore)
+            .onChange(of: horizontalSizeClass) { _, newValue in
+                if newValue == .compact {
+                    withAnimation { editorCore.showSidebar = false }
+                }
+            }
+            .onAppear {
+                if horizontalSizeClass == .compact {
+                    editorCore.showSidebar = false
+                }
+            }
     }
 
     // MARK: - Timeline Notification Handlers
@@ -468,10 +479,29 @@ struct ContentView: View {
     private var mainLayout: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                IDEActivityBar(editorCore: editorCore, selectedTab: $editorCore.focusedSidebarTab, showSettings: $showSettings)
+                if horizontalSizeClass == .compact {
+                    // Hamburger menu button replaces full activity bar in compact (Split View / Slide Over)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            editorCore.showSidebar.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Toggle Sidebar")
+                } else {
+                    IDEActivityBar(editorCore: editorCore, selectedTab: $editorCore.focusedSidebarTab, showSettings: $showSettings)
+                }
                 
                 if editorCore.showSidebar {
-                    sidebarContent.frame(width: editorCore.sidebarWidth)
+                    sidebarContent
+                        .frame(width: editorCore.sidebarWidth)
+                        .transition(.move(edge: .leading))
                 }
                 
                 VStack(spacing: 0) {
@@ -479,7 +509,6 @@ struct ContentView: View {
                     
                     if let tab = editorCore.activeTab {
                         IDEEditorView(editorCore: editorCore, tab: tab, theme: theme, isTerminalFocused: Binding(get: { isTerminalFocused }, set: { isTerminalFocused = $0 }))
-                            .id(tab.id)
                             .allowsHitTesting(!isTerminalFocused)
                     } else {
                         IDEWelcomeView(editorCore: editorCore, showFolderPicker: $showingFolderPicker, theme: theme)
@@ -1025,9 +1054,29 @@ struct IDEEditorView: View {
             // Set initial lineHeight based on font size
             lineHeight = ceil(editorCore.editorFontSize * 1.4)
         }
-        .onChange(of: tab.id) { _, _ in
+        .onChange(of: tab.id) { oldTabId, _ in
+            // ── Tab switch: save outgoing state, load incoming state ──────────
+            // 1. Save scroll offset + cursor of the tab we're leaving
+            if let outgoingIndex = editorCore.tabs.firstIndex(where: { $0.id == oldTabId }) {
+                editorCore.tabs[outgoingIndex].savedScrollOffset = scrollOffset
+                editorCore.tabs[outgoingIndex].savedCursorIndex  = cursorIndex
+            }
+
+            // 2. Load new tab content
             text = tab.content
             foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
+
+            // 3. Restore saved scroll + cursor for the incoming tab (async so
+            //    the editor has a chance to finish loading the new text first)
+            let restoredScroll  = tab.savedScrollOffset
+            let restoredCursor  = tab.savedCursorIndex
+            DispatchQueue.main.async {
+                scrollOffset = restoredScroll
+                if restoredCursor > 0 {
+                    requestedCursorIndex = restoredCursor
+                    cursorIndex = restoredCursor
+                }
+            }
         }
         .onChange(of: currentLineNumber) { _, line in
             // Use debounced cursor update to reduce view refreshes
@@ -1272,6 +1321,7 @@ struct IDEWelcomeView: View {
     @StateObject var recentFiles: RecentFileManager = .shared
     @Binding var showFolderPicker: Bool
     let theme: Theme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     var body: some View {
         ScrollView {
@@ -1292,8 +1342,11 @@ struct IDEWelcomeView: View {
                 }
                 .padding(.bottom, 40)
                 
-                // Main content in columns
-                HStack(alignment: .top, spacing: 48) {
+                // Main content in columns — stack vertically in compact (Split View / Slide Over)
+                let layout: AnyLayout = horizontalSizeClass == .compact
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 32))
+                    : AnyLayout(HStackLayout(alignment: .top, spacing: 48))
+                layout {
                     // Left: Start actions
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Start")

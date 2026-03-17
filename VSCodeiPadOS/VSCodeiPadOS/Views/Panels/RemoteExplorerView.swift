@@ -187,7 +187,6 @@ struct RemoteExplorerView: View {
     
     private func connectToSaved(_ config: SSHConnectionConfig) {
         isConnecting = true
-        defer { isConnecting = false }
         
         let terminal = TerminalManager()
         activeTerminal = terminal
@@ -389,7 +388,8 @@ struct SavedConnectionRow: View {
                     // Open the downloaded file in editor
                     do {
                         let content = try String(contentsOf: localURL, encoding: .utf8)
-                        editorCore.addTab(fileName: node.name, content: content)
+                        let hostIdentifier = self.terminal?.title ?? SSHManager.shared.connectedHostName ?? "remote"
+                        editorCore.addTab(fileName: node.name, content: content, remotePath: node.path, remoteHost: hostIdentifier)
                         self.errorMessage = nil
                     } catch {
                         self.errorMessage = "Failed to read downloaded file: \(error.localizedDescription)"
