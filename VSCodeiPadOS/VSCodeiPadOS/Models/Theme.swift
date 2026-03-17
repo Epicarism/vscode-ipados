@@ -47,6 +47,26 @@ struct Theme: Identifiable, Equatable, Hashable {
     let type: Color
     let variable: Color
     
+    // Semantic Colors
+    let errorForeground: Color
+    let warningForeground: Color
+    let successForeground: Color
+    let infoForeground: Color
+    let errorBackground: Color
+    let warningBackground: Color
+    let successBackground: Color
+    
+    // UI Chrome
+    let border: Color
+    let activeBorder: Color
+    let overlayColor: Color
+    let disabledForeground: Color
+    
+    // Diff Colors
+    let diffAddedBackground: Color
+    let diffRemovedBackground: Color
+    let diffHeaderBackground: Color
+    
     // MARK: - VS Code Default Themes
     
     static let darkPlus = Theme(
@@ -88,7 +108,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#6A9955"),
         function: Color(hex: "#DCDCAA"),
         type: Color(hex: "#4EC9B0"),
-        variable: Color(hex: "#9CDCFE")
+        variable: Color(hex: "#9CDCFE"),
+        errorForeground: Color(hex: "#F48771"),
+        warningForeground: Color(hex: "#CCA700"),
+        successForeground: Color(hex: "#89D185"),
+        infoForeground: Color(hex: "#75BEFF"),
+        errorBackground: Color(hex: "#F48771").opacity(0.15),
+        warningBackground: Color(hex: "#CCA700").opacity(0.15),
+        successBackground: Color(hex: "#89D185").opacity(0.15),
+        border: Color(hex: "#454545"),
+        activeBorder: Color(hex: "#007ACC"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#858585"),
+        diffAddedBackground: Color(hex: "#2EA043").opacity(0.4375),
+        diffRemovedBackground: Color(hex: "#F85149").opacity(0.4375),
+        diffHeaderBackground: Color(hex: "#264F78")
     )
     
     static let lightPlus = Theme(
@@ -130,7 +164,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#008000"),
         function: Color(hex: "#795E26"),
         type: Color(hex: "#267F99"),
-        variable: Color(hex: "#001080")
+        variable: Color(hex: "#001080"),
+        errorForeground: Color(hex: "#E51400"),
+        warningForeground: Color(hex: "#BF8803"),
+        successForeground: Color(hex: "#388A34"),
+        infoForeground: Color(hex: "#006AB1"),
+        errorBackground: Color(hex: "#E51400").opacity(0.1),
+        warningBackground: Color(hex: "#BF8803").opacity(0.1),
+        successBackground: Color(hex: "#388A34").opacity(0.1),
+        border: Color(hex: "#CCCCCC"),
+        activeBorder: Color(hex: "#0066B8"),
+        overlayColor: Color(hex: "#000000").opacity(0.4),
+        disabledForeground: Color(hex: "#A0A0A0"),
+        diffAddedBackground: Color(hex: "#2EA043").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#F85149").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#BBDAFF")
     )
     
     static let monokai = Theme(
@@ -172,7 +220,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#75715E"),
         function: Color(hex: "#A6E22E"),
         type: Color(hex: "#66D9EF"),
-        variable: Color(hex: "#FD971F")
+        variable: Color(hex: "#FD971F"),
+        errorForeground: Color(hex: "#F92672"),
+        warningForeground: Color(hex: "#E6DB74"),
+        successForeground: Color(hex: "#A6E22E"),
+        infoForeground: Color(hex: "#66D9EF"),
+        errorBackground: Color(hex: "#F92672").opacity(0.15),
+        warningBackground: Color(hex: "#E6DB74").opacity(0.15),
+        successBackground: Color(hex: "#A6E22E").opacity(0.15),
+        border: Color(hex: "#464741"),
+        activeBorder: Color(hex: "#F92672"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#75715E"),
+        diffAddedBackground: Color(hex: "#A6E22E").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#F92672").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#3E3D32")
     )
     
     static let solarizedDark = Theme(
@@ -214,7 +276,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#586E75"),
         function: Color(hex: "#268BD2"),
         type: Color(hex: "#CB4B16"),
-        variable: Color(hex: "#B58900")
+        variable: Color(hex: "#B58900"),
+        errorForeground: Color(hex: "#DC322F"),
+        warningForeground: Color(hex: "#B58900"),
+        successForeground: Color(hex: "#859900"),
+        infoForeground: Color(hex: "#268BD2"),
+        errorBackground: Color(hex: "#DC322F").opacity(0.15),
+        warningBackground: Color(hex: "#B58900").opacity(0.15),
+        successBackground: Color(hex: "#859900").opacity(0.15),
+        border: Color(hex: "#2A4E56"),
+        activeBorder: Color(hex: "#268BD2"),
+        overlayColor: Color(hex: "#002B36").opacity(0.6),
+        disabledForeground: Color(hex: "#657B83"),
+        diffAddedBackground: Color(hex: "#859900").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#DC322F").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#073642")
     )
     
     static let solarizedLight = Theme(
@@ -256,7 +332,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#93A1A1"),
         function: Color(hex: "#268BD2"),
         type: Color(hex: "#CB4B16"),
-        variable: Color(hex: "#B58900")
+        variable: Color(hex: "#B58900"),
+        errorForeground: Color(hex: "#DC322F"),
+        warningForeground: Color(hex: "#B58900"),
+        successForeground: Color(hex: "#859900"),
+        infoForeground: Color(hex: "#268BD2"),
+        errorBackground: Color(hex: "#DC322F").opacity(0.1),
+        warningBackground: Color(hex: "#B58900").opacity(0.1),
+        successBackground: Color(hex: "#859900").opacity(0.1),
+        border: Color(hex: "#EEE8D5"),
+        activeBorder: Color(hex: "#268BD2"),
+        overlayColor: Color(hex: "#002B36").opacity(0.4),
+        disabledForeground: Color(hex: "#93A1A1"),
+        diffAddedBackground: Color(hex: "#859900").opacity(0.1875),
+        diffRemovedBackground: Color(hex: "#DC322F").opacity(0.1875),
+        diffHeaderBackground: Color(hex: "#EEE8D5")
     )
     
     static let dracula = Theme(
@@ -298,7 +388,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#6272A4"),
         function: Color(hex: "#50FA7B"),
         type: Color(hex: "#8BE9FD"),
-        variable: Color(hex: "#FFB86C")
+        variable: Color(hex: "#FFB86C"),
+        errorForeground: Color(hex: "#FF5555"),
+        warningForeground: Color(hex: "#FFB86C"),
+        successForeground: Color(hex: "#50FA7B"),
+        infoForeground: Color(hex: "#8BE9FD"),
+        errorBackground: Color(hex: "#FF5555").opacity(0.15),
+        warningBackground: Color(hex: "#FFB86C").opacity(0.15),
+        successBackground: Color(hex: "#50FA7B").opacity(0.15),
+        border: Color(hex: "#44475A"),
+        activeBorder: Color(hex: "#BD93F9"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#6272A4"),
+        diffAddedBackground: Color(hex: "#50FA7B").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#FF5555").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#44475A")
     )
     
     static let oneDarkPro = Theme(
@@ -340,7 +444,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#5C6370"),
         function: Color(hex: "#61AFEF"),
         type: Color(hex: "#E5C07B"),
-        variable: Color(hex: "#E06C75")
+        variable: Color(hex: "#E06C75"),
+        errorForeground: Color(hex: "#E06C75"),
+        warningForeground: Color(hex: "#E5C07B"),
+        successForeground: Color(hex: "#98C379"),
+        infoForeground: Color(hex: "#61AFEF"),
+        errorBackground: Color(hex: "#E06C75").opacity(0.15),
+        warningBackground: Color(hex: "#E5C07B").opacity(0.15),
+        successBackground: Color(hex: "#98C379").opacity(0.15),
+        border: Color(hex: "#3B4048"),
+        activeBorder: Color(hex: "#528BFF"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#5C6370"),
+        diffAddedBackground: Color(hex: "#98C379").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#E06C75").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#2C313C")
     )
     
     static let nord = Theme(
@@ -382,7 +500,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#616E88"),
         function: Color(hex: "#88C0D0"),
         type: Color(hex: "#8FBCBB"),
-        variable: Color(hex: "#D8DEE9")
+        variable: Color(hex: "#D8DEE9"),
+        errorForeground: Color(hex: "#BF616A"),
+        warningForeground: Color(hex: "#EBCB8B"),
+        successForeground: Color(hex: "#A3BE8C"),
+        infoForeground: Color(hex: "#81A1C1"),
+        errorBackground: Color(hex: "#BF616A").opacity(0.15),
+        warningBackground: Color(hex: "#EBCB8B").opacity(0.15),
+        successBackground: Color(hex: "#A3BE8C").opacity(0.15),
+        border: Color(hex: "#434C5E"),
+        activeBorder: Color(hex: "#88C0D0"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#4C566A"),
+        diffAddedBackground: Color(hex: "#A3BE8C").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#BF616A").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#3B4252")
     )
     
     static let githubDark = Theme(
@@ -424,7 +556,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#8B949E"),
         function: Color(hex: "#D2A8FF"),
         type: Color(hex: "#79C0FF"),
-        variable: Color(hex: "#FFA657")
+        variable: Color(hex: "#FFA657"),
+        errorForeground: Color(hex: "#F85149"),
+        warningForeground: Color(hex: "#D29922"),
+        successForeground: Color(hex: "#3FB950"),
+        infoForeground: Color(hex: "#58A6FF"),
+        errorBackground: Color(hex: "#F85149").opacity(0.15),
+        warningBackground: Color(hex: "#D29922").opacity(0.15),
+        successBackground: Color(hex: "#3FB950").opacity(0.15),
+        border: Color(hex: "#30363D"),
+        activeBorder: Color(hex: "#58A6FF"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#484F58"),
+        diffAddedBackground: Color(hex: "#3FB950").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#F85149").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#161B22")
     )
     
     static let githubLight = Theme(
@@ -466,7 +612,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#6E7781"),
         function: Color(hex: "#8250DF"),
         type: Color(hex: "#0550AE"),
-        variable: Color(hex: "#953800")
+        variable: Color(hex: "#953800"),
+        errorForeground: Color(hex: "#CF222E"),
+        warningForeground: Color(hex: "#9A6700"),
+        successForeground: Color(hex: "#1A7F37"),
+        infoForeground: Color(hex: "#0969DA"),
+        errorBackground: Color(hex: "#CF222E").opacity(0.1),
+        warningBackground: Color(hex: "#9A6700").opacity(0.1),
+        successBackground: Color(hex: "#1A7F37").opacity(0.1),
+        border: Color(hex: "#D0D7DE"),
+        activeBorder: Color(hex: "#0969DA"),
+        overlayColor: Color(hex: "#000000").opacity(0.4),
+        disabledForeground: Color(hex: "#8C959F"),
+        diffAddedBackground: Color(hex: "#1A7F37").opacity(0.1875),
+        diffRemovedBackground: Color(hex: "#CF222E").opacity(0.1875),
+        diffHeaderBackground: Color(hex: "#F6F8FA")
     )
     
     static let cobalt2 = Theme(
@@ -508,7 +668,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#0088FF"),
         function: Color(hex: "#FFC600"),
         type: Color(hex: "#80FFBB"),
-        variable: Color(hex: "#9EFFFF")
+        variable: Color(hex: "#9EFFFF"),
+        errorForeground: Color(hex: "#FF628C"),
+        warningForeground: Color(hex: "#FFC600"),
+        successForeground: Color(hex: "#80FFBB"),
+        infoForeground: Color(hex: "#0088FF"),
+        errorBackground: Color(hex: "#FF628C").opacity(0.15),
+        warningBackground: Color(hex: "#FFC600").opacity(0.15),
+        successBackground: Color(hex: "#80FFBB").opacity(0.15),
+        border: Color(hex: "#294B5C"),
+        activeBorder: Color(hex: "#0088FF"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#3D5F7D"),
+        diffAddedBackground: Color(hex: "#80FFBB").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#FF628C").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#0D3A58")
     )
     
     static let ayuDark = Theme(
@@ -550,7 +724,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#626A73"),
         function: Color(hex: "#FFB454"),
         type: Color(hex: "#59C2FF"),
-        variable: Color(hex: "#B3B1AD")
+        variable: Color(hex: "#B3B1AD"),
+        errorForeground: Color(hex: "#FF3333"),
+        warningForeground: Color(hex: "#E6B450"),
+        successForeground: Color(hex: "#AAD94C"),
+        infoForeground: Color(hex: "#59C2FF"),
+        errorBackground: Color(hex: "#FF3333").opacity(0.15),
+        warningBackground: Color(hex: "#E6B450").opacity(0.15),
+        successBackground: Color(hex: "#AAD94C").opacity(0.15),
+        border: Color(hex: "#1C212B"),
+        activeBorder: Color(hex: "#59C2FF"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#3D424D"),
+        diffAddedBackground: Color(hex: "#AAD94C").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#FF3333").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#0D1016")
     )
     
     static let ayuLight = Theme(
@@ -592,7 +780,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#ABB0B6"),
         function: Color(hex: "#F2AE49"),
         type: Color(hex: "#399EE6"),
-        variable: Color(hex: "#5C6166")
+        variable: Color(hex: "#5C6166"),
+        errorForeground: Color(hex: "#F07178"),
+        warningForeground: Color(hex: "#F2AE49"),
+        successForeground: Color(hex: "#86B300"),
+        infoForeground: Color(hex: "#399EE6"),
+        errorBackground: Color(hex: "#F07178").opacity(0.1),
+        warningBackground: Color(hex: "#F2AE49").opacity(0.1),
+        successBackground: Color(hex: "#86B300").opacity(0.1),
+        border: Color(hex: "#E7E8E9"),
+        activeBorder: Color(hex: "#399EE6"),
+        overlayColor: Color(hex: "#000000").opacity(0.4),
+        disabledForeground: Color(hex: "#9DA2A6"),
+        diffAddedBackground: Color(hex: "#86B300").opacity(0.1875),
+        diffRemovedBackground: Color(hex: "#F07178").opacity(0.1875),
+        diffHeaderBackground: Color(hex: "#EFF0F1")
     )
     
     static let ayuMirage = Theme(
@@ -634,7 +836,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#5C6773"),
         function: Color(hex: "#FFD580"),
         type: Color(hex: "#73D0FF"),
-        variable: Color(hex: "#CBCCC6")
+        variable: Color(hex: "#CBCCC6"),
+        errorForeground: Color(hex: "#F28779"),
+        warningForeground: Color(hex: "#FFD580"),
+        successForeground: Color(hex: "#BAE67E"),
+        infoForeground: Color(hex: "#73D0FF"),
+        errorBackground: Color(hex: "#F28779").opacity(0.15),
+        warningBackground: Color(hex: "#FFD580").opacity(0.15),
+        successBackground: Color(hex: "#BAE67E").opacity(0.15),
+        border: Color(hex: "#2D3640"),
+        activeBorder: Color(hex: "#73D0FF"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#707A8C"),
+        diffAddedBackground: Color(hex: "#BAE67E").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#F28779").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#232834")
     )
     
     static let quietLight = Theme(
@@ -676,7 +892,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#AAAAAA"),
         function: Color(hex: "#7A3E9D"),
         type: Color(hex: "#7A3E9D"),
-        variable: Color(hex: "#333333")
+        variable: Color(hex: "#333333"),
+        errorForeground: Color(hex: "#D73A49"),
+        warningForeground: Color(hex: "#CB6200"),
+        successForeground: Color(hex: "#22863A"),
+        infoForeground: Color(hex: "#4B83CD"),
+        errorBackground: Color(hex: "#D73A49").opacity(0.1),
+        warningBackground: Color(hex: "#CB6200").opacity(0.1),
+        successBackground: Color(hex: "#22863A").opacity(0.1),
+        border: Color(hex: "#E0E0E0"),
+        activeBorder: Color(hex: "#4B83CD"),
+        overlayColor: Color(hex: "#000000").opacity(0.4),
+        disabledForeground: Color(hex: "#AAAAAA"),
+        diffAddedBackground: Color(hex: "#22863A").opacity(0.1875),
+        diffRemovedBackground: Color(hex: "#D73A49").opacity(0.1875),
+        diffHeaderBackground: Color(hex: "#E4F6D4")
     )
     
     static let red = Theme(
@@ -718,7 +948,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#CC6666"),
         function: Color(hex: "#FFFF66"),
         type: Color(hex: "#AAFFAA"),
-        variable: Color(hex: "#AADDFF")
+        variable: Color(hex: "#AADDFF"),
+        errorForeground: Color(hex: "#FF0000"),
+        warningForeground: Color(hex: "#FFFF66"),
+        successForeground: Color(hex: "#AAFFAA"),
+        infoForeground: Color(hex: "#AADDFF"),
+        errorBackground: Color(hex: "#FF0000").opacity(0.15),
+        warningBackground: Color(hex: "#FFFF66").opacity(0.15),
+        successBackground: Color(hex: "#AAFFAA").opacity(0.15),
+        border: Color(hex: "#550000"),
+        activeBorder: Color(hex: "#FF0000"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#CC6666"),
+        diffAddedBackground: Color(hex: "#AAFFAA").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#FF0000").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#500000")
     )
     
     static let tomorrowNight = Theme(
@@ -760,7 +1004,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#969896"),
         function: Color(hex: "#81A2BE"),
         type: Color(hex: "#F0C674"),
-        variable: Color(hex: "#CC6666")
+        variable: Color(hex: "#CC6666"),
+        errorForeground: Color(hex: "#CC6666"),
+        warningForeground: Color(hex: "#F0C674"),
+        successForeground: Color(hex: "#B5BD68"),
+        infoForeground: Color(hex: "#81A2BE"),
+        errorBackground: Color(hex: "#CC6666").opacity(0.15),
+        warningBackground: Color(hex: "#F0C674").opacity(0.15),
+        successBackground: Color(hex: "#B5BD68").opacity(0.15),
+        border: Color(hex: "#373B41"),
+        activeBorder: Color(hex: "#81A2BE"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#969896"),
+        diffAddedBackground: Color(hex: "#B5BD68").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#CC6666").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#282A2E")
     )
     
     static let tomorrowNightBlue = Theme(
@@ -802,7 +1060,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#7285B7"),
         function: Color(hex: "#BBDAFF"),
         type: Color(hex: "#FFEEAD"),
-        variable: Color(hex: "#FF9DA4")
+        variable: Color(hex: "#FF9DA4"),
+        errorForeground: Color(hex: "#FF9DA4"),
+        warningForeground: Color(hex: "#FFEEAD"),
+        successForeground: Color(hex: "#D1F1A9"),
+        infoForeground: Color(hex: "#BBDAFF"),
+        errorBackground: Color(hex: "#FF9DA4").opacity(0.15),
+        warningBackground: Color(hex: "#FFEEAD").opacity(0.15),
+        successBackground: Color(hex: "#D1F1A9").opacity(0.15),
+        border: Color(hex: "#003875"),
+        activeBorder: Color(hex: "#BBDAFF"),
+        overlayColor: Color(hex: "#000000").opacity(0.6),
+        disabledForeground: Color(hex: "#7285B7"),
+        diffAddedBackground: Color(hex: "#D1F1A9").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#FF9DA4").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#00346E")
     )
     
     static let highContrast = Theme(
@@ -844,7 +1116,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#7CA668"),
         function: Color(hex: "#DCDCAA"),
         type: Color(hex: "#4EC9B0"),
-        variable: Color(hex: "#9CDCFE")
+        variable: Color(hex: "#9CDCFE"),
+        errorForeground: Color(hex: "#FF0000"),
+        warningForeground: Color(hex: "#FFD700"),
+        successForeground: Color(hex: "#00FF00"),
+        infoForeground: Color(hex: "#00BFFF"),
+        errorBackground: Color(hex: "#FF0000").opacity(0.2),
+        warningBackground: Color(hex: "#FFD700").opacity(0.2),
+        successBackground: Color(hex: "#00FF00").opacity(0.2),
+        border: Color(hex: "#6FC3DF"),
+        activeBorder: Color(hex: "#FFFFFF"),
+        overlayColor: Color(hex: "#000000").opacity(0.6),
+        disabledForeground: Color(hex: "#FFFFFF").opacity(0.5),
+        diffAddedBackground: Color(hex: "#00FF00").opacity(0.3),
+        diffRemovedBackground: Color(hex: "#FF0000").opacity(0.3),
+        diffHeaderBackground: Color(hex: "#0000AA")
     )
     
 
@@ -887,7 +1173,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#616E88"),
         function: Color(hex: "#88C0D0"),
         type: Color(hex: "#8FBCBB"),
-        variable: Color(hex: "#D08770")
+        variable: Color(hex: "#D08770"),
+        errorForeground: Color(hex: "#BF616A"),
+        warningForeground: Color(hex: "#EBCB8B"),
+        successForeground: Color(hex: "#A3BE8C"),
+        infoForeground: Color(hex: "#81A1C1"),
+        errorBackground: Color(hex: "#BF616A").opacity(0.15),
+        warningBackground: Color(hex: "#EBCB8B").opacity(0.15),
+        successBackground: Color(hex: "#A3BE8C").opacity(0.15),
+        border: Color(hex: "#434C5E"),
+        activeBorder: Color(hex: "#88C0D0"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#4C566A"),
+        diffAddedBackground: Color(hex: "#A3BE8C").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#BF616A").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#3B4252")
     )
 
     static let tokyoNight = Theme(
@@ -929,7 +1229,21 @@ struct Theme: Identifiable, Equatable, Hashable {
         comment: Color(hex: "#565F89"),
         function: Color(hex: "#7AA2F7"),
         type: Color(hex: "#7DCFFF"),
-        variable: Color(hex: "#C0CAF5")
+        variable: Color(hex: "#C0CAF5"),
+        errorForeground: Color(hex: "#F7768E"),
+        warningForeground: Color(hex: "#E0AF68"),
+        successForeground: Color(hex: "#9ECE6A"),
+        infoForeground: Color(hex: "#7AA2F7"),
+        errorBackground: Color(hex: "#F7768E").opacity(0.15),
+        warningBackground: Color(hex: "#E0AF68").opacity(0.15),
+        successBackground: Color(hex: "#9ECE6A").opacity(0.15),
+        border: Color(hex: "#292E42"),
+        activeBorder: Color(hex: "#7AA2F7"),
+        overlayColor: Color(hex: "#000000").opacity(0.5),
+        disabledForeground: Color(hex: "#565F89"),
+        diffAddedBackground: Color(hex: "#9ECE6A").opacity(0.25),
+        diffRemovedBackground: Color(hex: "#F7768E").opacity(0.25),
+        diffHeaderBackground: Color(hex: "#1E2030")
     )
 
     // MARK: - All Themes
