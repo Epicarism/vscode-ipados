@@ -402,6 +402,9 @@ struct OutputView: View {
         .background(theme.editorBackground)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Output panel")
+        .onReceive(NotificationCenter.default.publisher(for: .cancelRemoteExecution)) { _ in
+            outputManager.finishRemoteExecution(exitMessage: "[Execution cancelled by user]")
+        }
     }
 
     private var header: some View {

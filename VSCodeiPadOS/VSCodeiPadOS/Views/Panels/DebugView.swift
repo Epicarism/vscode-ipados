@@ -819,7 +819,7 @@ struct BreakpointRow: View {
             }) {
                 Image(systemName: "circle.fill")
                     .font(.system(size: 10))
-                    .foregroundColor(breakpoint.isEnabled ? .red : theme.comment)
+                    .foregroundColor(breakpoint.isEnabled ? Color(UIColor.systemRed) : theme.comment)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(breakpoint.isEnabled ? "Enabled breakpoint – tap to disable" : "Disabled breakpoint – tap to enable")

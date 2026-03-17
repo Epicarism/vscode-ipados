@@ -112,6 +112,8 @@ struct DebugConsoleView: View {
     @State private var commandHistory: [String] = []
     @State private var historyIndex: Int = -1
     @FocusState private var isInputFocused: Bool
+    @State private var isAutoScrollEnabled = true
+
 
     private var theme: Theme { themeManager.currentTheme }
 
@@ -150,11 +152,12 @@ struct DebugConsoleView: View {
                 }
                 .background(theme.editorBackground)
                 .onChange(of: debugManager.consoleEntries.count) { _, _ in
-                    if let last = debugManager.consoleEntries.last {
+                    if isAutoScrollEnabled, let last = debugManager.consoleEntries.last {
                         withAnimation(.easeOut(duration: 0.12)) {
                             proxy.scrollTo(last.id, anchor: .bottom)
                         }
                     }
+
                 }
             }
 
@@ -191,6 +194,17 @@ struct DebugConsoleView: View {
                     .font(.system(size: 10))
                     .foregroundColor(theme.comment)
             }
+
+            Button {
+                isAutoScrollEnabled.toggle()
+            } label: {
+                Image(systemName: isAutoScrollEnabled ? "arrow.down.circle.fill" : "arrow.down.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.comment)
+            }
+            .buttonStyle(.plain)
+            .help(isAutoScrollEnabled ? "Auto-scroll On" : "Auto-scroll Off")
+
 
             Button {
                 debugManager.copyConsoleToClipboard()

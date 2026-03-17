@@ -1256,33 +1256,9 @@ mod tests {
         // Small delay to allow sync to complete before reading content
         DispatchQueue.main.async { [self] in
             for index in self.tabs.indices {
-                guard let url = self.tabs[index].url, self.tabs[index].isUnsaved else { continue }
-
-                // Apply file cleanup settings to a local copy only — don't mutate tab content
-                var contentToSave = self.tabs[index].content
-                contentToSave = self.applyFileSaveSettings(to: contentToSave)
-
-                do {
-                    if let fileNavigator {
-                        try fileNavigator.writeFile(at: url, content: contentToSave)
-                    } else {
-                        // Fallback: Ensure we have access when writing, even if this URL wasn't opened via openFile().
-                        let didStart = (self.securityScopedAccessCounts[url] == nil) ? url.startAccessingSecurityScopedResource() : false
-                        defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                        try contentToSave.write(to: url, atomically: true, encoding: self.tabs[index].stringEncoding)
-                    }
-
-                    self.tabs[index].isUnsaved = false
-
-                    // Run diagnostics on the saved file
-                    DiagnosticsService.shared.analyzeFile(
-                        content: contentToSave,
-                        filename: self.tabs[index].fileName,
-                        filePath: url.path
-                    )
-                } catch {
-                    AppLogger.editor.error("Error saving file: \(error)")
-                }
+                guard self.tabs[index].url != nil, self.tabs[index].isUnsaved else { continue }
+                // Call the existing _performSave to avoid code duplication
+                self._performSave(tabId: self.tabs[index].id, index: index)
             }
         }
     }
