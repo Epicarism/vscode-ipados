@@ -429,7 +429,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         }
         
         nonisolated(unsafe) let delegate = self.delegate
-        weak var weakManager = self
+        weak var weakManager: SSHManager? = self
         
         let childChannel: Channel = try await channel.pipeline.handler(type: NIOSSHHandler.self).flatMap { sshHandler in
             let childPromise = channel.eventLoop.makePromise(of: Channel.self)
