@@ -36,7 +36,7 @@ struct StatusBarView: View {
             // Subtle separator line at top (matches VSCode)
             Rectangle()
                 .fill(theme.statusBarForeground.opacity(0.15))
-                .frame(height: CGFloat(1) / UIScreen.main.scale)  // hairline
+                .frame(height: 1.0 / (UITraitCollection.current.displayScale > 0 ? UITraitCollection.current.displayScale : 2.0))  // hairline
 
             HStack(spacing: 0) {
                 // ── Left side ──────────────────────────────────────────

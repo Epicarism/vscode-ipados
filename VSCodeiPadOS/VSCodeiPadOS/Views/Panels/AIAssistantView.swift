@@ -821,7 +821,10 @@ struct AISettingsView: View {
                         Text("Required for some gated models like Nanbeige2")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Link("Get token from huggingface.co/settings/tokens", destination: URL(string: "https://huggingface.co/settings/tokens")!)
+                        if let url = URL(string: "https://huggingface.co/settings/tokens") {
+                            Link("Get token from huggingface.co/settings/tokens", destination: url)
+                                .font(.caption)
+                        }
                             .font(.caption)
                     }
                     
@@ -850,11 +853,11 @@ struct AISettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("API keys are stored locally on your device.")
                         Text("Get your API keys from:")
-                        Link("• OpenAI Platform", destination: URL(string: "https://platform.openai.com/api-keys")!)
-                        Link("• Anthropic Console", destination: URL(string: "https://console.anthropic.com/")!)
-                        Link("• Google AI Studio", destination: URL(string: "https://makersuite.google.com/app/apikey")!)
-                        Link("• Moonshot AI (Kimi)", destination: URL(string: "https://platform.moonshot.cn/")!)
-                        Link("• Zhipu AI (GLM)", destination: URL(string: "https://open.bigmodel.cn/")!)
+                        if let url = URL(string: "https://platform.openai.com/api-keys") { Link("• OpenAI Platform", destination: url) }
+                        if let url = URL(string: "https://console.anthropic.com/") { Link("• Anthropic Console", destination: url) }
+                        if let url = URL(string: "https://makersuite.google.com/app/apikey") { Link("• Google AI Studio", destination: url) }
+                        if let url = URL(string: "https://platform.moonshot.cn/") { Link("• Moonshot AI (Kimi)", destination: url) }
+                        if let url = URL(string: "https://open.bigmodel.cn/") { Link("• Zhipu AI (GLM)", destination: url) }
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)

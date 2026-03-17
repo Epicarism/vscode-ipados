@@ -217,6 +217,19 @@ class SplitEditorManager: ObservableObject {
         }
     }
     
+    /// Move a tab by its UUID string to a target pane (used for drag-and-drop).
+    func moveTab(id tabIdString: String, toPane targetPaneId: UUID) {
+        guard let tabUUID = UUID(uuidString: tabIdString) else { return }
+        // Find the source pane that contains this tab
+        for sourcePane in panes {
+            if let tab = sourcePane.tabs.first(where: { $0.id == tabUUID }) {
+                guard sourcePane.id != targetPaneId else { return } // Already in target
+                moveTabToPane(tab: tab, fromPaneId: sourcePane.id, toPaneId: targetPaneId)
+                return
+            }
+        }
+    }
+
     // Sync scroll across panes
     func syncScrollOffset(_ offset: CGFloat, fromPaneId: UUID) {
         guard syncScroll else { return }
@@ -298,11 +311,21 @@ struct SinglePaneView: View {
     }
     
     var body: some View {
+        paneContent
+            .background(isActive ? Color(UIColor.systemBackground) : Color(UIColor.secondarySystemBackground).opacity(0.3))
+            .overlay(activeIndicatorOverlay)
+            .overlay(dropZoneOverlay)
+            .onTapGesture {
+                splitManager.activePaneId = pane.id
+            }
+            .onDrop(of: [.text], isTargeted: $dragOverPane) { providers in
+                handleDrop(providers)
+            }
+    }
+    
+    private var paneContent: some View {
         VStack(spacing: 0) {
-            // Pane header with tabs and controls
             paneHeader
-            
-            // Editor content
             if let tab = pane.activeTab {
                 PaneEditorView(
                     pane: pane,
@@ -314,38 +337,35 @@ struct SinglePaneView: View {
                 emptyPaneView
             }
         }
-        .background(isActive ? Color(UIColor.systemBackground) : Color(UIColor.secondarySystemBackground).opacity(0.3))
-        .overlay(
-            RoundedRectangle(cornerRadius: 0)
-                .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .overlay(
-            // Drop zone indicator
-            Group {
-                if dragOverPane {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.accentColor.opacity(0.2))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [5]))
-                        )
-                }
+    }
+    
+    private var activeIndicatorOverlay: some View {
+        RoundedRectangle(cornerRadius: 0)
+            .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 2)
+    }
+    
+    private var dropZoneOverlay: some View {
+        Group {
+            if dragOverPane {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.accentColor.opacity(0.2))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [5]))
+                    )
             }
-        )
-        .onTapGesture {
-            splitManager.activePaneId = pane.id
         }
-        .onDrop(of: [.text], isTargeted: $dragOverPane) { providers in
-            // Extract tab identifier from drop providers
-            guard let provider = providers.first else { return false }
-            provider.loadObject(ofClass: NSString.self) { reading, _ in
-                guard let tabId = reading as? String else { return }
-                DispatchQueue.main.async {
-                    splitManager.moveTab(id: tabId, toPane: pane.id)
-                }
+    }
+    
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadObject(ofClass: NSString.self) { reading, _ in
+            guard let tabId = reading as? String else { return }
+            DispatchQueue.main.async {
+                splitManager.moveTab(id: tabId, toPane: pane.id)
             }
-            return true
         }
+        return true
     }
     
     private var paneHeader: some View {
@@ -585,33 +605,35 @@ struct PaneEditorView: View {
                 }
 
                 // Editor
-                if useRunestoneEditor {
-                    RunestoneEditorView(
-                        text: $text,
-                        filename: tab.fileName,
-                        scrollOffset: $scrollOffset,
-                        totalLines: $totalLines,
-                        currentLineNumber: $currentLineNumber,
-                        currentColumn: $currentColumn,
-                        cursorIndex: $cursorIndex,
-                        isActive: splitManager.activePaneId == pane.id
-                    )
-                    .environmentObject(editorCore)
-                } else {
-                    SyntaxHighlightingTextView(
-                        text: $text,
-                        filename: tab.fileName,
-                        scrollPosition: $scrollPosition,
-                        scrollOffset: $scrollOffset,
-                        totalLines: $totalLines,
-                        visibleLines: $visibleLines,
-                        currentLineNumber: $currentLineNumber,
-                        currentColumn: $currentColumn,
-                        lineHeight: $lineHeight,
-                        isActive: splitManager.activePaneId == pane.id,
-                        editorCore: editorCore,
-                        requestedLineSelection: $requestedLineSelection
-                    )
+                Group {
+                    if useRunestoneEditor {
+                        RunestoneEditorView(
+                            text: $text,
+                            filename: tab.fileName,
+                            scrollOffset: $scrollOffset,
+                            totalLines: $totalLines,
+                            currentLineNumber: $currentLineNumber,
+                            currentColumn: $currentColumn,
+                            cursorIndex: $cursorIndex,
+                            isActive: splitManager.activePaneId == pane.id
+                        )
+                        .environmentObject(editorCore)
+                    } else {
+                        SyntaxHighlightingTextView(
+                            text: $text,
+                            filename: tab.fileName,
+                            scrollPosition: $scrollPosition,
+                            scrollOffset: $scrollOffset,
+                            totalLines: $totalLines,
+                            visibleLines: $visibleLines,
+                            currentLineNumber: $currentLineNumber,
+                            currentColumn: $currentColumn,
+                            lineHeight: $lineHeight,
+                            isActive: splitManager.activePaneId == pane.id,
+                            editorCore: editorCore,
+                            requestedLineSelection: $requestedLineSelection
+                        )
+                    }
                 }
                 .onChange(of: text) { _, newValue in
                     pane.updateTabContent(newValue)
@@ -705,7 +727,7 @@ struct PaneEditorView: View {
             // Re-detect foldable regions for new file
             foldingManager.detectFoldableRegions(in: text, filePath: fileId)
         }
-        .onChange(of: pane.scrollOffset) { newOffset in
+        .onChange(of: pane.scrollOffset) { _, newOffset in
             guard splitManager.syncScroll else { return }
             // Avoid feedback loop when we're the source pane.
             if abs(scrollOffset - newOffset) > 0.5 {

@@ -1341,8 +1341,8 @@ struct ANSIText: View {
     let preParsedSegments: [ANSISegment]?
     @StateObject private var themeManager = ThemeManager.shared
     
-    private static let ansiRegex = try! NSRegularExpression(pattern: "\u{1B}\\[([0-9;]*)([a-zA-Z])")
-    private static let oscRegex = try! NSRegularExpression(pattern: "\u{1B}\\][^\u{07}\u{1B}]*(\u{07}|\u{1B}\\\\)")
+    private static let ansiRegex: NSRegularExpression? = try? NSRegularExpression(pattern: "\u{1B}\\[([0-9;]*)([a-zA-Z])")
+    private static let oscRegex: NSRegularExpression? = try? NSRegularExpression(pattern: "\u{1B}\\][^\u{07}\u{1B}]*(\u{07}|\u{1B}\\\\)")
     
     init(_ text: String, segments: [ANSISegment]? = nil) {
         self.text = text
@@ -1394,7 +1394,7 @@ struct ANSIText: View {
     
     private func parseANSI(_ input: String) -> [ANSISegment] {
         // First strip OSC sequences (terminal title changes, etc.)
-        let cleanedInput = Self.oscRegex.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: "")
+        let cleanedInput = Self.oscRegex?.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: "") ?? input
         
         var segments: [ANSISegment] = []
         var currentColor: Color? = nil
@@ -1403,7 +1403,10 @@ struct ANSIText: View {
         var italic = false
         var underline = false
         var reverseVideo = false
-        let regex = Self.ansiRegex
+        guard let regex = Self.ansiRegex else {
+            // Fallback: return plain text as single segment
+            return [ANSISegment(text: cleanedInput, color: nil, backgroundColor: nil, bold: false, italic: false, underline: false)]
+        }
         
         let nsInput = cleanedInput as NSString
         var lastEnd = 0
@@ -1556,7 +1559,7 @@ struct ANSIText: View {
             initialUnderline: Bool = false
         ) -> (segments: [ANSISegment], finalColor: Color?, finalBgColor: Color?, finalBold: Bool, finalItalic: Bool, finalUnderline: Bool) {
             // First strip OSC sequences (terminal title changes, etc.)
-            let cleanedInput = oscRegex.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: "")
+            let cleanedInput = oscRegex?.stringByReplacingMatches(in: input, range: NSRange(location: 0, length: (input as NSString).length), withTemplate: "") ?? input
             
             var segments: [ANSISegment] = []
             var currentColor: Color? = initialColor
@@ -1565,7 +1568,11 @@ struct ANSIText: View {
             var italic = initialItalic
             var underline = initialUnderline
             var reverseVideo = false
-            let regex = ansiRegex
+            guard let regex = ansiRegex else {
+                // Fallback: return plain text as single segment with current state
+                return ([ANSISegment(text: cleanedInput, color: currentColor, backgroundColor: currentBackgroundColor, bold: bold, italic: italic, underline: underline)],
+                        currentColor, currentBackgroundColor, bold, italic, underline)
+            }
             
             let nsInput = cleanedInput as NSString
             var lastEnd = 0
