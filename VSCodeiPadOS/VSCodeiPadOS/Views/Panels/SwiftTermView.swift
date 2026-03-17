@@ -36,10 +36,10 @@ struct SwiftTerminalView: UIViewRepresentable {
     
     // MARK: - Coordinator
     
-    class Coordinator: NSObject, TerminalViewDelegate {
+    @MainActor class Coordinator: NSObject, TerminalViewDelegate {
         var parent: SwiftTerminalView
         weak var terminalView: SwiftTerm.TerminalView?
-        private var sshOutputObserver: NSObjectProtocol?
+        private nonisolated(unsafe) var sshOutputObserver: NSObjectProtocol?
         
         init(_ parent: SwiftTerminalView) {
             self.parent = parent
@@ -54,27 +54,29 @@ struct SwiftTerminalView: UIViewRepresentable {
         
         // MARK: - TerminalViewDelegate
         
-        func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
+        nonisolated func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
             // Forward terminal size changes to SSH
-            guard parent.terminalManager.isConnected else { return }
-            Task {
+            Task { @MainActor in
                 try? await SSHManager.shared.resizeTerminal(cols: newCols, rows: newRows)
             }
         }
         
-        func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {
-            Task { @MainActor in
-                parent.terminalManager.title = title
+        nonisolated func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {
+            let t = title
+            Task { @MainActor [weak self] in
+                self?.parent.terminalManager.title = t
             }
         }
         
-        func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
+        nonisolated func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
             // Forward user keystrokes to SSH
             let bytes = Array(data)
             guard let str = String(bytes: bytes, encoding: .utf8), !str.isEmpty else {
                 // Send raw bytes for non-UTF8 sequences
                 let rawStr = bytes.map { String(format: "%c", $0) }.joined()
-                SSHManager.shared.send(command: rawStr)
+                Task { @MainActor in
+                    SSHManager.shared.send(command: rawStr)
+                }
                 return
             }
             // Use sendInput for raw data (no newline appended)
@@ -83,22 +85,30 @@ struct SwiftTerminalView: UIViewRepresentable {
             }
         }
         
-        func scrolled(source: SwiftTerm.TerminalView, position: Double) {
+        nonisolated func scrolled(source: SwiftTerm.TerminalView, position: Double) {
             // Could update UI scroll indicators if needed
         }
         
-        func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {
+        nonisolated func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {
             // Could update terminal tab title with current directory
         }
         
-        func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
+        nonisolated func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
             if let url = URL(string: link) {
-                UIApplication.shared.open(url)
+                Task { @MainActor in
+                    UIApplication.shared.open(url)
+                }
             }
         }
         
-        func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {
+        nonisolated func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {
             // Selection range changed — could update copy state
+        }
+        
+        nonisolated func clipboardCopy(source: SwiftTerm.TerminalView, content: Data) {
+            Task { @MainActor in
+                UIPasteboard.general.setData(content, forPasteboardType: "public.utf8-plain-text")
+            }
         }
         
         // MARK: - SSH Data Feed
@@ -106,14 +116,14 @@ struct SwiftTerminalView: UIViewRepresentable {
         /// Feed raw data from SSH into the terminal emulator
         func feedData(_ text: String) {
             guard let tv = terminalView else { return }
-            let bytes = Array(text.utf8)
+            let bytes = ArraySlice(Array(text.utf8))
             tv.feed(byteArray: bytes)
         }
         
         /// Feed raw bytes from SSH into the terminal emulator
         func feedBytes(_ data: Data) {
             guard let tv = terminalView else { return }
-            let bytes = Array(data)
+            let bytes = ArraySlice(Array(data))
             tv.feed(byteArray: bytes)
         }
         
@@ -159,7 +169,7 @@ struct SwiftTerminalView: UIViewRepresentable {
                 "\u{1b}[0m" + // Reset
                 "Type 'ssh' to connect to a remote server, or use the built-in commands.\r\n" +
                 "\r\n$ "
-            let bytes = Array(welcome.utf8)
+            let bytes = ArraySlice(Array(welcome.utf8))
             tv.feed(byteArray: bytes)
         }
         

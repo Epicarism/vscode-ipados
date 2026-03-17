@@ -362,6 +362,7 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         default:
             // Unsupported key type
             return nil
+        }
     }
     
     /// Parse PEM-encoded EC private key

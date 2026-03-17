@@ -373,8 +373,9 @@ struct RunestoneEditorView: UIViewRepresentable {
             for name in actions {
                 editorActionObservers.append(
                     NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notif in
+                        let notifName = notif.name
                         MainActor.assumeIsolated {
-                            self?.handleEditorAction(notif.name)
+                            self?.handleEditorAction(notifName)
                         }
                     }
                 )

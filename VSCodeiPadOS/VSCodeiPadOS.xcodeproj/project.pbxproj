@@ -156,6 +156,7 @@
 		D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBE91AB571E62605847001D /* RemoteDebugger.swift */; };
 		E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA35FC9065D549599858CE86 /* CommandPaletteView.swift */; };
 		BC1D2F417588AF65F71E4F42 /* VSCodeTunnelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E97BA415738F75FEC6431C /* VSCodeTunnelManager.swift */; };
+		57A19E793481B1BD9D85B0B0 /* SwiftTermView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5517D452851148CA4AD04F /* SwiftTermView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -308,7 +309,8 @@
 		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
 		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
 		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
-		F5E97BA415738F75FEC6431C /* VSCodeTunnelManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VSCodeTunnelManager.swift; path = Services/VSCodeTunnelManager.swift; sourceTree = "<group>"; };
+		F5E97BA415738F75FEC6431C /* VSCodeTunnelManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VSCodeTunnelManager.swift; path = VSCodeTunnelManager.swift; sourceTree = "<group>"; };
+		FA5517D452851148CA4AD04F /* SwiftTermView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -539,6 +541,7 @@
 				2121 /* TestView.swift */,
 				2050 /* SettingsView.swift */,
 				2051 /* TerminalView.swift */,
+				FA5517D452851148CA4AD04F /* SwiftTermView.swift */,
 				2053 /* DebugView.swift */,
 				2153 /* RunnerWarningView.swift */,
 				8012 /* ExtensionsView.swift */,
@@ -697,6 +700,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A19E793481B1BD9D85B0B0 /* SwiftTermView.swift in Sources */,
 				BC1D2F417588AF65F71E4F42 /* VSCodeTunnelManager.swift in Sources */,
 				6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */,
 				1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */,
