@@ -451,7 +451,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     // Only apply if text hasn't changed while we were processing
                     guard textView.text == text else { return }
                     
-                    textView.attributedText = attributedText
+                    // Apply highlighting directly to textStorage to avoid polluting the undo stack
+                    let textStorage = textView.textStorage
+                    textStorage.beginEditing()
+                    attributedText.enumerateAttributes(in: NSRange(location: 0, length: attributedText.length), options: []) { attrs, range, _ in
+                        textStorage.setAttributes(attrs, range: range)
+                    }
+                    textStorage.endEditing()
                     textView.selectedRange = selectedRange
                     
                     textView.typingAttributes = [
@@ -533,25 +539,27 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     // Only apply if text hasn't changed while we were processing
                     guard textView.text == text else { return }
                     
-                    // Create full attributed string with base styling
-                    let fullAttributed = NSMutableAttributedString(string: text)
+                    // Apply highlighting directly to textStorage to avoid polluting the undo stack
+                    let textStorage = textView.textStorage
                     let baseFont = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
                     let baseColor = UIColor(theme.editorForeground)
-                    let fullRange = NSRange(location: 0, length: text.utf16.count)
-                    fullAttributed.addAttribute(.font, value: baseFont, range: fullRange)
-                    fullAttributed.addAttribute(.foregroundColor, value: baseColor, range: fullRange)
+                    let fullRange = NSRange(location: 0, length: textStorage.length)
+                    
+                    textStorage.beginEditing()
+                    // Apply base styling to full range
+                    textStorage.addAttribute(.font, value: baseFont, range: fullRange)
+                    textStorage.addAttribute(.foregroundColor, value: baseColor, range: fullRange)
                     
                     // Apply highlighted attributes only to visible range
                     highlightedVisible.enumerateAttributes(in: NSRange(location: 0, length: highlightedVisible.length), options: []) { attrs, range, _ in
                         let targetRange = NSRange(location: safeRange.location + range.location, length: range.length)
-                        if targetRange.location + targetRange.length <= fullAttributed.length {
+                        if targetRange.location + targetRange.length <= textStorage.length {
                             for (key, value) in attrs {
-                                fullAttributed.addAttribute(key, value: value, range: targetRange)
+                                textStorage.addAttribute(key, value: value, range: targetRange)
                             }
                         }
                     }
-                    
-                    textView.attributedText = fullAttributed
+                    textStorage.endEditing()
                     textView.selectedRange = selectedRange
                     
                     textView.typingAttributes = [

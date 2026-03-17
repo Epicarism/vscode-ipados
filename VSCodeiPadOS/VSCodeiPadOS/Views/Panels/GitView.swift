@@ -102,6 +102,11 @@ struct GitView: View {
             
             Divider()
             
+            // Merge Conflicts Banner
+            if !gitManager.mergeConflicts.isEmpty {
+                mergeConflictsBanner()
+            }
+            
             // Commit input
             VStack(spacing: 8) {
                 TextField("Message (press ⌘Enter to commit)", text: $commitMessage)
@@ -145,6 +150,14 @@ struct GitView: View {
             // Changes list
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
+                    // Merge Conflicts section
+                    if !gitManager.mergeConflicts.isEmpty {
+                        sectionHeader("Merge Conflicts", count: gitManager.mergeConflicts.count, color: .yellow)
+                        ForEach(gitManager.mergeConflicts, id: \.self) { path in
+                            conflictRow(path)
+                        }
+                    }
+                    
                     // Staged changes
                     if !gitManager.stagedChanges.isEmpty {
                         sectionHeader("Staged Changes", count: gitManager.stagedChanges.count, color: .green)
@@ -172,7 +185,8 @@ struct GitView: View {
                     // No changes - show polished empty state
                     if gitManager.stagedChanges.isEmpty &&
                         gitManager.unstagedChanges.isEmpty &&
-                        gitManager.untrackedFiles.isEmpty {
+                        gitManager.untrackedFiles.isEmpty &&
+                        gitManager.mergeConflicts.isEmpty {
                         VStack(spacing: 12) {
                             Spacer()
                             Image(systemName: "checkmark.circle")
@@ -394,6 +408,90 @@ struct GitView: View {
             
             Button(action: {
                 UIPasteboard.general.string = entry.path
+            }) {
+                Label("Copy Path", systemImage: "doc.on.doc")
+            }
+        }
+    }
+    
+    // MARK: - Merge Conflict UI
+    
+    private func mergeConflictsBanner() -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.yellow)
+                .font(.system(size: 12))
+            Text("\(gitManager.mergeConflicts.count) merge conflict\(gitManager.mergeConflicts.count == 1 ? "" : "s") detected")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.yellow)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.yellow.opacity(0.1))
+    }
+    
+    private func conflictRow(_ path: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 10))
+                .foregroundColor(.yellow)
+                .frame(width: 16)
+            
+            Text(path.components(separatedBy: "/").last ?? path)
+                .font(.system(size: 12))
+                .lineLimit(1)
+            
+            Spacer()
+            
+            Menu {
+                Button(action: {
+                    Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .ours) } }
+                }) {
+                    Label("Accept Current (Ours)", systemImage: "arrow.uturn.left")
+                }
+                Button(action: {
+                    Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .theirs) } }
+                }) {
+                    Label("Accept Incoming (Theirs)", systemImage: "arrow.uturn.right")
+                }
+                Divider()
+                Button(action: {
+                    Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .manual) } }
+                }) {
+                    Label("Resolve Manually", systemImage: "pencil.tip")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color.yellow.opacity(0.08))
+        .cornerRadius(4)
+        .contextMenu {
+            Button(action: {
+                Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .ours) } }
+            }) {
+                Label("Accept Current (Ours)", systemImage: "arrow.uturn.left")
+            }
+            Button(action: {
+                Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .theirs) } }
+            }) {
+                Label("Accept Incoming (Theirs)", systemImage: "arrow.uturn.right")
+            }
+            Divider()
+            Button(action: {
+                Task { await performGitOp { try await gitManager.resolveConflict(file: path, resolution: .manual) } }
+            }) {
+                Label("Resolve Manually", systemImage: "pencil.tip")
+            }
+            Divider()
+            Button(action: {
+                UIPasteboard.general.string = path
             }) {
                 Label("Copy Path", systemImage: "doc.on.doc")
             }

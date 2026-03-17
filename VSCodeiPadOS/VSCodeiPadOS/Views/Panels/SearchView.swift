@@ -282,7 +282,14 @@ struct SearchView: View {
         let fileResult = results[selected.fileIndex]
         guard selected.matchIndex < fileResult.matches.count else { return }
         let match = fileResult.matches[selected.matchIndex]
-        onResultSelected?(fileResult.path, match.lineNumber)
+        // Resolve relative path against workspace root to get a valid file URL
+        let absolutePath: String
+        if fileResult.path.hasPrefix("/") {
+            absolutePath = fileResult.path
+        } else {
+            absolutePath = rootURL.appendingPathComponent(fileResult.path).path
+        }
+        onResultSelected?(absolutePath, match.lineNumber)
     }
 
     // MARK: - Body (Refactored into smaller sections)
@@ -801,7 +808,10 @@ struct SearchView: View {
                     fileIndex: fileIndex,
                     showPath: showFilePath,
                     selectedNavigationItem: $selectedNavigationItem,
-                    onMatchSelected: onResultSelected,
+                    onMatchSelected: { filePath, lineNumber in
+                        let absolutePath = filePath.hasPrefix("/") ? filePath : rootURL.appendingPathComponent(filePath).path
+                        onResultSelected?(absolutePath, lineNumber)
+                    },
                     onOpenResult: openSelectedResult
                 )
             }
@@ -816,7 +826,10 @@ struct SearchView: View {
                 fileIndex: fileIndex,
                 showPath: showFilePath,
                 selectedNavigationItem: $selectedNavigationItem,
-                onMatchSelected: onResultSelected,
+                onMatchSelected: { filePath, lineNumber in
+                    let absolutePath = filePath.hasPrefix("/") ? filePath : rootURL.appendingPathComponent(filePath).path
+                    onResultSelected?(absolutePath, lineNumber)
+                },
                 onOpenResult: openSelectedResult
             )
         }

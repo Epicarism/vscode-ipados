@@ -12,8 +12,11 @@ import SwiftUI
 
 struct ExtensionsPanel: View {
     @StateObject private var manager = ExtensionManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var selectedExtensionId: String? = nil
     @State private var showingDetail: Bool = false
+    
+    private var theme: Theme { themeManager.currentTheme }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -57,7 +60,7 @@ struct ExtensionsPanel: View {
     private var extensionSearchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
                 .font(.system(size: 12))
                 .accessibilityHidden(true)
             
@@ -71,7 +74,7 @@ struct ExtensionsPanel: View {
             if !manager.searchText.isEmpty {
                 Button(action: { manager.searchText = "" }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(theme.comment))
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
@@ -81,7 +84,7 @@ struct ExtensionsPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(UIColor.tertiarySystemBackground))
+        .background(Color(theme.editorBackground))
         .cornerRadius(6)
         .padding(.horizontal, 12)
         .padding(.top, 8)
@@ -124,9 +127,9 @@ struct ExtensionsPanel: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(manager.selectedCategory != nil ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .background(manager.selectedCategory != nil ? Color(theme.keyword).opacity(0.15) : Color.clear)
                     .cornerRadius(4)
-                    .foregroundColor(manager.selectedCategory != nil ? .accentColor : .secondary)
+                    .foregroundColor(manager.selectedCategory != nil ? Color(theme.keyword) : Color(theme.comment))
                 }
                 .accessibilityLabel("Filter by category")
                 .accessibilityHint("Double tap to choose an extension category")
@@ -149,15 +152,15 @@ struct ExtensionsPanel: View {
                         .font(.system(size: 9, weight: .bold))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(Color.accentColor.opacity(0.2))
+                        .background(Color(theme.keyword).opacity(0.2))
                         .cornerRadius(4)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            .background(isSelected ? Color(theme.keyword).opacity(0.15) : Color.clear)
             .cornerRadius(4)
-            .foregroundColor(isSelected ? .accentColor : .secondary)
+            .foregroundColor(isSelected ? Color(theme.keyword) : Color(theme.comment))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(filter.rawValue) filter\(count > 0 && filter == .installed ? ", \(count) installed" : "")")
@@ -203,7 +206,7 @@ struct ExtensionsPanel: View {
                 .scaleEffect(1.2)
             Text("Loading extensions...")
                 .font(.system(size: 13))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
             Spacer()
         }
     }
@@ -215,11 +218,11 @@ struct ExtensionsPanel: View {
             Spacer()
             Image(systemName: emptyIcon)
                 .font(.system(size: 32))
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundColor(Color(theme.comment).opacity(0.5))
                 .accessibilityHidden(true)
             Text(emptyMessage)
                 .font(.system(size: 13))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
                 .multilineTextAlignment(.center)
             if manager.selectedFilter == .installed && manager.searchText.isEmpty {
                 Button("Browse Marketplace") {
@@ -259,7 +262,10 @@ struct ExtensionRowView: View {
     @ObservedObject var manager: ExtensionManager
     let onTap: () -> Void
     
+    @ObservedObject private var themeManager = ThemeManager.shared
     @State private var isPressed = false
+    
+    private var theme: Theme { themeManager.currentTheme }
     
     var body: some View {
         Button(action: onTap) {
@@ -274,25 +280,25 @@ struct ExtensionRowView: View {
                     HStack(spacing: 6) {
                         Text(extension_.displayName)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
+                            .foregroundColor(Color(theme.sidebarForeground))
                             .lineLimit(1)
                         
                         Text("v\(extension_.version)")
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(theme.comment))
                     }
                     
                     // Description
                     Text(extension_.description)
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(theme.comment))
                         .lineLimit(2)
                     
                     // Publisher + stats
                     HStack(spacing: 8) {
                         Text(extension_.publisher)
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(theme.comment))
                         
                         HStack(spacing: 2) {
                             Image(systemName: "arrow.down.circle")
@@ -300,7 +306,7 @@ struct ExtensionRowView: View {
                             Text(extension_.formattedDownloads)
                                 .font(.system(size: 10))
                         }
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(theme.comment))
                         .accessibilityLabel("\(extension_.formattedDownloads) downloads")
                         
                         HStack(spacing: 2) {
@@ -310,7 +316,7 @@ struct ExtensionRowView: View {
                             Text(String(format: "%.1f", extension_.rating))
                                 .font(.system(size: 10))
                         }
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(theme.comment))
                         .accessibilityLabel("Rating: \(String(format: "%.1f", extension_.rating)) out of 5")
                     }
                 }
@@ -322,7 +328,7 @@ struct ExtensionRowView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(isPressed ? Color(UIColor.systemFill).opacity(0.5) : Color.clear)
+            .background(isPressed ? Color(theme.selection).opacity(0.5) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle(isPressed: $isPressed))
@@ -410,9 +416,9 @@ struct ExtensionRowView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color(UIColor.systemFill))
+                .background(Color(theme.selection))
                 .cornerRadius(4)
-                .foregroundColor(extension_.isEnabled ? .secondary : .orange)
+                .foregroundColor(extension_.isEnabled ? Color(theme.comment) : .orange)
             }
             .accessibilityLabel("Manage \(extension_.displayName), currently \(extension_.isEnabled ? "enabled" : "disabled")")
             .accessibilityHint("Double tap to disable, enable, or uninstall this extension")
@@ -422,7 +428,7 @@ struct ExtensionRowView: View {
                     .font(.system(size: 11, weight: .medium))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
-                    .background(Color.accentColor)
+                    .background(Color(theme.keyword))
                     .foregroundColor(.white)
                     .cornerRadius(4)
             }
@@ -452,6 +458,9 @@ struct ExtensionDetailView: View {
     let extension_: IDEExtension
     @ObservedObject var manager: ExtensionManager
     @Environment(\.dismiss) var dismiss
+    @ObservedObject private var themeManager = ThemeManager.shared
+    
+    private var theme: Theme { themeManager.currentTheme }
     
     // Get current state from manager
     private var currentExtension: IDEExtension? {
@@ -484,6 +493,7 @@ struct ExtensionDetailView: View {
                 }
                 .padding(20)
             }
+            .background(Color(theme.sidebarBackground))
             .navigationTitle(extension_.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -502,33 +512,34 @@ struct ExtensionDetailView: View {
             // Large icon
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(UIColor.tertiarySystemBackground))
+                    .fill(Color(theme.editorBackground))
                     .frame(width: 64, height: 64)
                 Image(systemName: extension_.iconName)
                     .font(.system(size: 28))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(Color(theme.keyword))
             }
             .accessibilityHidden(true)
             
             VStack(alignment: .leading, spacing: 6) {
                 Text(extension_.displayName)
                     .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color(theme.sidebarForeground))
                 
                 HStack(spacing: 4) {
                     Text(extension_.publisher)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(Color(theme.keyword))
                     
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 12))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(Color(theme.keyword))
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(extension_.publisher), verified publisher")
                 
                 Text(extension_.description)
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(theme.comment))
             }
             
             Spacer()
@@ -569,8 +580,8 @@ struct ExtensionDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 6)
-                            .background(Color(UIColor.systemFill))
-                            .foregroundColor(current.isEnabled ? .secondary : .green)
+                            .background(Color(theme.selection))
+                            .foregroundColor(current.isEnabled ? Color(theme.comment) : Color(theme.string))
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
@@ -585,7 +596,7 @@ struct ExtensionDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(Color.accentColor)
+                        .background(Color(theme.keyword))
                         .foregroundColor(.white)
                         .cornerRadius(6)
                 }
@@ -612,10 +623,11 @@ struct ExtensionDetailView: View {
         VStack(spacing: 4) {
             Text(title)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
                 .textCase(.uppercase)
             Text(value)
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(theme.sidebarForeground))
         }
     }
     
@@ -623,15 +635,16 @@ struct ExtensionDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Category")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
             
             HStack {
                 Label(extension_.category.rawValue, systemImage: extension_.category.icon)
                     .font(.system(size: 12))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(Color(UIColor.tertiarySystemBackground))
+                    .background(Color(theme.editorBackground))
                     .cornerRadius(4)
+                    .foregroundColor(Color(theme.sidebarForeground))
             }
         }
         .accessibilityElement(children: .combine)
@@ -641,15 +654,15 @@ struct ExtensionDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Details")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
             
             Text(extension_.description)
                 .font(.system(size: 13))
-                .foregroundColor(.primary)
+                .foregroundColor(Color(theme.sidebarForeground))
             
             Text("Extension ID: \(extension_.fullId)")
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(theme.comment))
                 .padding(.top, 8)
                 .accessibilityLabel("Extension identifier: \(extension_.fullId)")
         }
