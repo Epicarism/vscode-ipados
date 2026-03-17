@@ -38,6 +38,8 @@ struct DebugView: View {
     @State private var editingBreakpointId: String? = nil
     @State private var conditionText: String = ""
     @State private var showConditionEditor: Bool = false
+    @State private var showConsole: Bool = true
+    @State private var consoleInput: String = ""
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -80,6 +82,11 @@ struct DebugView: View {
                     
                     // Breakpoints Section
                     breakpointsSection
+                    
+                    sectionDivider
+                    
+                    // Console Section
+                    consoleSection
                 }
             }
         }
@@ -502,6 +509,109 @@ struct DebugView: View {
         .padding(.horizontal, 8)
     }
     
+    // MARK: - Console Section
+    private var consoleSection: some View {
+        DisclosureGroup(isExpanded: $showConsole) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Console entries with auto-scroll
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            if debugManager.consoleEntries.isEmpty {
+                                Text("No console output")
+                                    .font(.caption)
+                                    .foregroundColor(theme.comment)
+                                    .padding(.vertical, 4)
+                                    .padding(.leading, 12)
+                            } else {
+                                ForEach(debugManager.consoleEntries) { entry in
+                                    HStack(alignment: .top, spacing: 4) {
+                                        Text(entry.prefix)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(colorForConsoleKind(entry.kind))
+                                            .frame(width: 12, alignment: .leading)
+                                        
+                                        Text(entry.text)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(colorForConsoleKind(entry.kind))
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(.vertical, 1)
+                                    .padding(.horizontal, 8)
+                                    .id(entry.id)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 200)
+                    .onChange(of: debugManager.consoleEntries.count) { _, _ in
+                        if let lastEntry = debugManager.consoleEntries.last {
+                            withAnimation {
+                                proxy.scrollTo(lastEntry.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+                
+                Divider()
+                    .background(theme.editorForeground.opacity(0.1))
+                    .padding(.vertical, 4)
+                
+                // Input field
+                HStack(spacing: 4) {
+                    TextField("Evaluate expression...", text: $consoleInput)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, design: .monospaced))
+                        .padding(6)
+                        .background(theme.selection.opacity(0.3))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .onSubmit {
+                            if !consoleInput.isEmpty {
+                                debugManager.submitConsole(input: consoleInput)
+                                consoleInput = ""
+                            }
+                        }
+                    
+                    Button(action: {
+                        if !consoleInput.isEmpty {
+                            debugManager.submitConsole(input: consoleInput)
+                            consoleInput = ""
+                        }
+                    }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(consoleInput.isEmpty ? theme.comment : Color(UIColor.systemBlue))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(consoleInput.isEmpty)
+                    .accessibilityLabel("Send")
+                    .accessibilityHint("Double tap to evaluate expression")
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            }
+            .padding(.leading, 4)
+        } label: {
+            HStack {
+                DebugSectionHeader(title: "CONSOLE", theme: theme)
+                Spacer()
+                Button(action: { debugManager.clearConsole() }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10))
+                        .foregroundColor(theme.comment)
+                }
+                .buttonStyle(.plain)
+                .opacity(showConsole ? 1 : 0)
+                .accessibilityLabel("Clear console")
+                .accessibilityHint("Double tap to clear console output")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Console section, \(showConsole ? "expanded" : "collapsed")")
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+    }
+    
     // MARK: - Breakpoints Section
     private var breakpointsSection: some View {
         DisclosureGroup(isExpanded: $isBreakpointsExpanded) {
@@ -523,7 +633,7 @@ struct DebugView: View {
                     }
                 } else {
                     ForEach(debugManager.breakpoints) { bp in
-                        BreakpointRow(breakpoint: bp, theme: theme)
+                        BreakpointRow(breakpoint: bp, theme: theme, debugManager: debugManager)
                     }
                 }
             }
@@ -564,6 +674,23 @@ struct DebugView: View {
         Divider()
             .background(theme.editorForeground.opacity(0.1))
             .padding(.vertical, 4)
+    }
+    
+    private func colorForConsoleKind(_ kind: DebugManager.ConsoleEntry.Kind) -> Color {
+        switch kind {
+        case .error:
+            return Color.red
+        case .warning:
+            return Color.orange
+        case .output:
+            return Color.green
+        case .input:
+            return Color(UIColor.systemBlue)
+        case .system:
+            return Color.gray
+        case .info:
+            return theme.comment
+        }
     }
     
     private func convertToDebugVariable(_ variable: DebugManager.Variable, depth: Int = 0) -> DebugVariable {
@@ -808,18 +935,17 @@ struct CallStackRow: View {
 struct BreakpointRow: View {
     let breakpoint: DebugManager.Breakpoint
     let theme: Theme
-    
-    @StateObject private var debugManager = DebugManager.shared
+    let debugManager: DebugManager
     
     var body: some View {
         HStack(spacing: 6) {
             // Enable/disable toggle
             Button(action: {
-                debugManager.toggleBreakpoint(breakpoint.id)
+                debugManager.toggleBreakpointEnabled(id: breakpoint.id)
             }) {
-                Image(systemName: "circle.fill")
+                Image(systemName: breakpoint.isEnabled ? "circle.fill" : "circle")
                     .font(.system(size: 10))
-                    .foregroundColor(breakpoint.isEnabled ? Color(UIColor.systemRed) : theme.comment)
+                    .foregroundColor(Color(UIColor.systemRed))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(breakpoint.isEnabled ? "Enabled breakpoint – tap to disable" : "Disabled breakpoint – tap to enable")
@@ -864,7 +990,7 @@ struct BreakpointRow: View {
         .accessibilityLabel("Breakpoint at \(breakpoint.fileName) line \(breakpoint.lineNumber), \(breakpoint.isEnabled ? "enabled" : "disabled")")
         .contextMenu {
             Button(action: {
-                debugManager.toggleBreakpoint(breakpoint.id)
+                debugManager.toggleBreakpointEnabled(id: breakpoint.id)
             }) {
                 Label(breakpoint.isEnabled ? "Disable Breakpoint" : "Enable Breakpoint",
                       systemImage: breakpoint.isEnabled ? "circle" : "circle.fill")
