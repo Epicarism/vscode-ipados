@@ -121,6 +121,9 @@ class JSRunner: @unchecked Sendable {
     /** The underlying JavaScript context */
     private(set) var context: JSContext!
     
+    /** Lock to protect concurrent access to `context` */
+    private let contextLock = NSLock()
+    
     /** Handler for console messages from JavaScript */
     private var consoleHandler: ((String) -> Void)?
     
@@ -334,8 +337,11 @@ class JSRunner: @unchecked Sendable {
                 // Set up timeout
                 var timeoutOccurred = false
                 let timeoutWorkItem = DispatchWorkItem { [weak self] in
+                    guard let self = self else { return }
                     timeoutOccurred = true
-                    self?.context = nil // Force terminate
+                    self.contextLock.lock()
+                    self.context = nil // Force terminate
+                    self.contextLock.unlock()
                 }
                 
                 DispatchQueue.global().asyncAfter(
@@ -351,6 +357,11 @@ class JSRunner: @unchecked Sendable {
                 var executionError: Error?
                 
                 autoreleasepool {
+                    self.contextLock.lock()
+                    guard self.context != nil else {
+                        self.contextLock.unlock()
+                        return
+                    }
                     result = self.context.evaluateScript(code)
                     
                     // Check for exceptions
@@ -359,6 +370,7 @@ class JSRunner: @unchecked Sendable {
                         executionError = JSRunnerError.scriptError(message)
                         self.context.exception = nil
                     }
+                    self.contextLock.unlock()
                 }
                 
                 // Cancel timeout if execution completed
@@ -367,7 +379,9 @@ class JSRunner: @unchecked Sendable {
                 // Check for timeout
                 if timeoutOccurred {
                     // Need to recreate context since we nilled it
+                    self.contextLock.lock()
                     self.setupContext()
+                    self.contextLock.unlock()
                     continuation.resume(throwing: JSRunnerError.executionTimeout)
                     return
                 }
@@ -387,7 +401,10 @@ class JSRunner: @unchecked Sendable {
                 }
                 
                 // Return result or undefined if nil
-                continuation.resume(returning: result ?? JSValue(undefinedIn: self.context))
+                self.contextLock.lock()
+                let currentContext = self.context
+                self.contextLock.unlock()
+                continuation.resume(returning: result ?? JSValue(undefinedIn: currentContext))
             }
         }
     }

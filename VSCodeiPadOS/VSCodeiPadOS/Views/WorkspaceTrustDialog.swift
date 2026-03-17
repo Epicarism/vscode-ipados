@@ -10,11 +10,14 @@ struct WorkspaceTrustDialog: View {
             Image(systemName: "shield.checkerboard")
                 .font(.system(size: 48))
                 .foregroundColor(.blue)
+                .accessibilityHidden(true)
             
             Text("Do you trust the authors of the files in this folder?")
                 .font(.title3)
                 .fontWeight(.bold)
                 .multilineTextAlignment(.center)
+                .accessibilityLabel("Security warning: Do you trust the authors of the files in this folder?")
+                .accessibilityAddTraits(.isHeader)
             
             Text(workspaceURL.lastPathComponent)
                 .font(.headline)
@@ -22,12 +25,14 @@ struct WorkspaceTrustDialog: View {
                 .padding(8)
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(8)
+                .accessibilityLabel("Folder: \(workspaceURL.lastPathComponent)")
             
             Text("Code in this folder may be executed by tasks, debugging, or extensions. Trusting this folder allows full access to all features.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+                .accessibilityLabel("Warning: Code in this folder may be executed by tasks, debugging, or extensions. Trusting this folder allows full access to all features.")
             
             HStack(spacing: 16) {
                 Button(action: onCancel) {
@@ -39,6 +44,8 @@ struct WorkspaceTrustDialog: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Don't Trust")
+                .accessibilityHint("Keeps restricted mode active. Extensions and tasks will not run in this folder.")
                 
                 Button(action: onTrust) {
                     Text("Trust Folder")
@@ -50,6 +57,8 @@ struct WorkspaceTrustDialog: View {
                         .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Trust Folder")
+                .accessibilityHint("Grants full access to all features including tasks, debugging, and extensions for this folder.")
             }
             .padding(.top, 10)
         }

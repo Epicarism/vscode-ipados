@@ -2076,6 +2076,7 @@ mod tests {
         for i in 0..<(lineIdx + 1) {
             newLineStart += lines[i].count + 1
         }
+        guard lineIdx + 1 < lines.count else { return }
         multiCursorState.reset(to: newLineStart + min(offsetInLine, lines[lineIdx + 1].count))
     }
 

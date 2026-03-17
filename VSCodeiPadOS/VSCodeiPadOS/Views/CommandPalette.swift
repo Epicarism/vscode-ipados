@@ -193,9 +193,11 @@ struct CommandRowView: View {
                 .font(.system(size: 14))
                 .foregroundColor(isSelected ? .white : .accentColor)
                 .frame(width: 24)
+                .accessibilityHidden(true)
             
             // Command name with highlighting
             highlightedName
+                .accessibilityHidden(true)
             
             Spacer()
             
@@ -204,6 +206,7 @@ struct CommandRowView: View {
                 Image(systemName: "clock")
                     .font(.system(size: 10))
                     .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    .accessibilityHidden(true)
             }
             
             // Category badge
@@ -216,10 +219,12 @@ struct CommandRowView: View {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(isSelected ? Color.white.opacity(0.2) : Color(UIColor.tertiarySystemFill))
                 )
+                .accessibilityHidden(true)
             
             // Keyboard shortcut
             if let shortcut = command.shortcut {
                 ShortcutBadge(shortcut: shortcut, isSelected: isSelected)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 16)

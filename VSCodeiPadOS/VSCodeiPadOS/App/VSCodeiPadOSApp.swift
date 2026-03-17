@@ -6,6 +6,7 @@ struct VSCodeiPadOSApp: App {
     @StateObject private var editorCore = EditorCore()
     @StateObject private var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
     @State private var showTerminal = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
@@ -38,6 +39,24 @@ struct VSCodeiPadOSApp: App {
                         OnboardingView()
                             .environmentObject(themeManager)
                     }
+                    // ── Deep-link / open-in handler ──────────────────
+                    .onOpenURL { url in
+                        // Handles files shared from Files app, Safari, or other apps
+                        // (complements SceneDelegate's UIKit open-URL path).
+                        AppLogger.editor.info("Received deep-link URL: \(url.absoluteString)")
+                        if url.isFileURL {
+                            let didStart = url.startAccessingSecurityScopedResource()
+                            editorCore.openFile(from: url)
+                            if didStart { url.stopAccessingSecurityScopedResource() }
+                        } else {
+                            // Non-file deep link — forward via notification for interested handlers
+                            NotificationCenter.default.post(
+                                name: .openFile,
+                                object: nil,
+                                userInfo: ["url": url]
+                            )
+                        }
+                    }
             }
         }
         .commands {
@@ -53,12 +72,63 @@ struct VSCodeiPadOSApp: App {
             TerminalMenuCommands()
             HelpMenuCommands()
         }
+        // ── Scene phase handling ─────────────────────────────────
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                // Trigger auto-save of all open files and persist window state.
+                // Complements AppDelegate.applicationDidEnterBackground which
+                // calls SceneDelegate.saveWindowState per UIKit scene.
+                AppLogger.editor.info("Scene → background: saving all open files")
+                editorCore.saveAllTabs()
+                AutoSaveManager.shared.appDidResignActive()
+                // Capture current editor state for every connected window
+                for scene in UIApplication.shared.connectedScenes {
+                    guard let windowScene = scene as? UIWindowScene else { continue }
+                    let windowId = windowScene.session.windowId
+                    WindowStateManager.shared.captureState(
+                        from: editorCore,
+                        windowId: windowId,
+                        workspacePath: editorCore.fileNavigator?.rootPath
+                    )
+                }
+            case .inactive:
+                // Pause focus-change auto-saves to avoid spurious writes while
+                // the app is transitioning (e.g. notification centre appearing).
+                AppLogger.editor.debug("Scene → inactive: flushing focus-change saves")
+                AutoSaveManager.shared.editorDidLoseFocus()
+            case .active:
+                // Re-read open files that may have been edited externally.
+                AppLogger.editor.debug("Scene → active: refreshing files from disk")
+                refreshOpenFilesFromDisk()
+            @unknown default:
+                break
+            }
+        }
     }
     
     private func updateWindowTitle(_ title: String) {
         // Update the window title for the scene
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             windowScene.title = title
+        }
+    }
+
+    /// Re-read open files that may have been modified externally while CodePad
+    /// was inactive (e.g. edited in Files or Working Copy).
+    /// Only reloads tabs with no local unsaved changes, to avoid data loss.
+    private func refreshOpenFilesFromDisk() {
+        for index in editorCore.tabs.indices {
+            let tab = editorCore.tabs[index]
+            guard let url = tab.url,
+                  !tab.isUnsaved,
+                  FileManager.default.fileExists(atPath: url.path),
+                  let data = try? Data(contentsOf: url),
+                  let diskContent = String(data: data, encoding: tab.stringEncoding),
+                  diskContent != tab.content else { continue }
+            // Content differs from what is in memory — reload silently
+            AppLogger.editor.info("External change detected for \(tab.fileName) — reloading from disk")
+            editorCore.tabs[index].content = diskContent
         }
     }
 }

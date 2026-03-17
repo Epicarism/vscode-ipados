@@ -287,6 +287,8 @@ struct CommandPaletteView: View {
                     .font(.system(size: 14))
                     .textFieldStyle(.plain)
                     .focused($isSearchFocused)
+                    .accessibilityLabel("Command search")
+                    .accessibilityHint("Type to filter commands. Use arrow keys to navigate results, Return to execute.")
                     .onSubmit {
                         if let command = selectedIndex < filteredCommands.count ? filteredCommands[selectedIndex] : nil {
                             executeCommand(command)
@@ -299,6 +301,8 @@ struct CommandPaletteView: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                    .accessibilityHint("Clears the current search text and shows all commands.")
                 }
             }
             .padding(.horizontal, 16)
@@ -322,6 +326,8 @@ struct CommandPaletteView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 6)
                             .background(Color(UIColor.tertiarySystemBackground))
+                            .accessibilityLabel("Recently used commands")
+                            .accessibilityAddTraits(.isHeader)
                         }
 
                         ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { index, command in
@@ -332,6 +338,9 @@ struct CommandPaletteView: View {
                                 isRecent: recentManager.recentCommands.contains(command.name)
                             )
                             .id(index)
+                            .accessibilityLabel("\(command.name), \(command.category.rawValue) command\(command.shortcut != nil ? ", shortcut \(command.shortcut!)" : "")\(recentManager.recentCommands.contains(command.name) ? ", recently used" : "")")
+                            .accessibilityHint("Double-tap to execute \(command.name).")
+                            .accessibilityAddTraits(.isButton)
                             .onTapGesture {
                                 executeCommand(command)
                             }
@@ -349,6 +358,8 @@ struct CommandPaletteView: View {
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 6)
                                 .background(Color(UIColor.tertiarySystemBackground))
+                                .accessibilityLabel("All commands")
+                                .accessibilityAddTraits(.isHeader)
                             }
                         }
                     }

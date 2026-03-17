@@ -153,7 +153,8 @@ struct SearchResult: Identifiable {
             core.openFile(from: url)
         }
 
-        guard let tabIndex = core.activeTabIndex else { return }
+        guard let tabIndex = core.activeTabIndex,
+              tabIndex < core.tabs.count else { return }
         var content = core.tabs[tabIndex].content
 
         guard let match = regex.firstMatch(in: content, options: [], range: result.matchNSRange) else { return }
@@ -203,8 +204,9 @@ struct SearchResult: Identifiable {
         var affectedFiles = 0
         for url in urls {
             let content: String
-            if let tabIndex = core.tabs.firstIndex(where: { $0.url == url }) {
-                content = core.tabs[tabIndex].content
+            if let tabIndex = core.tabs.firstIndex(where: { $0.url == url }),
+               let openTab = core.tabs[safe: tabIndex] {
+                content = openTab.content
             } else if let diskContent = try? String(contentsOf: url, encoding: .utf8) {
                 content = diskContent
             } else {
@@ -235,7 +237,8 @@ struct SearchResult: Identifiable {
 
         switch searchScope {
         case .currentFile:
-            guard let idx = core.activeTabIndex else { return }
+            guard let idx = core.activeTabIndex,
+                  idx < core.tabs.count else { return }
             let content = core.tabs[idx].content
             let replaced = regex.stringByReplacingMatches(
                 in: content,
@@ -246,7 +249,9 @@ struct SearchResult: Identifiable {
 
         case .openFiles:
             for i in core.tabs.indices {
-                let content = core.tabs[i].content
+                guard i < core.tabs.count,
+                      let tab = core.tabs[safe: i] else { continue }
+                let content = tab.content
                 let replaced = regex.stringByReplacingMatches(
                     in: content,
                     range: NSRange(location: 0, length: (content as NSString).length),
@@ -267,8 +272,10 @@ struct SearchResult: Identifiable {
 
             for url in urls {
                 // If open, update tab.
-                if let tabIndex = core.tabs.firstIndex(where: { $0.url == url }) {
-                    let content = core.tabs[tabIndex].content
+                if let tabIndex = core.tabs.firstIndex(where: { $0.url == url }),
+                   tabIndex < core.tabs.count,
+                   let existingTab = core.tabs[safe: tabIndex] {
+                    let content = existingTab.content
                     let replaced = regex.stringByReplacingMatches(
                         in: content,
                         range: NSRange(location: 0, length: (content as NSString).length),

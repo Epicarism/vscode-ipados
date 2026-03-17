@@ -359,7 +359,7 @@ private final class HTMLAbbreviationParser {
             if current == "=" {
                 pos += 1
                 if current == "\"" || current == "'" {
-                    let q = current!
+                    guard let q = current else { break }
                     pos += 1
                     while let ch2 = current, ch2 != q { value.append(ch2); pos += 1 }
                     if current == q { pos += 1 }

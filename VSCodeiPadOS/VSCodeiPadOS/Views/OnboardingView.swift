@@ -158,6 +158,7 @@ struct OnboardingView: View {
             .scaleEffect(symbolScale)
             .opacity(symbolOpacity)
             .padding(.bottom, 36)
+            .accessibilityHidden(true)
 
             // Title
             Text(page.title)
@@ -167,6 +168,8 @@ struct OnboardingView: View {
                 .offset(y: contentOffset)
                 .opacity(contentOpacity)
                 .padding(.horizontal, 32)
+                .accessibilityLabel("Step \(page.id + 1) of \(pages.count): \(page.title)")
+                .accessibilityAddTraits(.isHeader)
 
             // Subtitle (page 1 only)
             if let subtitle = page.subtitle {
@@ -178,6 +181,7 @@ struct OnboardingView: View {
                     .opacity(contentOpacity)
                     .padding(.top, 12)
                     .padding(.horizontal, 40)
+                    .accessibilityLabel(subtitle)
             }
 
             // Bullet points
@@ -189,11 +193,13 @@ struct OnboardingView: View {
                                 .foregroundColor(page.symbolColor)
                                 .font(.system(size: 18))
                                 .padding(.top, 1)
+                                .accessibilityHidden(true)
 
                             Text(bullet)
                                 .font(.system(size: 16, weight: .regular))
                                 .foregroundColor(theme.editorForeground.opacity(0.85))
                                 .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel(bullet)
                         }
                         .offset(y: contentOffset)
                         .opacity(contentOpacity)
@@ -247,6 +253,7 @@ struct OnboardingView: View {
                         }
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showKeyboardCheatSheet)
+                    .accessibilityHidden(true)
 
                     Text("Show keyboard shortcuts cheat sheet")
                         .font(.system(size: 15))
@@ -254,6 +261,9 @@ struct OnboardingView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(showKeyboardCheatSheet ? "Show keyboard shortcuts cheat sheet, checked" : "Show keyboard shortcuts cheat sheet, unchecked")
+            .accessibilityHint("Toggles whether the keyboard shortcuts cheat sheet is shown after onboarding.")
+            .accessibilityAddTraits(showKeyboardCheatSheet ? [.isButton, .isSelected] : .isButton)
             .padding(.top, 16)
 
             // Get Started button
@@ -274,6 +284,8 @@ struct OnboardingView: View {
                     .shadow(color: Color(hex: "#007ACC").opacity(0.45), radius: 12, x: 0, y: 4)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Get Started")
+            .accessibilityHint("Completes onboarding and opens the editor.")
             .padding(.horizontal, 48)
             .padding(.top, 8)
         }
@@ -292,8 +304,10 @@ struct OnboardingView: View {
                               : theme.editorForeground.opacity(0.25))
                         .frame(width: currentPage == page.id ? 20 : 8, height: 8)
                         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentPage)
+                        .accessibilityLabel("Step \(page.id + 1) of \(pages.count)\(currentPage == page.id ? ", current" : "")")
                 }
             }
+            .accessibilityLabel("Onboarding progress: step \(currentPage + 1) of \(pages.count)")
 
             // Skip / Next buttons (hidden on last page — Get Started is inside the page)
             if currentPage < pages.count - 1 {
@@ -306,6 +320,8 @@ struct OnboardingView: View {
                     .font(.system(size: 15))
                     .foregroundColor(theme.editorForeground.opacity(0.45))
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Skip onboarding")
+                    .accessibilityHint("Skips the remaining onboarding steps and opens the editor.")
 
                     Button {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
@@ -317,6 +333,7 @@ struct OnboardingView: View {
                                 .font(.system(size: 15, weight: .semibold))
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 13, weight: .semibold))
+                                .accessibilityHidden(true)
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 22)
@@ -327,6 +344,8 @@ struct OnboardingView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Next")
+                    .accessibilityHint("Goes to step \(currentPage + 2) of \(pages.count).")
                 }
             }
         }
