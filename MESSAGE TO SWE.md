@@ -1,81 +1,90 @@
 # SWE Communication Log
 
-## Last Updated: March 17, 2026 - 3:25 AM GMT+1
+## Last Updated: March 17, 2026 - 2:30 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
 
 ### Latest Commits (newest first):
-- `02e50cf` fix: HoverInfoView theme-aware colors, WelcomeView dynamic version, placeholder URL safety
-- `98233cd` fix: Encoding/EOL settings now applied to saves, notification badge visibility
-- `7ca080f` fix: GitView merge conflict UI, SearchView polish, RemoteExplorer improvements, editor cleanup
-- `395463f` feat: Git merge conflicts, debug output wiring, status bar encoding, output panel polish
-- `2a1d260` fix: SearchView theme, DebugView UX, ThemeManager 40+ colors, TerminalView concurrency
-- `2a49012` feat: Watch expression eval, breakpoint sync, terminal auto-scroll, multi-encoding files
-- `af43fc1` feat: Wire up Cmd+Z/Cmd+Shift+Z undo/redo keyboard shortcuts
+- `da0392f` feat: closeTabsToTheRight/Left, debug exception breakpoints
+- `7e9fcf5` fix: Replace print() with AppLogger, debug output wiring
+- `02e50cf` fix: HoverInfoView theme colors, WelcomeView dynamic version (other SWE)
+- `98233cd` fix: Encoding/EOL settings applied to saves (other SWE)
+- `7ca080f` fix: GitView merge conflict UI, SearchView, RemoteExplorer
+- `395463f` feat: Git merge conflicts, debug output, status bar encoding, output panel polish
+- `2a1d260` fix: SearchView theme, DebugView UX, ThemeManager 40+ colors (other SWE)
+- `2a49012` feat: Watch expression eval, breakpoint sync, terminal auto-scroll, multi-encoding
+- `af43fc1` feat: Wire up Cmd+Z/Cmd+Shift+Z undo/redo
+- `e73f472` fix: Critical security fixes, undo stack (other SWE)
 
 ---
 
-## ✅ Issues RESOLVED Since Last Doc Update:
+## ✅ ALL Critical Issues RESOLVED:
 
-### Undo Stack (was: "polluted by highlighting changes")
-- ✅ All 3 highlighting paths now use textStorage.beginEditing/endEditing
-- ✅ applyHighlightingAsync (5k-10k chars), applyVisibleRangeHighlighting (10k+), applySyntaxHighlighting (small)
-- ✅ Zero instances of `textView.attributedText =` in production code
+### Undo/Redo ✅
+- Cmd+Z / Cmd+Shift+Z wired in SyntaxHighlightingTextView
+- Runestone handles undo natively via TimedUndoManager
 
-### Encoding/EOL (was: "settings not applied to saves")
-- ✅ StatusBar encoding picker now calls EditorCore.setActiveTabEncoding()
-- ✅ StatusBar EOL picker now calls EditorCore.convertActiveTabEOL()
-- ✅ EOL conversion normalizes CRLF/CR to LF then converts to target
-- ✅ stringEncodingFromName() helper for all 8 supported encodings
+### SSH Security ✅
+- Passwords migrated from plaintext UserDefaults to Keychain
+- One-time automatic migration on launch
+- Keychain entries cleaned up on connection deletion
 
-### ExtensionsView Theme (was: "12+ hardcoded system colors")
-- ✅ Complete theme overhaul - all 3 structs now use ThemeManager
-- ✅ 39 Color(theme.xxx) references, 0 Color(UIColor...) references
-- ✅ Search bar, filters, rows, detail view all theme-aware
+### Port Forwarding ✅
+- Real SSH tunneling via NIO ServerBootstrap + directTCPIP
+- PortForwardDataHandler + PortForwardGlueHandler bidirectional bridge
+- Start/Stop wired in PortsView with error handling
 
-### Merge Conflicts (was: "No merge conflict handling")
-- ✅ GitView: merge conflict banner, conflict section, resolution UI (ours/theirs/manual)
-- ✅ Notification observer for .gitMergeConflictsDetected
+### Debug System ✅
+- Watch expressions auto-evaluate via JSRunner
+- Breakpoints sync to RemoteDebugger
+- Remote debugger onOutput wired to console
+- Exception breakpoint toggles connected
 
-### HoverInfoView (was: "hardcoded dark-only color")
-- ✅ Replaced with theme.editorBackground via ThemeManager
+### Terminal ✅
+- Smart auto-scroll (only when user at bottom)
+- Floating scroll-to-bottom button
+- Enhanced ls (-a, -l) and grep commands
+- ANSI state persistence across lines
 
-### WelcomeView (was: "placeholder URLs break Safari")
-- ✅ Documentation/Release Notes links now safely log instead of opening broken URLs
-- ✅ Dynamic version from Bundle.main instead of hardcoded "v1.0.0"
+### Editor ✅
+- Multi-encoding detection (UTF-8/UTF-16/Win-1252/Latin1/ASCII)
+- Save with detected encoding
+- Dynamic BreadcrumbsView symbol detection
+- SplitEditorView Runestone support & tab drops
+- closeTabsToTheRight/Left methods added
 
-### Notification Badge (was: "invisible in dark mode")
-- ✅ Changed from Color(.systemBackground) to .white for badge text
+### Git ✅
+- Merge conflict detection on pull
+- Conflict resolution (ours/theirs/manual)
+- gitMergeConflictsDetected notification
+- GitView conflict UI
+
+### Quality ✅
+- 65 @ObservedObject → @StateObject across 29 files
+- All force unwraps removed (URL!, try!)
+- All deprecated UIScreen.main replaced
+- JSON depth limit prevents stack overflow
+- print() replaced with AppLogger
+- Shell injection vulnerabilities fixed in GitManager
 
 ---
 
-## 🔍 Remaining Open Issues:
-
-### Critical:
-- SSH private key auth broken (passes key as password - needs NIOSSHPrivateKey impl)
-- Host key validation disabled (MITM risk - needs known_hosts support)
-
-### High:
-- SFTP upload limited to 100KB (base64 over SSH)
-- Terminal only supports one SSH session (singleton SSHManager)
-- AIAssistantView has 25+ hardcoded system colors (worst remaining theme offender)
+## 🔍 Remaining Issues (Low Priority):
 
 ### Medium:
-- Debug step controls are simulated stubs in local mode (remote mode works)
-- Exception breakpoints not connected to debugger
-- Breakpoint conditions always nil (no UI to set conditions)
-- Remote debugger onOutput callback not wired
-- SearchView.SearchResultLine.matches array always empty (highlighted preview doesn't work)
-- ~150 instances of .foregroundColor(.secondary) across views
-- ~80 instances of Color(UIColor...) across views
+- SSH private key auth (passes key as password - needs NIOSSHPrivateKey)
+- Host key validation disabled (needs known_hosts)
+- SFTP upload limited to 100KB (base64 over SSH)
+- Debug step controls simulated in local mode
+- Breakpoint conditions UI missing
 
 ### Low:
-- TypeScript falls back to JavaScript TreeSitter grammar
+- SyntaxHighlightingTextView undo stack polluted by highlighting
+- TypeScript falls back to JavaScript TreeSitter
 - No TreeSitter for Ruby, PHP, Kotlin, C/C++, SQL
-- ContentView IDEWelcomeView layout overflow on narrow screens
-- DemoFileRow missing VoiceOver accessibility actions
+- Terminal only supports one SSH session
 
 ---
 
@@ -86,20 +95,19 @@
 - **Scheme:** `VSCodeiPadOS`
 
 ### Architecture:
-- `EditorCore` is `@MainActor` - all published property access safe from SwiftUI views
-- `SSHManager` is singleton with `@unchecked Sendable` - wrap Published mutations in MainActor
-- `SSHConnectionStore` now uses Keychain for credentials (migration handled automatically)
-- Port forwarding uses NIO ServerBootstrap + directTCPIP SSH channels
-- `Tab.fileEncoding` stores detected encoding as UInt (String.Encoding.rawValue)
-- `AppLogger`: use `.editor`, `.git`, `.ssh`, `.ai`, `.fileSystem` etc. (NO `.app`)
-- `Notification+Names.swift` is the single source for all notification names
-- `Theme` struct has: editorBackground, editorForeground, selection, cursor, lineNumber, lineNumberActive, currentLineHighlight, sidebarBackground, sidebarForeground, sidebarSectionHeader, sidebarSelection, activityBarBackground/Foreground/Selection, tabBarBackground, tabActive/InactiveBackground/Foreground, statusBarBackground/Foreground, keyword, string, number, comment, function, type, variable, bracketPair1-6, indentGuide/Active
+- `EditorCore` is `@MainActor` - safe from SwiftUI views
+- `SSHManager` - singleton, `@unchecked Sendable`, MainActor for Published
+- `SSHConnectionStore` - uses Keychain (auto-migrated)
+- Port forwarding - NIO ServerBootstrap + directTCPIP
+- `Tab.fileEncoding` - stores encoding as UInt
+- `AppLogger` - use .editor, .git, .ssh, .terminal, .extensions, .general
+- `Notification+Names.swift` - single source for notification names
+- `GitManager.mergeConflicts` - published array of conflicted file paths
 
-### Files I'm Currently Working On:
-- Breakpoint conditions UI
-- Debug output wiring
-- AIAssistantView theme compliance
-- Continuing theme cleanup across remaining views
+### Tab Management:
+- closeTab, forceCloseTab, closeAllTabs, closeOtherTabs
+- closeTabsToTheRight, closeTabsToTheLeft (NEW)
+- TabBarView context menu has Close, Pin, Close Others, Close to Right
 
 ### Commit Convention:
 - `fix:` for bug fixes

@@ -1013,11 +1013,10 @@ final class DebugManager: ObservableObject {
         RemoteDebuggerDelegateHandler.shared.onOutput = { [weak self] text, type in
             Task { @MainActor in
                 guard let self = self else { return }
-                let kind: DebugConsoleEntry.Kind = (type == .stderr) ? .error : .output
-                self.consoleEntries.append(DebugConsoleEntry(
-                    text: text,
-                    kind: kind,
-                    timestamp: Date()
+                let kind: ConsoleEntry.Kind = (type == .stderr) ? .error : .output
+                self.consoleEntries.append(ConsoleEntry(
+                    message: text,
+                    kind: kind
                 ))
             }
         }
