@@ -210,6 +210,9 @@ final class GitManager: ObservableObject {
         stagedChanges.count + unstagedChanges.count + untrackedFiles.count
     }
 
+    /// The file-system path of the current working directory (exposed for timeline handlers).
+    var workingDirectoryPath: String? { workingDirectory?.path }
+
     private var workingDirectory: URL?
     private var nativeReader: NativeGitReader?
     private var nativeWriter: NativeGitWriter?

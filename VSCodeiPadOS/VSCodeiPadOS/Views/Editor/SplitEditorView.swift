@@ -532,7 +532,8 @@ struct PaneEditorView: View {
     @State private var lineHeight: CGFloat = 17
     @State private var requestedLineSelection: Int? = nil
     @State private var requestedCursorIndex: Int? = nil
-    
+    @State private var gitGutterRefreshToken: Int = 0
+
     private var useRunestoneEditor: Bool { FeatureFlags.useRunestoneEditor }
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
@@ -637,6 +638,7 @@ struct PaneEditorView: View {
                 }
                 .onChange(of: text) { _, newValue in
                     pane.updateTabContent(newValue)
+                    gitGutterRefreshToken &+= 1
                 }
                 .onChange(of: scrollOffset) { _, newOffset in
                     // Track latest scroll offset for this pane, and sync if enabled.
@@ -686,7 +688,28 @@ struct PaneEditorView: View {
             )
             .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for line numbers
             .padding(.trailing, 60) // Offset for minimap
-            
+
+            // FEAT-071 Git gutter indicators (added/modified/deleted)
+            // 6 pt strip at the right edge of the 70 pt line-number gutter.
+            if let fileURL = tab.url, lineNumbersStyle != "off" {
+                let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+                let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+                let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+                GitGutterView(
+                    fileURL: fileURL,
+                    visibleLineRange: firstVisible..<lastVisible,
+                    lineHeight: lineHeight,
+                    contentTopInset: 8,
+                    selectedLine: currentLineNumber,
+                    refreshToken: AnyHashable(gitGutterRefreshToken)
+                )
+                .frame(width: 6)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.leading, 64)
+                .allowsHitTesting(false)
+                .clipped()
+            }
+
             // Peek Definition Overlay
             if let peekState = editorCore.peekState, editorCore.activeTabId == tab.id {
                  // Calculate simplified position: center of screen for now, but conceptually "inline"

@@ -84,8 +84,116 @@ struct ContentView: View {
             .modifier(EditorActionHandlers(editorCore: editorCore))
             .modifier(CursorAndZoomHandlers(editorCore: editorCore))
             .modifier(EditingHandlers(editorCore: editorCore))
+            .modifier(TimelineHandlers(editorCore: editorCore))
             .environmentObject(themeManager)
             .environmentObject(editorCore)
+    }
+
+    // MARK: - Timeline Notification Handlers
+
+    private struct TimelineHandlers: ViewModifier {
+        @ObservedObject var editorCore: EditorCore
+
+        func body(content: Content) -> some View {
+            content
+                // 1. Show diff for a git commit (userInfo: ["commitSHA": String])
+                .onReceive(NotificationCenter.default.publisher(for: .showCommitDiff)) { notification in
+                    guard let sha = notification.userInfo?["commitSHA"] as? String else { return }
+                    let shortSHA = String(sha.prefix(7))
+                    editorCore.focusedSidebarTab = 2
+                    withAnimation { editorCore.showSidebar = true }
+                    Task {
+                        let ssh = SSHManager.shared
+                        if ssh.isConnected,
+                           let dir = GitManager.shared.workingDirectoryPath {
+                            let escaped = dir.replacingOccurrences(of: "'", with: "'\\''")
+                            let cmd = "cd '\(escaped)' && git show --stat \(sha)"
+                            if let result = try? await ssh.executeCommand(cmd, timeout: 30),
+                               result.isSuccess {
+                                let summary = result.stdout
+                                    .components(separatedBy: "\n")
+                                    .prefix(4)
+                                    .joined(separator: "\n")
+                                await MainActor.run {
+                                    NotificationManager.shared.info("Commit \(shortSHA)", detail: summary)
+                                }
+                                return
+                            }
+                        }
+                        await MainActor.run {
+                            NotificationManager.shared.info(
+                                "Show diff for commit \(shortSHA)",
+                                detail: "Connect SSH for full diff view"
+                            )
+                        }
+                    }
+                }
+                // 2. Restore a local save version (userInfo: ["entryId": String])
+                .onReceive(NotificationCenter.default.publisher(for: .restoreLocalVersion)) { notification in
+                    guard let entryId = notification.userInfo?["entryId"] as? String else { return }
+                    // LocalSaveEntry tracks save events but does not snapshot file content.
+                    // Without a stored snapshot a content restore is not possible.
+                    NotificationManager.shared.warning(
+                        "Restore not available",
+                        detail: "Local save \(String(entryId.prefix(8))): content snapshots are not stored in this version."
+                    )
+                }
+                // 3. Checkout a git commit (userInfo: ["commitSHA": String])
+                .onReceive(NotificationCenter.default.publisher(for: .checkoutCommit)) { notification in
+                    guard let sha = notification.userInfo?["commitSHA"] as? String else { return }
+                    let shortSHA = String(sha.prefix(7))
+                    Task {
+                        let ssh = SSHManager.shared
+                        if ssh.isConnected,
+                           let dir = GitManager.shared.workingDirectoryPath {
+                            let escaped = dir.replacingOccurrences(of: "'", with: "'\\''")
+                            let cmd = "cd '\(escaped)' && git checkout \(sha)"
+                            do {
+                                let result = try await ssh.executeCommand(cmd, timeout: 60)
+                                await MainActor.run {
+                                    if result.isSuccess {
+                                        NotificationManager.shared.info("Checked out commit \(shortSHA)")
+                                        Task { await GitManager.shared.refresh() }
+                                    } else {
+                                        NotificationManager.shared.error(
+                                            "Checkout failed",
+                                            detail: result.stderr.isEmpty
+                                                ? "Exit code \(result.exitCode)"
+                                                : result.stderr
+                                        )
+                                    }
+                                }
+                            } catch {
+                                await MainActor.run {
+                                    NotificationManager.shared.error(
+                                        "Checkout error",
+                                        detail: error.localizedDescription
+                                    )
+                                }
+                            }
+                        } else {
+                            await MainActor.run {
+                                NotificationManager.shared.warning(
+                                    "Checkout commit \(shortSHA)",
+                                    detail: "Connect SSH to checkout commits on the remote working tree"
+                                )
+                            }
+                        }
+                    }
+                }
+                // 4. Compare a local save with current (userInfo: ["entryId": String])
+                .onReceive(NotificationCenter.default.publisher(for: .compareLocalVersion)) { notification in
+                    guard let entryId = notification.userInfo?["entryId"] as? String else { return }
+                    // LocalSaveEntry does not store a content snapshot, so a real diff is not
+                    // possible. Navigate to Source Control for manual comparison.
+                    editorCore.focusedSidebarTab = 2
+                    withAnimation { editorCore.showSidebar = true }
+                    NotificationManager.shared.info(
+                        "Compare with current",
+                        detail: "Local save \(String(entryId.prefix(8))): use Source Control to view working-copy changes"
+                    )
+                }
+        }
     }
 
     // MARK: - Notification Handler Modifiers (split to help type-checker)
@@ -629,6 +737,7 @@ struct IDEEditorView: View {
     @State private var lineHeight: CGFloat = 20  // Updated dynamically based on font size
     @State private var requestedCursorIndex: Int? = nil
     @State private var requestedLineSelection: Int? = nil
+    @State private var gitGutterRefreshToken: Int = 0
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
@@ -732,6 +841,7 @@ struct IDEEditorView: View {
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
                             foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
+                            gitGutterRefreshToken &+= 1
                         }
                         .onChange(of: cursorIndex) { _, newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
@@ -782,6 +892,28 @@ struct IDEEditorView: View {
                 )
                 .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+
+                // FEAT-071 Git gutter indicators (added/modified/deleted)
+                // Positioned as a narrow (6 pt) strip at the right edge of the line-number
+                // gutter so it aligns with VSCode-style change bars.
+                if let fileURL = tab.url, lineNumbersStyle != "off" {
+                    let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+                    let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+                    let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+                    GitGutterView(
+                        fileURL: fileURL,
+                        visibleLineRange: firstVisible..<lastVisible,
+                        lineHeight: lineHeight,
+                        contentTopInset: 8,
+                        selectedLine: currentLineNumber,
+                        refreshToken: AnyHashable(gitGutterRefreshToken)
+                    )
+                    .frame(width: 6)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.leading, 52)
+                    .allowsHitTesting(false)
+                    .clipped()
+                }
                 if showAutocomplete && !autocomplete.suggestionItems.isEmpty {
                     AutocompletePopup(
                         suggestions: autocomplete.suggestionItems,
