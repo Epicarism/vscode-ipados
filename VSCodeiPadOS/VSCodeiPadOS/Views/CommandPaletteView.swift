@@ -112,6 +112,34 @@ struct CommandPaletteView: View {
                 NotificationCenter.default.post(name: .moveLineDown, object: nil)
                 dismiss()
             },
+            Command(name: "Duplicate Line Down", shortcut: "⌥⇧↓", icon: "plus.square.on.square", category: .edit) {
+                NotificationCenter.default.post(name: .duplicateLineDown, object: nil)
+                dismiss()
+            },
+            Command(name: "Insert Line Below", shortcut: "⌘↵", icon: "text.append", category: .edit) {
+                NotificationCenter.default.post(name: .insertLineBelow, object: nil)
+                dismiss()
+            },
+            Command(name: "Insert Line Above", shortcut: "⌘⇧↵", icon: "text.insert", category: .edit) {
+                NotificationCenter.default.post(name: .insertLineAbove, object: nil)
+                dismiss()
+            },
+            Command(name: "Select Line", shortcut: "⌘L", icon: "text.line.first.and.arrowtriangle.forward", category: .edit) {
+                NotificationCenter.default.post(name: .selectLine, object: nil)
+                dismiss()
+            },
+            Command(name: "Indent Line", shortcut: "⌘]", icon: "increase.indent", category: .edit) {
+                NotificationCenter.default.post(name: .indentLines, object: nil)
+                dismiss()
+            },
+            Command(name: "Outdent Line", shortcut: "⌘[", icon: "decrease.indent", category: .edit) {
+                NotificationCenter.default.post(name: .outdentLines, object: nil)
+                dismiss()
+            },
+            Command(name: "Join Lines", shortcut: "⌃J", icon: "arrow.right.arrow.left", category: .edit) {
+                NotificationCenter.default.post(name: .joinLines, object: nil)
+                dismiss()
+            },
 
             // Selection Commands
             Command(name: "Select All", shortcut: "⌘A", icon: "selection.pin.in.out", category: .selection) {
@@ -174,7 +202,7 @@ struct CommandPaletteView: View {
                 editorCore.showGoToLine = true
                 dismiss()
             },
-            Command(name: "Go to Definition", shortcut: "F12", icon: "arrow.right.circle", category: .go) {
+            Command(name: "Go to Definition", shortcut: "⌘.", icon: "arrow.right.circle", category: .go) {
                 editorCore.goToDefinitionAtCursor()
                 dismiss()
             },
@@ -197,15 +225,15 @@ struct CommandPaletteView: View {
 
             // Run Commands
             Command(name: "Start Debugging", shortcut: "F5", icon: "play.fill", category: .run) {
+                NotificationCenter.default.post(name: .startDebugging, object: nil)
                 dismiss()
             },
             Command(name: "Run Without Debugging", shortcut: "⌃F5", icon: "play", category: .run) {
+                NotificationCenter.default.post(name: .runWithoutDebugging, object: nil)
                 dismiss()
             },
-            Command(name: "Stop", shortcut: "⇧F5", icon: "stop.fill", category: .run) {
-                dismiss()
-            },
-            Command(name: "Restart", shortcut: "⌃⇧F5", icon: "arrow.clockwise", category: .run) {
+            Command(name: "Run JavaScript", shortcut: nil, icon: "play.circle", category: .run) {
+                NotificationCenter.default.post(name: .runJavaScript, object: nil)
                 dismiss()
             },
 
@@ -247,16 +275,35 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Git: Clone Repository", shortcut: nil, icon: "arrow.down.circle", category: .file) {
+                NotificationCenter.default.post(name: .cloneRepository, object: nil)
                 dismiss()
             },
 
             // Code Folding Commands
-            Command(name: "Fold All", shortcut: nil, icon: "chevron.down.square", category: .view) {
+            Command(name: "Fold All", shortcut: "⌘⇧0", icon: "chevron.down.square", category: .view) {
                 editorCore.collapseAllFolds()
                 dismiss()
             },
-            Command(name: "Unfold All", shortcut: nil, icon: "chevron.up.square", category: .view) {
+            Command(name: "Unfold All", shortcut: "⌘⇧9", icon: "chevron.up.square", category: .view) {
                 editorCore.expandAllFolds()
+                dismiss()
+            },
+            Command(name: "Toggle Word Wrap", shortcut: nil, icon: "text.word.spacing", category: .view) {
+                let current = UserDefaults.standard.bool(forKey: "wordWrap")
+                UserDefaults.standard.set(!current, forKey: "wordWrap")
+                dismiss()
+            },
+            Command(name: "Toggle Minimap", shortcut: nil, icon: "sidebar.right", category: .view) {
+                let current = UserDefaults.standard.bool(forKey: "minimapEnabled")
+                UserDefaults.standard.set(!current, forKey: "minimapEnabled")
+                dismiss()
+            },
+            Command(name: "Show Problems", shortcut: "⌘⇧M", icon: "exclamationmark.triangle", category: .view) {
+                NotificationCenter.default.post(name: .switchToProblemsPanel, object: nil)
+                dismiss()
+            },
+            Command(name: "Trigger Suggestion", shortcut: "⌃Space", icon: "text.bubble", category: .edit) {
+                NotificationCenter.default.post(name: .triggerSuggestion, object: nil)
                 dismiss()
             },
 
