@@ -1026,6 +1026,10 @@ struct IDEEditorView: View {
     private var useRunestoneEditor: Bool { FeatureFlags.useRunestoneEditor }
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
+    @AppStorage("minimapEnabled") private var minimapEnabled: Bool = true
+    @AppStorage("indentGuides") private var indentGuides: Bool = true
+    @AppStorage("inlineSuggestions") private var inlineSuggestions: Bool = true
+    @AppStorage("bracketPairColorization") private var bracketPairColorization: Bool = true
     @State private var text: String = ""
     @State private var scrollPosition: Int = 0
     @State private var scrollOffset: CGFloat = 0
@@ -1180,7 +1184,7 @@ struct IDEEditorView: View {
                             inlineSuggestionManager.clearSuggestion()
                         }
                     
-                    if !tab.fileName.hasSuffix(".json") {
+                    if !tab.fileName.hasSuffix(".json") && minimapEnabled {
                         MinimapView(
                             content: text,
                             scrollOffset: scrollOffset,
@@ -1226,6 +1230,7 @@ struct IDEEditorView: View {
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
 
                 // Indentation guide lines (FEAT-indent-guides)
+                if indentGuides {
                 IndentGuidesOverlay(
                     code: text,
                     scrollPosition: scrollPosition,
@@ -1237,6 +1242,7 @@ struct IDEEditorView: View {
                 )
                 .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+                }
 
                 // FEAT-071 Git gutter indicators (added/modified/deleted)
                 // Positioned as a narrow (6 pt) strip at the right edge of the line-number
@@ -1260,7 +1266,7 @@ struct IDEEditorView: View {
                     .clipped()
                 }
                 // Inline suggestion ghost text
-                if inlineSuggestionManager.currentSuggestion != nil && !showAutocomplete {
+                if inlineSuggestionManager.currentSuggestion != nil && !showAutocomplete && inlineSuggestions {
                     InlineSuggestionView(
                         code: text,
                         language: CodeLanguage(from: tab.url?.pathExtension ?? "swift"),

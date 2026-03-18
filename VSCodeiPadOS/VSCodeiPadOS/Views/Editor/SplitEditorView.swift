@@ -538,6 +538,7 @@ struct PaneEditorView: View {
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
     @AppStorage("stickyScroll") private var stickyScroll: Bool = true
+    @AppStorage("minimapEnabled") private var minimapEnabled: Bool = true
 
     private var fileId: String { tab.url?.path ?? tab.fileName }
     
@@ -663,6 +664,7 @@ struct PaneEditorView: View {
                 }
                 
                 // Mini minimap
+                if minimapEnabled {
                 MinimapView(
                     content: text,
                     scrollOffset: scrollOffset,
@@ -674,6 +676,7 @@ struct PaneEditorView: View {
                     }
                 )
                 .frame(width: 60)
+                }
             }
             // Sticky Header Overlay (FEAT-040)
             // Shown only when the user has "Sticky Scroll" enabled in Settings.
