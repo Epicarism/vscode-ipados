@@ -133,11 +133,12 @@ final class AutoSaveManager: ObservableObject {
         }
     }
     
-    private func performAutoSave(tabId: UUID) {
+    @discardableResult
+    private func performAutoSave(tabId: UUID) -> Bool {
         guard let editorCore = editorCore,
               let index = editorCore.tabs.firstIndex(where: { $0.id == tabId }),
               let url = editorCore.tabs[index].url,
-              editorCore.tabs[index].isUnsaved else { return }
+              editorCore.tabs[index].isUnsaved else { return false }
         
         do {
             if let fileNavigator = editorCore.fileNavigator {
@@ -147,6 +148,7 @@ final class AutoSaveManager: ObservableObject {
             }
             
             editorCore.tabs[index].isUnsaved = false
+            // Return true before posting notification
             pendingSaves.remove(tabId)
             
             // Post notification for status bar feedback
@@ -155,21 +157,32 @@ final class AutoSaveManager: ObservableObject {
                 object: nil,
                 userInfo: ["fileName": url.lastPathComponent]
             )
+            return true
         } catch {
             AppLogger.editor.error("Auto-save error: \(error)")
+            return false
         }
     }
     
     private func saveAllPending() {
         guard let editorCore = editorCore else { return }
         
+        // Clean up stale entries for tabs that no longer exist
+        let existingTabIds = Set(editorCore.tabs.map { $0.id })
+        pendingSaves = pendingSaves.intersection(existingTabIds)
+        for staleId in autoSaveTasks.keys where !existingTabIds.contains(staleId) {
+            autoSaveTasks[staleId]?.cancel()
+            autoSaveTasks.removeValue(forKey: staleId)
+        }
+        
         var succeeded: Set<UUID> = []
         for tabId in pendingSaves {
             if let index = editorCore.tabs.firstIndex(where: { $0.id == tabId }),
                editorCore.tabs[index].isUnsaved,
                editorCore.tabs[index].url != nil {
-                performAutoSave(tabId: tabId)
-                succeeded.insert(tabId)
+                if performAutoSave(tabId: tabId) {
+                    succeeded.insert(tabId)
+                }
             }
         }
         

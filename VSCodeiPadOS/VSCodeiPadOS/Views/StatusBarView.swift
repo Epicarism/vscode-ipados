@@ -12,8 +12,8 @@ struct StatusBarView: View {
     @State private var showNotificationCenter = false
 
     // Editor settings (persisted via AppStorage)
-    @AppStorage("editor.tabSize") private var tabSize: Int = 4
-    @AppStorage("editor.insertSpaces") private var insertSpaces: Bool = true
+    @AppStorage("tabSize") private var tabSize: Int = 4
+    @AppStorage("insertSpaces") private var insertSpaces: Bool = true
     @AppStorage("editor.encoding") private var encoding: String = "UTF-8"
     @AppStorage("editor.eol") private var eolSetting: String = "LF"
 
