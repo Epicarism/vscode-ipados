@@ -88,7 +88,7 @@ struct BreadcrumbsView: View {
                             return
                         }
                         let dirPath = "/" + pathComponents[...index].joined(separator: "/")
-                        UIPasteboard.general.string = dirPath
+
                         NotificationCenter.default.post(
                             name: Notification.Name("navigateToDirectory"),
                             object: nil,

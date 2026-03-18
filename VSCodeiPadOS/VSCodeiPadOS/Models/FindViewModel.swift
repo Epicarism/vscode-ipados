@@ -514,7 +514,11 @@ struct FindReplaceView: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($searchFieldFocused)
                     .onSubmit {
-                        viewModel.performSearch()
+                        if viewModel.searchResults.isEmpty {
+                            viewModel.performSearch()
+                        } else {
+                            viewModel.nextResult()
+                        }
                     }
                 
                 // Regex error display

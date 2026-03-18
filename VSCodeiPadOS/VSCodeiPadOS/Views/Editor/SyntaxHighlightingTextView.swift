@@ -359,8 +359,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
         
         // Handle find/replace selection requests (jump to match)
-        if let range = editorCore.requestedSelection,
-           range != context.coordinator.lastHandledSelection {
+        if let range = editorCore.requestedSelection {
             context.coordinator.lastHandledSelection = range
             let textLength = (textView.text as NSString?)?.length ?? 0
             let safeRange = NSRange(

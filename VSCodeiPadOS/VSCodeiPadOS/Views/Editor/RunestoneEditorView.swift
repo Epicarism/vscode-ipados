@@ -282,8 +282,7 @@ struct RunestoneEditorView: UIViewRepresentable {
 
         // MARK: Find/Replace - jump to match
         // When FindViewModel sets editorCore.requestedSelection, scroll to and select that range.
-        if let range = editorCore.requestedSelection,
-           range != context.coordinator.lastHandledSelection {
+        if let range = editorCore.requestedSelection {
             context.coordinator.lastHandledSelection = range
             let textLength = (textView.text as NSString).length
             let safeRange = NSRange(
