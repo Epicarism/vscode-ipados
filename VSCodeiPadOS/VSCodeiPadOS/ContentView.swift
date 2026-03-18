@@ -359,6 +359,18 @@ struct ContentView: View {
                     editorCore.showSaveAsDialog = true
                 }
             }
+            .sheet(isPresented: $editorCore.showWelcome) {
+                NavigationView {
+                    WelcomeView()
+                        .environmentObject(themeManager)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Close") { editorCore.showWelcome = false }
+                            }
+                        }
+                }
+            }
     }
 
     @ViewBuilder
