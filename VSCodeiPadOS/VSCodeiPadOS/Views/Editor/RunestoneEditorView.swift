@@ -1334,6 +1334,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             var newText = lines.joined(separator: "\n")
             if hadTrailingNewline { newText += "\n" }
             
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: lineRange, with: newText)
             textView.text = fullText as String
@@ -1344,6 +1345,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: min(selectedRange.location + (allCommented ? -(prefix.count + 1) : (prefix.count + 1)), max(0, (textView.text as NSString).length)),
                 length: max(0, selectedRange.length + lengthDiff)
             )
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1390,9 +1392,11 @@ struct RunestoneEditorView: UIViewRepresentable {
             var newText = lines.joined(separator: "\n")
             if hadTrailingNewline { newText += "\n" }
             
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: lineRange, with: newText)
             textView.text = fullText as String
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1401,10 +1405,12 @@ struct RunestoneEditorView: UIViewRepresentable {
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
             
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: lineRange, with: "")
             textView.text = fullText as String
             textView.selectedRange = NSRange(location: min(lineRange.location, max(0, (textView.text as NSString).length)), length: 0)
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1420,6 +1426,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             let prevLine = text.substring(with: prevLineRange)
             
             let combinedRange = NSUnionRange(prevLineRange, lineRange)
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             
             // Swap lines, preserving newline structure
@@ -1435,6 +1442,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             let newLocation = prevLineRange.location + (selectedRange.location - lineRange.location)
             textView.selectedRange = NSRange(location: newLocation, length: selectedRange.length)
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1451,6 +1459,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             let nextLine = text.substring(with: nextLineRange)
             
             let combinedRange = NSUnionRange(lineRange, nextLineRange)
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             
             // Swap: next line first, then current line
@@ -1466,6 +1475,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             let newLocation = lineRange.location + nextLine.count + (selectedRange.location - lineRange.location)
             textView.selectedRange = NSRange(location: min(newLocation, (textView.text as NSString).length), length: selectedRange.length)
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1477,6 +1487,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             if !lineText.hasSuffix("\n") { lineText += "\n" }
             
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             if above {
                 fullText.insert(lineText, at: lineRange.location)
@@ -1490,6 +1501,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 // Cursor moves to duplicated line below
                 textView.selectedRange = NSRange(location: selectedRange.location + lineText.count, length: selectedRange.length)
             }
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1561,6 +1573,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             var newText = lines.joined(separator: "\n")
             if hadTrailingNewline { newText += "\n" }
             
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: lineRange, with: newText)
             textView.text = fullText as String
@@ -1571,6 +1584,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: selectedRange.location + indent.count,
                 length: max(0, selectedRange.length + lengthDiff - indent.count)
             )
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1612,6 +1626,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             var newText = lines.joined(separator: "\n")
             if hadTrailingNewline { newText += "\n" }
             
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: lineRange, with: newText)
             textView.text = fullText as String
@@ -1623,6 +1638,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: newLocation,
                 length: max(0, selectedRange.length + lengthDiff + firstLineRemoved)
             )
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
@@ -1650,12 +1666,14 @@ struct RunestoneEditorView: UIViewRepresentable {
             let joined = trimmedNextLine.isEmpty ? currentLineText + "\n" : currentLineText + " " + trimmedNextLine
             
             let combinedRange = NSUnionRange(lineRange, nextLineRange)
+            textView.undoManager?.beginUndoGrouping()
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: combinedRange, with: joined)
             textView.text = fullText as String
             
             // Place cursor at the join point
             textView.selectedRange = NSRange(location: currentLineText.count, length: 0)
+            textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
     }

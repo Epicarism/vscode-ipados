@@ -896,7 +896,7 @@ struct IDEEditorView: View {
     @StateObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
     @StateObject private var inlineSuggestionManager = InlineSuggestionManager()
-    @State private var inlineSuggestionWorkItem: DispatchWorkItem?
+
     
     // MARK: - Shared Autocomplete Handlers
     private func handleAcceptAutocomplete() -> Bool {
@@ -972,9 +972,14 @@ struct IDEEditorView: View {
                                     onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
                                     onDismissAutocomplete: { self.handleDismissAutocomplete() },
                                     onAcceptInlineSuggestion: {
-                                        guard let suggestion = inlineSuggestionManager.currentSuggestion else { return false }
-                                        text.insert(contentsOf: suggestion, at: text.index(text.startIndex, offsetBy: min(cursorIndex, text.count)))
-                                        cursorIndex += suggestion.count
+                                        // Use remainingSuggestionText so partial-accept progress is honoured
+                                        let textToInsert = inlineSuggestionManager.remainingSuggestionText.isEmpty
+                                            ? (inlineSuggestionManager.currentSuggestion ?? "")
+                                            : inlineSuggestionManager.remainingSuggestionText
+                                        guard !textToInsert.isEmpty else { return false }
+                                        let insertAt = text.index(text.startIndex, offsetBy: min(cursorIndex, text.count))
+                                        text.insert(contentsOf: textToInsert, at: insertAt)
+                                        cursorIndex += textToInsert.count
                                         requestedCursorIndex = cursorIndex
                                         inlineSuggestionManager.clearSuggestion()
                                         return true
@@ -1011,23 +1016,20 @@ struct IDEEditorView: View {
                             foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
                             gitGutterRefreshToken &+= 1
                             
-                            // Debounced inline suggestion
-                            inlineSuggestionWorkItem?.cancel()
+                            // Inline suggestion — manager handles debounce (300ms) + throttle (2s) internally
                             inlineSuggestionManager.clearSuggestion()
                             if newValue.count > 10 && !showAutocomplete {
-                                let work = DispatchWorkItem { [weak inlineSuggestionManager] in
-                                    let lines = newValue.prefix(cursorIndex).split(separator: "\n", omittingEmptySubsequences: false)
-                                    let line = lines.count
-                                    let col = (lines.last?.count ?? 0) + 1
-                                    inlineSuggestionManager?.requestSuggestion(for: newValue, at: .init(line: line, column: col), fileName: tab.url?.lastPathComponent)
-                                }
-                                inlineSuggestionWorkItem = work
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+                                let lines = newValue.prefix(cursorIndex).split(separator: "\n", omittingEmptySubsequences: false)
+                                let line = lines.count
+                                let col = (lines.last?.count ?? 0) + 1
+                                inlineSuggestionManager.requestSuggestion(for: newValue, at: .init(line: line, column: col), fileName: tab.url?.lastPathComponent)
                             }
                         }
                         .onChange(of: cursorIndex) { _, newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
                             showAutocomplete = autocomplete.showSuggestions
+                            // Dismiss inline suggestion when cursor moves (user clicked elsewhere)
+                            inlineSuggestionManager.clearSuggestion()
                         }
                     
                     if !tab.fileName.hasSuffix(".json") {
@@ -1192,6 +1194,23 @@ struct IDEEditorView: View {
             if editorCore.showSearch {
                 editorCore.showSearch = false
                 findViewModel.clearSearch()
+            } else {
+                // Escape with no search bar open → dismiss inline suggestion
+                inlineSuggestionManager.clearSuggestion()
+            }
+        }
+        // MARK: - Inline Suggestion: Partial Accept (Ctrl+Right / Option+Right)
+        .onReceive(NotificationCenter.default.publisher(for: .inlineSuggestionPartialAccept)) { _ in
+            guard let acceptedChunk = inlineSuggestionManager.partialAccept() else { return }
+            guard !acceptedChunk.isEmpty else { return }
+            // Insert the accepted word-chunk at the current cursor position
+            let insertAt = text.index(text.startIndex, offsetBy: min(cursorIndex, text.count))
+            text.insert(contentsOf: acceptedChunk, at: insertAt)
+            cursorIndex += acceptedChunk.count
+            requestedCursorIndex = cursorIndex
+            // Clear when the suggestion is now fully consumed
+            if inlineSuggestionManager.isSuggestionFullyAccepted {
+                inlineSuggestionManager.clearSuggestion()
             }
         }
 
