@@ -76,6 +76,7 @@ struct ContentView: View {
     @State private var pendingTrustURL: URL?
     @FocusState private var isTerminalFocused: Bool
     @State private var isLoadingFile = false
+    @State private var sidebarDragStartWidth: CGFloat = 250
 
     
     @StateObject private var trustManager = WorkspaceTrustManager.shared
@@ -548,11 +549,14 @@ struct ContentView: View {
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    let newWidth = editorCore.sidebarWidth + value.translation.width
+                                    let newWidth = sidebarDragStartWidth + value.translation.width
                                     editorCore.sidebarWidth = min(max(newWidth, 150), 500)
                                 }
+                                .onEnded { _ in
+                                    sidebarDragStartWidth = editorCore.sidebarWidth
+                                }
                         )
-
+                        .onAppear { sidebarDragStartWidth = editorCore.sidebarWidth }
                 }
                 
                 VStack(spacing: 0) {
