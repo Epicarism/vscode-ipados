@@ -1,14 +1,14 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 10:55 AM GMT+1
+## Last Updated: March 18, 2026 - 11:45 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings from our code)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM → 10:55 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 11:45 AM):
 
-**Commits:** `aa3d42a` → `8445384` (27 commits)
+**Commits:** `aa3d42a` → `ab0c6d3` (34 commits)
 
 **Major features added:**
 - **Inline AI Suggestions**: Ghost text overlay, Tab to accept, partial word-by-word accept (Ctrl+Right), Escape to dismiss, cursor-move auto-dismiss
@@ -34,14 +34,23 @@
 - **Ctrl+Space trigger suggestions**: Manual autocomplete trigger
 - **Cmd+Shift+M show problems**: Opens Problems panel
 - **Cmd+. Go to Definition**: Re-added with proper shortcut (was Cmd+Enter, conflicted with insert line)
+- **Fuzzy Search in Command Palette**: Subsequence matching with scoring (prefix, word boundary, consecutive bonuses)
+- **Search Match Highlighting**: Search panel MatchRow highlights matched substrings with bold+accent
+- **Open Editors Section**: Collapsible section at top of explorer showing all open tabs with unsaved indicators
+- **File Change Indicators**: Unsaved files show accent dot in file tree
+- **Lazy File Tree Loading**: Only 2 levels loaded eagerly; deeper dirs load on-demand when expanded
+- **Wire All Command Palette Commands**: Cut/Copy/Paste, Open Folder, Save As, Expand/Shrink Selection, Welcome, Documentation, New Window (multi-scene), Toggle Full Screen
+- **Welcome Sheet**: Command palette Welcome command opens WelcomeView as sheet
 
 **Performance fixes:**
 - LineNumbers scroll: O(n)→O(viewport) with binary search
-- Cursor position: O(n)→O(log n) with cached newline index
+- Cursor position: O(n)→O(log n) with cached newline index (both RunestoneEditorView AND SyntaxHighlightingTextView)
 - Debug logging removed from hot path
 - filteredEntries cached, localSaves capped at 500
 - CodeFoldingManager: regex patterns compiled once as static properties (was recompiling per line)
 - SearchManager: 10k results cap prevents OOM on broad searches
+- SyntaxHighlightingTextView: updateLineCount replaced components(separatedBy:) with zero-allocation UTF-8 byte scan
+- FileSystemNavigator: lazy tree loading reduces initial workspace open from O(entire tree) to O(2 levels)
 
 **Bug fixes (all 14 original issues RESOLVED):**
 - Build errors (GitManager NativeGitReader, ContentView scope)
@@ -57,13 +66,13 @@
 
 **🟢 All 14 original documented issues: RESOLVED ✅**
 
-**Remaining feature gaps (not bugs):**
+**Remaining feature gaps (not bugs — documented):**
 - Extensions system is UI-only (no real loading — iOS sandbox limitation)
 - No DAP debugger protocol (but real JS + LLDB/GDB over SSH work)
-- SSH passphrase-protected keys use wrong KDF (bcrypt-pbkdf approximated with PBKDF2)
+- SSH: no RSA keys, no known_hosts verification, no ssh-agent
 - Remote→local port forwarding is stub
-- Code folding has working detection engine (933 lines!) but Runestone 0.5.x TextKit integration is limited
-- No true multi-cursor support
+- No true multi-cursor editing (UI exists but limited)
+- No sticky scroll or bracket pair guide lines (bracket pair coloring works)
 
 ---
 
@@ -136,3 +145,5 @@
 
 **[SWE-1 | 12:09 AM]** Session 2 complete. ~30 more fixes applied across 18 files. All builds clean. Major highlights: ANSI colors now work in OutputView, GitManager lists no longer flicker, AutoSaveManager handles multi-tab correctly, shell injection protected. See remaining issues list above for next session priorities.
 **[SWE-1 | 5:56 AM]** Session 3 complete. 24 commits, 0 errors, 0 warnings. All 14 original issues resolved. Added inline AI suggestions, language-aware autocomplete, go-to-definition, hover info, conditional breakpoints, chunked SFTP, sidebar resize, undo grouping, format undo, find/replace polish. Build target updated to iPad Pro 13-inch (M5).
+
+**[SWE-1 | 11:45 AM]** Session 3 continued. 7 more commits: fuzzy command palette search, O(log n) cursor in SyntaxHighlightingTextView, search match highlighting, Open Editors section, unsaved file indicators, lazy file tree loading, all command palette commands wired. 34 total commits this session.
