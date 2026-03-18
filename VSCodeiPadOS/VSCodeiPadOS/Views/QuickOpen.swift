@@ -16,7 +16,7 @@ struct QuickOpenView: View {
     @State private var searchText = ""
     @State private var selectedIndex = 0
     @FocusState private var isSearchFocused: Bool
-    @State private var recentFiles: [QuickOpenItem] = []
+    @ObservedObject private var recentFileManager = RecentFileManager.shared
 
     // Deterministic items for XCUITests (driven by launch argument: "-uiTesting")
     @State private var uiTestItems: [QuickOpenItem] = QuickOpenView.makeUITestItemsIfNeeded()
@@ -50,8 +50,8 @@ struct QuickOpenView: View {
         let fileB = ensureFile("UITest-B.txt", contents: "B")
 
         return [
-            QuickOpenItem(name: "UITest-A.txt", path: "", url: fileA, isOpen: false, language: CodeLanguage(from: "txt")),
-            QuickOpenItem(name: "UITest-B.txt", path: "", url: fileB, isOpen: false, language: CodeLanguage(from: "txt"))
+            QuickOpenItem(name: "UITest-A.txt", path: "", url: fileA, isOpen: false, isRecent: false, language: CodeLanguage(from: "txt")),
+            QuickOpenItem(name: "UITest-B.txt", path: "", url: fileB, isOpen: false, isRecent: false, language: CodeLanguage(from: "txt"))
         ]
     }
 
@@ -69,6 +69,7 @@ struct QuickOpenView: View {
                 path: tab.url?.deletingLastPathComponent().path ?? "",
                 url: tab.url,
                 isOpen: true,
+                isRecent: false,
                 language: tab.language
             ))
         }
@@ -92,6 +93,7 @@ struct QuickOpenView: View {
                     path: basePath,
                     url: node.url,
                     isOpen: false,
+                    isRecent: false,
                     language: CodeLanguage(from: node.fileExtension)
                 ))
             }
@@ -102,23 +104,57 @@ struct QuickOpenView: View {
         }
     }
 
+    /// Top 10 recently opened files that are NOT currently open in a tab.
+    private var recentFileItems: [QuickOpenItem] {
+        if Self.isUITesting { return [] }
+        return recentFileManager.recentFiles
+            .filter { url in !editorCore.tabs.contains(where: { $0.url == url }) }
+            .prefix(10)
+            .map { url in
+                let name = url.lastPathComponent
+                let path = url.deletingLastPathComponent().path
+                let ext = (name as NSString).pathExtension.lowercased()
+                return QuickOpenItem(
+                    name: name,
+                    path: path,
+                    url: url,
+                    isOpen: false,
+                    isRecent: true,
+                    language: CodeLanguage(from: ext)
+                )
+            }
+    }
+
     private var filteredFiles: [QuickOpenItem] {
         if searchText.isEmpty {
-            // Show open files first, then recent
-            return allFiles.sorted { a, b in
-                if a.isOpen && !b.isOpen { return true }
-                if !a.isOpen && b.isOpen { return false }
-                return a.name < b.name
-            }
+            // Order: open editors → recently opened (top 10) → workspace files
+            let openItems    = allFiles.filter { $0.isOpen }.sorted { $0.name < $1.name }
+            let recentItems  = recentFileItems   // already excludes open tabs
+            let recentURLs   = Set(recentItems.compactMap { $0.url })
+            let workspaceItems = allFiles
+                .filter { item in
+                    !item.isOpen && !recentURLs.contains(item.url ?? URL(fileURLWithPath: ""))
+                }
+                .sorted { $0.name < $1.name }
+            return openItems + recentItems + workspaceItems
         }
 
-        return allFiles
+        // Search mode: fuzzy-match across all files + recent files not in workspace
+        let searchPool: [QuickOpenItem] = {
+            let allURLs = Set(allFiles.compactMap { $0.url })
+            let extraRecents = recentFileItems.filter { item in
+                guard let url = item.url else { return false }
+                return !allURLs.contains(url)
+            }
+            return allFiles + extraRecents
+        }()
+
+        return searchPool
             .compactMap { item -> (QuickOpenItem, Int)? in
                 // Score against filename and path
                 let nameScore = FuzzyMatcher.score(query: searchText, target: item.name) ?? 0
                 let pathScore = (FuzzyMatcher.score(query: searchText, target: item.fullPath) ?? 0) / 2
                 let totalScore = max(nameScore, pathScore)
-
                 guard totalScore > 0 else { return nil }
                 return (item, totalScore)
             }
@@ -197,21 +233,26 @@ struct QuickOpenView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            // Section header for open files
-                            if searchText.isEmpty && filteredFiles.contains(where: { $0.isOpen }) {
-                                HStack {
-                                    Text("open editors")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.secondary)
-                                        .textCase(.uppercase)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 6)
-                                .background(Color(UIColor.tertiarySystemBackground))
-                            }
-
                             ForEach(Array(filteredFiles.enumerated()), id: \.element.id) { index, file in
+                                // --- Section headers (empty-search mode only) ---
+                                if searchText.isEmpty {
+                                    // "Open Editors" before the very first open tab
+                                    if index == 0 && file.isOpen {
+                                        SectionHeaderView(title: "open editors")
+                                    }
+                                    // "Recently Opened" before the first recent item
+                                    //   Case A: there are open tabs before it
+                                    if file.isRecent
+                                        && (index == 0 || !filteredFiles[index - 1].isRecent) {
+                                        SectionHeaderView(title: "recently opened")
+                                    }
+                                    // "Workspace Files" before the first non-open non-recent item
+                                    if !file.isOpen && !file.isRecent
+                                        && (index == 0 || filteredFiles[index - 1].isRecent || filteredFiles[index - 1].isOpen) {
+                                        SectionHeaderView(title: "workspace files")
+                                    }
+                                }
+
                                 QuickOpenRowView(
                                     item: file,
                                     searchQuery: searchText,
@@ -224,23 +265,6 @@ struct QuickOpenView: View {
                                 .id(index)
                                 .onTapGesture {
                                     openFile(file)
-                                }
-
-                                // Section divider between open and other files
-                                if searchText.isEmpty {
-                                    let openFiles = filteredFiles.filter { $0.isOpen }
-                                    if index == openFiles.count - 1 && openFiles.count < filteredFiles.count {
-                                        HStack {
-                                            Text("workspace files")
-                                                .font(.system(size: 11, weight: .medium))
-                                                .foregroundColor(.secondary)
-                                                .textCase(.uppercase)
-                                            Spacer()
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 6)
-                                        .background(Color(UIColor.tertiarySystemBackground))
-                                    }
                                 }
                             }
                         }
@@ -284,6 +308,25 @@ struct QuickOpenView: View {
     }
 }
 
+// MARK: - Section Header View
+
+private struct SectionHeaderView: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(Color(UIColor.tertiarySystemBackground))
+    }
+}
+
 // MARK: - Quick Open Item
 
 struct QuickOpenItem: Identifiable {
@@ -292,6 +335,7 @@ struct QuickOpenItem: Identifiable {
     let path: String
     let url: URL?
     let isOpen: Bool
+    let isRecent: Bool
     let language: CodeLanguage
 
     var fullPath: String {
@@ -338,6 +382,13 @@ struct QuickOpenRowView: View {
                 Image(systemName: "circle.fill")
                     .font(.system(size: 6))
                     .foregroundColor(isSelected ? .white : .accentColor)
+            }
+
+            // Recent indicator
+            if item.isRecent && !item.isOpen {
+                Image(systemName: "clock")
+                    .font(.system(size: 11))
+                    .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary.opacity(0.6))
             }
         }
         .padding(.horizontal, 16)
