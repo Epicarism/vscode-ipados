@@ -78,11 +78,23 @@ struct FileTreeRowView: View {
                 FileIconView(filename: node.name, isDirectory: node.isDirectory, isOpen: isExpanded)
                     .frame(width: 16, height: 16)
                 
-                // Name
-                Text(node.name)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                    .foregroundColor(.primary)
+                // Name + unsaved indicator
+                if !node.isDirectory, editorCore.tabs.contains(where: { $0.url == node.url && $0.isUnsaved }) {
+                    HStack(spacing: 3) {
+                        Text(node.name)
+                            .font(.system(size: 13))
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                    }
+                } else {
+                    Text(node.name)
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                        .foregroundColor(.primary)
+                }
                 
                 Spacer()
             }

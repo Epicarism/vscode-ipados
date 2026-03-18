@@ -851,6 +851,55 @@ struct IDESidebarFiles: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    // MARK: Open Editors Section
+                    if !editorCore.tabs.isEmpty {
+                        DisclosureGroup("OPEN EDITORS") {
+                            ForEach(editorCore.tabs) { tab in
+                                HStack(spacing: 6) {
+                                    // Close button
+                                    Button {
+                                        editorCore.closeTab(id: tab.id)
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 14, height: 14)
+                                    }
+                                    .buttonStyle(.plain)
+                                    
+                                    FileIconView(filename: tab.fileName, isDirectory: false, isOpen: false)
+                                        .frame(width: 14, height: 14)
+                                    
+                                    Text(tab.fileName)
+                                        .font(.system(size: 12))
+                                        .lineLimit(1)
+                                        .foregroundColor(tab.id == editorCore.activeTabId ? .accentColor : .primary)
+                                    
+                                    if tab.isUnsaved {
+                                        Circle()
+                                            .fill(Color.accentColor)
+                                            .frame(width: 6, height: 6)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                .padding(.vertical, 1)
+                                .padding(.horizontal, 4)
+                                .background(tab.id == editorCore.activeTabId ? Color.accentColor.opacity(0.15) : Color.clear)
+                                .cornerRadius(3)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    editorCore.activeTabId = tab.id
+                                }
+                            }
+                        }
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(theme.sidebarForeground.opacity(0.7))
+                        .padding(.bottom, 4)
+                    }
+                    
+                    // MARK: File Tree
                     if let tree = fileNavigator.fileTree {
                         FileTreeView(root: tree, fileNavigator: fileNavigator, editorCore: editorCore)
                     } else {
