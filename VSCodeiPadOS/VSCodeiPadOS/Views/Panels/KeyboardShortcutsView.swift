@@ -50,6 +50,7 @@ struct ShortcutCatalog {
         KeyboardShortcut(name: "Quick Open", keys: "⌘P", category: .general, description: "Quickly open files by name"),
         KeyboardShortcut(name: "New File", keys: "⌘N", category: .general, description: "Create a new untitled file"),
         KeyboardShortcut(name: "Save", keys: "⌘S", category: .general, description: "Save the active file"),
+        KeyboardShortcut(name: "Save All", keys: "⌥⌘S", category: .general, description: "Save all open files"),
         KeyboardShortcut(name: "Close Tab", keys: "⌘W", category: .general, description: "Close the active editor tab"),
         KeyboardShortcut(name: "Settings", keys: "⌘,", category: .general, description: "Open settings"),
         
@@ -60,15 +61,36 @@ struct ShortcutCatalog {
         KeyboardShortcut(name: "Undo", keys: "⌘Z", category: .editing, description: "Undo last action"),
         KeyboardShortcut(name: "Redo", keys: "⇧⌘Z", category: .editing, description: "Redo last undone action"),
         KeyboardShortcut(name: "Select All", keys: "⌘A", category: .editing, description: "Select all text in editor"),
+        KeyboardShortcut(name: "Select Line", keys: "⌘L", category: .editing, description: "Select the current line"),
+        KeyboardShortcut(name: "Toggle Comment", keys: "⌘/", category: .editing, description: "Toggle line comment"),
+        KeyboardShortcut(name: "Delete Line", keys: "⇧⌘K", category: .editing, description: "Delete the current line"),
+        KeyboardShortcut(name: "Move Line Up", keys: "⌥↑", category: .editing, description: "Move the current line up"),
+        KeyboardShortcut(name: "Move Line Down", keys: "⌥↓", category: .editing, description: "Move the current line down"),
+        KeyboardShortcut(name: "Duplicate Line Down", keys: "⇧⌥↓", category: .editing, description: "Duplicate the current line below"),
+        KeyboardShortcut(name: "Duplicate Line Up", keys: "⇧⌥↑", category: .editing, description: "Duplicate the current line above"),
+        KeyboardShortcut(name: "Insert Line Below", keys: "⌘↵", category: .editing, description: "Insert a new line below"),
+        KeyboardShortcut(name: "Insert Line Above", keys: "⇧⌘↵", category: .editing, description: "Insert a new line above"),
+        KeyboardShortcut(name: "Indent Line", keys: "⌘]", category: .editing, description: "Indent the current line"),
+        KeyboardShortcut(name: "Outdent Line", keys: "⌘[", category: .editing, description: "Outdent the current line"),
+        KeyboardShortcut(name: "Join Lines", keys: "⌃J", category: .editing, description: "Join the current line with the next"),
+        KeyboardShortcut(name: "Format Document", keys: "⇧⌥F", category: .editing, description: "Format the active document"),
+        KeyboardShortcut(name: "Trigger Suggestion", keys: "⌃Space", category: .editing, description: "Trigger autocomplete suggestions"),
         KeyboardShortcut(name: "Zoom In", keys: "⌘+", category: .editing, description: "Increase editor font size"),
         KeyboardShortcut(name: "Zoom Out", keys: "⌘-", category: .editing, description: "Decrease editor font size"),
+        
+        // Selection
+        KeyboardShortcut(name: "Add Next Occurrence", keys: "⌘D", category: .editing, description: "Add next match to selection"),
+        KeyboardShortcut(name: "Select All Occurrences", keys: "⇧⌘L", category: .editing, description: "Select all occurrences of selection"),
+        KeyboardShortcut(name: "Add Cursor Above", keys: "⌥⌘↑", category: .editing, description: "Add cursor on the line above"),
+        KeyboardShortcut(name: "Add Cursor Below", keys: "⌥⌘↓", category: .editing, description: "Add cursor on the line below"),
         
         // Navigation
         KeyboardShortcut(name: "Go to Line", keys: "⌃G", category: .navigation, description: "Jump to a specific line number"),
         KeyboardShortcut(name: "Go to Symbol", keys: "⇧⌘O", category: .navigation, description: "Navigate to a symbol in the file"),
-        KeyboardShortcut(name: "Go to Definition", keys: "F12", category: .navigation, description: "Jump to symbol definition"),
-        KeyboardShortcut(name: "Go Back", keys: "⌃-", category: .navigation, description: "Go to previous editor location"),
-        KeyboardShortcut(name: "Go Forward", keys: "⌃⇧-", category: .navigation, description: "Go to next editor location"),
+        KeyboardShortcut(name: "Go to Definition", keys: "⌘.", category: .navigation, description: "Jump to symbol definition"),
+        KeyboardShortcut(name: "Peek Definition", keys: "⌥D", category: .navigation, description: "Peek at symbol definition inline"),
+        KeyboardShortcut(name: "Go Back", keys: "⌃[", category: .navigation, description: "Go to previous editor location"),
+        KeyboardShortcut(name: "Go Forward", keys: "⌃]", category: .navigation, description: "Go to next editor location"),
         
         // Search
         KeyboardShortcut(name: "Find", keys: "⌘F", category: .search, description: "Find text in current file"),
@@ -79,21 +101,16 @@ struct ShortcutCatalog {
         KeyboardShortcut(name: "Toggle Sidebar", keys: "⌘B", category: .view, description: "Show or hide the sidebar"),
         KeyboardShortcut(name: "Toggle Terminal", keys: "⌘J", category: .view, description: "Show or hide the integrated terminal"),
         KeyboardShortcut(name: "AI Assistant", keys: "⇧⌘A", category: .view, description: "Open the AI coding assistant"),
-        KeyboardShortcut(name: "Zen Mode", keys: "⌘K Z", category: .view, description: "Enter distraction-free zen mode"),
-        KeyboardShortcut(name: "Explorer", keys: "⇧⌘E", category: .view, description: "Show file explorer sidebar"),
-        KeyboardShortcut(name: "Source Control", keys: "⌃⇧G", category: .view, description: "Show source control sidebar"),
-        KeyboardShortcut(name: "Extensions", keys: "⇧⌘X", category: .view, description: "Show extensions sidebar"),
+        KeyboardShortcut(name: "Show Problems", keys: "⇧⌘M", category: .view, description: "Show the problems panel"),
+        KeyboardShortcut(name: "Fold All", keys: "⇧⌘0", category: .view, description: "Collapse all code folds"),
+        KeyboardShortcut(name: "Unfold All", keys: "⇧⌘9", category: .view, description: "Expand all code folds"),
         
         // Debug
-        KeyboardShortcut(name: "Start Debugging", keys: "F5", category: .debug, description: "Start or continue debugging"),
-        KeyboardShortcut(name: "Step Over", keys: "F10", category: .debug, description: "Step over in debugger"),
-        KeyboardShortcut(name: "Step Into", keys: "F11", category: .debug, description: "Step into in debugger"),
-        KeyboardShortcut(name: "Step Out", keys: "⇧F11", category: .debug, description: "Step out in debugger"),
-        KeyboardShortcut(name: "Toggle Breakpoint", keys: "F9", category: .debug, description: "Toggle breakpoint at current line"),
+        KeyboardShortcut(name: "Start Debugging", keys: "⇧⌘D", category: .debug, description: "Start or continue debugging"),
+        KeyboardShortcut(name: "Run Without Debugging", keys: "⇧⌘R", category: .debug, description: "Run the project"),
         
         // Terminal
         KeyboardShortcut(name: "New Terminal", keys: "⌃⇧`", category: .terminal, description: "Create a new terminal instance"),
-        KeyboardShortcut(name: "Clear Terminal", keys: "⌘K", category: .terminal, description: "Clear the terminal output"),
     ]
     
     static func shortcuts(for category: ShortcutCategory) -> [KeyboardShortcut] {
