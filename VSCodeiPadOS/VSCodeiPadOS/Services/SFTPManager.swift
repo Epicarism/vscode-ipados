@@ -287,8 +287,10 @@ class SFTPManager: @unchecked Sendable {
             do {
                 let fileData = try Data(contentsOf: localURL)
                 
-                guard fileData.count < 100 * 1024 else {
-                    completion(.failure(SFTPError.transferFailed("File too large for base64 upload (max 100KB). Size: \(fileData.count) bytes")))
+                // 5MB max upload limit
+                let maxUploadSize = 5 * 1024 * 1024
+                guard fileData.count < maxUploadSize else {
+                    completion(.failure(SFTPError.transferFailed("File too large for base64 upload (max 5MB). Size: \(fileData.count) bytes")))
                     return
                 }
                 
@@ -301,13 +303,52 @@ class SFTPManager: @unchecked Sendable {
                 let parentDir = (remotePath as NSString).deletingLastPathComponent
                 _ = try? await sshManager?.executeCommand("mkdir -p \(shellEscape(parentDir))")
                 
-                // Write base64 data using printf to avoid echo issues with special characters
+                // For files up to 100KB, use a single command; for larger files, chunk the upload
                 let escapedPath = shellEscape(remotePath)
-                let command = "printf '%s' \(shellEscape(base64String)) | base64 -d > \(escapedPath)"
-                let cmdResult = try await sshManager?.executeCommand(command)
-                if cmdResult == nil {
-                    completion(.failure(SFTPError.notConnected))
-                    return
+                let chunkThreshold = 100 * 1024
+                
+                if fileData.count < chunkThreshold {
+                    // Small file: single printf command
+                    let command = "printf '%s' \(shellEscape(base64String)) | base64 -d > \(escapedPath)"
+                    guard let _ = try await sshManager?.executeCommand(command) else {
+                        completion(.failure(SFTPError.notConnected))
+                        return
+                    }
+                } else {
+                    // Larger file: split base64 into chunks and append with >>
+                    // Use ~64KB chunks of base64 text (each chunk decodes to ~48KB of binary)
+                    let base64ChunkSize = 64 * 1024
+                    let totalChunks = (base64String.count + base64ChunkSize - 1) / base64ChunkSize
+                    let tmpFile = "\(escapedPath).b64tmp"
+                    
+                    for chunkIndex in 0..<totalChunks {
+                        let startIdx = base64String.index(base64String.startIndex, offsetBy: chunkIndex * base64ChunkSize)
+                        let endIdx = base64String.index(startIdx, offsetBy: min(base64ChunkSize, base64String.count - chunkIndex * base64ChunkSize))
+                        let chunk = String(base64String[startIdx..<endIdx])
+                        
+                        // First chunk overwrites (>), subsequent chunks append (>>)
+                        let redirectOp = chunkIndex == 0 ? ">" : ">>"
+                        let chunkCmd = "printf '%s' \(shellEscape(chunk)) \(redirectOp) \(tmpFile)"
+                        guard let _ = try await sshManager?.executeCommand(chunkCmd) else {
+                            _ = try? await sshManager?.executeCommand("rm -f \(tmpFile)")
+                            completion(.failure(SFTPError.notConnected))
+                            return
+                        }
+                        
+                        // Report progress during chunked upload
+                        let chunkBytes = UInt64(Double(chunkIndex + 1) / Double(totalChunks) * Double(fileData.count))
+                        delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(
+                            fileName: fileName, bytesTransferred: min(chunkBytes, UInt64(fileData.count)), totalBytes: UInt64(fileData.count), isUpload: true
+                        ))
+                    }
+                    
+                    // Decode the assembled base64 temp file into the final destination
+                    let decodeCmd = "base64 -d \(tmpFile) > \(escapedPath) && rm -f \(tmpFile)"
+                    guard let _ = try await sshManager?.executeCommand(decodeCmd) else {
+                        _ = try? await sshManager?.executeCommand("rm -f \(tmpFile)")
+                        completion(.failure(SFTPError.notConnected))
+                        return
+                    }
                 }
                 
                 delegate?.sftpManager(self, didUpdateProgress: SFTPTransferProgress(

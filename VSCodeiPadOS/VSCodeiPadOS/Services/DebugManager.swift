@@ -578,6 +578,19 @@ final class DebugManager: ObservableObject {
                 }
             }()
 
+            // Collect conditions for enabled breakpoints in this file.
+            let bpConditions: [Int: String] = {
+                let fid = canonicalFileId(fileId)
+                var conditions: [Int: String] = [:]
+                for line in bpLines {
+                    let id = "\(fid)::\(line)"
+                    if let cond = breakpointConditions[id], !cond.isEmpty {
+                        conditions[line] = cond
+                    }
+                }
+                return conditions
+            }()
+
             // Set up call stack frame
             callStack = [StackFrame(function: "<module>", file: fileName, line: 1)]
             selectedFrameId = callStack.first?.id
@@ -587,7 +600,8 @@ final class DebugManager: ObservableObject {
             let session = JSDebugSession(
                 code: code,
                 fileName: fileName,
-                breakpointLines: bpLines
+                breakpointLines: bpLines,
+                breakpointConditions: bpConditions
             )
             activeDebugSession = session
             activeJSRunner = session.runner
@@ -675,7 +689,7 @@ final class DebugManager: ObservableObject {
             for i in updated.indices {
                 let expr = updated[i].expression
                 if let val = try? await runner.executeToString(code: expr) {
-                    updated[i].value = val ?? "undefined"
+                    updated[i].value = val
                 } else {
                     updated[i].value = "<error>"
                 }
@@ -1326,6 +1340,7 @@ final class JSDebugSession {
     private let source: String
     private let fileName: String
     private let breakpointLines: Set<Int>   // 0-based line indices
+    private let breakpointConditions: [Int: String]  // 0-based line -> condition expression
     private var isCancelled = false
 
     /// Continuation used to suspend execution until the UI resumes the session.
@@ -1336,10 +1351,11 @@ final class JSDebugSession {
 
     // MARK: - Init
 
-    init(code: String, fileName: String, breakpointLines: Set<Int>) {
+    init(code: String, fileName: String, breakpointLines: Set<Int>, breakpointConditions: [Int: String] = [:]) {
         self.source = code
         self.fileName = fileName
         self.breakpointLines = breakpointLines
+        self.breakpointConditions = breakpointConditions
         self.runner = JSRunner()
 
         eventStream = AsyncStream { [weak self] continuation in
@@ -1407,25 +1423,42 @@ final class JSDebugSession {
 
             // If this segment has a pause line, pause first
             if let pauseLine = segment.pauseLine {
-                // Snapshot variables from the JS context
-                let vars = await captureVariables()
-
-                // Emit paused event
-                streamContinuation?.yield(.paused(line: pauseLine, variables: vars))
-
-                // Suspend here until UI resumes
-                let mode = await withCheckedContinuation { (cont: CheckedContinuation<ResumeMode, Never>) in
-                    resumeContinuation = cont
+                // Evaluate breakpoint condition if one is set
+                var shouldPause = true
+                if let condition = breakpointConditions[pauseLine], !condition.isEmpty {
+                    let conditionResult: String
+                    do {
+                        conditionResult = try await runner.executeToString(code: condition) ?? ""
+                    } catch {
+                        conditionResult = ""
+                    }
+                    let falsyValues: Set<String> = ["false", "0", "null", "undefined", ""]
+                    if falsyValues.contains(conditionResult) {
+                        shouldPause = false
+                    }
                 }
 
-                guard !isCancelled else { break }
-                streamContinuation?.yield(.resumed)
+                if shouldPause {
+                    // Snapshot variables from the JS context
+                    let vars = await captureVariables()
 
-                // For stepOver/stepInto we still execute this line then stop at next BP.
-                // For stepOut / continue we run through to next BP.
-                // In all cases we just continue running the segment as normal —
-                // the segment loop will naturally pause again at the next breakpoint.
-                _ = mode  // All modes behave identically at top-level: run to next BP
+                    // Emit paused event
+                    streamContinuation?.yield(.paused(line: pauseLine, variables: vars))
+
+                    // Suspend here until UI resumes
+                    let mode = await withCheckedContinuation { (cont: CheckedContinuation<ResumeMode, Never>) in
+                        resumeContinuation = cont
+                    }
+
+                    guard !isCancelled else { break }
+                    streamContinuation?.yield(.resumed)
+
+                    // For stepOver/stepInto we still execute this line then stop at next BP.
+                    // For stepOut / continue we run through to next BP.
+                    // In all cases we just continue running the segment as normal —
+                    // the segment loop will naturally pause again at the next breakpoint.
+                    _ = mode  // All modes behave identically at top-level: run to next BP
+                }
             }
 
             // Build the code for this segment
