@@ -39,6 +39,7 @@ struct RunestoneEditorView: UIViewRepresentable {
     // Settings from AppStorage
     @AppStorage("wordWrap") private var wordWrapEnabled: Bool = true
     @AppStorage("showLineNumbers") private var showLineNumbers: Bool = true
+    @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
     @AppStorage("tabSize") private var tabSize: Int = 4
     @AppStorage("insertSpaces") private var insertSpaces: Bool = true
     @AppStorage("showInvisibleCharacters") private var showInvisibleCharacters: Bool = false
@@ -171,8 +172,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
         }
         
-        // Sync Runestone's built-in line numbers with the user setting
-        textView.showLineNumbers = showLineNumbers
+        // Sync Runestone built-in line numbers with lineNumbersStyle setting
+        textView.showLineNumbers = (lineNumbersStyle != "off")
         // Word wrap toggle still works
         if textView.isLineWrappingEnabled != wordWrapEnabled {
             textView.isLineWrappingEnabled = wordWrapEnabled

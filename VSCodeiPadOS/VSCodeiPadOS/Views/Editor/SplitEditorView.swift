@@ -549,7 +549,7 @@ struct PaneEditorView: View {
                 //
                 // IMPORTANT: keep gutter in sync with the editor scroll position. The gutter ScrollView
                 // is scroll-disabled, and we offset the content to match the editor's scroll.
-                if lineNumbersStyle != "off" {
+                if lineNumbersStyle != "off" && !useRunestoneEditor {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .trailing, spacing: 0) {
                             // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
@@ -690,8 +690,8 @@ struct PaneEditorView: View {
                         requestedLineSelection = line
                     }
                 )
-                .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for gutter
-                .padding(.trailing, 60) // Offset for minimap
+                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 70 : 0) // Offset for gutter
+                .padding(.trailing, minimapEnabled ? 60 : 0) // Offset for minimap
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(true)
                 .zIndex(50)
@@ -704,17 +704,17 @@ struct PaneEditorView: View {
                 scrollPosition: scrollPosition,
                 lineHeight: lineHeight,
                 fontSize: 14,
-                gutterWidth: lineNumbersStyle != "off" ? 70 : 0,
-                rightReservedWidth: 60
+                gutterWidth: (lineNumbersStyle != "off" && !useRunestoneEditor) ? 70 : 0,
+                rightReservedWidth: minimapEnabled ? 60 : 0
             )
-            .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for line numbers
-            .padding(.trailing, 60) // Offset for minimap
+            .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 70 : 0)
+            .padding(.trailing, minimapEnabled ? 60 : 0)
 
 
 
             // FEAT-071 Git gutter indicators (added/modified/deleted)
             // 6 pt strip at the right edge of the 70 pt line-number gutter.
-            if let fileURL = tab.url, lineNumbersStyle != "off" {
+            if let fileURL = tab.url, lineNumbersStyle != "off" && !useRunestoneEditor {
                 let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
                 let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
                 let lastVisible = min(totalLines + 1, firstVisible + visibleCount)

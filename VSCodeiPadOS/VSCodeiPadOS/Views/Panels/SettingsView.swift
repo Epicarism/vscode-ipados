@@ -130,7 +130,7 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .searchable(text: $searchText, placement: .sidebar)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
             .background(
                 Button("") { dismiss() }
                     .keyboardShortcut(.escape, modifiers: [])
