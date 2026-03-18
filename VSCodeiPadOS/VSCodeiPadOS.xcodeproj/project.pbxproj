@@ -7,12 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C014100783893AFEE050E4 /* SFTPManager.swift */; };
-
-		1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */; };
-
-		88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */; };
-
 		1001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2001 /* ContentView.swift */; };
 		1002 /* VSCodeiPadOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002 /* VSCodeiPadOSApp.swift */; };
 		1003 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2003 /* AppCommands.swift */; };
@@ -51,7 +45,6 @@
 		1062 /* RecentFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2062 /* RecentFileManager.swift */; };
 		1063 /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063 /* SearchManager.swift */; };
 		1063B /* FindReferencesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2063B /* FindReferencesService.swift */; };
-		4063C /* CodeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3063C /* CodeFormatter.swift */; };
 		1064 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2064 /* SettingsManager.swift */; };
 		1065 /* SnippetsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2065 /* SnippetsManager.swift */; };
 		1066 /* TasksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2066 /* TasksManager.swift */; };
@@ -101,11 +94,6 @@
 		1140 /* FileHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2140 /* FileHelpers.swift */; };
 		1141 /* Notification+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2141 /* Notification+Search.swift */; };
 		1142 /* SSHManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2142 /* SSHManager.swift */; };
-		BB11CC22DD33EE44FF550002 /* EmmetEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550001 /* EmmetEngine.swift */; };
-		BB11CC22DD33EE44FF550004 /* SnippetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550003 /* SnippetManager.swift */; };
-		BB11CC22DD33EE44FF550006 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550005 /* OnboardingView.swift */; };
-		AA01BB02CC03DD04EE05FF07 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */; };
-		CC01DD02EE03FF040012 /* CloneRepositoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC01DD02EE03FF040011 /* CloneRepositoryView.swift */; };
 		1143 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2143 /* AppDelegate.swift */; };
 		1144 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2144 /* SceneDelegate.swift */; };
 		1145 /* NativeGitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2145 /* NativeGitReader.swift */; };
@@ -129,14 +117,19 @@
 		1164 /* GitHubLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2164 /* GitHubLoginView.swift */; };
 		1165 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2165 /* KeychainManager.swift */; };
 		16AE4B084CAA297D994F0E3F /* RunConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE15C63C875548573754E1A7 /* RunConfigView.swift */; };
+		1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */; };
 		1901 /* KeyCommandBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2901 /* KeyCommandBridge.swift */; };
 		19EC15A0E8DDCB0CDC307F95 /* InlineSuggestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */; };
+		1D991EE41B48E67BE7F0460D /* IndentGuidesOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335856227DA8D31DBD7AA45A /* IndentGuidesOverlay.swift */; };
 		267E5C73339E4A2046BCD25A /* Array+Safe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59E70842EC260BF4AA42344E /* Array+Safe.swift */; };
 		351ADC4052ACAADD4536971C /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE814C21BB995B940748C92 /* KeychainHelper.swift */; };
 		35BF151D49904BC89A3FC364 /* InlineSuggestionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */; };
+		4063C /* CodeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3063C /* CodeFormatter.swift */; };
 		43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */; };
+		57A19E793481B1BD9D85B0B0 /* SwiftTermView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5517D452851148CA4AD04F /* SwiftTermView.swift */; };
 		5AC9E5FE66317900502462CC /* BracketMatchingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDF346FA8697F71C1802A47 /* BracketMatchingManager.swift */; };
 		5C78C87974CA648FB14CBC80 /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2305D4B39C54469E738C61 /* LoadingView.swift */; };
+		6F4C47E42FB8C13D4DE9626D /* SFTPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C014100783893AFEE050E4 /* SFTPManager.swift */; };
 		7513892E59B691367EFC56EB /* ErrorParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */; };
 		8003 /* LocalLLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8004 /* LocalLLMService.swift */; };
 		8005 /* LocalModels.json in Resources */ = {isa = PBXBuildFile; fileRef = 8006 /* LocalModels.json */; };
@@ -147,6 +140,7 @@
 		8019 /* KeyboardShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8018 /* KeyboardShortcutsView.swift */; };
 		8020 /* AutoSaveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8021 /* AutoSaveManager.swift */; };
 		861AF3F49041DDA8E3DFE5A1 /* ErrorBoundaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */; };
+		88E7801B5D3735CD0CAE4752 /* RemoteExplorerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */; };
 		896596672F3B9FAC005B984D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896596632F3B9FAB005B984D /* FeatureFlags.swift */; };
 		8CA403766E4C8AC0F3AE0195 /* ModifierTapGestureRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */; };
 		8F09852A2FAFCCDE9BF57E1B /* SuggestionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161CE6C43626812282CD4694 /* SuggestionCache.swift */; };
@@ -156,23 +150,21 @@
 		9901 /* ToolCallParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9902 /* ToolCallParser.swift */; };
 		9910 /* PortsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9911 /* PortsView.swift */; };
 		A4BE8674EE9E8A4A98A12D01 /* GitGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */; };
+		AA01BB02CC03DD04EE05FF07 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */; };
 		BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885F3C3B4438947AA7802BF5 /* Codicon.swift */; };
+		BB11CC22DD33EE44FF550002 /* EmmetEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550001 /* EmmetEngine.swift */; };
+		BB11CC22DD33EE44FF550004 /* SnippetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550003 /* SnippetManager.swift */; };
+		BB11CC22DD33EE44FF550006 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11CC22DD33EE44FF550005 /* OnboardingView.swift */; };
 		BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76695AA95638C9192E12E05E /* WindowStateManager.swift */; };
+		BC1D2F417588AF65F71E4F42 /* VSCodeTunnelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E97BA415738F75FEC6431C /* VSCodeTunnelManager.swift */; };
+		CC01DD02EE03FF040012 /* CloneRepositoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC01DD02EE03FF040011 /* CloneRepositoryView.swift */; };
 		D07B0BA42656013102FE0C3C /* MergeConflictView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */; };
 		D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301258073261580A471BF74C /* VSCodeTunnelView.swift */; };
 		D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBE91AB571E62605847001D /* RemoteDebugger.swift */; };
 		E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA35FC9065D549599858CE86 /* CommandPaletteView.swift */; };
-		BC1D2F417588AF65F71E4F42 /* VSCodeTunnelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E97BA415738F75FEC6431C /* VSCodeTunnelManager.swift */; };
-		57A19E793481B1BD9D85B0B0 /* SwiftTermView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA5517D452851148CA4AD04F /* SwiftTermView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		67C014100783893AFEE050E4 /* SFTPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SFTPManager.swift"; path = "VSCodeiPadOS/Services/SFTPManager.swift"; sourceTree = "<group>"; };
-
-		EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "RemoteFileSystemProvider.swift"; path = "VSCodeiPadOS/Services/RemoteFileSystemProvider.swift"; sourceTree = "<group>"; };
-
-		5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "RemoteExplorerView.swift"; path = "VSCodeiPadOS/Views/Panels/RemoteExplorerView.swift"; sourceTree = "<group>"; };
-
 		01D876D29772900D5748F5F4 /* InlineSuggestionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionManager.swift; path = Services/InlineSuggestionManager.swift; sourceTree = "<group>"; };
 		14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorBoundaryView.swift; path = Views/ErrorBoundaryView.swift; sourceTree = "<group>"; };
 		15399AFF4AAC959FAE62AF76 /* ErrorParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ErrorParser.swift; path = Services/ErrorParser.swift; sourceTree = "<group>"; };
@@ -215,7 +207,6 @@
 		2062 /* RecentFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFileManager.swift; sourceTree = "<group>"; };
 		2063 /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
 		2063B /* FindReferencesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindReferencesService.swift; sourceTree = "<group>"; };
-		3063C /* CodeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeFormatter.swift; sourceTree = "<group>"; };
 		2064 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		2065 /* SnippetsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsManager.swift; sourceTree = "<group>"; };
 		2066 /* TasksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksManager.swift; sourceTree = "<group>"; };
@@ -265,10 +256,6 @@
 		2140 /* FileHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileHelpers.swift; sourceTree = "<group>"; };
 		2141 /* Notification+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notification+Search.swift"; sourceTree = "<group>"; };
 		2142 /* SSHManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHManager.swift; sourceTree = "<group>"; };
-		BB11CC22DD33EE44FF550001 /* EmmetEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmmetEngine.swift; sourceTree = "<group>"; };
-		BB11CC22DD33EE44FF550003 /* SnippetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetManager.swift; sourceTree = "<group>"; };
-		BB11CC22DD33EE44FF550005 /* OnboardingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
-		CC01DD02EE03FF040011 /* CloneRepositoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloneRepositoryView.swift; sourceTree = "<group>"; };
 		2143 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2144 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		2145 /* NativeGitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitReader.swift; sourceTree = "<group>"; };
@@ -294,9 +281,13 @@
 		2EC55DCB94D6A5D5377C6724 /* GitGutterView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GitGutterView.swift; path = Views/Editor/GitGutterView.swift; sourceTree = "<group>"; };
 		3000 /* VSCodeiPadOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VSCodeiPadOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		301258073261580A471BF74C /* VSCodeTunnelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VSCodeTunnelView.swift; path = Views/VSCodeTunnelView.swift; sourceTree = "<group>"; };
+		3063C /* CodeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeFormatter.swift; sourceTree = "<group>"; };
+		335856227DA8D31DBD7AA45A /* IndentGuidesOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IndentGuidesOverlay.swift; sourceTree = "<group>"; };
 		33FC0141BB3FF4F1032984E5 /* ModifierTapGestureRecognizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ModifierTapGestureRecognizer.swift; path = Views/Editor/ModifierTapGestureRecognizer.swift; sourceTree = "<group>"; };
 		4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WelcomeView.swift; path = Views/WelcomeView.swift; sourceTree = "<group>"; };
 		59E70842EC260BF4AA42344E /* Array+Safe.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Array+Safe.swift"; path = "Extensions/Array+Safe.swift"; sourceTree = "<group>"; };
+		5F6DCD402FE43D23FF3B2A43 /* RemoteExplorerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteExplorerView.swift; path = VSCodeiPadOS/Views/Panels/RemoteExplorerView.swift; sourceTree = "<group>"; };
+		67C014100783893AFEE050E4 /* SFTPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SFTPManager.swift; path = VSCodeiPadOS/Services/SFTPManager.swift; sourceTree = "<group>"; };
 		76695AA95638C9192E12E05E /* WindowStateManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WindowStateManager.swift; path = Services/WindowStateManager.swift; sourceTree = "<group>"; };
 		7AB5F3EDA26F8FBBB150466E /* MergeConflictView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MergeConflictView.swift; path = Views/Editor/MergeConflictView.swift; sourceTree = "<group>"; };
 		7C2305D4B39C54469E738C61 /* LoadingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LoadingView.swift; path = Views/LoadingView.swift; sourceTree = "<group>"; };
@@ -315,16 +306,21 @@
 		9002 /* AIAgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAgentTools.swift; sourceTree = "<group>"; };
 		9004 /* Notification+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Notification+Names.swift"; path = "Extensions/Notification+Names.swift"; sourceTree = "<group>"; };
 		9102 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppLogger.swift; path = Utils/AppLogger.swift; sourceTree = "<group>"; };
-		AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticManager.swift; path = Utils/HapticManager.swift; sourceTree = "<group>"; };
 		9902 /* ToolCallParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolCallParser.swift; sourceTree = "<group>"; };
 		9911 /* PortsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortsView.swift; sourceTree = "<group>"; };
 		9C539EBAF32170E8E16339CD /* InlineSuggestionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = InlineSuggestionView.swift; path = Views/Editor/InlineSuggestionView.swift; sourceTree = "<group>"; };
+		AA01BB02CC03DD04EE05FF06 /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticManager.swift; path = Utils/HapticManager.swift; sourceTree = "<group>"; };
 		AEBE91AB571E62605847001D /* RemoteDebugger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RemoteDebugger.swift; path = Services/RemoteDebugger.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550001 /* EmmetEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmmetEngine.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550003 /* SnippetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetManager.swift; sourceTree = "<group>"; };
+		BB11CC22DD33EE44FF550005 /* OnboardingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		CC01DD02EE03FF040011 /* CloneRepositoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloneRepositoryView.swift; sourceTree = "<group>"; };
 		DEE814C21BB995B940748C92 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = Utils/KeychainHelper.swift; sourceTree = "<group>"; };
-		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
-		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
+		EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteFileSystemProvider.swift; path = VSCodeiPadOS/Services/RemoteFileSystemProvider.swift; sourceTree = "<group>"; };
 		F5E97BA415738F75FEC6431C /* VSCodeTunnelManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VSCodeTunnelManager.swift; path = VSCodeTunnelManager.swift; sourceTree = "<group>"; };
+		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
 		FA5517D452851148CA4AD04F /* SwiftTermView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermView.swift; sourceTree = "<group>"; };
+		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -531,6 +527,7 @@
 				2035 /* MinimapView.swift */,
 				2036 /* SyntaxHighlightingTextView.swift */,
 				2147 /* RunestoneEditorView.swift */,
+				335856227DA8D31DBD7AA45A /* IndentGuidesOverlay.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -872,6 +869,7 @@
 				D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */,
 				43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */,
 				BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */,
+				1D991EE41B48E67BE7F0460D /* IndentGuidesOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -904,8 +902,8 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
 				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 2;
 			};
 			name = Debug;
@@ -936,8 +934,8 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
 				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 2;
 			};
 			name = Release;

@@ -694,6 +694,8 @@ struct PaneEditorView: View {
             .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for line numbers
             .padding(.trailing, 60) // Offset for minimap
 
+
+
             // FEAT-071 Git gutter indicators (added/modified/deleted)
             // 6 pt strip at the right edge of the 70 pt line-number gutter.
             if let fileURL = tab.url, lineNumbersStyle != "off" {

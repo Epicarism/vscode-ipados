@@ -1225,6 +1225,19 @@ struct IDEEditorView: View {
                 .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
 
+                // Indentation guide lines (FEAT-indent-guides)
+                IndentGuidesOverlay(
+                    code: text,
+                    scrollPosition: scrollPosition,
+                    lineHeight: lineHeight,
+                    fontSize: editorCore.editorFontSize,
+                    gutterWidth: (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0,
+                    rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80,
+                    guideColor: theme.editorForeground.opacity(0.10)
+                )
+                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
+                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+
                 // FEAT-071 Git gutter indicators (added/modified/deleted)
                 // Positioned as a narrow (6 pt) strip at the right edge of the line-number
                 // gutter so it aligns with VSCode-style change bars.
