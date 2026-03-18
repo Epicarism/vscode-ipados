@@ -788,6 +788,19 @@ struct RunestoneEditorView: UIViewRepresentable {
                 return
             }
             
+            // Wrap the mutation in an undo group so Format Document is
+            // reversible with a single Cmd+Z (undo) / Cmd+Shift+Z (redo).
+            textView.undoManager?.beginUndoGrouping()
+            textView.undoManager?.registerUndo(withTarget: self) { coordinator in
+                guard let tv = coordinator.textView else { return }
+                tv.text = text
+                coordinator.parent.text = text
+                MainActor.assumeIsolated {
+                    coordinator.parent.editorCore.objectWillChange.send()
+                }
+            }
+            textView.undoManager?.endUndoGrouping()
+            
             textView.text = formatted
             parent.text = formatted
             MainActor.assumeIsolated {

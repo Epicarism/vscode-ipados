@@ -534,6 +534,27 @@ struct ContentView: View {
                         .transition(.move(edge: .leading))
                 }
                 
+                // Drag-to-resize handle between sidebar and editor
+                if editorCore.showSidebar {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 4)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 1)
+                        )
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newWidth = editorCore.sidebarWidth + value.translation.width
+                                    editorCore.sidebarWidth = min(max(newWidth, 150), 500)
+                                }
+                        )
+
+                }
+                
                 VStack(spacing: 0) {
                     TabBarView(tabs: $editorCore.tabs, activeTabId: $editorCore.activeTabId, editorCore: editorCore, themeManager: ThemeManager.shared)
                     
@@ -1154,6 +1175,15 @@ struct IDEEditorView: View {
             text = tab.content
             foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
 
+            // 2b. Clear stale UI state from the previous tab
+            showAutocomplete = false
+            autocomplete.hideSuggestions()
+            inlineSuggestionManager.clearSuggestion()
+            if editorCore.showSearch {
+                editorCore.showSearch = false
+                editorCore.showReplace = false
+            }
+
             // 3. Restore saved scroll + cursor for the incoming tab (async so
             //    the editor has a chance to finish loading the new text first)
             let restoredScroll  = tab.savedScrollOffset
@@ -1188,6 +1218,12 @@ struct IDEEditorView: View {
             if show {
                 findViewModel.isReplaceMode = true
                 editorCore.showReplace = false  // consume the flag
+            }
+        }
+        // Clear inline suggestion whenever autocomplete popup appears so they don't overlap
+        .onChange(of: showAutocomplete) { _, isShowing in
+            if isShowing {
+                inlineSuggestionManager.clearSuggestion()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .hideSearch)) { _ in
