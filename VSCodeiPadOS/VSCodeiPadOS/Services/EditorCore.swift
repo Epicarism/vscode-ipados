@@ -1356,7 +1356,7 @@ mod tests {
 
         // Apply file cleanup settings to a local copy only — don't mutate tab content
         var contentToSave = tabs[saveIndex].content
-        contentToSave = applyFileSaveSettings(to: contentToSave)
+        contentToSave = applyFileSaveSettings(to: contentToSave, filename: tabs[saveIndex].fileName)
 
         // --- Remote file save ---
         if let remotePath = tabs[saveIndex].remotePath {
@@ -1406,13 +1406,20 @@ mod tests {
         }
     }
     
-    /// Applies trim whitespace and insert final newline settings
-    private func applyFileSaveSettings(to content: String) -> String {
+    /// Applies trim whitespace, insert final newline, and format-on-save settings
+    private func applyFileSaveSettings(to content: String, filename: String = "") -> String {
         // Read settings directly from UserDefaults to avoid MainActor isolation issues
         let trimWhitespace = UserDefaults.standard.bool(forKey: "trimTrailingWhitespace")
         let insertNewline = UserDefaults.standard.bool(forKey: "insertFinalNewline")
+        let formatOnSave = UserDefaults.standard.bool(forKey: "formatOnSave")
         
         var result = content
+        
+        // Format on save (runs first so whitespace trim applies to formatted output)
+        if formatOnSave && !filename.isEmpty {
+            let formatted = CodeFormatter.shared.format(code: result, filename: filename)
+            if formatted != result { result = formatted }
+        }
         
         // Trim trailing whitespace from each line
         if trimWhitespace {
