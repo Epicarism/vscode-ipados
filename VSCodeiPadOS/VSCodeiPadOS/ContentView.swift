@@ -895,6 +895,8 @@ struct IDEEditorView: View {
     @State private var showAutocomplete = false
     @StateObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
+    @StateObject private var inlineSuggestionManager = InlineSuggestionManager()
+    @State private var inlineSuggestionWorkItem: DispatchWorkItem?
     
     // MARK: - Shared Autocomplete Handlers
     private func handleAcceptAutocomplete() -> Bool {
@@ -1000,6 +1002,20 @@ struct IDEEditorView: View {
                             showAutocomplete = autocomplete.showSuggestions
                             foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
                             gitGutterRefreshToken &+= 1
+                            
+                            // Debounced inline suggestion
+                            inlineSuggestionWorkItem?.cancel()
+                            inlineSuggestionManager.clearSuggestion()
+                            if newValue.count > 10 && !showAutocomplete {
+                                let work = DispatchWorkItem { [weak inlineSuggestionManager] in
+                                    let lines = newValue.prefix(cursorIndex).split(separator: "\n", omittingEmptySubsequences: false)
+                                    let line = lines.count
+                                    let col = (lines.last?.count ?? 0) + 1
+                                    inlineSuggestionManager?.requestSuggestion(for: newValue, at: .init(line: line, column: col), fileName: tab.url?.lastPathComponent)
+                                }
+                                inlineSuggestionWorkItem = work
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+                            }
                         }
                         .onChange(of: cursorIndex) { _, newCursor in
                             autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)

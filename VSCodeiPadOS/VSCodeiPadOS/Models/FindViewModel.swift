@@ -60,6 +60,9 @@ struct SearchResult: Identifiable {
     /// Error message when regex pattern is invalid
     @Published var regexError: String?
 
+    /// User-facing error feedback from replace-all operations
+    @Published var replaceAllError: String?
+
     // Search scope
     @Published var searchScope: SearchScope = .currentFile
 
@@ -235,6 +238,8 @@ struct SearchResult: Identifiable {
               let regex = buildRegex()
         else { return }
 
+        replaceAllError = nil
+
         switch searchScope {
         case .currentFile:
             guard let idx = core.activeTabIndex,
@@ -264,11 +269,13 @@ struct SearchResult: Identifiable {
             }
 
         case .workspace:
-            // Best-effort: replace in open tabs + on-disk workspace files.
+            // Replace in open tabs + on-disk workspace files; track failures.
             var urls: [URL] = []
             if let tree = core.fileNavigator?.fileTree {
                 urls = collectFileURLs(from: tree)
             }
+
+            var failedFiles: [String] = []
 
             for url in urls {
                 // If open, update tab.
@@ -289,20 +296,27 @@ struct SearchResult: Identifiable {
                 }
 
                 // Otherwise, attempt to update on disk.
-                if let content = try? String(contentsOf: url, encoding: .utf8) {
-                    let replaced = regex.stringByReplacingMatches(
-                        in: content,
-                        range: NSRange(location: 0, length: (content as NSString).length),
-                        withTemplate: replaceQuery
-                    )
-                    if replaced != content {
-                        do {
-                            try replaced.write(to: url, atomically: true, encoding: .utf8)
-                        } catch {
-                            AppLogger.general.error("Failed to write replacement to \(url.lastPathComponent): \(error.localizedDescription)")
-                        }
+                guard let content = (try? String(contentsOf: url, encoding: .utf8)) else {
+                    failedFiles.append(url.lastPathComponent)
+                    continue
+                }
+                let replaced = regex.stringByReplacingMatches(
+                    in: content,
+                    range: NSRange(location: 0, length: (content as NSString).length),
+                    withTemplate: replaceQuery
+                )
+                if replaced != content {
+                    do {
+                        try replaced.write(to: url, atomically: true, encoding: .utf8)
+                    } catch {
+                        failedFiles.append(url.lastPathComponent)
+                        AppLogger.general.error("Failed to write replacement to \(url.lastPathComponent): \(error.localizedDescription)")
                     }
                 }
+            }
+
+            if !failedFiles.isEmpty {
+                replaceAllError = "Failed to replace in \(failedFiles.count) file\(failedFiles.count == 1 ? "" : "s"): \(failedFiles.joined(separator: ", "))"
             }
         }
 
