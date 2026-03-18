@@ -1166,6 +1166,7 @@ struct IDEEditorView: View {
             findViewModel.editorCore = editorCore
             // Set initial lineHeight based on font size
             lineHeight = ceil(editorCore.editorFontSize * 1.4)
+
         }
         .onChange(of: tab.id) { oldTabId, _ in
             // ── Tab switch: save outgoing state, load incoming state ──────────

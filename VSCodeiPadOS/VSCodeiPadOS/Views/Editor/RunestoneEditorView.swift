@@ -549,7 +549,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             let actions: [Notification.Name] = [
                 .toggleComment, .deleteLine, .moveLineUp, .moveLineDown,
                 .duplicateLineUp, .duplicateLineDown, .addNextOccurrence, .selectAllOccurrences,
-                .selectLine, .indentLines, .outdentLines, .joinLines
+                .selectLine, .indentLines, .outdentLines, .joinLines,
+                .insertLineBelow, .insertLineAbove
             ]
             for name in actions {
                 editorActionObservers.append(
@@ -583,6 +584,14 @@ struct RunestoneEditorView: UIViewRepresentable {
                 NotificationCenter.default.addObserver(forName: .formatDocument, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
                         self?.handleFormatDocument()
+                    }
+                }
+            )
+            // Show Problems relay (Cmd+Shift+M)
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .showProblems, object: nil, queue: .main) { _ in
+                    MainActor.assumeIsolated {
+                        NotificationCenter.default.post(name: .switchToProblemsPanel, object: nil)
                     }
                 }
             )
@@ -1257,6 +1266,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             case .indentLines: performIndentLines(textView)
             case .outdentLines: performOutdentLines(textView)
             case .joinLines: performJoinLines(textView)
+            case .insertLineBelow: performInsertLineBelow(textView)
+            case .insertLineAbove: performInsertLineAbove(textView)
             default: break
             }
         }
@@ -1685,6 +1696,56 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             // Place cursor at the join point
             textView.selectedRange = NSRange(location: currentLineText.count, length: 0)
+            textView.undoManager?.endUndoGrouping()
+            textViewDidChange(textView)
+        }
+        
+        private func performInsertLineBelow(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+            
+            // Get current line's indentation
+            let currentLine = text.substring(with: lineRange)
+            let indent = currentLine.prefix(while: { $0 == " " || $0 == "\t" })
+            
+            // Insert newline + indent after the end of the current line content
+            // lineRange includes the trailing \n, so insert before it to keep the newline order correct
+            let lineEnd = currentLine.hasSuffix("\n") ? lineRange.location + lineRange.length - 1 : lineRange.location + lineRange.length
+            let insertText = "\n" + String(indent)
+            
+            textView.undoManager?.beginUndoGrouping()
+            let fullText = NSMutableString(string: textView.text)
+            fullText.insert(insertText, at: lineEnd)
+            textView.text = fullText as String
+            
+            // Place cursor at end of new line (after indent)
+            let newCursorPos = lineEnd + 1 + indent.count
+            textView.selectedRange = NSRange(location: newCursorPos, length: 0)
+            textView.undoManager?.endUndoGrouping()
+            textViewDidChange(textView)
+        }
+        
+        private func performInsertLineAbove(_ textView: TextView) {
+            let text = textView.text as NSString
+            let selectedRange = textView.selectedRange
+            let lineRange = text.lineRange(for: NSRange(location: selectedRange.location, length: 0))
+            
+            // Get current line's indentation
+            let currentLine = text.substring(with: lineRange)
+            let indent = currentLine.prefix(while: { $0 == " " || $0 == "\t" })
+            
+            // Insert newline + indent before current line
+            let insertText = String(indent) + "\n"
+            
+            textView.undoManager?.beginUndoGrouping()
+            let fullText = NSMutableString(string: textView.text)
+            fullText.insert(insertText, at: lineRange.location)
+            textView.text = fullText as String
+            
+            // Place cursor at end of indent on the new line
+            let newCursorPos = lineRange.location + indent.count
+            textView.selectedRange = NSRange(location: newCursorPos, length: 0)
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }

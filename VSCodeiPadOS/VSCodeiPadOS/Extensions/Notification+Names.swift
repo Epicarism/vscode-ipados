@@ -249,6 +249,14 @@ extension Notification.Name {
     static let outdentLines = Notification.Name("OutdentLines")
     /// Join the current line with the next line.
     static let joinLines = Notification.Name("JoinLines")
+    /// Insert a new line below the current line.
+    static let insertLineBelow = Notification.Name("InsertLineBelow")
+    /// Insert a new line above the current line.
+    static let insertLineAbove = Notification.Name("InsertLineAbove")
+    /// Trigger inline suggestions / autocomplete.
+    static let triggerSuggestion = Notification.Name("TriggerSuggestion")
+    /// Show the Problems panel.
+    static let showProblems = Notification.Name("ShowProblems")
 
     // MARK: - Timeline
 

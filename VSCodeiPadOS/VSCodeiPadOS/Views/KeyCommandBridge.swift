@@ -120,7 +120,6 @@ class KeyCommandController: UIViewController {
             // MARK: - Navigation
             ("Go to Line", "g", [.control], #selector(cmdGoToLine)),
             ("Go to Symbol", "o", [.command, .shift], #selector(cmdGoToSymbol)),
-            ("Go to Definition", "\r", [.command], #selector(cmdGoToDefinition)),
             ("Go Back", "[", [.control], #selector(cmdGoBack)),
             ("Go Forward", "]", [.control], #selector(cmdGoForward)),
             
@@ -144,7 +143,7 @@ class KeyCommandController: UIViewController {
             ("Undo", "z", [.command], #selector(cmdUndo)),
             ("Redo", "z", [.command, .shift], #selector(cmdRedo)),
             // Select Line
-            ("Select Line", "l", [.control], #selector(cmdSelectLine)),
+            ("Select Line", "l", [.command], #selector(cmdSelectLine)),
             // Indent/Outdent
             ("Indent Line", "]", [.command], #selector(cmdIndentLines)),
             ("Outdent Line", "[", [.command], #selector(cmdOutdentLines)),
@@ -153,6 +152,13 @@ class KeyCommandController: UIViewController {
             // Fold/Unfold All
             ("Fold All", "0", [.command, .shift], #selector(cmdFoldAll)),
             ("Unfold All", "9", [.command, .shift], #selector(cmdUnfoldAll)),
+            // Insert Line Below/Above
+            ("Insert Line Below", "\r", [.command], #selector(cmdInsertLineBelow)),
+            ("Insert Line Above", "\r", [.command, .shift], #selector(cmdInsertLineAbove)),
+            // Trigger Suggestions
+            ("Trigger Suggestion", " ", [.control], #selector(cmdTriggerSuggestion)),
+            // Show Problems
+            ("Show Problems", "m", [.command, .shift], #selector(cmdShowProblems)),
             
             // MARK: - Panels
             ("Search in Files", "f", [.command, .shift], #selector(cmdSearchInFiles)),
@@ -283,6 +289,10 @@ class KeyCommandController: UIViewController {
     @objc func cmdJoinLines() { NotificationCenter.default.post(name: .joinLines, object: nil) }
     @objc func cmdFoldAll() { NotificationCenter.default.post(name: .collapseAllFolds, object: nil) }
     @objc func cmdUnfoldAll() { NotificationCenter.default.post(name: .expandAllFolds, object: nil) }
+    @objc func cmdInsertLineBelow() { NotificationCenter.default.post(name: .insertLineBelow, object: nil) }
+    @objc func cmdInsertLineAbove() { NotificationCenter.default.post(name: .insertLineAbove, object: nil) }
+    @objc func cmdTriggerSuggestion() { NotificationCenter.default.post(name: .triggerSuggestion, object: nil) }
+    @objc func cmdShowProblems() { NotificationCenter.default.post(name: .showProblems, object: nil) }
     
 
     // MARK: - Panels
