@@ -232,7 +232,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             // Update line count
             DispatchQueue.main.async {
-                self.totalLines = self.countLines(in: text)
+                self.totalLines = context.coordinator.lineCount
             }
         } else if textChanged && !context.coordinator.hasBeenEdited && !isActivelyEditing && !context.coordinator.isUpdatingFromTextView {
             // Text changed externally (e.g., initial load, external modification)
@@ -252,7 +252,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             // Update line count
             DispatchQueue.main.async {
-                self.totalLines = self.countLines(in: text)
+                self.totalLines = context.coordinator.lineCount
             }
         }
         // If user HAS edited OR is actively editing, DO NOTHING
@@ -507,6 +507,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         /// The text length when newlineOffsets was last fully rebuilt.
         /// Used to detect when a full rebuild is needed (e.g. file switch).
         private var newlineOffsetsTextLength: Int = -1
+        /// O(1) line count derived from the cached newline offset array.
+        var lineCount: Int { newlineOffsets.count + 1 }
 
         // MARK: - Bracket Matching Highlight
         /// Overlay layer used to draw subtle background boxes on matched bracket pairs.

@@ -858,18 +858,15 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         func updateLineCount(_ textView: UITextView) {
             let text = textView.text ?? ""
-            // PERF: Single pass — count newlines via UTF-8 bytes (no allocation)
-            // and build offset cache for O(log n) cursor position lookups
+            let ns = text as NSString
             var count = 1
             var offsets: [Int] = []
-            offsets.reserveCapacity(text.count / 40) // estimate ~40 chars/line
-            var byteIdx = 0
-            for byte in text.utf8 {
-                if byte == UInt8(ascii: "\n") {
-                    offsets.append(byteIdx)
+            offsets.reserveCapacity(ns.length / 40)
+            for i in 0..<ns.length {
+                if ns.character(at: i) == 0x0A { // newline
+                    offsets.append(i)
                     count += 1
                 }
-                byteIdx += 1
             }
             cachedNewlineOffsets = offsets
             // Already on main thread (called from textViewDidChange) — update directly
@@ -879,27 +876,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         func updateCursorPosition(_ textView: UITextView) {
             guard let selectedRange = textView.selectedTextRange else { return }
             let cursorPosition = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
-            
-            // PERF: Binary search on cached newline offsets — O(log n) instead of O(n)
             let offsets = cachedNewlineOffsets
-            // Convert cursorPosition (UTF-16) to approximate UTF-8 offset for search
-            // Since we built offsets from UTF-8 bytes, we need UTF-8 offset of cursor
-            let text = textView.text ?? ""
-            let utf8Cursor: Int
-            if cursorPosition <= 0 {
-                utf8Cursor = 0
-            } else if cursorPosition >= (text as NSString).length {
-                utf8Cursor = text.utf8.count
-            } else {
-                let idx = text.index(text.startIndex, offsetBy: min(cursorPosition, text.count), limitedBy: text.endIndex) ?? text.endIndex
-                utf8Cursor = text.utf8.distance(from: text.utf8.startIndex, to: idx.samePosition(in: text.utf8) ?? text.utf8.endIndex)
-            }
-            
-            // Binary search: find how many newline offsets are < utf8Cursor
+            // Binary search: find how many newline offsets are < cursorPosition
+            // offsets are now UTF-16 (NSString) indices — same units as cursorPosition
             var low = 0, high = offsets.count
             while low < high {
                 let mid = (low + high) / 2
-                if offsets[mid] < utf8Cursor {
+                if offsets[mid] < cursorPosition {
                     low = mid + 1
                 } else {
                     high = mid
@@ -907,7 +890,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             }
             let lineNumber = low + 1
             let columnStart = low > 0 ? offsets[low - 1] + 1 : 0
-            let column = utf8Cursor - columnStart + 1
+            let column = cursorPosition - columnStart + 1
             
             DispatchQueue.main.async {
                 self.parent.currentLineNumber = lineNumber
@@ -937,22 +920,18 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             isUpdatingFromMinimap = true
             
             // PERF: Use cachedNewlineOffsets for O(1) line→offset lookup
-            // instead of O(n) NSString enumeration
-            let text = textView.text ?? ""
-            let nsText = text as NSString
+            // offsets are now UTF-16 (NSString) indices — no conversion needed
+            let nsText = (textView.text ?? "") as NSString
             let characterPosition: Int
             
             if line <= 0 {
                 characterPosition = 0
             } else {
-                // cachedNewlineOffsets stores UTF-8 byte offsets of each '\n'
-                // Line N starts right after the (N-1)th newline
                 let offsets = cachedNewlineOffsets
                 if line - 1 < offsets.count {
-                    // Convert UTF-8 byte offset to UTF-16 (NSString) offset
-                    let utf8Offset = offsets[line - 1] + 1 // byte after the newline
-                    let idx = text.utf8.index(text.utf8.startIndex, offsetBy: min(utf8Offset, text.utf8.count))
-                    characterPosition = text[text.startIndex..<idx].utf16.count
+                    // offsets[line-1] is the UTF-16 index of the (line-1)th newline;
+                    // the line starts at the next UTF-16 code unit.
+                    characterPosition = offsets[line - 1] + 1
                 } else {
                     // Line beyond document — go to end
                     characterPosition = nsText.length
@@ -972,8 +951,8 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 
         func scrollToAndSelectLine(_ line: Int, in textView: UITextView) {
             // PERF: Use cachedNewlineOffsets for O(1) line→offset lookup
-            let text = textView.text ?? ""
-            let nsText = text as NSString
+            // offsets are now UTF-16 (NSString) indices — no conversion needed
+            let nsText = (textView.text ?? "") as NSString
             let offsets = cachedNewlineOffsets
             
             let characterPosition: Int
@@ -982,23 +961,19 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             if line <= 0 {
                 characterPosition = 0
                 // First line ends at first newline or end of text
-                let endPos = offsets.isEmpty ? nsText.length : text[text.startIndex..<text.utf8.index(text.utf8.startIndex, offsetBy: offsets[0])].utf16.count
+                let endPos = offsets.isEmpty ? nsText.length : offsets[0]
                 lineLength = endPos
             } else if line - 1 < offsets.count {
-                // Line starts right after the (line-1)th newline
-                let utf8Start = offsets[line - 1] + 1
-                let startIdx = text.utf8.index(text.utf8.startIndex, offsetBy: min(utf8Start, text.utf8.count))
-                characterPosition = text[text.startIndex..<startIdx].utf16.count
+                // Line starts right after the (line-1)th newline (UTF-16 offset)
+                characterPosition = offsets[line - 1] + 1
                 
                 // Line ends at the line-th newline or end of text
-                let utf8End: Int
+                let endPos: Int
                 if line < offsets.count {
-                    utf8End = offsets[line]
+                    endPos = offsets[line]
                 } else {
-                    utf8End = text.utf8.count
+                    endPos = nsText.length
                 }
-                let endIdx = text.utf8.index(text.utf8.startIndex, offsetBy: min(utf8End, text.utf8.count))
-                let endPos = text[text.startIndex..<endIdx].utf16.count
                 lineLength = endPos - characterPosition
             } else {
                 // Beyond document
