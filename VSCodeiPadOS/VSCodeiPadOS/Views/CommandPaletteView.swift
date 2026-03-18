@@ -30,6 +30,7 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "New Window", shortcut: "⌘⇧N", icon: "macwindow.badge.plus", category: .file) {
+                UIApplication.shared.requestSceneSessionActivation(nil, userActivity: nil, options: nil, errorHandler: nil)
                 dismiss()
             },
             Command(name: "Open File", shortcut: "⌘O", icon: "doc", category: .file) {
@@ -178,6 +179,13 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Toggle Full Screen", shortcut: "⌃⌘F", icon: "arrow.up.left.and.arrow.down.right", category: .view) {
+                // Request full-screen via scene geometry on iPadOS 16+
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                    if windowScene.activationState == .foregroundActive {
+                        let geometryRequest = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .all)
+                        windowScene.requestGeometryUpdate(geometryRequest) { _ in }
+                    }
+                }
                 dismiss()
             },
             Command(name: "Zoom In", shortcut: "⌘+", icon: "plus.magnifyingglass", category: .view) {

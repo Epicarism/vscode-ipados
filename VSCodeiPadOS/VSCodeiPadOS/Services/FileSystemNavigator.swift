@@ -282,7 +282,7 @@ final class FileSystemNavigator: ObservableObject {
 
     // MARK: - Tree
 
-    nonisolated private func buildFileTree(at url: URL) -> FileTreeNode? {
+    nonisolated private func buildFileTree(at url: URL, depth: Int = 0, maxEagerDepth: Int = 2) -> FileTreeNode? {
         let fileManager = FileManager.default
 
         do {
@@ -291,13 +291,26 @@ final class FileSystemNavigator: ObservableObject {
             let name = resourceValues.name ?? url.lastPathComponent
 
             if isDirectory {
-                let contents = try fileManager.contentsOfDirectory(
-                    at: url,
-                    includingPropertiesForKeys: [.isDirectoryKey],
-                    options: [.skipsHiddenFiles]
-                )
-                let children = contents.compactMap { buildFileTree(at: $0) }.sorted { $0.name < $1.name }
-                return FileTreeNode(url: url, name: name, isDirectory: true, children: children)
+                // Only eagerly load children up to maxEagerDepth levels deep
+                // Beyond that, create placeholder nodes that load on-demand
+                if depth < maxEagerDepth {
+                    let contents = try fileManager.contentsOfDirectory(
+                        at: url,
+                        includingPropertiesForKeys: [.isDirectoryKey],
+                        options: [.skipsHiddenFiles]
+                    )
+                    let children = contents.compactMap { buildFileTree(at: $0, depth: depth + 1, maxEagerDepth: maxEagerDepth) }
+                        .sorted { lhs, rhs in
+                            // Directories first, then alphabetically
+                            if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
+                            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                        }
+                    return FileTreeNode(url: url, name: name, isDirectory: true, children: children)
+                } else {
+                    // Shallow: just mark as directory with no children yet
+                    // Children will be loaded when user expands this folder
+                    return FileTreeNode(url: url, name: name, isDirectory: true, children: [])
+                }
             } else {
                 return FileTreeNode(url: url, name: name, isDirectory: false, children: [])
             }
@@ -306,13 +319,79 @@ final class FileSystemNavigator: ObservableObject {
             return nil
         }
     }
+    
+    /// Lazily load children for a directory node when it's expanded
+    func loadChildrenIfNeeded(for node: FileTreeNode) {
+        guard node.isDirectory, node.children.isEmpty else { return }
+        
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let url = node.url
+            
+            let children = await Task.detached(priority: .userInitiated) { [self] () -> [FileTreeNode] in
+                let fileManager = FileManager.default
+                do {
+                    let contents = try fileManager.contentsOfDirectory(
+                        at: url,
+                        includingPropertiesForKeys: [.isDirectoryKey],
+                        options: [.skipsHiddenFiles]
+                    )
+                    return contents.compactMap { childURL -> FileTreeNode? in
+                        let resourceValues = try? childURL.resourceValues(forKeys: [.isDirectoryKey, .nameKey])
+                        let isDir = resourceValues?.isDirectory ?? false
+                        let childName = resourceValues?.name ?? childURL.lastPathComponent
+                        if isDir {
+                            return FileTreeNode(url: childURL, name: childName, isDirectory: true, children: [])
+                        } else {
+                            return FileTreeNode(url: childURL, name: childName, isDirectory: false, children: [])
+                        }
+                    }.sorted { lhs, rhs in
+                        if lhs.isDirectory != rhs.isDirectory { return lhs.isDirectory }
+                        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                    }
+                } catch {
+                    return []
+                }
+            }.value
+            
+            // Rebuild the tree with the new children inserted
+            if let root = self.fileTree {
+                self.fileTree = self.insertChildren(children, for: node.url, in: root)
+            }
+        }
+    }
+    
+    /// Recursively find and replace a node's children in the tree
+    private func insertChildren(_ children: [FileTreeNode], for targetURL: URL, in node: FileTreeNode) -> FileTreeNode {
+        if node.url == targetURL {
+            return FileTreeNode(url: node.url, name: node.name, isDirectory: node.isDirectory, children: children)
+        }
+        guard node.isDirectory else { return node }
+        let updatedChildren = node.children.map { insertChildren(children, for: targetURL, in: $0) }
+        return FileTreeNode(url: node.url, name: node.name, isDirectory: node.isDirectory, children: updatedChildren)
+    }
 
     func toggleExpanded(path: String) {
         if expandedPaths.contains(path) {
             expandedPaths.remove(path)
         } else {
             expandedPaths.insert(path)
+            // Lazy load children when expanding a folder
+            if let root = fileTree {
+                if let node = findNode(at: path, in: root), node.isDirectory, node.children.isEmpty {
+                    loadChildrenIfNeeded(for: node)
+                }
+            }
         }
+    }
+    
+    /// Find a node by path in the tree
+    private func findNode(at path: String, in node: FileTreeNode) -> FileTreeNode? {
+        if node.url.path == path { return node }
+        for child in node.children {
+            if let found = findNode(at: path, in: child) { return found }
+        }
+        return nil
     }
 
     // MARK: - Helpers
