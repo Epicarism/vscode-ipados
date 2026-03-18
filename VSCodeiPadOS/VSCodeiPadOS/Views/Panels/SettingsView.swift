@@ -116,9 +116,14 @@ struct SettingsView: View {
             NavigationSplitView {
                 List(SettingsCategory.allCases, selection: $selectedCategory) {
                     category in
-                    NavigationLink(value: category) {
+                    Button(action: { selectedCategory = category }) {
                         Label(category.rawValue, systemImage: category.icon)
+                            .foregroundColor(selectedCategory == category ? .accentColor : .primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .listRowBackground(selectedCategory == category ? Color.accentColor.opacity(0.15) : Color.clear)
                 }
                 .navigationTitle("Settings")
                 .listStyle(.sidebar)
