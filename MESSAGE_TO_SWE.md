@@ -1,14 +1,14 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 5:56 AM GMT+1
+## Last Updated: March 18, 2026 - 6:40 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings from our code)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM → 5:56 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 6:40 AM):
 
-**Commits:** `aa3d42a` → `af8f27c` (24 commits)
+**Commits:** `aa3d42a` → `d31956b` (27 commits)
 
 **Major features added:**
 - **Inline AI Suggestions**: Ghost text overlay, Tab to accept, partial word-by-word accept (Ctrl+Right), Escape to dismiss, cursor-move auto-dismiss
@@ -28,6 +28,12 @@
 - **Find Enter→Next**: Enter in search field advances to next result (was re-searching)
 - **Breadcrumb tap no longer copies to clipboard**: Removed accidental UIPasteboard side-effect
 - **Find selection dedup fix**: Find Next/Previous always scrolls to match (even single-result case)
+- **Cmd+Enter insert line below**: New line with preserved indentation (VSCode standard)
+- **Cmd+Shift+Enter insert line above**: New line above with preserved indentation
+- **Cmd+L select line**: Changed from Ctrl+L to match VSCode standard
+- **Ctrl+Space trigger suggestions**: Manual autocomplete trigger
+- **Cmd+Shift+M show problems**: Opens Problems panel
+- **Cmd+. Go to Definition**: Re-added with proper shortcut (was Cmd+Enter, conflicted with insert line)
 
 **Performance fixes:**
 - LineNumbers scroll: O(n)→O(viewport) with binary search
