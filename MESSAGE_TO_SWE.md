@@ -58,16 +58,16 @@
 
 ### 🔴 Remaining Known Issues:
 - [x] ~~SyntaxHighlightingTextView: `isApplyingHighlighting` race condition~~ ✅ Fixed (NSLock)
-- [ ] SyntaxHighlightingTextView: Bracket colorization applies inside strings/comments
-- [ ] SyntaxHighlightingTextView: Toggle comment only handles `//`, not language-aware
+- [x] ~~SyntaxHighlightingTextView: Bracket colorization applies inside strings/comments~~ ✅ Fixed (checks foreground color before colorizing)
+- [x] ~~SyntaxHighlightingTextView: Toggle comment only handles `//`, not language-aware~~ ✅ Fixed (block comment wrap/unwrap for HTML/CSS)
 - [x] ~~RunestoneEditorView: Debug logging unconditional in production~~ ✅ Fixed (removed from hot path)
 - [x] ~~RunestoneEditorView: O(n) cursor position calculation per keystroke~~ ✅ Fixed (cached newline index + binary search)
-- [ ] FindViewModel: Silent regex failure (no user feedback on invalid regex)
+- [x] ~~FindViewModel: Silent regex failure~~ ✅ Fixed (red error text displayed)
 - [ ] FindViewModel: replaceAll silently swallows write errors on workspace scope
-- [ ] TimelineView: filteredEntries re-sorts on every view evaluation, localSaves unbounded
-- [ ] TerminalView: SSHConnectionView uses deprecated NavigationView
-- [ ] GitManager: Remote branch checkout always fails, delete branch doesn't handle packed-refs
-- [ ] GitManager: Stash list never populated during refresh()
+- [x] ~~TimelineView: filteredEntries re-sorts, localSaves unbounded~~ ✅ Fixed (cached + 500 cap)
+- [x] ~~TerminalView: SSHConnectionView uses deprecated NavigationView~~ ✅ Fixed (NavigationStack)
+- [x] ~~GitManager: Remote branch checkout always fails, delete branch doesn't handle packed-refs~~ ✅ Fixed (remote branch lookup + packed-refs cleanup)
+- [x] ~~GitManager: Stash list never populated during refresh()~~ ✅ Fixed (parses .git/logs/refs/stash)
 - [x] ~~EditorCore: saveActiveTab race~~ ✅ Fixed (cancellable DispatchWorkItem)
 - [x] ~~ContentView: LineNumbers.visibleLineIndices O(n)~~ ✅ Fixed (viewport-aware + binary search)
 - [ ] SettingsView: AIManager() vs AIManager.shared singleton mismatch, SettingsWebView onDismiss dead code
