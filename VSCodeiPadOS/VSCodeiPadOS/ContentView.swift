@@ -1090,7 +1090,7 @@ struct IDEEditorView: View {
                 ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
                     // Line numbers gutter with code folding indicators
-                    if lineNumbersStyle != "off" {
+                    if lineNumbersStyle != "off" && !useRunestoneEditor {
                         LineNumbers(
                             totalLines: totalLines,
                             currentLine: currentLineNumber,
