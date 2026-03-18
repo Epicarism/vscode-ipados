@@ -189,6 +189,7 @@ class EditorCore: ObservableObject {
     @Published var showCommandPalette = false
     @Published var showQuickOpen = false
     @Published var showAIAssistant = false
+    @Published var showWelcome = false
     @Published var showGoToLine = false
     @Published var showGoToSymbol = false
     @Published var editorFontSize: CGFloat = {

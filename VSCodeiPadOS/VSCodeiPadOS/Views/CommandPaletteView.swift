@@ -326,9 +326,13 @@ struct CommandPaletteView: View {
 
             // Help Commands
             Command(name: "Welcome", shortcut: nil, icon: "hand.wave", category: .help) {
+                editorCore.showWelcome = true
                 dismiss()
             },
             Command(name: "Documentation", shortcut: nil, icon: "book", category: .help) {
+                if let url = URL(string: "https://github.com/nicepkg/vscode-ipados") {
+                    UIApplication.shared.open(url)
+                }
                 dismiss()
             },
             Command(name: "AI Assistant", shortcut: "⌘⇧A", icon: "brain", category: .help) {

@@ -550,7 +550,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                 .toggleComment, .deleteLine, .moveLineUp, .moveLineDown,
                 .duplicateLineUp, .duplicateLineDown, .addNextOccurrence, .selectAllOccurrences,
                 .selectLine, .indentLines, .outdentLines, .joinLines,
-                .insertLineBelow, .insertLineAbove
+                .insertLineBelow, .insertLineAbove,
+                .expandSelection, .shrinkSelection
             ]
             for name in actions {
                 editorActionObservers.append(
@@ -1268,6 +1269,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             case .joinLines: performJoinLines(textView)
             case .insertLineBelow: performInsertLineBelow(textView)
             case .insertLineAbove: performInsertLineAbove(textView)
+            case .expandSelection: performExpandSelection(textView)
+            case .shrinkSelection: performShrinkSelection(textView)
             default: break
             }
         }
@@ -1575,7 +1578,96 @@ struct RunestoneEditorView: UIViewRepresentable {
             let lineRange = text.lineRange(for: textView.selectedRange)
             textView.selectedRange = lineRange
         }
-        
+
+        private func performExpandSelection(_ textView: TextView) {
+            let text = textView.text as NSString
+            let fullRange = NSRange(location: 0, length: text.length)
+            let sel = textView.selectedRange
+
+            // If nothing selected, select the current word
+            if sel.length == 0 {
+                if let uiTextView = textView as? UITextView,
+                   let pos = uiTextView.position(from: uiTextView.beginningOfDocument, offset: sel.location) {
+                    let wordRange = uiTextView.tokenizer.rangeEnclosingPosition(
+                        pos,
+                        with: .word,
+                        inDirection: UITextDirection(rawValue: UITextStorageDirection.forward.rawValue)
+                    )
+                    if let wordRange = wordRange {
+                        let start = uiTextView.offset(from: uiTextView.beginningOfDocument, to: wordRange.start)
+                        let length = uiTextView.offset(from: wordRange.start, to: wordRange.end)
+                        let nsRange = NSRange(location: start, length: length)
+                        if nsRange.length > 0 {
+                            textView.selectedRange = nsRange
+                            return
+                        }
+                    }
+                }
+                // Fallback: expand to line
+                textView.selectedRange = text.lineRange(for: sel)
+                return
+            }
+
+            // If selection is already the full document, nothing to expand
+            if sel == fullRange { return }
+
+            // Compute line range for current selection
+            let lineRange = text.lineRange(for: sel)
+
+            // If selection already covers the full line range, expand to all
+            if sel.location == lineRange.location && sel.length == lineRange.length {
+                textView.selectedRange = fullRange
+                return
+            }
+
+            // Otherwise expand to line range
+            textView.selectedRange = lineRange
+        }
+
+        private func performShrinkSelection(_ textView: TextView) {
+            let text = textView.text as NSString
+            let fullRange = NSRange(location: 0, length: text.length)
+            let sel = textView.selectedRange
+
+            // Nothing to shrink if cursor
+            if sel.length == 0 { return }
+
+            // If all selected, shrink to current line (use midpoint to pick a line)
+            if sel.location == fullRange.location && sel.length == fullRange.length {
+                let midpoint = NSRange(location: text.length / 2, length: 0)
+                textView.selectedRange = text.lineRange(for: midpoint)
+                return
+            }
+
+            // If selection equals its own line range, try to shrink to word
+            let lineRange = text.lineRange(for: sel)
+            if sel.location == lineRange.location && sel.length == lineRange.length {
+                if let uiTextView = textView as? UITextView,
+                   let pos = uiTextView.position(from: uiTextView.beginningOfDocument, offset: sel.location) {
+                    let wordRange = uiTextView.tokenizer.rangeEnclosingPosition(
+                        pos,
+                        with: .word,
+                        inDirection: UITextDirection(rawValue: UITextStorageDirection.forward.rawValue)
+                    )
+                    if let wordRange = wordRange {
+                        let start = uiTextView.offset(from: uiTextView.beginningOfDocument, to: wordRange.start)
+                        let length = uiTextView.offset(from: wordRange.start, to: wordRange.end)
+                        let nsRange = NSRange(location: start, length: length)
+                        if nsRange.length > 0 {
+                            textView.selectedRange = nsRange
+                            return
+                        }
+                    }
+                }
+                // Fallback: collapse to cursor
+                textView.selectedRange = NSRange(location: sel.location, length: 0)
+                return
+            }
+
+            // Otherwise collapse to cursor (start of selection)
+            textView.selectedRange = NSRange(location: sel.location, length: 0)
+        }
+
         private func performIndentLines(_ textView: TextView) {
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange

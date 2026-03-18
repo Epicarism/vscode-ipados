@@ -145,6 +145,9 @@ class KeyCommandController: UIViewController {
             ("Redo", "z", [.command, .shift], #selector(cmdRedo)),
             // Select Line
             ("Select Line", "l", [.command], #selector(cmdSelectLine)),
+            // Expand/Shrink Selection
+            ("Expand Selection", UIKeyCommand.inputRightArrow, [.shift, .alternate], #selector(cmdExpandSelection)),
+            ("Shrink Selection", UIKeyCommand.inputLeftArrow, [.shift, .alternate], #selector(cmdShrinkSelection)),
             // Indent/Outdent
             ("Indent Line", "]", [.command], #selector(cmdIndentLines)),
             ("Outdent Line", "[", [.command], #selector(cmdOutdentLines)),
@@ -285,6 +288,8 @@ class KeyCommandController: UIViewController {
     @objc func cmdUndo() { NotificationCenter.default.post(name: .performUndo, object: nil) }
     @objc func cmdRedo() { NotificationCenter.default.post(name: .performRedo, object: nil) }
     @objc func cmdSelectLine() { NotificationCenter.default.post(name: .selectLine, object: nil) }
+    @objc func cmdExpandSelection() { NotificationCenter.default.post(name: .expandSelection, object: nil) }
+    @objc func cmdShrinkSelection() { NotificationCenter.default.post(name: .shrinkSelection, object: nil) }
     @objc func cmdIndentLines() { NotificationCenter.default.post(name: .indentLines, object: nil) }
     @objc func cmdOutdentLines() { NotificationCenter.default.post(name: .outdentLines, object: nil) }
     @objc func cmdJoinLines() { NotificationCenter.default.post(name: .joinLines, object: nil) }
