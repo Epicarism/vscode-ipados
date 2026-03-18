@@ -174,6 +174,10 @@ struct SettingsDetailView: View {
     @AppStorage("insertFinalNewline") private var insertFinalNewline: Bool = false
     @AppStorage("showInvisibleCharacters") private var showInvisibleCharacters: Bool = false
     @AppStorage("stickyScroll") private var stickyScroll: Bool = true
+    @AppStorage("formatOnSave") private var formatOnSave: Bool = false
+    @AppStorage("bracketPairColorization") private var bracketPairColorization: Bool = true
+    @AppStorage("indentGuides") private var indentGuides: Bool = true
+    @AppStorage("inlineSuggestions") private var inlineSuggestions: Bool = true
     
     var body: some View {
         Form {
@@ -331,6 +335,26 @@ struct SettingsDetailView: View {
                             .accessibilityHint("Adjust the delay before auto-saving, from 500 to 5000 milliseconds")
                         }
                     }
+                    
+                    if matchesSearch("Format On Save") {
+                        Toggle("Format On Save", isOn: $formatOnSave)
+                            .accessibilityHint("Automatically format the document when saving")
+                    }
+                    
+                    if matchesSearch("Bracket Pair Colorization") {
+                        Toggle("Bracket Pair Colorization", isOn: $bracketPairColorization)
+                            .accessibilityHint("Colorize matching bracket pairs with distinct colors")
+                    }
+                    
+                    if matchesSearch("Indent Guides") {
+                        Toggle("Indent Guides", isOn: $indentGuides)
+                            .accessibilityHint("Show vertical indent guide lines in the editor")
+                    }
+                    
+                    if matchesSearch("Inline Suggestions") {
+                        Toggle("Inline Suggestions", isOn: $inlineSuggestions)
+                            .accessibilityHint("Show AI-powered inline code suggestions while typing")
+                    }
                 }
             }
 
@@ -376,7 +400,7 @@ struct SettingsDetailView: View {
                 return matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected")
             }
             if category == .features {
-                return matchesSearch("Auto Save")
+                return matchesSearch("Auto Save") || matchesSearch("Format On Save") || matchesSearch("Bracket Pair Colorization") || matchesSearch("Indent Guides") || matchesSearch("Inline Suggestions")
             }
             if category == .extensions {
                 return matchesSearch("AI Assistant")
