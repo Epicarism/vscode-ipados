@@ -833,7 +833,19 @@ struct IDESidebarFiles: View {
     @ObservedObject var fileNavigator: FileSystemNavigator
     @Binding var showFolderPicker: Bool
     let theme: Theme
-    
+    @State private var filterText: String = ""
+
+    private func filterTree(_ node: FileTreeNode, query: String) -> FileTreeNode? {
+        if query.isEmpty { return node }
+        let q = query.lowercased()
+        if !node.isDirectory {
+            return node.name.lowercased().contains(q) ? node : nil
+        }
+        let filteredChildren = node.children.compactMap { filterTree($0, query: q) }
+        if filteredChildren.isEmpty && !node.name.lowercased().contains(q) { return nil }
+        return FileTreeNode(url: node.url, name: node.name, isDirectory: true, children: filteredChildren)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -860,7 +872,34 @@ struct IDESidebarFiles: View {
                     .accessibilityHint("Double tap to refresh the file explorer")
                 }
             }.padding(.horizontal, 12).padding(.vertical, 8)
-            
+
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(theme.sidebarForeground.opacity(0.5))
+                TextField("Filter files", text: $filterText)
+                    .font(.system(size: 12))
+                    .foregroundColor(theme.sidebarForeground)
+                    .autocorrectionDisabled(true)
+                    .autocapitalization(.none)
+                if !filterText.isEmpty {
+                    Button(action: { filterText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(theme.sidebarForeground.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(theme.sidebarForeground.opacity(0.2), lineWidth: 1)
+            )
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     // MARK: Open Editors Section
@@ -912,8 +951,13 @@ struct IDESidebarFiles: View {
                     }
                     
                     // MARK: File Tree
-                    if let tree = fileNavigator.fileTree {
-                        FileTreeView(root: tree, fileNavigator: fileNavigator, editorCore: editorCore)
+                    if let tree = fileNavigator.fileTree, let filteredTree = filterTree(tree, query: filterText) {
+                        FileTreeView(root: filteredTree, fileNavigator: fileNavigator, editorCore: editorCore)
+                    } else if fileNavigator.fileTree != nil && !filterText.isEmpty {
+                        Text("No files match \"\(filterText)\"")
+                            .font(.caption)
+                            .foregroundColor(theme.sidebarForeground.opacity(0.5))
+                            .padding(.vertical, 8)
                     } else {
                         DemoFileTree(editorCore: editorCore, theme: theme)
                     }

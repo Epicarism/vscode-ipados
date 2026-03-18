@@ -29,7 +29,11 @@ struct TabBarView: View {
                             onActivate: { activateTab(tab) },
                             onPin: { togglePin(tab) },
                             onCloseOthers: { closeOthers(except: tab) },
-                            onCloseRight: { closeTabsToRight(of: tab) }
+                            onCloseRight: { closeTabsToRight(of: tab) },
+                            onCloseAll: { closeAllTabs() },
+                            onCloseSaved: { closeSavedTabs() },
+                            onCopyPath: { copyPath(of: tab) },
+                            onRevealInExplorer: { revealInExplorer(tab) }
                         )
                         .id(tab.id)
                         .draggableToNewWindow(tab: tab, onDrag: {
@@ -96,6 +100,30 @@ struct TabBarView: View {
             }
         }
     }
+
+    private func closeAllTabs() {
+        editorCore.closeAllTabs()
+    }
+
+    private func closeSavedTabs() {
+        let idsToClose = tabs.filter { !$0.isUnsaved }.map { $0.id }
+        for id in idsToClose {
+            editorCore.forceCloseTab(id: id)
+        }
+    }
+
+    private func copyPath(of tab: Tab) {
+        if let path = tab.url?.path {
+            UIPasteboard.general.string = path
+        } else {
+            UIPasteboard.general.string = tab.fileName
+        }
+    }
+
+    private func revealInExplorer(_ tab: Tab) {
+        editorCore.focusedSidebarTab = 0
+        withAnimation { editorCore.showSidebar = true }
+    }
 }
 
 struct TabItemView: View {
@@ -107,6 +135,10 @@ struct TabItemView: View {
     let onPin: () -> Void
     let onCloseOthers: () -> Void
     let onCloseRight: () -> Void
+    let onCloseAll: () -> Void
+    let onCloseSaved: () -> Void
+    let onCopyPath: () -> Void
+    let onRevealInExplorer: () -> Void
 
     @State private var isHovering = false
 
@@ -176,19 +208,12 @@ struct TabItemView: View {
             isHovering = hovering
         }
         .contextMenu {
+            // ── Close actions ────────────────────────────────
             Button(action: onClose) {
                 Label("Close", systemImage: "xmark")
             }
             .accessibilityLabel("Close tab \(tab.fileName)")
             .accessibilityHint("Closes this tab")
-
-            Button(action: onPin) {
-                Label(tab.isPinned ? "Unpin" : "Pin", systemImage: "pin")
-            }
-            .accessibilityLabel(tab.isPinned ? "Unpin tab \(tab.fileName)" : "Pin tab \(tab.fileName)")
-            .accessibilityHint(tab.isPinned ? "Unpins this tab so it can be closed" : "Pins this tab to the tab bar")
-
-            Divider()
 
             Button(action: onCloseOthers) {
                 Label("Close Others", systemImage: "xmark.circle")
@@ -196,11 +221,47 @@ struct TabItemView: View {
             .accessibilityLabel("Close other tabs")
             .accessibilityHint("Closes all tabs except \(tab.fileName)")
 
+            Button(action: onCloseAll) {
+                Label("Close All", systemImage: "xmark.square.fill")
+            }
+            .accessibilityLabel("Close all tabs")
+            .accessibilityHint("Closes every open tab")
+
+            Button(action: onCloseSaved) {
+                Label("Close Saved", systemImage: "checkmark.square")
+            }
+            .accessibilityLabel("Close saved tabs")
+            .accessibilityHint("Closes all tabs that have no unsaved changes")
+
             Button(action: onCloseRight) {
                 Label("Close to the Right", systemImage: "xmark.square")
             }
             .accessibilityLabel("Close tabs to the right of \(tab.fileName)")
             .accessibilityHint("Closes all tabs to the right of this one")
+
+            Divider()
+
+            // ── File actions ─────────────────────────────────
+            Button(action: onCopyPath) {
+                Label("Copy Path", systemImage: "doc.on.clipboard")
+            }
+            .accessibilityLabel("Copy file path")
+            .accessibilityHint("Copies the full path of \(tab.fileName) to the clipboard")
+
+            Button(action: onRevealInExplorer) {
+                Label("Reveal in Explorer", systemImage: "sidebar.left")
+            }
+            .accessibilityLabel("Reveal \(tab.fileName) in Explorer")
+            .accessibilityHint("Opens the Explorer sidebar and highlights this file")
+
+            Divider()
+
+            // ── Pin ───────────────────────────────────────────
+            Button(action: onPin) {
+                Label(tab.isPinned ? "Unpin Tab" : "Pin Tab", systemImage: tab.isPinned ? "pin.slash" : "pin")
+            }
+            .accessibilityLabel(tab.isPinned ? "Unpin tab \(tab.fileName)" : "Pin tab \(tab.fileName)")
+            .accessibilityHint(tab.isPinned ? "Unpins this tab so it can be closed" : "Pins this tab to the tab bar")
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(tab.isPinned ? "Pinned tab" : "Tab"), \(tab.fileName)\(tab.isUnsaved ? ", unsaved changes" : "")\(tab.isPreview ? ", preview" : "")")
