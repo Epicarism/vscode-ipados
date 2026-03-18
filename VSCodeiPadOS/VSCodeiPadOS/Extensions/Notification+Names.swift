@@ -160,6 +160,10 @@ extension Notification.Name {
     static let collapseAllFolds = Notification.Name("collapseAllFolds")
     /// Expand all code folds.
     static let expandAllFolds = Notification.Name("expandAllFolds")
+    /// Fold the region at the current cursor line.
+    static let foldCurrentLine = Notification.Name("foldCurrentLine")
+    /// Unfold the region at the current cursor line.
+    static let unfoldCurrentLine = Notification.Name("unfoldCurrentLine")
     /// Code folding regions changed.
     static let codeFoldingDidChange = Notification.Name("codeFoldingDidChange")
 

@@ -87,8 +87,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         let textView = TextView()
         textView.editorDelegate = context.coordinator
         
-        // Enable Runestone's built-in line numbers and line height multiplier for code folding support
-        textView.showLineNumbers = true
+        // Custom fold-aware gutter handles line numbers — disable Runestone's built-in
+        textView.showLineNumbers = false
         textView.lineHeightMultiplier = 1.3
         textView.lineSelectionDisplayType = .line
         
@@ -172,8 +172,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
         }
         
-        // Sync Runestone built-in line numbers with lineNumbersStyle setting
-        textView.showLineNumbers = (lineNumbersStyle != "off")
+        // Custom fold-aware gutter always shown — Runestone built-in line numbers off
+        textView.showLineNumbers = false
         // Word wrap toggle still works
         if textView.isLineWrappingEnabled != wordWrapEnabled {
             textView.isLineWrappingEnabled = wordWrapEnabled
@@ -588,6 +588,25 @@ struct RunestoneEditorView: UIViewRepresentable {
                     }
                 }
             )
+            // Listen for single-line fold/unfold notifications
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .foldCurrentLine, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, self.textView != nil else { return }
+                        let line = max(0, self.parent.currentLineNumber - 1)
+                        CodeFoldingManager.shared.foldAtLine(line)
+                    }
+                }
+            )
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .unfoldCurrentLine, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, self.textView != nil else { return }
+                        let line = max(0, self.parent.currentLineNumber - 1)
+                        CodeFoldingManager.shared.unfoldAtLine(line)
+                    }
+                }
+            )
 
             // Listen for format document notification
             editorActionObservers.append(
@@ -760,34 +779,16 @@ struct RunestoneEditorView: UIViewRepresentable {
         /// Uses respondsToSelector to call Runestone's fold API if available,
         /// otherwise falls back to a no-op (Runestone 0.5.x has no built-in
         /// code folding, but this is future-proofed for newer versions).
-        private func handleCollapseAllFolds() {
-            guard let textView = textView else { return }
-            // Runestone 0.6+ may add collapseAllFolds() — call it dynamically if present
-            let sel = NSSelectorFromString("collapseAllFolds")
-            if textView.responds(to: sel) {
-                _ = textView.perform(sel)
-            } else {
-                // No built-in fold support in current Runestone version.
-                // Post a notification so UI can reflect the intent if needed.
-                NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
-            }
+        @MainActor private func handleCollapseAllFolds() {
+            CodeFoldingManager.shared.collapseAll()
         }
 
         /// Handles the expandAllFolds notification from EditorCore.
         /// Uses respondsToSelector to call Runestone's unfold API if available,
         /// otherwise falls back to a no-op (Runestone 0.5.x has no built-in
         /// code folding, but this is future-proofed for newer versions).
-        private func handleExpandAllFolds() {
-            guard let textView = textView else { return }
-            // Runestone 0.6+ may add expandAllFolds() — call it dynamically if present
-            let sel = NSSelectorFromString("expandAllFolds")
-            if textView.responds(to: sel) {
-                _ = textView.perform(sel)
-            } else {
-                // No built-in fold support in current Runestone version.
-                // Post a notification so UI can reflect the intent if needed.
-                NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
-            }
+        @MainActor private func handleExpandAllFolds() {
+            CodeFoldingManager.shared.expandAll()
         }
 
         // MARK: - Format Document

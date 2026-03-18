@@ -1090,7 +1090,7 @@ struct IDEEditorView: View {
                 ZStack(alignment: .topLeading) {
                 HStack(spacing: 0) {
                     // Line numbers gutter with code folding indicators
-                    if lineNumbersStyle != "off" && !useRunestoneEditor {
+                    if lineNumbersStyle != "off" {
                         LineNumbers(
                             totalLines: totalLines,
                             currentLine: currentLineNumber,
@@ -1137,6 +1137,7 @@ struct IDEEditorView: View {
                                         return true
                                     }
                                 )
+                                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
                             } else {
                                 // Legacy SyntaxHighlightingTextView (fallback)
                                 SyntaxHighlightingTextView(
@@ -1166,6 +1167,7 @@ struct IDEEditorView: View {
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
                             foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
+                            foldingManager.currentText = newValue
                             gitGutterRefreshToken &+= 1
                             
                             // Inline suggestion — manager handles debounce (300ms) + throttle (2s) internally
@@ -1213,7 +1215,7 @@ struct IDEEditorView: View {
                         requestedLineSelection = line
                     }
                 )
-                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
+                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
 
                 // Inlay Hints Overlay (type hints, parameter names)
@@ -1223,10 +1225,10 @@ struct IDEEditorView: View {
                     scrollPosition: scrollPosition,
                     lineHeight: lineHeight,
                     fontSize: editorCore.editorFontSize,
-                    gutterWidth: (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0,
+                    gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
                     rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80
                 )
-                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
+                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
 
                 // Indentation guide lines (FEAT-indent-guides)
@@ -1236,11 +1238,11 @@ struct IDEEditorView: View {
                     scrollPosition: scrollPosition,
                     lineHeight: lineHeight,
                     fontSize: editorCore.editorFontSize,
-                    gutterWidth: (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0,
+                    gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
                     rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80,
                     guideColor: theme.editorForeground.opacity(0.10)
                 )
-                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 60 : 0)
+                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
                 }
 
@@ -1305,6 +1307,10 @@ struct IDEEditorView: View {
         .onAppear {
             text = tab.content
             foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
+            foldingManager.currentText = tab.content
+            foldingManager.onTextMutation = { newText in
+                text = newText
+            }
             findViewModel.editorCore = editorCore
             // Set initial lineHeight based on font size
             lineHeight = ceil(editorCore.editorFontSize * 1.4)
@@ -1321,6 +1327,10 @@ struct IDEEditorView: View {
             // 2. Load new tab content
             text = tab.content
             foldingManager.detectFoldableRegions(in: tab.content, filePath: tab.url?.path)
+            foldingManager.currentText = tab.content
+            foldingManager.onTextMutation = { newText in
+                text = newText
+            }
 
             // 2b. Clear stale UI state from the previous tab
             showAutocomplete = false
@@ -1504,7 +1514,8 @@ struct LineNumbers: View {
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundColor(.primary.opacity(0.6))
                     }
-                    .frame(width: 16, height: lineHeight)
+                    .frame(width: 20, height: lineHeight)
+                    .contentShape(Rectangle())
                     .background(isFolded ? Color.secondary.opacity(0.15) : Color.clear)
                     .cornerRadius(3)
                 }

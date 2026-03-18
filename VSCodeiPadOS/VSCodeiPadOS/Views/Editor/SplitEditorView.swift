@@ -549,7 +549,7 @@ struct PaneEditorView: View {
                 //
                 // IMPORTANT: keep gutter in sync with the editor scroll position. The gutter ScrollView
                 // is scroll-disabled, and we offset the content to match the editor's scroll.
-                if lineNumbersStyle != "off" && !useRunestoneEditor {
+                if lineNumbersStyle != "off" {
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .trailing, spacing: 0) {
                             // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
@@ -566,13 +566,14 @@ struct PaneEditorView: View {
                                                 Image(systemName: foldingManager.isFolded(fileId: fileId, line: lineIndex) ? "chevron.right" : "chevron.down")
                                                     .font(.system(size: 10, weight: .regular))
                                                     .foregroundColor(.secondary.opacity(0.8))
-                                                    .frame(width: 12, height: lineHeight)
+                                                    .frame(width: 20, height: lineHeight)
+                                                    .contentShape(Rectangle())
                                             }
                                             .buttonStyle(.plain)
                                         } else {
                                             // Spacer for alignment
                                             Spacer()
-                                                .frame(width: 12)
+                                                .frame(width: 20)
                                         }
                                         
                                         // Breakpoint indicator
@@ -625,6 +626,7 @@ struct PaneEditorView: View {
                             lineHeight: $lineHeight,
                             isActive: splitManager.activePaneId == pane.id
                         )
+                        .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
                         .environmentObject(editorCore)
                     } else {
                         SyntaxHighlightingTextView(
@@ -645,6 +647,7 @@ struct PaneEditorView: View {
                 }
                 .onChange(of: text) { _, newValue in
                     pane.updateTabContent(newValue)
+                    foldingManager.currentText = newValue
                     gitGutterRefreshToken &+= 1
                 }
                 .onChange(of: scrollOffset) { _, newOffset in
@@ -690,7 +693,7 @@ struct PaneEditorView: View {
                         requestedLineSelection = line
                     }
                 )
-                .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 70 : 0) // Offset for gutter
+                .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for gutter
                 .padding(.trailing, minimapEnabled ? 60 : 0) // Offset for minimap
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(true)
@@ -704,17 +707,17 @@ struct PaneEditorView: View {
                 scrollPosition: scrollPosition,
                 lineHeight: lineHeight,
                 fontSize: 14,
-                gutterWidth: (lineNumbersStyle != "off" && !useRunestoneEditor) ? 70 : 0,
+                gutterWidth: lineNumbersStyle != "off" ? 70 : 0,
                 rightReservedWidth: minimapEnabled ? 60 : 0
             )
-            .padding(.leading, (lineNumbersStyle != "off" && !useRunestoneEditor) ? 70 : 0)
+            .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
             .padding(.trailing, minimapEnabled ? 60 : 0)
 
 
 
             // FEAT-071 Git gutter indicators (added/modified/deleted)
             // 6 pt strip at the right edge of the 70 pt line-number gutter.
-            if let fileURL = tab.url, lineNumbersStyle != "off" && !useRunestoneEditor {
+            if let fileURL = tab.url, lineNumbersStyle != "off" {
                 let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
                 let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
                 let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
@@ -767,11 +770,19 @@ struct PaneEditorView: View {
             text = tab.content
             // Detect foldable regions for this file
             foldingManager.detectFoldableRegions(in: text, filePath: fileId)
+            foldingManager.currentText = text
+            foldingManager.onTextMutation = { newText in
+                text = newText
+            }
         }
         .onChange(of: tab.id) { _, _ in
             text = tab.content
             // Re-detect foldable regions for new file
             foldingManager.detectFoldableRegions(in: text, filePath: fileId)
+            foldingManager.currentText = text
+            foldingManager.onTextMutation = { newText in
+                text = newText
+            }
         }
         .onChange(of: pane.scrollOffset) { _, newOffset in
             guard splitManager.syncScroll else { return }

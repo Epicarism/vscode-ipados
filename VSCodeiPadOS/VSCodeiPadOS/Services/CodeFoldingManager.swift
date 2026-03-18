@@ -75,6 +75,13 @@ final class CodeFoldingManager: ObservableObject {
     @Published var foldRegions: [FoldRegion] = []
     @Published var collapsedLines: Set<Int> = []
     
+    /// Callback invoked when a fold/unfold mutates the text. ContentView/SplitEditorView set this.
+    @MainActor var onTextMutation: ((_ newText: String) -> Void)? = nil
+    /// Current full text for text-replacement folding. Set by the editor view.
+    @MainActor var currentText: String = ""
+    /// Storage for original folded text keyed by "fileId:startLine"
+    @MainActor private var foldedTextStorage: [String: String] = [:]
+    
     // Dictionary to manage fold regions per file
     nonisolated(unsafe) private var foldRegionsByFile: [String: [FoldRegion]] = [:]
     
@@ -96,7 +103,8 @@ final class CodeFoldingManager: ObservableObject {
     /// Detects all foldable regions in the given code
     func detectFoldableRegions(in code: String, filePath: String? = nil) {
         self.currentFilePath = filePath
-        self.currentFileId = filePath
+        // Use filePath if available; fall back to "__in_memory__" so currentFileId is never nil
+        self.currentFileId = filePath ?? "__in_memory__"
         
         let lines = code.components(separatedBy: .newlines)
         var regions: [FoldRegion] = []
@@ -551,13 +559,23 @@ final class CodeFoldingManager: ObservableObject {
     
     /// Toggles the fold state at a specific line
     func toggleFold(at line: Int) {
-        if let regionIndex = foldRegions.firstIndex(where: { $0.startLine == line }) {
-            foldRegions[regionIndex].isFolded.toggle()
-            updateCollapsedLines()
-            
-            // Save state after toggling
-            if let filePath = currentFilePath {
-                saveFoldState(for: filePath)
+        guard let regionIndex = foldRegions.firstIndex(where: { $0.startLine == line }) else { return }
+        let wasFolded = foldRegions[regionIndex].isFolded
+        foldRegions[regionIndex].isFolded.toggle()
+        updateCollapsedLines()
+        
+        // Save state after toggling
+        if let filePath = currentFilePath {
+            saveFoldState(for: filePath)
+        }
+        
+        // Apply or revert text-replacement fold
+        if let fileId = currentFileId {
+            let region = foldRegions[regionIndex]
+            if wasFolded {
+                revertTextFold(fileId: fileId, region: region)
+            } else {
+                applyTextFold(fileId: fileId, region: region)
             }
         }
     }
@@ -572,6 +590,9 @@ final class CodeFoldingManager: ObservableObject {
                 saveFoldState(for: filePath)
             }
         }
+        if let fileId = currentFileId, let region = getRegion(at: line) {
+            revertTextFold(fileId: fileId, region: region)
+        }
     }
     
     /// Collapses a region
@@ -584,6 +605,52 @@ final class CodeFoldingManager: ObservableObject {
                 saveFoldState(for: filePath)
             }
         }
+        if let fileId = currentFileId, let region = getRegion(at: line) {
+            applyTextFold(fileId: fileId, region: region)
+        }
+    }
+
+    // MARK: - Text-Replacement Folding
+
+    /// Replaces lines startLine+1...endLine with a single placeholder "⋯" comment line.
+    /// Stores the original text so unfold can restore it.
+    private func applyTextFold(fileId: String, region: FoldRegion) {
+        guard !currentText.isEmpty else { return }
+        let storageKey = "\(fileId):\(region.startLine)"
+        guard foldedTextStorage[storageKey] == nil else { return } // already folded
+        let lines = currentText.components(separatedBy: "\n")
+        guard region.endLine < lines.count, region.startLine < lines.count else { return }
+        // Determine fold placeholder style from first line
+        let firstLine = lines[region.startLine]
+        let indent = String(firstLine.prefix(while: { $0 == " " || $0 == "\t" }))
+        let placeholder = indent + "⋯"
+        // Store original lines that will be removed
+        let hiddenLines = Array(lines[(region.startLine + 1)...region.endLine])
+        foldedTextStorage[storageKey] = hiddenLines.joined(separator: "\n")
+        // Build new text
+        var newLines = lines
+        newLines.replaceSubrange((region.startLine + 1)...region.endLine, with: [placeholder])
+        let newText = newLines.joined(separator: "\n")
+        currentText = newText
+        onTextMutation?(newText)
+    }
+
+    /// Restores lines that were replaced by applyTextFold.
+    private func revertTextFold(fileId: String, region: FoldRegion) {
+        let storageKey = "\(fileId):\(region.startLine)"
+        guard let stored = foldedTextStorage[storageKey] else { return }
+        guard !currentText.isEmpty else { return }
+        let lines = currentText.components(separatedBy: "\n")
+        // The placeholder is at startLine + 1 in the current (folded) text
+        let placeholderLine = region.startLine + 1
+        guard placeholderLine < lines.count else { return }
+        let restoredLines = stored.components(separatedBy: "\n")
+        var newLines = lines
+        newLines.replaceSubrange(placeholderLine...placeholderLine, with: restoredLines)
+        foldedTextStorage.removeValue(forKey: storageKey)
+        let newText = newLines.joined(separator: "\n")
+        currentText = newText
+        onTextMutation?(newText)
     }
     
     /// Expands all folded regions
@@ -749,6 +816,7 @@ final class CodeFoldingManager: ObservableObject {
         guard var regions = foldRegionsByFile[fileId] else { return }
         
         if let regionIndex = regions.firstIndex(where: { $0.startLine == line }) {
+            let wasFolded = regions[regionIndex].isFolded
             regions[regionIndex].isFolded.toggle()
             foldRegionsByFile[fileId] = regions
             
@@ -759,6 +827,21 @@ final class CodeFoldingManager: ObservableObject {
             } else {
                 // Ensure SwiftUI updates for gutters rendering using file-aware queries.
                 objectWillChange.send()
+            }
+            
+            // Apply or revert text fold
+            if let region = getRegion(at: line) {
+                if wasFolded {
+                    revertTextFold(fileId: fileId, region: region)
+                } else {
+                    applyTextFold(fileId: fileId, region: region)
+                }
+            } else if let region = regions.first(where: { $0.startLine == line }) {
+                if wasFolded {
+                    revertTextFold(fileId: fileId, region: region)
+                } else {
+                    applyTextFold(fileId: fileId, region: region)
+                }
             }
             
             // Save state after toggling
