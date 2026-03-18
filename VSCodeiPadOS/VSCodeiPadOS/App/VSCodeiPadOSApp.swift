@@ -314,7 +314,17 @@ struct GoMenuCommands: Commands {
             Button("Go to Definition") {
                 NotificationCenter.default.post(name: .goToDefinition, object: nil)
             }
+            .keyboardShortcut(".", modifiers: .command)
+            
+            Button("Insert Line Below") {
+                NotificationCenter.default.post(name: .insertLineBelow, object: nil)
+            }
             .keyboardShortcut(.return, modifiers: .command)
+            
+            Button("Insert Line Above") {
+                NotificationCenter.default.post(name: .insertLineAbove, object: nil)
+            }
+            .keyboardShortcut(.return, modifiers: [.command, .shift])
             
             Button("Go Back") {
                 NotificationCenter.default.post(name: .goBack, object: nil)

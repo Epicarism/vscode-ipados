@@ -120,6 +120,7 @@ class KeyCommandController: UIViewController {
             // MARK: - Navigation
             ("Go to Line", "g", [.control], #selector(cmdGoToLine)),
             ("Go to Symbol", "o", [.command, .shift], #selector(cmdGoToSymbol)),
+            ("Go to Definition", ".", [.command], #selector(cmdGoToDefinition)),
             ("Go Back", "[", [.control], #selector(cmdGoBack)),
             ("Go Forward", "]", [.control], #selector(cmdGoForward)),
             
