@@ -970,7 +970,15 @@ struct IDEEditorView: View {
                                     isActive: isTerminalFocused?.wrappedValue != true,
                                     fontSize: editorCore.editorFontSize,
                                     onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
-                                    onDismissAutocomplete: { self.handleDismissAutocomplete() }
+                                    onDismissAutocomplete: { self.handleDismissAutocomplete() },
+                                    onAcceptInlineSuggestion: {
+                                        guard let suggestion = inlineSuggestionManager.currentSuggestion else { return false }
+                                        text.insert(contentsOf: suggestion, at: text.index(text.startIndex, offsetBy: min(cursorIndex, text.count)))
+                                        cursorIndex += suggestion.count
+                                        requestedCursorIndex = cursorIndex
+                                        inlineSuggestionManager.clearSuggestion()
+                                        return true
+                                    }
                                 )
                             } else {
                                 // Legacy SyntaxHighlightingTextView (fallback)
@@ -1087,6 +1095,18 @@ struct IDEEditorView: View {
                     .padding(.leading, 52)
                     .allowsHitTesting(false)
                     .clipped()
+                }
+                // Inline suggestion ghost text
+                if inlineSuggestionManager.currentSuggestion != nil && !showAutocomplete {
+                    InlineSuggestionView(
+                        code: text,
+                        language: CodeLanguage(from: tab.url?.pathExtension ?? "swift"),
+                        scrollPosition: max(0, Int(scrollOffset / lineHeight)),
+                        lineHeight: lineHeight,
+                        fontSize: editorCore.editorFontSize
+                    )
+                    .environmentObject(inlineSuggestionManager)
+                    .allowsHitTesting(false)
                 }
                 if showAutocomplete && !autocomplete.suggestionItems.isEmpty {
                     AutocompletePopup(

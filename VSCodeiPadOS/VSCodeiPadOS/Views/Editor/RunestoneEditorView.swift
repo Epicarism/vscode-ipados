@@ -46,6 +46,7 @@ struct RunestoneEditorView: UIViewRepresentable {
     /// Autocomplete key handling hooks (return true if handled)
     let onAcceptAutocomplete: (() -> Bool)?
     let onDismissAutocomplete: (() -> Bool)?
+    var onAcceptInlineSuggestion: (() -> Bool)?
     
     init(
         text: Binding<String>,
@@ -59,7 +60,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         isActive: Bool,
         fontSize: CGFloat = 14.0,
         onAcceptAutocomplete: (() -> Bool)? = nil,
-        onDismissAutocomplete: (() -> Bool)? = nil
+        onDismissAutocomplete: (() -> Bool)? = nil,
+        onAcceptInlineSuggestion: (() -> Bool)? = nil
     ) {
         self._text = text
         self.filename = filename
@@ -73,6 +75,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         self.fontSize = fontSize
         self.onAcceptAutocomplete = onAcceptAutocomplete
         self.onDismissAutocomplete = onDismissAutocomplete
+        self.onAcceptInlineSuggestion = onAcceptInlineSuggestion
     }
     
     func makeCoordinator() -> Coordinator {
@@ -752,7 +755,12 @@ struct RunestoneEditorView: UIViewRepresentable {
             // MARK: Tab key
             // ---------------------------------------------------------------
             if text == "\t" {
-                // First give autocomplete a chance to accept
+                // First check inline suggestion
+                let inlineAccepted = MainActor.assumeIsolated {
+                    parent.onAcceptInlineSuggestion?()
+                }
+                if inlineAccepted == true { return false }
+                // Then give autocomplete a chance to accept
                 let accepted = MainActor.assumeIsolated {
                     parent.onAcceptAutocomplete?()
                 }
