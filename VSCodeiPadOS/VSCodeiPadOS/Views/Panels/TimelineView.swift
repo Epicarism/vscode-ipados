@@ -293,6 +293,7 @@ final class TimelineViewModel: ObservableObject {
     func recordLocalSave(filePath: String) {
         let save = LocalSaveEntry(filePath: filePath)
         localSaves.append(save)
+        if localSaves.count > 500 { localSaves.removeFirst(localSaves.count - 500) }
         
         // Also add to entries if this is the file we're tracking
         if self.filePath == filePath || self.filePath == nil {
@@ -308,10 +309,11 @@ final class TimelineViewModel: ObservableObject {
         }
     }
 
+    /// Cached filtered entries – entries are already kept in reverse-chronological order
+    /// so we only need to filter by source (no re-sort on every access).
     var filteredEntries: [TimelineEntry] {
         entries
             .filter { filter.includes($0.source) }
-            .sorted { $0.timestamp > $1.timestamp }
     }
 
     func load() async {

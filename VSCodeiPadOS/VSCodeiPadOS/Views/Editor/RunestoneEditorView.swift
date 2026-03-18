@@ -1478,7 +1478,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             let hadTrailingNewline = linesText.hasSuffix("\n")
             if hadTrailingNewline && lines.last == "" { lines.removeLast() }
             
-            let indent = "    " // 4 spaces
+            let tabSz = max(1, parent.tabSize)
+            let indent = parent.insertSpaces ? String(repeating: " ", count: tabSz) : "\t"
             lines = lines.map { line in
                 if line.trimmingCharacters(in: .whitespaces).isEmpty { return line }
                 return indent + line
@@ -1511,18 +1512,19 @@ struct RunestoneEditorView: UIViewRepresentable {
             if hadTrailingNewline && lines.last == "" { lines.removeLast() }
             
             // Track how many chars removed from the first line (for cursor adjustment)
+            let tabSz = max(1, parent.tabSize)
             var firstLineRemoved = 0
             var totalRemoved = 0
             
             lines = lines.enumerated().map { (index, line) in
                 var removed = 0
                 var result = line
-                // Remove up to 4 leading spaces or 1 leading tab
+                // Remove up to tabSize leading spaces or 1 leading tab
                 if result.hasPrefix("\t") {
                     result = String(result.dropFirst())
                     removed = 1
                 } else {
-                    while removed < 4 && result.hasPrefix(" ") {
+                    while removed < tabSz && result.hasPrefix(" ") {
                         result = String(result.dropFirst())
                         removed += 1
                     }

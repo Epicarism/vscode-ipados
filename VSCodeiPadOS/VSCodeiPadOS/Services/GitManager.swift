@@ -410,6 +410,36 @@ final class GitManager: ObservableObject {
         recentCommits = data.recentCommits
         aheadCount = data.aheadCount
         behindCount = data.behindCount
+
+        // Parse stashes from .git/logs/refs/stash
+        var parsedStashes: [GitStashEntry] = []
+        let stashRefPath = repoURL.appendingPathComponent(".git/refs/stash")
+        if FileManager.default.fileExists(atPath: stashRefPath.path) {
+            let stashLogPath = repoURL.appendingPathComponent(".git/logs/refs/stash")
+            if let logContent = try? String(contentsOf: stashLogPath, encoding: .utf8) {
+                let lines = logContent.components(separatedBy: .newlines).filter { !$0.isEmpty }
+                for (index, line) in lines.reversed().enumerated() {
+                    // Format: <old_sha> <new_sha> <name> <<email>> <timestamp> <tz>\t<message>
+                    guard let tabRange = line.range(of: "\t") else { continue }
+                    let message = String(line[tabRange.upperBound...])
+                    
+                    // Extract branch from message like "WIP on main: abc1234 commit msg"
+                    // or "On main: custom stash message"
+                    var stashBranch = ""
+                    var stashMessage = message
+                    if let onRange = message.range(of: "WIP on ") ?? message.range(of: "On ") {
+                        let afterOn = String(message[onRange.upperBound...])
+                        if let colonRange = afterOn.range(of: ": ") {
+                            stashBranch = String(afterOn[afterOn.startIndex..<colonRange.lowerBound])
+                            stashMessage = String(afterOn[colonRange.upperBound...])
+                        }
+                    }
+                    
+                    parsedStashes.append(GitStashEntry(index: index, message: stashMessage, branch: stashBranch))
+                }
+            }
+        }
+        stashes = parsedStashes
         
         isLoading = false
     }
@@ -561,10 +591,59 @@ final class GitManager: ObservableObject {
         }
         
         let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(branch)")
-        guard FileManager.default.fileExists(atPath: refPath.path) else {
-            throw GitManagerError.invalidRepository
+        if !FileManager.default.fileExists(atPath: refPath.path) {
+            // Branch not found locally — check remote tracking branch
+            let remoteRefPath = repoURL.appendingPathComponent(".git/refs/remotes/origin/\(branch)")
+            var remoteSHA: String?
+            
+            if FileManager.default.fileExists(atPath: remoteRefPath.path) {
+                remoteSHA = try? String(contentsOf: remoteRefPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            
+            // Fallback: check packed-refs for the remote branch
+            if remoteSHA == nil {
+                let packedRefsPath = repoURL.appendingPathComponent(".git/packed-refs")
+                if let packedContent = try? String(contentsOf: packedRefsPath, encoding: .utf8) {
+                    for line in packedContent.components(separatedBy: .newlines) {
+                        let trimmed = line.trimmingCharacters(in: .whitespaces)
+                        guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { continue }
+                        let parts = trimmed.components(separatedBy: .whitespaces)
+                        guard parts.count >= 2 else { continue }
+                        if parts[1] == "refs/remotes/origin/\(branch)" {
+                            remoteSHA = parts[0]
+                            break
+                        }
+                    }
+                }
+            }
+            
+            if let sha = remoteSHA, !sha.isEmpty {
+                // Create local tracking branch from remote SHA
+                let parentDir = refPath.deletingLastPathComponent()
+                try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+                try (sha + "\n").write(to: refPath, atomically: true, encoding: .utf8)
+            } else {
+                // Also check packed-refs for a local branch before giving up
+                let packedRefsPath = repoURL.appendingPathComponent(".git/packed-refs")
+                var foundInPacked = false
+                if let packedContent = try? String(contentsOf: packedRefsPath, encoding: .utf8) {
+                    for line in packedContent.components(separatedBy: .newlines) {
+                        let trimmed = line.trimmingCharacters(in: .whitespaces)
+                        guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { continue }
+                        let parts = trimmed.components(separatedBy: .whitespaces)
+                        guard parts.count >= 2 else { continue }
+                        if parts[1] == "refs/heads/\(branch)" {
+                            foundInPacked = true
+                            break
+                        }
+                    }
+                }
+                if !foundInPacked {
+                    throw GitManagerError.invalidRepository
+                }
+            }
         }
-        
+
         // Update HEAD to point to the branch
         let headPath = repoURL.appendingPathComponent(".git/HEAD")
         try "ref: refs/heads/\(branch)\n".write(to: headPath, atomically: true, encoding: .utf8)
@@ -626,6 +705,33 @@ final class GitManager: ObservableObject {
         
         let refPath = repoURL.appendingPathComponent(".git/refs/heads/\(name)")
         try FileManager.default.removeItem(at: refPath)
+
+        // Also remove the branch from packed-refs if present
+        let packedRefsPath = repoURL.appendingPathComponent(".git/packed-refs")
+        if let packedContent = try? String(contentsOf: packedRefsPath, encoding: .utf8) {
+            let targetRef = "refs/heads/\(name)"
+            let lines = packedContent.components(separatedBy: .newlines)
+            var filteredLines: [String] = []
+            var modified = false
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                // Preserve comment lines and empty lines
+                if trimmed.hasPrefix("#") || trimmed.isEmpty {
+                    filteredLines.append(line)
+                    continue
+                }
+                let parts = trimmed.components(separatedBy: .whitespaces)
+                if parts.count >= 2 && parts[1] == targetRef {
+                    modified = true
+                    continue // Skip this line — it's the branch we're deleting
+                }
+                filteredLines.append(line)
+            }
+            if modified {
+                let newContent = filteredLines.joined(separator: "\n")
+                try? newContent.write(to: packedRefsPath, atomically: true, encoding: .utf8)
+            }
+        }
         
         await refresh()
     }

@@ -1089,7 +1089,10 @@ struct IDEEditorView: View {
                         }
                         showAutocomplete = false
                     }
-                    .offset(x: 70, y: CGFloat(currentLineNumber) * lineHeight - scrollOffset)
+                    .offset(x: {
+                        let gutterWidth = lineNumbersStyle != "off" ? CGFloat(max(String(totalLines).count, 2)) * 9.0 + 35.0 : 8.0
+                        return gutterWidth
+                    }(), y: CGFloat(currentLineNumber) * lineHeight - scrollOffset)
                 }
             }
         }

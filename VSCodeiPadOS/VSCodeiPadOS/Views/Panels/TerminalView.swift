@@ -1613,7 +1613,7 @@ struct SSHConnectionView: View {
     @State private var importSuccessMessage: String?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 // Saved Connections Section
                 if !connectionStore.savedConnections.isEmpty {

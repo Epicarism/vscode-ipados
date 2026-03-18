@@ -986,12 +986,19 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let text = textView.text ?? ""
             let nsText = text as NSString
             
-            // Determine comment prefix based on file language
+            // Determine comment prefix/suffix based on file language
             let commentPrefix = commentPrefixForFilename(parent.filename)
+            let commentSuffix = commentSuffixForFilename(parent.filename)
             
             // Get the full range of selected text in NSRange
             let selStart = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
             let selEnd = textView.offset(from: textView.beginningOfDocument, to: selectedRange.end)
+            
+            // Block comment languages (HTML, CSS) use wrap/unwrap instead of line-prefix
+            if let suffix = commentSuffix {
+                handleBlockToggleComment(in: textView, nsText: nsText, selStart: selStart, selEnd: selEnd, prefix: commentPrefix, suffix: suffix)
+                return
+            }
             
             // Find all line ranges that intersect with the selection
             var lineRanges: [NSRange] = []
@@ -1061,6 +1068,60 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             parent.text = textView.text
         }
         
+        /// Handles block comment toggle (wrap/unwrap) for languages like HTML and CSS
+        private func handleBlockToggleComment(in textView: UITextView, nsText: NSString, selStart: Int, selEnd: Int, prefix: String, suffix: String) {
+            // Determine the range to wrap: either the selection or the current line
+            let wrapRange: NSRange
+            if selStart == selEnd {
+                // No selection - wrap the current line
+                if let selectedRange = textView.selectedTextRange,
+                   let lineRange = textView.tokenizer.rangeEnclosingPosition(selectedRange.start, with: .paragraph, inDirection: UITextDirection(rawValue: 1)) {
+                    let loc = textView.offset(from: textView.beginningOfDocument, to: lineRange.start)
+                    let len = textView.offset(from: lineRange.start, to: lineRange.end)
+                    wrapRange = NSRange(location: loc, length: len)
+                } else {
+                    return
+                }
+            } else {
+                wrapRange = NSRange(location: selStart, length: selEnd - selStart)
+            }
+            
+            guard wrapRange.location + wrapRange.length <= nsText.length else { return }
+            let selectedText = nsText.substring(with: wrapRange)
+            let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            textView.undoManager?.beginUndoGrouping()
+            let textStorage = textView.textStorage
+            
+            // Check if already wrapped with block comment
+            if trimmed.hasPrefix(prefix) && trimmed.hasSuffix(suffix) {
+                // Unwrap: remove prefix and suffix
+                var unwrapped = selectedText
+                // Remove prefix (with optional trailing space)
+                if let range = unwrapped.range(of: prefix + " ") {
+                    unwrapped = unwrapped.replacingCharacters(in: range, with: "")
+                } else if let range = unwrapped.range(of: prefix) {
+                    unwrapped = unwrapped.replacingCharacters(in: range, with: "")
+                }
+                // Remove suffix (with optional leading space)
+                if let range = unwrapped.range(of: " " + suffix, options: .backwards) {
+                    unwrapped = unwrapped.replacingCharacters(in: range, with: "")
+                } else if let range = unwrapped.range(of: suffix, options: .backwards) {
+                    unwrapped = unwrapped.replacingCharacters(in: range, with: "")
+                }
+                textStorage.replaceCharacters(in: wrapRange, with: unwrapped)
+            } else {
+                // Wrap with prefix ... suffix
+                let wrapped = prefix + " " + selectedText + " " + suffix
+                textStorage.replaceCharacters(in: wrapRange, with: wrapped)
+            }
+            
+            textView.undoManager?.endUndoGrouping()
+            
+            // Update parent binding
+            parent.text = textView.text
+        }
+        
         /// Returns the correct single-line comment prefix for the given filename.
         private func commentPrefixForFilename(_ filename: String) -> String {
             let ext = (filename as NSString).pathExtension.lowercased()
@@ -1082,6 +1143,19 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             default:
                 // Swift, JS, TS, C, C++, Java, Kotlin, Rust, Go, etc.
                 return "//"
+            }
+        }
+        
+        /// Returns the closing comment suffix for block-comment languages, or nil for line-comment languages.
+        private func commentSuffixForFilename(_ filename: String) -> String? {
+            let ext = (filename as NSString).pathExtension.lowercased()
+            switch ext {
+            case "html", "xml", "svg":
+                return "-->"
+            case "css", "scss", "less":
+                return "*/"
+            default:
+                return nil
             }
         }
         
@@ -1933,10 +2007,9 @@ struct VSCodeSyntaxHighlighter {
             UIColor(theme.bracketPair6)
         ]
         
-        // Scan text for brackets
-        // Note: In a real implementation, we should skip brackets inside strings/comments
-        // But since we apply this LAST, we can try to respect existing string/comment colors
-        // OR implement a more robust parser. For now, simple scan.
+        // Colors to skip: brackets inside strings or comments should not be colorized
+        let stringColor = UIColor(theme.string)
+        let commentColor = UIColor(theme.comment)
         
         // Optimization: Use scanner or direct iteration
         let nsString = text as NSString
@@ -1948,9 +2021,18 @@ struct VSCodeSyntaxHighlighter {
                 let c = Character(scalar)
                 
                 if brackets.contains(c) {
-                    // Check if it's already colored as string/comment (heuristic)
-                    // If color is string/comment, skip
-                    // (Requires iterating attributes, which is slow. We'll just apply on top for now)
+                    // Check if this bracket is inside a string or comment by examining
+                    // the foreground color already applied by syntax highlighting.
+                    // Since bracket colorization runs LAST, existing colors indicate
+                    // the token type from the syntax highlighter.
+                    let existingAttrs = attributed.attributes(at: index, effectiveRange: nil)
+                    if let existingColor = existingAttrs[.foregroundColor] as? UIColor {
+                        if existingColor == stringColor || existingColor == commentColor {
+                            // Skip brackets inside strings/comments
+                            index += 1
+                            continue
+                        }
+                    }
                     
                     if let open = pairs[c] { // Closing bracket
                         if let last = stack.last, last.char == open {
@@ -1970,9 +2052,7 @@ struct VSCodeSyntaxHighlighter {
                         let depth = stack.count
                         stack.append((c, index, depth))
                         
-                        // We'll color it when (and if) we find the match, or here?
-                        // Better to color here tentatively, but matching is better.
-                        // Let's color tentatively based on depth.
+                        // Color tentatively based on depth.
                         let color = colors[depth % colors.count]
                         attributed.addAttribute(.foregroundColor, value: color, range: NSRange(location: index, length: 1))
                     }

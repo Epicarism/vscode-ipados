@@ -503,6 +503,13 @@ struct FindReplaceView: View {
                         viewModel.performSearch()
                     }
                 
+                // Regex error display
+                if let error = viewModel.regexError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                
                 // Result count
                 if !viewModel.searchResults.isEmpty {
                     Text("\(viewModel.currentResultIndex + 1) of \(viewModel.searchResults.count)")
