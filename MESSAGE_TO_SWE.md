@@ -1,27 +1,46 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 12:45 AM GMT+1
+## Last Updated: March 18, 2026 - 4:45 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 4:45 AM):
 
-**Commit:** `aa3d42a` - fix: build errors, wire shortcuts, perf fixes, race conditions
+**Commits:** `aa3d42a` → `48d0fbf` (12 commits)
 
-**Key fixes this session (10 fixes):**
-- **GitManager**: Fixed build errors — unwrap failable `NativeGitReader` init, `GitObjectType` enum comparisons, `var`→`let` warnings
-- **ContentView**: Fixed `showCloneSheet`/`showTerminal` scope error (moved `.onReceive` from IDEEditorView to ContentView)
-- **ContentView**: LineNumbers `visibleLineIndices` O(n)→O(viewport) with binary search + early termination (was iterating ALL lines per scroll frame)
-- **RunestoneEditorView**: Cursor position O(n)→O(log n) with cached newline offset index + binary search (was scanning from BOF per keystroke)
-- **RunestoneEditorView**: Wired `.selectLine`, `.indentLines`, `.outdentLines`, `.joinLines` notification handlers
-- **RunestoneEditorView**: Removed unconditional debug logging in `textColor(for:)` hot path
-- **SyntaxHighlightingTextView**: Fixed `isApplyingHighlighting` race condition with NSLock
-- **EditorCore**: Fixed `saveActiveTab` race condition with cancellable DispatchWorkItem
-- **SSHManager**: `print()`→`AppLogger.ssh.warning()` for RSA key warnings
-- **CommandPaletteView**: Fixed force-unwrap `command.shortcut!`→`command.shortcut ?? ""`
-- **TerminalView**: Wired `.clearTerminal` notification
+**Major features added:**
+- **Inline AI Suggestions**: Wired InlineSuggestionManager + InlineSuggestionView into editor — ghost text overlay, Tab to accept, 1.5s debounced trigger
+- **Language-Aware Autocomplete**: Keywords for Swift/JS/TS/Python/Go/Rust, member completions for JS (Array/String/console/Promise) and Python (list/str/dict)
+- **Workspace-Aware Hover Info**: Searches open tabs for symbol definitions + doc comments, falls back to built-in stdlib docs
+- **Go-to-Definition**: Wired NavigationManager symbol indexing — indexes on tab open + debounced on text change, searches all open tabs
+- **Scroll-Triggered Syntax Highlighting**: Large files (>50k chars) now re-highlight visible range on scroll, not just on edit
+- **Extended Tree-sitter Mappings**: Template engines→HTML, SASS/LESS→CSS, GraphQL→JS, explicit TODO comments for missing grammars
+
+**Performance fixes:**
+- LineNumbers scroll: O(n)→O(viewport) with binary search
+- Cursor position: O(n)→O(log n) with cached newline index
+- Debug logging removed from hot path
+- filteredEntries cached, localSaves capped at 500
+
+**Bug fixes (all 14 original issues RESOLVED):**
+- Build errors (GitManager NativeGitReader, ContentView scope)
+- Race conditions (isApplyingHighlighting NSLock, saveActiveTab DispatchWorkItem)
+- Editor: keyboard shortcuts wired, indent uses dynamic tab size, block comments for HTML/CSS, bracket colorization skips strings/comments
+- Git: remote branch checkout, stash list populated, packed-refs cleanup
+- UI: regex error display, NavigationStack, dynamic autocomplete position
+- replaceAll error feedback, SettingsView dead code removal (~145 lines)
+
+**🟢 All 14 original documented issues: RESOLVED ✅**
+
+**Remaining feature gaps (not bugs):**
+- Extensions system is UI-only (no real loading — iOS sandbox limitation)
+- No DAP debugger protocol (but real JS + LLDB/GDB over SSH work)
+- SSH passphrase-protected keys use wrong KDF (bcrypt-pbkdf approximated with PBKDF2)
+- Remote→local port forwarding is stub
+- Code folding is stub in Runestone (API not available in 0.5.x)
+- No true multi-cursor support
 
 ---
 
