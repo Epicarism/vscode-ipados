@@ -1,14 +1,14 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 4:45 AM GMT+1
+## Last Updated: March 18, 2026 - 5:17 AM GMT+1
 
 ---
 
-## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings)
+## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 1 warning — NIO library Sendable conformance, unfixable)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM → 4:45 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 5:17 AM):
 
-**Commits:** `aa3d42a` → `48d0fbf` (12 commits)
+**Commits:** `aa3d42a` → `d4645a7` (17 commits)
 
 **Major features added:**
 - **Inline AI Suggestions**: Wired InlineSuggestionManager + InlineSuggestionView into editor — ghost text overlay, Tab to accept, 1.5s debounced trigger
@@ -17,12 +17,18 @@
 - **Go-to-Definition**: Wired NavigationManager symbol indexing — indexes on tab open + debounced on text change, searches all open tabs
 - **Scroll-Triggered Syntax Highlighting**: Large files (>50k chars) now re-highlight visible range on scroll, not just on edit
 - **Extended Tree-sitter Mappings**: Template engines→HTML, SASS/LESS→CSS, GraphQL→JS, explicit TODO comments for missing grammars
+- **Conditional Breakpoints in JS Debugger**: Breakpoint conditions evaluated in JS context; falsy results skip the breakpoint
+- **Chunked SFTP Uploads (up to 5MB)**: Files >100KB uploaded in 64KB base64 chunks with progress reporting
+- **Emmet JSX/TSX/Vue/Svelte Support**: Language detection extended for React/Vue/Svelte/PHP/ERB files
+- **Task stderr distinction**: Task output panel now correctly marks stderr output separately from stdout
 
 **Performance fixes:**
 - LineNumbers scroll: O(n)→O(viewport) with binary search
 - Cursor position: O(n)→O(log n) with cached newline index
 - Debug logging removed from hot path
 - filteredEntries cached, localSaves capped at 500
+- CodeFoldingManager: regex patterns compiled once as static properties (was recompiling per line)
+- SearchManager: 10k results cap prevents OOM on broad searches
 
 **Bug fixes (all 14 original issues RESOLVED):**
 - Build errors (GitManager NativeGitReader, ContentView scope)
@@ -31,6 +37,10 @@
 - Git: remote branch checkout, stash list populated, packed-refs cleanup
 - UI: regex error display, NavigationStack, dynamic autocomplete position
 - replaceAll error feedback, SettingsView dead code removal (~145 lines)
+- All compiler warnings resolved: SSHManager infinite recursion, HapticManager @MainActor, unused results, deprecated onChange
+- SearchManager: 10MB size guard added to replace (was missing, could OOM)
+- SSHManager: UInt128 operator no longer causes infinite recursion
+- HapticManager: @MainActor isolation for UIKit feedback generators
 
 **🟢 All 14 original documented issues: RESOLVED ✅**
 
@@ -39,7 +49,7 @@
 - No DAP debugger protocol (but real JS + LLDB/GDB over SSH work)
 - SSH passphrase-protected keys use wrong KDF (bcrypt-pbkdf approximated with PBKDF2)
 - Remote→local port forwarding is stub
-- Code folding is stub in Runestone (API not available in 0.5.x)
+- Code folding has working detection engine (933 lines!) but Runestone 0.5.x TextKit integration is limited
 - No true multi-cursor support
 
 ---
