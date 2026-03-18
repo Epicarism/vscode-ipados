@@ -1,17 +1,17 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 5:17 AM GMT+1
+## Last Updated: March 18, 2026 - 5:44 AM GMT+1
 
 ---
 
-## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 1 warning — NIO library Sendable conformance, unfixable)
+## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings from our code)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM → 5:17 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 5:44 AM):
 
-**Commits:** `aa3d42a` → `d4645a7` (17 commits)
+**Commits:** `aa3d42a` → `e46dd9e` (22 commits)
 
 **Major features added:**
-- **Inline AI Suggestions**: Wired InlineSuggestionManager + InlineSuggestionView into editor — ghost text overlay, Tab to accept, 1.5s debounced trigger
+- **Inline AI Suggestions**: Ghost text overlay, Tab to accept, partial word-by-word accept (Ctrl+Right), Escape to dismiss, cursor-move auto-dismiss
 - **Language-Aware Autocomplete**: Keywords for Swift/JS/TS/Python/Go/Rust, member completions for JS (Array/String/console/Promise) and Python (list/str/dict)
 - **Workspace-Aware Hover Info**: Searches open tabs for symbol definitions + doc comments, falls back to built-in stdlib docs
 - **Go-to-Definition**: Wired NavigationManager symbol indexing — indexes on tab open + debounced on text change, searches all open tabs
@@ -21,6 +21,10 @@
 - **Chunked SFTP Uploads (up to 5MB)**: Files >100KB uploaded in 64KB base64 chunks with progress reporting
 - **Emmet JSX/TSX/Vue/Svelte Support**: Language detection extended for React/Vue/Svelte/PHP/ERB files
 - **Task stderr distinction**: Task output panel now correctly marks stderr output separately from stdout
+- **Sidebar drag-to-resize**: 150–500px range with drag handle between sidebar and editor
+- **Editor undo grouping**: All 9 editor actions (toggle comment, delete/move/duplicate/join lines, indent/outdent) wrapped in undo groups for atomic Cmd+Z
+- **Format Document undoable**: Cmd+Z reverses formatting, Cmd+Shift+Z redoes
+- **Autocomplete clears on tab switch**: Prevents stale popup from previous file
 
 **Performance fixes:**
 - LineNumbers scroll: O(n)→O(viewport) with binary search
