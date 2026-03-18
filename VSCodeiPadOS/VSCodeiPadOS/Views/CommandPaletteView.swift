@@ -37,6 +37,7 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Open Folder", shortcut: "⌘⇧O", icon: "folder", category: .file) {
+                NotificationCenter.default.post(name: .openFolder, object: nil)
                 dismiss()
             },
             Command(name: "Save", shortcut: "⌘S", icon: "square.and.arrow.down", category: .file) {
@@ -44,6 +45,7 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Save As...", shortcut: "⌘⇧S", icon: "square.and.arrow.down.on.square", category: .file) {
+                NotificationCenter.default.post(name: .saveAs, object: nil)
                 dismiss()
             },
             Command(name: "Save All", shortcut: "⌘⌥S", icon: "square.and.arrow.down.fill", category: .file) {
@@ -71,12 +73,15 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Cut", shortcut: "⌘X", icon: "scissors", category: .edit) {
+                NotificationCenter.default.post(name: .performCut, object: nil)
                 dismiss()
             },
             Command(name: "Copy", shortcut: "⌘C", icon: "doc.on.doc", category: .edit) {
+                NotificationCenter.default.post(name: .performCopy, object: nil)
                 dismiss()
             },
             Command(name: "Paste", shortcut: "⌘V", icon: "doc.on.clipboard", category: .edit) {
+                NotificationCenter.default.post(name: .performPaste, object: nil)
                 dismiss()
             },
             Command(name: "Find", shortcut: "⌘F", icon: "magnifyingglass", category: .edit) {
@@ -147,9 +152,11 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Expand Selection", shortcut: "⌃⇧⌘→", icon: "arrow.up.left.and.arrow.down.right", category: .selection) {
+                NotificationCenter.default.post(name: .expandSelection, object: nil)
                 dismiss()
             },
             Command(name: "Shrink Selection", shortcut: "⌃⇧⌘←", icon: "arrow.down.right.and.arrow.up.left", category: .selection) {
+                NotificationCenter.default.post(name: .shrinkSelection, object: nil)
                 dismiss()
             },
             Command(name: "Add Cursor Above", shortcut: "⌥⌘↑", icon: "cursorarrow.and.square.on.square.dashed", category: .selection) {
@@ -262,9 +269,11 @@ struct CommandPaletteView: View {
                 dismiss()
             },
             Command(name: "Color Theme", shortcut: nil, icon: "paintpalette", category: .preferences) {
+                showSettings = true
                 dismiss()
             },
             Command(name: "File Icon Theme", shortcut: nil, icon: "doc.badge.gearshape", category: .preferences) {
+                showSettings = true
                 dismiss()
             },
 

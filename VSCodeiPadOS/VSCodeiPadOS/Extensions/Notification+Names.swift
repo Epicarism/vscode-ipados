@@ -258,6 +258,23 @@ extension Notification.Name {
     /// Show the Problems panel.
     static let showProblems = Notification.Name("ShowProblems")
 
+    // MARK: - Clipboard Operations (Command Palette)
+
+    /// Cut the current selection.
+    static let performCut = Notification.Name("PerformCut")
+    /// Copy the current selection.
+    static let performCopy = Notification.Name("PerformCopy")
+    /// Paste from clipboard.
+    static let performPaste = Notification.Name("PerformPaste")
+    /// Expand the current text selection.
+    static let expandSelection = Notification.Name("ExpandSelection")
+    /// Shrink the current text selection.
+    static let shrinkSelection = Notification.Name("ShrinkSelection")
+    /// Open a folder picker.
+    static let openFolder = Notification.Name("OpenFolder")
+    /// Save current file with a new name/location.
+    static let saveAs = Notification.Name("SaveAs")
+
     // MARK: - Timeline
 
     /// Show the diff for a specific Git commit. userInfo: ["commitSHA": String]

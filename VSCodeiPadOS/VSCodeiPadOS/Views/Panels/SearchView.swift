@@ -1160,9 +1160,8 @@ struct MatchRow: View {
                     .foregroundColor(.secondary)
                     .frame(width: 40, alignment: .trailing)
                 
-                Text(match.text)
+                highlightedMatchText(match.text, ranges: match.matches)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 
@@ -1177,6 +1176,40 @@ struct MatchRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Line \(match.lineNumber): \(match.text)")
         .accessibilityHint("Double tap to open this match")
+    }
+    
+    /// Build an attributed Text view with match ranges highlighted
+    private func highlightedMatchText(_ text: String, ranges: [Range<String.Index>]) -> Text {
+        guard !ranges.isEmpty else {
+            return Text(text).foregroundColor(.primary)
+        }
+        
+        var result = Text("")
+        var currentIndex = text.startIndex
+        
+        for range in ranges {
+            // Clamp range to valid bounds
+            let safeStart = max(range.lowerBound, text.startIndex)
+            let safeEnd = min(range.upperBound, text.endIndex)
+            guard safeStart < safeEnd, safeStart >= currentIndex else { continue }
+            
+            // Text before match
+            if currentIndex < safeStart {
+                result = result + Text(text[currentIndex..<safeStart]).foregroundColor(.primary)
+            }
+            // Highlighted match — use bold + accent color (Text concat only supports Text modifiers)
+            result = result + Text(text[safeStart..<safeEnd])
+                .bold()
+                .foregroundColor(.accentColor)
+            currentIndex = safeEnd
+        }
+        
+        // Remaining text after last match
+        if currentIndex < text.endIndex {
+            result = result + Text(text[currentIndex..<text.endIndex]).foregroundColor(.primary)
+        }
+        
+        return result
     }
 }
 
