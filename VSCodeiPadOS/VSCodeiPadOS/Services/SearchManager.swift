@@ -237,10 +237,14 @@ public final class SearchManager: ObservableObject {
                 let total = max(resolvedFiles.count, 1)
 
                 var aggregated: [FileMatch] = []
+                var totalMatchCount = 0
+                let maxResults = 10_000
                 for (idx, url) in resolvedFiles.enumerated() {
                     try Task.checkCancellation()
                     if let match = try self.searchFile(url: url, rootURL: rootURL, query: q), !match.matches.isEmpty {
                         aggregated.append(match)
+                        totalMatchCount += match.matches.count
+                        if totalMatchCount >= maxResults { break }
                     }
                     let p = Double(idx + 1) / Double(total)
                     await MainActor.run {
@@ -501,6 +505,11 @@ public final class SearchManager: ObservableObject {
     nonisolated private func replaceInFile(url: URL,
                                compiled: CompiledPattern,
                                replacement: String) throws -> (changed: Bool, replacements: Int) {
+        // Skip files larger than 10MB to prevent OOM during replace
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        if let fileSize = attrs?[.size] as? Int, fileSize > 10_000_000 {
+            return (false, 0)
+        }
         let data: Data
         do {
             data = try Data(contentsOf: url)

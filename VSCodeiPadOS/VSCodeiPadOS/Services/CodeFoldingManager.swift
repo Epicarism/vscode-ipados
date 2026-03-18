@@ -81,8 +81,18 @@ final class CodeFoldingManager: ObservableObject {
     private var currentFilePath: String?
     private var currentFileId: String?
     
+    // MARK: - Cached Regex Patterns (compiled once)
+    private static let modifierPrefix = #"^(?:\s*@\w+(?:\([^\)]*\))?\s+)*(?:\s*(?:public|private|internal|fileprivate|open|final|indirect|lazy|static|override|mutating|nonmutating)\s+)*"#
+    private static let classRegex = try? NSRegularExpression(pattern: modifierPrefix + #"class\s+(?!func\b|var\b|let\b)([A-Za-z_]\w*)"#)
+    private static let actorRegex = try? NSRegularExpression(pattern: modifierPrefix + #"actor\s+([A-Za-z_]\w*)"#)
+    private static let structRegex = try? NSRegularExpression(pattern: modifierPrefix + #"struct\s+([A-Za-z_]\w*)"#)
+    private static let enumRegex = try? NSRegularExpression(pattern: modifierPrefix + #"enum\s+([A-Za-z_]\w*)"#)
+    private static let protocolRegex = try? NSRegularExpression(pattern: modifierPrefix + #"protocol\s+([A-Za-z_]\w*)"#)
+    private static let extensionRegex = try? NSRegularExpression(pattern: modifierPrefix + #"extension\s+([A-Za-z_][A-Za-z0-9_\.]*)"#)
+    private static let funcRegex = try? NSRegularExpression(pattern: #"func\s+(\w+)"#)
+
     // MARK: - Enhanced Fold Detection
-    
+
     /// Detects all foldable regions in the given code
     func detectFoldableRegions(in code: String, filePath: String? = nil) {
         self.currentFilePath = filePath
@@ -349,8 +359,8 @@ final class CodeFoldingManager: ObservableObject {
     }
     
     private func detectDeclaration(_ line: String) -> (type: FoldRegion.FoldType, label: String)? {
-        func matchName(pattern: String) -> String? {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+        func matchName(regex: NSRegularExpression?) -> String? {
+            guard let regex else { return nil }
             guard let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
                   match.numberOfRanges >= 2,
                   let r = Range(match.range(at: 1), in: line)
@@ -358,37 +368,12 @@ final class CodeFoldingManager: ObservableObject {
             return String(line[r])
         }
 
-        // Allow leading attributes like "@MainActor", "@available(...)"
-        // Allow common modifiers in any order (best-effort).
-        let prefix = #"^(?:\s*@\w+(?:\([^\)]*\))?\s+)*(?:\s*(?:public|private|internal|fileprivate|open|final|indirect|lazy|static|override|mutating|nonmutating)\s+)*"#
-
-        // IMPORTANT: avoid treating "class func"/"class var" as a type declaration.
-        if let name = matchName(pattern: prefix + #"class\s+(?!func\b|var\b|let\b)([A-Za-z_]\w*)"#) {
-            return (.classOrStruct, name)
-        }
-
-        // Actor (Swift concurrency) – fold like a class/struct
-        if let name = matchName(pattern: prefix + #"actor\s+([A-Za-z_]\w*)"#) {
-            return (.classOrStruct, name)
-        }
-
-        if let name = matchName(pattern: prefix + #"struct\s+([A-Za-z_]\w*)"#) {
-            return (.classOrStruct, name)
-        }
-
-        if let name = matchName(pattern: prefix + #"enum\s+([A-Za-z_]\w*)"#) {
-            return (.enumDeclaration, name)
-        }
-
-        if let name = matchName(pattern: prefix + #"protocol\s+([A-Za-z_]\w*)"#) {
-            return (.protocolDeclaration, name)
-        }
-
-        // Extensions can include dotted names (Foo.Bar)
-        if let name = matchName(pattern: prefix + #"extension\s+([A-Za-z_][A-Za-z0-9_\.]*)"#) {
-            return (.extension, name)
-        }
-
+        if let name = matchName(regex: Self.classRegex) { return (.classOrStruct, name) }
+        if let name = matchName(regex: Self.actorRegex) { return (.classOrStruct, name) }
+        if let name = matchName(regex: Self.structRegex) { return (.classOrStruct, name) }
+        if let name = matchName(regex: Self.enumRegex) { return (.enumDeclaration, name) }
+        if let name = matchName(regex: Self.protocolRegex) { return (.protocolDeclaration, name) }
+        if let name = matchName(regex: Self.extensionRegex) { return (.extension, name) }
         return nil
     }
     
@@ -398,13 +383,10 @@ final class CodeFoldingManager: ObservableObject {
         
         // Check for 'func' keyword
         if line.contains("func ") {
-            // Extract function name
-            let funcPattern = "func\\s+(\\w+)"
-            if let regex = try? NSRegularExpression(pattern: funcPattern),
+            if let regex = Self.funcRegex,
                let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
                let nameRange = Range(match.range(at: 1), in: line) {
                 let functionName = String(line[nameRange])
-                // Check for parameters to create label
                 if let parenStart = line.firstIndex(of: "("), let parenEnd = line.firstIndex(of: ")") {
                     let params = String(line[parenStart...parenEnd])
                     return "\(functionName)\(params)"

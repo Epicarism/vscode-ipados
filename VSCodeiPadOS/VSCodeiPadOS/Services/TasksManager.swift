@@ -621,9 +621,9 @@ final class TasksManager: ObservableObject {
             let start = Date()
 
             do {
-                try Self.runWithProcess(task: task, workspaceRootURL: rootURL) { chunk in
+                try Self.runWithProcess(task: task, workspaceRootURL: rootURL) { chunk, streamType in
                     Task { @MainActor in
-                        TaskOutputPanelManager.shared.append(chunk, to: .tasks)
+                        TaskOutputPanelManager.shared.append(chunk, to: .tasks, streamType: streamType)
                     }
                 }
 
@@ -647,7 +647,7 @@ final class TasksManager: ObservableObject {
     nonisolated private static func runWithProcess(
         task: VSCodeTask,
         workspaceRootURL: URL?,
-        onOutput: @escaping (String) -> Void
+        onOutput: @escaping (String, OutputStreamType) -> Void
     ) throws {
 #if os(macOS)
         let process = Process()
@@ -682,20 +682,20 @@ final class TasksManager: ObservableObject {
         process.standardError = stderrPipe
 
         let lock = NSLock()
-        func forward(_ data: Data) {
+        func forward(_ data: Data, streamType: OutputStreamType) {
             guard !data.isEmpty else { return }
             if let s = String(data: data, encoding: .utf8), !s.isEmpty {
                 lock.lock()
-                onOutput(s)
+                onOutput(s, streamType)
                 lock.unlock()
             }
         }
 
         stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            forward(handle.availableData)
+            forward(handle.availableData, streamType: .stdout)
         }
         stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            forward(handle.availableData)
+            forward(handle.availableData, streamType: .stderr)
         }
 
         try process.run()
@@ -717,7 +717,7 @@ final class TasksManager: ObservableObject {
         }
 #else
         // Process execution not available on iOS
-        onOutput("Error: Task execution is not available on iOS\n")
+        onOutput("Error: Task execution is not available on iOS\n", .stderr)
         throw NSError(
             domain: "TasksManager",
             code: 1,

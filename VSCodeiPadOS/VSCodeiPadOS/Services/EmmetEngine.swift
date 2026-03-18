@@ -40,9 +40,13 @@ public final class EmmetEngine: @unchecked Sendable {
     private func detectLanguage(for filename: String) -> Language {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
-        case "html", "htm", "xhtml", "xml", "svg": return .html
-        case "css", "scss", "less":                 return .css
-        default:                                    return .unknown
+        case "html", "htm", "xhtml", "xml", "svg",
+             "jsx", "tsx", "vue", "svelte", "php", "erb":
+            return .html
+        case "css", "scss", "less", "sass", "styl", "postcss":
+            return .css
+        default:
+            return .unknown
         }
     }
 }
