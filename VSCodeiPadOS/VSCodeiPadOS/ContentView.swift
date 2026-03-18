@@ -350,6 +350,15 @@ struct ContentView: View {
                     .environmentObject(themeManager)
                     .environmentObject(editorCore)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openFolder)) { _ in
+                showingFolderPicker = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .saveAs)) { _ in
+                if let tab = editorCore.activeTab {
+                    editorCore.saveAsContent = tab.content
+                    editorCore.showSaveAsDialog = true
+                }
+            }
     }
 
     @ViewBuilder
@@ -479,6 +488,15 @@ struct ContentView: View {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .selectAll)) { _ in
                     UIApplication.shared.sendAction(#selector(UIResponder.selectAll(_:)), to: nil, from: nil, for: nil)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .performCut)) { _ in
+                    UIApplication.shared.sendAction(#selector(UIResponder.cut(_:)), to: nil, from: nil, for: nil)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .performCopy)) { _ in
+                    UIApplication.shared.sendAction(#selector(UIResponder.copy(_:)), to: nil, from: nil, for: nil)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .performPaste)) { _ in
+                    UIApplication.shared.sendAction(#selector(UIResponder.paste(_:)), to: nil, from: nil, for: nil)
                 }
         }
     }
