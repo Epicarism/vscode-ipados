@@ -336,18 +336,21 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         // Special-case filenames without extensions
         if lastComponent == "dockerfile" || lastComponent.hasPrefix("dockerfile.") {
-            return nil // Bash support not in package list yet
+            return nil // No Bash/Dockerfile grammar available in current package set
         }
         if lastComponent == ".env" || lastComponent.hasPrefix(".env.") {
-            return nil // Plain text
+            return nil // No dotenv grammar available; plain text
         }
         if lastComponent == "makefile" || lastComponent == "gnumakefile" {
-            return nil // Bash support not in package list yet
+            return nil // No Makefile grammar available in current package set
         }
         if lastComponent == "podfile" || lastComponent == "gemfile" {
-            return nil // Ruby support not in package list yet
+            return nil // No Ruby grammar available in current package set
         }
-        if lastComponent == "package.json" || lastComponent == "tsconfig.json" {
+        if lastComponent == "package.json" || lastComponent == "tsconfig.json"
+            || lastComponent == "tsconfig.base.json" || lastComponent == "jsconfig.json"
+            || lastComponent == ".babelrc" || lastComponent == ".eslintrc"
+            || lastComponent == ".prettierrc" {
             return TreeSitterLanguage.json
         }
         
@@ -360,7 +363,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         case "js", "mjs", "cjs", "jsx":
             return TreeSitterLanguage.javaScript
         
-        // TypeScript - use JavaScript as fallback
+        // TypeScript - use JavaScript grammar (closest available match; captures keywords/strings/comments)
         case "ts", "mts", "cts", "tsx":
             return TreeSitterLanguage.javaScript
         
@@ -376,21 +379,83 @@ struct RunestoneEditorView: UIViewRepresentable {
         case "rs":
             return TreeSitterLanguage.rust
         
-        // JSON
-        case "json", "jsonc":
+        // JSON / JSON-like config formats
+        case "json", "jsonc", "json5":
             return TreeSitterLanguage.json
         
-        // HTML
+        // HTML / HTML-like templates
         case "html", "htm", "xhtml":
             return TreeSitterLanguage.html
         
+        // Jinja/Django/EJS templates - use HTML as closest match
+        case "jinja", "jinja2", "j2", "ejs", "hbs", "handlebars", "mustache":
+            return TreeSitterLanguage.html
+        
         // CSS
-        case "css", "scss":
+        case "css":
             return TreeSitterLanguage.css
         
-        // XML - use HTML as fallback
-        case "xml", "plist", "svg":
+        // CSS preprocessors - use CSS grammar (captures selectors/properties/values)
+        case "scss", "sass", "less":
+            return TreeSitterLanguage.css
+        
+        // XML / XML-like formats - use HTML grammar (closest available match)
+        case "xml", "plist", "svg", "xsl", "xslt", "xaml", "wsdl", "rss", "atom":
             return TreeSitterLanguage.html
+        
+        // Shell scripts - no shell grammar available; plain text
+        // To add: import TreeSitterBashRunestone and return TreeSitterLanguage.bash
+        case "sh", "bash", "zsh", "fish", "ksh", "csh", "tcsh", "command":
+            return nil
+        
+        // Ruby - no grammar available; plain text
+        // To add: import TreeSitterRubyRunestone and return TreeSitterLanguage.ruby
+        case "rb", "rake", "gemspec", "podspec", "rbw":
+            return nil
+        
+        // Java - no grammar available; plain text
+        // To add: import TreeSitterJavaRunestone and return TreeSitterLanguage.java
+        case "java":
+            return nil
+        
+        // Kotlin - no grammar available; plain text
+        // To add: import TreeSitterKotlinRunestone and return TreeSitterLanguage.kotlin
+        case "kt", "kts":
+            return nil
+        
+        // C / C++ - no grammar available; plain text
+        // To add: import TreeSitterCRunestone / TreeSitterCPPRunestone
+        case "c", "h", "cpp", "cc", "cxx", "c++", "hpp", "hxx", "hh":
+            return nil
+        
+        // C# - no grammar available; plain text
+        // To add: import TreeSitterCSharpRunestone and return TreeSitterLanguage.cSharp
+        case "cs":
+            return nil
+        
+        // PHP - no grammar available; plain text
+        // To add: import TreeSitterPHPRunestone and return TreeSitterLanguage.php
+        case "php", "phtml", "php3", "php4", "php5", "php7", "php8":
+            return nil
+        
+        // YAML - no grammar available; plain text
+        // To add: import TreeSitterYAMLRunestone and return TreeSitterLanguage.yaml
+        case "yaml", "yml":
+            return nil
+        
+        // TOML - no grammar available; plain text
+        // To add: import TreeSitterTOMLRunestone and return TreeSitterLanguage.toml
+        case "toml":
+            return nil
+        
+        // Markdown - no grammar available; plain text
+        // To add: import TreeSitterMarkdownRunestone and return TreeSitterLanguage.markdown
+        case "md", "markdown", "mdx":
+            return nil
+        
+        // GraphQL - use JavaScript grammar (shares enough syntax: braces, strings, comments)
+        case "graphql", "gql":
+            return TreeSitterLanguage.javaScript
         
         // Default - no syntax highlighting
         default:

@@ -526,22 +526,20 @@ final class GitManager: ObservableObject {
     func diffWorkingCopyToHEAD(path: String, kind: GitChangeKind) async -> DiffFile? {
         guard let repoURL = workingDirectory else { return nil }
         
-        return await Task.detached {
-            guard let reader = NativeGitReader(repositoryURL: repoURL) else { return nil }
-            
-            let headSha = reader.headSHA()
-            let oldText = reader.fileContentsString(atPath: path, commitSHA: headSha) ?? ""
-            
-            let workingURL = repoURL.appendingPathComponent(path)
-            let newText = (try? String(contentsOf: workingURL, encoding: .utf8)) ?? ""
-            
-            return DiffBuilder.build(
-                fileName: path,
-                status: kind.rawValue,
-                old: oldText,
-                new: newText
-            )
-        }.value
+        guard let reader = NativeGitReader(repositoryURL: repoURL) else { return nil }
+        
+        let headSha = reader.headSHA()
+        let oldText = reader.fileContentsString(atPath: path, commitSHA: headSha) ?? ""
+        
+        let workingURL = repoURL.appendingPathComponent(path)
+        let newText = (try? String(contentsOf: workingURL, encoding: .utf8)) ?? ""
+        
+        return DiffBuilder.build(
+            fileName: path,
+            status: kind.rawValue,
+            old: oldText,
+            new: newText
+        )
     }
     
     func stage(file: String) async throws {
