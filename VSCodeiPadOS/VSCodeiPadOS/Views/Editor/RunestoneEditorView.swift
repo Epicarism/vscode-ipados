@@ -1184,6 +1184,12 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
 
         private func updateBracketHighlight(in textView: TextView) {
+            // Respect bracketPairColorization setting
+            guard UserDefaults.standard.object(forKey: "bracketPairColorization") as? Bool ?? true else {
+                bracketHighlightLayer.path = nil
+                bracketGuideLayer.path = nil
+                return
+            }
             // Make sure the layer is installed
             guard bracketHighlightLayer.superlayer != nil else { return }
 

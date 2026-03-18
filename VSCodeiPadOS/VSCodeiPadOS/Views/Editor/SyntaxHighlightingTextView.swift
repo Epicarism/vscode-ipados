@@ -2118,8 +2118,10 @@ struct VSCodeSyntaxHighlighter {
         case .plainText: break
         }
         
-        // FEAT-038: Bracket Pair Colorization (applied last)
-        highlightBracketPairs(attributed, text: text)
+        // FEAT-038: Bracket Pair Colorization (applied last, respects Settings toggle)
+        if UserDefaults.standard.object(forKey: "bracketPairColorization") as? Bool ?? true {
+            highlightBracketPairs(attributed, text: text)
+        }
         
         return attributed
     }
