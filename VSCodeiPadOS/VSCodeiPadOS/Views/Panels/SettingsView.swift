@@ -84,6 +84,7 @@ struct SettingsView: View {
     @ObservedObject var themeManager: ThemeManager
     @State private var searchText = ""
     @State private var selectedCategory: SettingsCategory? = .editor
+    @Environment(\.dismiss) private var dismiss
     
     init(themeManager: ThemeManager = ThemeManager.shared) {
         self.themeManager = themeManager
@@ -130,6 +131,12 @@ struct SettingsView: View {
                 }
             }
             .searchable(text: $searchText, placement: .sidebar)
+            .background(
+                Button("") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .opacity(0)
+                    .allowsHitTesting(false)
+            )
         } else {
             NavigationView {
                 List(SettingsCategory.allCases, selection: $selectedCategory) {
@@ -149,6 +156,12 @@ struct SettingsView: View {
                 SettingsDetailView(category: .editor, searchText: searchText, themeManager: themeManager)
             }
             .searchable(text: $searchText)
+            .background(
+                Button("") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .opacity(0)
+                    .allowsHitTesting(false)
+            )
         }
     }
 }
