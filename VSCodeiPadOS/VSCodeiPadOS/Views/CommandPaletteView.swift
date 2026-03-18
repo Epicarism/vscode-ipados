@@ -321,7 +321,46 @@ struct CommandPaletteView: View {
         ]
     }
 
-    // MARK: - Filtering: Case-insensitive substring matching on command titles
+    // MARK: - Fuzzy Search
+    
+    /// Fuzzy subsequence match: all query chars must appear in order in target.
+    /// Returns (matches, score) where higher score = better match.
+    private func fuzzyMatch(query: String, target: String) -> (matches: Bool, score: Int) {
+        let queryChars = Array(query.lowercased())
+        let targetLower = target.lowercased()
+        let targetChars = Array(targetLower)
+        guard !queryChars.isEmpty else { return (true, 0) }
+        
+        var qi = 0
+        var score = 0
+        var consecutive = 0
+        var lastMatchIdx = -2
+        
+        for (ti, tc) in targetChars.enumerated() {
+            if qi < queryChars.count && tc == queryChars[qi] {
+                // Prefix bonus: first char matches first char of target
+                if qi == 0 && ti == 0 { score += 10 }
+                // Word boundary bonus: char after space/separator
+                if ti > 0 {
+                    let prev = targetChars[ti - 1]
+                    if prev == " " || prev == ":" || prev == "-" || prev == "/" {
+                        score += 5
+                    }
+                }
+                // Consecutive match bonus
+                if ti == lastMatchIdx + 1 {
+                    consecutive += 1
+                    score += consecutive * 2
+                } else {
+                    consecutive = 0
+                }
+                lastMatchIdx = ti
+                qi += 1
+                score += 1 // base point per matched char
+            }
+        }
+        return (qi == queryChars.count, score)
+    }
 
     private var filteredCommands: [Command] {
         if searchText.isEmpty {
@@ -337,20 +376,28 @@ struct CommandPaletteView: View {
             return recent + others
         }
 
-        let query = searchText.lowercased().trimmingCharacters(in: .whitespaces)
+        let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return allCommands }
 
-        // Case-insensitive substring match on the command title (name).
-        // Prefix matches rank first, then other substring matches.
-        let prefixMatches = allCommands.filter { $0.name.lowercased().hasPrefix(query) }
-        let containsMatches = allCommands.filter {
-            !$0.name.lowercased().hasPrefix(query) &&
-            ($0.name.lowercased().contains(query) ||
-             ($0.shortcut?.lowercased().contains(query) ?? false) ||
-             $0.category.rawValue.lowercased().contains(query))
+        // Fuzzy match against name, shortcut, and category
+        var scored: [(command: Command, score: Int)] = []
+        for cmd in allCommands {
+            let (nameMatch, nameScore) = fuzzyMatch(query: query, target: cmd.name)
+            let (shortcutMatch, shortcutScore) = cmd.shortcut.map { fuzzyMatch(query: query, target: $0) } ?? (false, 0)
+            let (catMatch, catScore) = fuzzyMatch(query: query, target: cmd.category.rawValue)
+            
+            if nameMatch || shortcutMatch || catMatch {
+                // Name match gets priority, shortcut/category are secondary
+                let bestScore = max(nameScore, max(shortcutScore - 3, catScore - 5))
+                scored.append((cmd, bestScore))
+            }
         }
-
-        return prefixMatches + containsMatches
+        
+        // Sort by score descending, then alphabetically for ties
+        return scored.sorted { a, b in
+            if a.score != b.score { return a.score > b.score }
+            return a.command.name < b.command.name
+        }.map { $0.command }
     }
 
     private func dismiss() {

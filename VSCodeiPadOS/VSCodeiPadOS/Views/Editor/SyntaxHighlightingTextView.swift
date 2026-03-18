@@ -411,6 +411,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         // PERF: Debounce bracket matching to avoid O(n) scans on every cursor move
         private var bracketMatchDebouncer: Timer?
         
+        // PERF: Cached newline offsets for O(log n) line/column lookups
+        private var cachedNewlineOffsets: [Int] = []
+        
         // PERFORMANCE: Large file highlighting optimization
         // Files larger than this threshold get deferred full highlighting
         private let largeFileThreshold = 10000  // 10k characters
@@ -825,10 +828,22 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         func updateLineCount(_ textView: UITextView) {
             let text = textView.text ?? ""
-            // PERF: Single Objective-C call — far faster than iterating every Swift Character
-            let lineCount = (text as NSString).components(separatedBy: "\n").count
+            // PERF: Single pass — count newlines via UTF-8 bytes (no allocation)
+            // and build offset cache for O(log n) cursor position lookups
+            var count = 1
+            var offsets: [Int] = []
+            offsets.reserveCapacity(text.count / 40) // estimate ~40 chars/line
+            var byteIdx = 0
+            for byte in text.utf8 {
+                if byte == UInt8(ascii: "\n") {
+                    offsets.append(byteIdx)
+                    count += 1
+                }
+                byteIdx += 1
+            }
+            cachedNewlineOffsets = offsets
             DispatchQueue.main.async {
-                self.parent.totalLines = lineCount
+                self.parent.totalLines = count
             }
         }
         
@@ -836,24 +851,38 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             guard let selectedRange = textView.selectedTextRange else { return }
             let cursorPosition = textView.offset(from: textView.beginningOfDocument, to: selectedRange.start)
             
-            // PERF: Count newlines directly instead of creating substring + array
+            // PERF: Binary search on cached newline offsets — O(log n) instead of O(n)
+            let offsets = cachedNewlineOffsets
+            // Convert cursorPosition (UTF-16) to approximate UTF-8 offset for search
+            // Since we built offsets from UTF-8 bytes, we need UTF-8 offset of cursor
             let text = textView.text ?? ""
-            var lineNumber = 1
-            var columnStart = 0
-            
-            let endIndex = text.index(text.startIndex, offsetBy: min(cursorPosition, text.count), limitedBy: text.endIndex) ?? text.endIndex
-            for (i, char) in text[..<endIndex].enumerated() {
-                if char == "\n" {
-                    lineNumber += 1
-                    columnStart = i + 1
-                }
+            let utf8Cursor: Int
+            if cursorPosition <= 0 {
+                utf8Cursor = 0
+            } else if cursorPosition >= (text as NSString).length {
+                utf8Cursor = text.utf8.count
+            } else {
+                let idx = text.index(text.startIndex, offsetBy: min(cursorPosition, text.count), limitedBy: text.endIndex) ?? text.endIndex
+                utf8Cursor = text.utf8.distance(from: text.utf8.startIndex, to: idx.samePosition(in: text.utf8) ?? text.utf8.endIndex)
             }
             
-            let column = cursorPosition - columnStart + 1
+            // Binary search: find how many newline offsets are < utf8Cursor
+            var low = 0, high = offsets.count
+            while low < high {
+                let mid = (low + high) / 2
+                if offsets[mid] < utf8Cursor {
+                    low = mid + 1
+                } else {
+                    high = mid
+                }
+            }
+            let lineNumber = low + 1
+            let columnStart = low > 0 ? offsets[low - 1] + 1 : 0
+            let column = utf8Cursor - columnStart + 1
             
             DispatchQueue.main.async {
                 self.parent.currentLineNumber = lineNumber
-                self.parent.currentColumn = column
+                self.parent.currentColumn = max(1, column)
                 self.parent.cursorIndex = cursorPosition
             }
         }
