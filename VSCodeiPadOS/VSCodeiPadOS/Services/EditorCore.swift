@@ -330,6 +330,7 @@ class EditorCore: ObservableObject {
     /// Serializes save dispatches — cancels any pending save when a new one is requested,
     /// preventing concurrent saves from interleaving and corrupting/losing data.
     private var pendingSaveWorkItem: DispatchWorkItem?
+    private var pendingIndexWorkItem: DispatchWorkItem?
 
     var activeTab: Tab? {
         tabs.first { $0.id == activeTabId }
@@ -1126,6 +1127,8 @@ mod tests {
         tabs.append(newTab)
         activeTabId = newTab.id
         updateLargeFileStatus()
+        // Index symbols for go-to-definition
+        indexActiveTab()
     }
 
     /// Always creates a brand-new untitled tab with a unique name.
@@ -1303,6 +1306,14 @@ mod tests {
         // Trigger auto-save if enabled
         let tabId = tabs[index].id
         Task { @MainActor in AutoSaveManager.shared.contentDidChange(tabId: tabId) }
+        
+        // Debounced symbol indexing for go-to-definition
+        pendingIndexWorkItem?.cancel()
+        let indexWork = DispatchWorkItem { [weak self] in
+            self?.indexActiveTab()
+        }
+        pendingIndexWorkItem = indexWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: indexWork)
     }
 
     func saveActiveTab() {
