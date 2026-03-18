@@ -261,7 +261,7 @@ enum OpenSSHKeyDecryptor {
         var decryptedData = Data(count: encryptedData.count + kCCBlockSizeAES128)
         var numBytesDecrypted: size_t = 0
         
-        var decryptedCount = decryptedData.count
+        let decryptedCount = decryptedData.count
         let result = encryptedData.withUnsafeBytes { encryptedBytes in
             decryptedData.withUnsafeMutableBytes { decryptedBytes in
                 key.withUnsafeBytes { keyBytes in
@@ -340,11 +340,11 @@ final class AES256CTRCryptor {
     
     private func encryptCounter() throws -> Data {
         // Encrypt the counter block using AES-256-ECB
-        var counterData = counter.data
+        let counterData = counter.data
         var encrypted = Data(count: kCCBlockSizeAES128)
         var numBytesEncrypted: size_t = 0
         
-        var encryptedCount = encrypted.count
+        let encryptedCount = encrypted.count
         let counterCount = counterData.count
         let result = counterData.withUnsafeBytes { counterBytes in
             encrypted.withUnsafeMutableBytes { encryptedBytes in
@@ -416,7 +416,7 @@ struct UInt128 {
     }
     
     static func + (lhs: UInt128, rhs: UInt64) -> UInt128 {
-        return lhs + UInt128(Data(count: 16)) + rhs
+        return lhs + UInt128(rhs)
     }
 }
 
@@ -1022,7 +1022,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     /// Clear a cached passphrase
     func clearCachedPassphrase(forKey key: String) {
         passphraseCacheLock.withLock {
-            passphraseCache.removeValue(forKey: key)
+            _ = passphraseCache.removeValue(forKey: key)
         }
     }
     

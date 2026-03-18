@@ -286,7 +286,7 @@ final class GitManager: ObservableObject {
         lastError = nil
         
         // Run all heavy I/O on a background thread
-        refreshTask = Task.detached { [weak self] in
+        refreshTask = Task.detached {
             // Create reader inside detached task (NativeGitReader is not Sendable)
             guard let reader = NativeGitReader(repositoryURL: repoURL) else {
                 return (error: "No git repository found", data: nil as RefreshData?)

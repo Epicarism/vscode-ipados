@@ -136,7 +136,7 @@ struct CloneRepositoryView: View {
                 destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             }
         }
-        .onChange(of: repositoryURL) { _ in
+        .onChange(of: repositoryURL) { _, _ in
             // Reset branch discovery when URL changes
             availableBranches = []
             discoveredDefaultBranch = nil

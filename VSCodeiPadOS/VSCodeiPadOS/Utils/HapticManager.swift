@@ -11,6 +11,7 @@ import UIKit
 
 // MARK: - Haptic Manager
 
+@MainActor
 enum HapticManager {
 
     /// Short physical impact — use for low-weight confirmations (save, sidebar toggle).

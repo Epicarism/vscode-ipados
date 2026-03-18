@@ -208,7 +208,7 @@ struct SwiftTerminalView: UIViewRepresentable {
         
         // Auto-focus the terminal so keyboard activates immediately
         DispatchQueue.main.async {
-            tv.becomeFirstResponder()
+            _ = tv.becomeFirstResponder()
         }
         
         return tv
