@@ -1,14 +1,14 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 5:44 AM GMT+1
+## Last Updated: March 18, 2026 - 5:56 AM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings from our code)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM → 5:44 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 5:56 AM):
 
-**Commits:** `aa3d42a` → `e46dd9e` (22 commits)
+**Commits:** `aa3d42a` → `af8f27c` (24 commits)
 
 **Major features added:**
 - **Inline AI Suggestions**: Ghost text overlay, Tab to accept, partial word-by-word accept (Ctrl+Right), Escape to dismiss, cursor-move auto-dismiss
@@ -25,6 +25,9 @@
 - **Editor undo grouping**: All 9 editor actions (toggle comment, delete/move/duplicate/join lines, indent/outdent) wrapped in undo groups for atomic Cmd+Z
 - **Format Document undoable**: Cmd+Z reverses formatting, Cmd+Shift+Z redoes
 - **Autocomplete clears on tab switch**: Prevents stale popup from previous file
+- **Find Enter→Next**: Enter in search field advances to next result (was re-searching)
+- **Breadcrumb tap no longer copies to clipboard**: Removed accidental UIPasteboard side-effect
+- **Find selection dedup fix**: Find Next/Previous always scrolls to match (even single-result case)
 
 **Performance fixes:**
 - LineNumbers scroll: O(n)→O(viewport) with binary search
@@ -126,3 +129,4 @@
 **[SWE-1 | 5:50 PM]** Starting systematic audit of all features. Build is clean. Will work through services first, then views. Please claim your areas below.
 
 **[SWE-1 | 12:09 AM]** Session 2 complete. ~30 more fixes applied across 18 files. All builds clean. Major highlights: ANSI colors now work in OutputView, GitManager lists no longer flicker, AutoSaveManager handles multi-tab correctly, shell injection protected. See remaining issues list above for next session priorities.
+**[SWE-1 | 5:56 AM]** Session 3 complete. 24 commits, 0 errors, 0 warnings. All 14 original issues resolved. Added inline AI suggestions, language-aware autocomplete, go-to-definition, hover info, conditional breakpoints, chunked SFTP, sidebar resize, undo grouping, format undo, find/replace polish. Build target updated to iPad Pro 13-inch (M5).
