@@ -157,18 +157,18 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Update coordinator's parent reference for current bindings
         context.coordinator.parent = self
         
-        // Update theme if changed
+        // Update theme if changed (consolidated: single makeRunestoneTheme call
+        // even when both theme AND font change in the same SwiftUI update)
         let currentThemeId = ThemeManager.shared.currentTheme.id
-        if context.coordinator.lastThemeId != currentThemeId {
-            context.coordinator.lastThemeId = currentThemeId
+        let themeChanged = context.coordinator.lastThemeId != currentThemeId
+        let fontChanged = context.coordinator.lastFontSize != fontSize
+        if themeChanged || fontChanged {
+            if themeChanged { context.coordinator.lastThemeId = currentThemeId }
+            if fontChanged { context.coordinator.lastFontSize = fontSize }
             textView.theme = makeRunestoneTheme()
-            textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
-        }
-        
-        // Update font size if changed
-        if context.coordinator.lastFontSize != fontSize {
-            context.coordinator.lastFontSize = fontSize
-            textView.theme = makeRunestoneTheme()
+            if themeChanged {
+                textView.backgroundColor = UIColor(ThemeManager.shared.currentTheme.editorBackground)
+            }
         }
         
         // Sync Runestone's built-in line numbers with the user setting
@@ -465,18 +465,13 @@ struct RunestoneEditorView: UIViewRepresentable {
     
     // MARK: - Helpers
     
+    /// PERF: Use the coordinator's cached newline offsets when available,
+    /// otherwise fall back to a quick UTF-8 byte scan (no NSString allocation).
     private func countLines(in text: String) -> Int {
         guard !text.isEmpty else { return 1 }
-        // Use NSString for efficient newline counting (avoids char-by-char iteration)
-        let ns = text as NSString
         var count = 1
-        var searchRange = NSRange(location: 0, length: ns.length)
-        while searchRange.location < ns.length {
-            let found = ns.range(of: "\n", range: searchRange)
-            if found.location == NSNotFound { break }
-            count += 1
-            searchRange.location = found.location + found.length
-            searchRange.length = ns.length - searchRange.location
+        for byte in text.utf8 {
+            if byte == UInt8(ascii: "\n") { count += 1 }
         }
         return count
     }
@@ -629,8 +624,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                     // Update text binding (debounced - only after typing stops)
                     self.parent.text = textView.text
                     
-                    // Update line count
-                    self.parent.totalLines = self.parent.countLines(in: textView.text)
+                    // PERF: Use cached newline offsets instead of re-scanning
+                    self.parent.totalLines = self.newlineOffsets.count + 1
                 }
             }
             
@@ -652,7 +647,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Immediate sync
             MainActor.assumeIsolated {
                 parent.text = textView.text
-                parent.totalLines = parent.countLines(in: textView.text)
+                // PERF: Use cached newline offsets instead of re-scanning
+                parent.totalLines = self.newlineOffsets.count + 1
             }
         }
         

@@ -8,9 +8,24 @@
 import SwiftUI
 import UIKit
 
-/// File-level regex cache: NSRegularExpression is thread-safe once created,
+/// Thread-safe file-level regex cache: NSRegularExpression is thread-safe once created,
 /// so we compile each pattern+options pair exactly once and reuse across all highlight passes.
-private nonisolated(unsafe) var syntaxRegexCache: [String: NSRegularExpression] = [:]
+/// The lock protects the dictionary from concurrent read/write corruption.
+private let _syntaxRegexCacheLock = NSLock()
+private nonisolated(unsafe) var _syntaxRegexCacheStorage: [String: NSRegularExpression] = [:]
+
+/// Thread-safe accessor for the regex cache.
+private func syntaxRegexCacheLookup(_ key: String) -> NSRegularExpression? {
+    _syntaxRegexCacheLock.lock()
+    defer { _syntaxRegexCacheLock.unlock() }
+    return _syntaxRegexCacheStorage[key]
+}
+
+private func syntaxRegexCacheInsert(_ key: String, _ value: NSRegularExpression) {
+    _syntaxRegexCacheLock.lock()
+    defer { _syntaxRegexCacheLock.unlock() }
+    _syntaxRegexCacheStorage[key] = value
+}
 
 /// UITextView wrapper with syntax highlighting support
 struct SyntaxHighlightingTextView: UIViewRepresentable {
@@ -283,16 +298,20 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             }
         }
 
-        // Re-apply tab interval whenever font or tab size may have changed
+        // Re-apply tab interval only when font or tab size has actually changed
         let tabSizeValue = UserDefaults.standard.integer(forKey: "tabSize")
         let resolvedTabSize = tabSizeValue > 0 ? tabSizeValue : 4
-        let monoFont2 = textView.font ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-        let charWidth2 = (" " as NSString).size(withAttributes: [.font: monoFont2]).width
-        let tabInterval2 = CGFloat(resolvedTabSize) * charWidth2
-        let paragraphStyle2 = NSMutableParagraphStyle()
-        paragraphStyle2.tabStops = []
-        paragraphStyle2.defaultTabInterval = tabInterval2
-        textView.typingAttributes[.paragraphStyle] = paragraphStyle2
+        if resolvedTabSize != context.coordinator.lastTabSize || fontSize != context.coordinator.lastFontSize {
+            context.coordinator.lastTabSize = resolvedTabSize
+            context.coordinator.lastFontSize = fontSize
+            let monoFont2 = textView.font ?? UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            let charWidth2 = (" " as NSString).size(withAttributes: [.font: monoFont2]).width
+            let tabInterval2 = CGFloat(resolvedTabSize) * charWidth2
+            let paragraphStyle2 = NSMutableParagraphStyle()
+            paragraphStyle2.tabStops = []
+            paragraphStyle2.defaultTabInterval = tabInterval2
+            textView.typingAttributes[.paragraphStyle] = paragraphStyle2
+        }
         
         // Update text if changed externally
         if textView.text != text {
@@ -429,6 +448,14 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         /// so the newly-visible range is highlighted without a second user gesture.
         private var pendingScrollHighlight = false
         
+        // PERF: Track whether text changed since last highlight to skip redundant
+        // re-highlighting on keyboard appear (textViewDidBeginEditing)
+        private var textChangedSinceLastHighlight = false
+        
+        // PERF: Cache last tab style params to avoid recomputing on every SwiftUI update
+        var lastTabSize: Int = -1
+        var lastFontSize: CGFloat = -1
+
         // PERF: Debounce SwiftUI binding updates to avoid view re-renders on every keystroke
         private var textUpdateWorkItem: DispatchWorkItem?
         private let textUpdateDebounceInterval: TimeInterval = 0.3  // 300ms
@@ -446,8 +473,9 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
         
         func textViewDidBeginEditing(_ textView: UITextView) {
-            // Ensure syntax highlighting is current when user begins editing
-            // This handles cases where text was set but highlighting hasn't run yet
+            // PERF: Only re-highlight if text actually changed since last highlight pass.
+            // Previously this fired a full synchronous regex pass on every keyboard appear.
+            guard textChangedSinceLastHighlight || !hasAppliedInitialHighlighting else { return }
             applySyntaxHighlighting(to: textView)
         }
         
@@ -460,6 +488,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
         
         func textViewDidChange(_ textView: UITextView) {
+            textChangedSinceLastHighlight = true
             // PERF: Debounce SwiftUI binding update — cancel previous, schedule new with 300ms delay.
             // Immediate propagation is handled by textViewDidEndEditing and syncTextImmediately().
             textUpdateWorkItem?.cancel()
@@ -565,6 +594,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     ]
                     
                     self.lastThemeId = theme.id
+                    self.textChangedSinceLastHighlight = false
                     
                     // If a scroll-triggered highlight was requested while we were busy,
                     // re-highlight now for the current visible range.
@@ -842,9 +872,8 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 byteIdx += 1
             }
             cachedNewlineOffsets = offsets
-            DispatchQueue.main.async {
-                self.parent.totalLines = count
-            }
+            // Already on main thread (called from textViewDidChange) — update directly
+            parent.totalLines = count
         }
         
         func updateCursorPosition(_ textView: UITextView) {
@@ -907,25 +936,27 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             guard !isUpdatingFromMinimap else { return }
             isUpdatingFromMinimap = true
             
-            // Optimized: Use NSString enumeration instead of splitting entire text
-            let nsText = textView.text as NSString
-            var currentLine = 0
-            var characterPosition = 0
-            var foundLine = false
+            // PERF: Use cachedNewlineOffsets for O(1) line→offset lookup
+            // instead of O(n) NSString enumeration
+            let text = textView.text ?? ""
+            let nsText = text as NSString
+            let characterPosition: Int
             
-            nsText.enumerateSubstrings(in: NSRange(location: 0, length: nsText.length), options: [.byLines, .substringNotRequired]) { _, substringRange, _, stop in
-                if currentLine == line {
-                    characterPosition = substringRange.location
-                    foundLine = true
-                    stop.pointee = true
-                    return
+            if line <= 0 {
+                characterPosition = 0
+            } else {
+                // cachedNewlineOffsets stores UTF-8 byte offsets of each '\n'
+                // Line N starts right after the (N-1)th newline
+                let offsets = cachedNewlineOffsets
+                if line - 1 < offsets.count {
+                    // Convert UTF-8 byte offset to UTF-16 (NSString) offset
+                    let utf8Offset = offsets[line - 1] + 1 // byte after the newline
+                    let idx = text.utf8.index(text.utf8.startIndex, offsetBy: min(utf8Offset, text.utf8.count))
+                    characterPosition = text[text.startIndex..<idx].utf16.count
+                } else {
+                    // Line beyond document — go to end
+                    characterPosition = nsText.length
                 }
-                currentLine += 1
-            }
-            
-            guard foundLine || (line == 0 && nsText.length == 0) else {
-                isUpdatingFromMinimap = false
-                return
             }
             
             if let position = textView.position(from: textView.beginningOfDocument, offset: characterPosition) {
@@ -940,33 +971,47 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
 
         func scrollToAndSelectLine(_ line: Int, in textView: UITextView) {
-            // Optimized: Use NSString enumeration instead of splitting entire text
-            let nsText = textView.text as NSString
-            var currentLine = 0
-            var characterPosition = 0
-            var lineLength = 0
-            var foundLine = false
+            // PERF: Use cachedNewlineOffsets for O(1) line→offset lookup
+            let text = textView.text ?? ""
+            let nsText = text as NSString
+            let offsets = cachedNewlineOffsets
             
-            nsText.enumerateSubstrings(in: NSRange(location: 0, length: nsText.length), options: .byLines) { substring, substringRange, _, stop in
-                if currentLine == line {
-                    characterPosition = substringRange.location
-                    lineLength = substringRange.length
-                    foundLine = true
-                    stop.pointee = true
-                    return
+            let characterPosition: Int
+            let lineLength: Int
+            
+            if line <= 0 {
+                characterPosition = 0
+                // First line ends at first newline or end of text
+                let endPos = offsets.isEmpty ? nsText.length : text[text.startIndex..<text.utf8.index(text.utf8.startIndex, offsetBy: offsets[0])].utf16.count
+                lineLength = endPos
+            } else if line - 1 < offsets.count {
+                // Line starts right after the (line-1)th newline
+                let utf8Start = offsets[line - 1] + 1
+                let startIdx = text.utf8.index(text.utf8.startIndex, offsetBy: min(utf8Start, text.utf8.count))
+                characterPosition = text[text.startIndex..<startIdx].utf16.count
+                
+                // Line ends at the line-th newline or end of text
+                let utf8End: Int
+                if line < offsets.count {
+                    utf8End = offsets[line]
+                } else {
+                    utf8End = text.utf8.count
                 }
-                currentLine += 1
+                let endIdx = text.utf8.index(text.utf8.startIndex, offsetBy: min(utf8End, text.utf8.count))
+                let endPos = text[text.startIndex..<endIdx].utf16.count
+                lineLength = endPos - characterPosition
+            } else {
+                // Beyond document
+                return
             }
             
-            guard foundLine else { return }
-
-            // FEAT-041: select entire line (excluding trailing newline)
+            // Select entire line (excluding trailing newline)
             let range = NSRange(location: characterPosition, length: lineLength)
             textView.selectedRange = range
-
+            
             // Ensure it's visible
             scrollToLine(line, in: textView)
-
+            
             // Update SwiftUI state
             updateCursorPosition(textView)
             updateScrollPosition(textView)
@@ -1016,6 +1061,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 
             // FEAT-044: restore matching bracket highlight after re-attributing text
             updateMatchingBracketHighlight(textView)
+            textChangedSinceLastHighlight = false
         }
         
         func handlePeekDefinition(in textView: UITextView) {
@@ -2654,11 +2700,11 @@ struct VSCodeSyntaxHighlighter {
         // combinations don't collide.
         let cacheKey = "\(options.rawValue):\(pattern)"
         let regex: NSRegularExpression
-        if let cached = syntaxRegexCache[cacheKey] {
+        if let cached = syntaxRegexCacheLookup(cacheKey) {
             regex = cached
         } else {
             guard let compiled = try? NSRegularExpression(pattern: pattern, options: options) else { return }
-            syntaxRegexCache[cacheKey] = compiled
+            syntaxRegexCacheInsert(cacheKey, compiled)
             regex = compiled
         }
         let range = NSRange(location: 0, length: text.utf16.count)

@@ -1,4 +1,4 @@
-//  IndentGuidesOverlay.swift
+//
 //  VSCodeiPadOS
 //
 //  Renders thin vertical indentation guide lines over the code editor area.
@@ -13,13 +13,14 @@
 //    the LineNumbers gutter and GitGutterView, so it stays in sync without
 //    any additional scroll synchronisation logic.
 //  • hit-testing is disabled – the overlay is purely decorative.
-//
-//  TODO (future): For pixel-perfect column alignment when the active editor
-//  uses proportional fonts or when word-wrap is on, measure actual glyph
-//  advances instead of using the monospaced character width approximation.
+//  • PERF: Only visible lines are processed. charWidth is cached per fontSize.
+//    Indent depths are computed once per visible line and reused.
 
 import SwiftUI
 import UIKit
+
+/// Cache for charWidth keyed by fontSize to avoid measuring every render.
+private nonisolated(unsafe) var _cachedCharWidths: [CGFloat: CGFloat] = [:]
 
 struct IndentGuidesOverlay: View {
 
@@ -56,8 +57,14 @@ struct IndentGuidesOverlay: View {
 
     var body: some View {
         GeometryReader { geo in
-            let font        = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-            let charWidth   = (" " as NSString).size(withAttributes: [.font: font]).width
+            // PERF: Cache charWidth per fontSize — avoid NSString.size() every render
+            let charWidth: CGFloat = {
+                if let cached = _cachedCharWidths[fontSize] { return cached }
+                let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+                let w = (" " as NSString).size(withAttributes: [.font: font]).width
+                _cachedCharWidths[fontSize] = w
+                return w
+            }()
             let topInset    = textInsets.top
             let leftInset   = textInsets.left
 
@@ -65,22 +72,20 @@ struct IndentGuidesOverlay: View {
             // a little beyond the last fully-visible row).
             let visibleCount = Int(ceil(geo.size.height / max(lineHeight, 1))) + 2
 
-            // Slice only the visible portion of the document to keep work O(visible).
-            let lines = splitLines(code)
+            // PERF: Extract only the visible portion of the document without
+            // splitting the entire string. Walk from the Nth newline to the
+            // (N + visibleCount)th newline.
             let firstLine = max(0, scrollPosition)
-            let lastLine  = min(lines.count, firstLine + visibleCount)
-            let visibleLines = Array(lines[firstLine..<lastLine])
+            let visibleLines = extractVisibleLines(from: code, startLine: firstLine, count: visibleCount)
 
             Canvas { ctx, size in
-                // Determine the maximum indent depth across all visible lines so
-                // we only iterate once per indent level (not once per line).
-                var guideColumns = Set<Int>()
-                for line in visibleLines {
-                    let depth = indentDepth(of: line, tabSize: tabSize)
-                    for level in 1...max(1, depth) {
-                        guideColumns.insert(level)
-                    }
-                }
+                let lineCount = visibleLines.count
+                guard lineCount > 0 else { return }
+
+                // PERF: Compute indent depths once into an array, reuse everywhere
+                let depths = visibleLines.map { indentDepth(of: $0, tabSize: tabSize) }
+                let maxDepth = depths.max() ?? 0
+                guard maxDepth > 0 else { return }
 
                 let guideUIColor = UIColor(guideColor)
                 let cgColor = guideUIColor.cgColor
@@ -89,7 +94,7 @@ struct IndentGuidesOverlay: View {
                     cgCtx.setStrokeColor(cgColor)
                     cgCtx.setLineWidth(0.5)
 
-                    for level in guideColumns {
+                    for level in 1...maxDepth {
                         // X position: gutter + textView left inset + column offset
                         let x = gutterWidth + leftInset + CGFloat(level * tabSize) * charWidth
 
@@ -98,8 +103,6 @@ struct IndentGuidesOverlay: View {
 
                         // Draw one continuous vertical line for this level,
                         // but only through rows that actually have this indent depth.
-                        // This matches VS Code's behaviour (guides only appear on
-                        // lines that are at least this deeply indented).
                         var segStart: CGFloat? = nil
 
                         func flushSegment(end: CGFloat) {
@@ -111,17 +114,15 @@ struct IndentGuidesOverlay: View {
                             segStart = nil
                         }
 
-                        for (idx, line) in visibleLines.enumerated() {
-                            let depth = indentDepth(of: line, tabSize: tabSize)
+                        for idx in 0..<lineCount {
                             let rowY = topInset + CGFloat(idx) * lineHeight
-
-                            if depth >= level {
+                            if depths[idx] >= level {
                                 if segStart == nil { segStart = rowY }
                             } else {
                                 flushSegment(end: rowY)
                             }
                         }
-                        flushSegment(end: topInset + CGFloat(visibleLines.count) * lineHeight)
+                        flushSegment(end: topInset + CGFloat(lineCount) * lineHeight)
                     }
                 }
             }
@@ -137,9 +138,36 @@ struct IndentGuidesOverlay: View {
 
     // MARK: - Helpers
 
-    /// Split document into lines without copying the whole string repeatedly.
-    private func splitLines(_ text: String) -> [Substring] {
-        text.split(separator: "\n", omittingEmptySubsequences: false)
+    /// Extract visible lines from the document without splitting the entire string.
+    /// Walks to the `startLine`-th newline, then collects `count` lines.
+    private func extractVisibleLines(from text: String, startLine: Int, count: Int) -> [Substring] {
+        guard !text.isEmpty, count > 0 else { return [] }
+        
+        var lines: [Substring] = []
+        lines.reserveCapacity(count)
+        
+        var currentLine = 0
+        var lineStart = text.startIndex
+        var i = text.startIndex
+        
+        while i < text.endIndex {
+            if text[i] == "\n" {
+                if currentLine >= startLine {
+                    lines.append(text[lineStart..<i])
+                    if lines.count >= count { return lines }
+                }
+                currentLine += 1
+                lineStart = text.index(after: i)
+            }
+            i = text.index(after: i)
+        }
+        
+        // Handle last line (no trailing newline)
+        if currentLine >= startLine && lines.count < count {
+            lines.append(text[lineStart..<text.endIndex])
+        }
+        
+        return lines
     }
 
     /// Count the indentation depth of a line in units of `tabSize`.
