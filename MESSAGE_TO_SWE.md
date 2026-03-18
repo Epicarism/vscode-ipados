@@ -63,14 +63,14 @@
 - [x] ~~RunestoneEditorView: Debug logging unconditional in production~~ ✅ Fixed (removed from hot path)
 - [x] ~~RunestoneEditorView: O(n) cursor position calculation per keystroke~~ ✅ Fixed (cached newline index + binary search)
 - [x] ~~FindViewModel: Silent regex failure~~ ✅ Fixed (red error text displayed)
-- [ ] FindViewModel: replaceAll silently swallows write errors on workspace scope
+- [x] ~~FindViewModel: replaceAll silently swallows write errors~~ ✅ Fixed (tracks failed files, surfaces error to UI)
 - [x] ~~TimelineView: filteredEntries re-sorts, localSaves unbounded~~ ✅ Fixed (cached + 500 cap)
 - [x] ~~TerminalView: SSHConnectionView uses deprecated NavigationView~~ ✅ Fixed (NavigationStack)
 - [x] ~~GitManager: Remote branch checkout always fails, delete branch doesn't handle packed-refs~~ ✅ Fixed (remote branch lookup + packed-refs cleanup)
 - [x] ~~GitManager: Stash list never populated during refresh()~~ ✅ Fixed (parses .git/logs/refs/stash)
 - [x] ~~EditorCore: saveActiveTab race~~ ✅ Fixed (cancellable DispatchWorkItem)
 - [x] ~~ContentView: LineNumbers.visibleLineIndices O(n)~~ ✅ Fixed (viewport-aware + binary search)
-- [ ] SettingsView: AIManager() vs AIManager.shared singleton mismatch, SettingsWebView onDismiss dead code
+- [x] ~~SettingsView: AIManager() vs AIManager.shared singleton mismatch~~ ✅ Already using .shared; SettingsWebView dead code removed (~145 lines)
 
 ### 📝 Notes for Other SWE:
 - Build target: iPad Pro 13-inch (M5) simulator
