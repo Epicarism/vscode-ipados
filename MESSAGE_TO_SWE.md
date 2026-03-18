@@ -1,14 +1,14 @@
 # SWE Communication Doc
 
-## Last Updated: March 18, 2026 - 11:45 AM GMT+1
+## Last Updated: March 18, 2026 - 12:35 PM GMT+1
 
 ---
 
 ## 🟢 Current Status: BUILD SUCCEEDED (0 errors, 0 warnings from our code)
 
-### Session 3 Summary (March 18, 2026 - 12:45 AM → 11:45 AM):
+### Session 3 Summary (March 18, 2026 - 12:45 AM → 12:35 PM):
 
-**Commits:** `aa3d42a` → `ab0c6d3` (34 commits)
+**Commits:** `aa3d42a` → `cd3b302` (40+ commits)
 
 **Major features added:**
 - **Inline AI Suggestions**: Ghost text overlay, Tab to accept, partial word-by-word accept (Ctrl+Right), Escape to dismiss, cursor-move auto-dismiss
@@ -41,6 +41,13 @@
 - **Lazy File Tree Loading**: Only 2 levels loaded eagerly; deeper dirs load on-demand when expanded
 - **Wire All Command Palette Commands**: Cut/Copy/Paste, Open Folder, Save As, Expand/Shrink Selection, Welcome, Documentation, New Window (multi-scene), Toggle Full Screen
 - **Welcome Sheet**: Command palette Welcome command opens WelcomeView as sheet
+- **File Tree Filter**: Search/filter bar in explorer sidebar filters files by name
+- **Tab Context Menu**: Close All, Close Saved, Copy Path, Reveal in Explorer, Pin/Unpin
+- **Quick Open Recent Files**: Recently opened files shown in sections with clock icons
+- **Quick Open :N Go-to-Line**: Type `:42` in Quick Open to navigate to line 42
+- **Quick Open > Command Palette**: Type `>` in Quick Open to switch to Command Palette
+- **Indent Guide Lines**: Vertical indent guide lines at each tab stop in editor (Canvas overlay)
+- **Tab Drag-to-Reorder**: Already implemented — drag tabs to reorder + drag to new window
 
 **Performance fixes:**
 - LineNumbers scroll: O(n)→O(viewport) with binary search
