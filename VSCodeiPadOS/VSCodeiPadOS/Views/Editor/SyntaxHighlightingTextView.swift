@@ -224,7 +224,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         // Set initial text with syntax highlighting
         textView.text = text
-        context.coordinator.applySyntaxHighlighting(to: textView)
+        // For very large files, only highlight the visible range on initial load
+        // to avoid blocking the main thread. Scroll-triggered highlighting covers the rest.
+        if text.count > 50000 {
+            context.coordinator.applyVisibleRangeHighlighting(to: textView)
+        } else {
+            context.coordinator.applySyntaxHighlighting(to: textView)
+        }
         context.coordinator.updateLineCount(textView)
         
         return textView
@@ -241,8 +247,16 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         // makeUIView applies it, but the view may not be fully in hierarchy yet,
         // causing the attributed text to be lost. This ensures it's applied reliably.
         if !context.coordinator.hasAppliedInitialHighlighting && !textView.text.isEmpty {
-            context.coordinator.applySyntaxHighlighting(to: textView)
+            // For large files, use visible-range-only highlighting to avoid blocking the main thread.
+            // A deferred full/visible pass runs after a short delay to cover remaining content.
+            if textView.text.count > 50000 {
+                context.coordinator.applyVisibleRangeHighlighting(to: textView)
+            } else {
+                context.coordinator.applySyntaxHighlighting(to: textView)
+            }
             context.coordinator.hasAppliedInitialHighlighting = true
+            // Seed the scroll-highlight tracker so the very first scroll triggers a re-highlight
+            context.coordinator.lastHighlightedScrollY = textView.contentOffset.y
         }
         
         // Update colors when theme changes
@@ -284,12 +298,22 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         if textView.text != text {
             let selectedRange = textView.selectedRange
             textView.text = text
-            context.coordinator.applySyntaxHighlighting(to: textView)
+            // Use visible-range-only highlighting for very large files to avoid main-thread stall
+            if text.count > 50000 {
+                context.coordinator.applyVisibleRangeHighlighting(to: textView)
+            } else {
+                context.coordinator.applySyntaxHighlighting(to: textView)
+            }
             context.coordinator.hasAppliedInitialHighlighting = true
+            context.coordinator.lastHighlightedScrollY = textView.contentOffset.y
             textView.selectedRange = selectedRange
         } else if context.coordinator.lastThemeId != ThemeManager.shared.currentTheme.id {
             // Re-apply highlighting if theme changed
-            context.coordinator.applySyntaxHighlighting(to: textView)
+            if text.count > 50000 {
+                context.coordinator.applyVisibleRangeHighlighting(to: textView)
+            } else {
+                context.coordinator.applySyntaxHighlighting(to: textView)
+            }
         }
         
         // Handle minimap scrolling - but ONLY if user is NOT actively scrolling
@@ -394,6 +418,14 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         private var largeFileHighlightDebouncer: Timer?
         // Track if we have pending full highlight (for large files)
         private var hasPendingFullHighlight = false
+
+        // PERF: Debounce scroll-triggered re-highlighting for large files
+        private var scrollHighlightTimer: Timer?
+        var lastHighlightedScrollY: CGFloat = -99999
+        /// When true, a scroll-triggered re-highlight was requested while an async
+        /// highlight pass was already in-flight.  Checked after the pass completes
+        /// so the newly-visible range is highlighted without a second user gesture.
+        private var pendingScrollHighlight = false
         
         // PERF: Debounce SwiftUI binding updates to avoid view re-renders on every keystroke
         private var textUpdateWorkItem: DispatchWorkItem?
@@ -531,6 +563,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     ]
                     
                     self.lastThemeId = theme.id
+                    
+                    // If a scroll-triggered highlight was requested while we were busy,
+                    // re-highlight now for the current visible range.
+                    if self.pendingScrollHighlight {
+                        self.pendingScrollHighlight = false
+                        self.applyVisibleRangeHighlighting(to: textView)
+                    }
                 }
             }
         }
@@ -538,7 +577,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         /// PERFORMANCE: Visible-range-only highlighting for very large files
         /// Only highlights the text that's currently visible on screen, dramatically reducing lag
         func applyVisibleRangeHighlighting(to textView: UITextView) {
-            guard !isApplyingHighlighting else { return }
+            guard !isApplyingHighlighting else {
+                // Don't silently drop – mark pending so we re-highlight after the
+                // in-flight pass finishes. This prevents scrolled text staying unstyled.
+                pendingScrollHighlight = true
+                return
+            }
+            pendingScrollHighlight = false
             isApplyingHighlighting = true
             
             let text = textView.text ?? ""
@@ -548,23 +593,21 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let selectedRange = textView.selectedRange
             
             // Calculate visible range with buffer
-            let visibleRect = textView.bounds
+            // Use contentOffset-based visible rect for accurate scroll position
+            let visibleRect = CGRect(
+                x: textView.contentOffset.x,
+                y: textView.contentOffset.y,
+                width: textView.bounds.width,
+                height: textView.bounds.height
+            )
 
             let layoutManager = textView.layoutManager
+            let textContainer = textView.textContainer
             
-            // Get the glyph range for the visible rect
-            var visibleGlyphRange = NSRange()
-            layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { (rect, usedRect, container, glyphRange, stop) in
-                if rect.intersects(visibleRect) {
-                    if visibleGlyphRange.length == 0 {
-                        visibleGlyphRange = glyphRange
-                    } else {
-                        visibleGlyphRange.length = glyphRange.location + glyphRange.length - visibleGlyphRange.location
-                    }
-                } else if visibleGlyphRange.length > 0 && rect.minY > visibleRect.maxY {
-                    stop.pointee = true
-                }
-            }
+            // PERF: Use glyphRange(forBoundingRect:) instead of enumerateLineFragments
+            // The old approach was O(n) — it walked ALL line fragments from glyph 0.
+            // glyphRange(forBoundingRect:) is O(log n) and directly returns visible glyphs.
+            let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
             
             // Convert glyph range to character range
             var visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
@@ -609,12 +652,12 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     let textStorage = textView.textStorage
                     let baseFont = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
                     let baseColor = UIColor(theme.editorForeground)
-                    let fullRange = NSRange(location: 0, length: textStorage.length)
+                    let safeApplyRange = NSRange(location: safeRange.location, length: min(safeRange.length, textStorage.length - safeRange.location))
                     
                     textStorage.beginEditing()
-                    // Apply base styling to full range
-                    textStorage.addAttribute(.font, value: baseFont, range: fullRange)
-                    textStorage.addAttribute(.foregroundColor, value: baseColor, range: fullRange)
+                    // Apply base styling only to the range we're about to re-highlight
+                    textStorage.addAttribute(.font, value: baseFont, range: safeApplyRange)
+                    textStorage.addAttribute(.foregroundColor, value: baseColor, range: safeApplyRange)
                     
                     // Apply highlighted attributes only to visible range
                     highlightedVisible.enumerateAttributes(in: NSRange(location: 0, length: highlightedVisible.length), options: []) { attrs, range, _ in
@@ -634,6 +677,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     ]
                     
                     self.lastThemeId = theme.id
+                    
+                    // If a scroll-triggered highlight was requested while we were busy,
+                    // re-highlight now for the current visible range.
+                    if self.pendingScrollHighlight {
+                        self.pendingScrollHighlight = false
+                        self.applyVisibleRangeHighlighting(to: textView)
+                    }
                 }
             }
         }
@@ -710,6 +760,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                         self?.isUserScrolling = false
                     }
                 }
+                
+                // Re-highlight visible range when drag ends without deceleration (large files)
+                if let textView = scrollView as? UITextView, (textView.text?.count ?? 0) > 10000 {
+                    scrollHighlightTimer?.invalidate()
+                    lastHighlightedScrollY = scrollView.contentOffset.y
+                    applyVisibleRangeHighlighting(to: textView)
+                }
             }
         }
         
@@ -720,6 +777,13 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 DispatchQueue.main.async {
                     self?.isUserScrolling = false
                 }
+            }
+            
+            // Re-highlight visible range when deceleration ends (large files)
+            if let textView = scrollView as? UITextView, (textView.text?.count ?? 0) > 10000 {
+                scrollHighlightTimer?.invalidate()
+                lastHighlightedScrollY = scrollView.contentOffset.y
+                applyVisibleRangeHighlighting(to: textView)
             }
         }
         
@@ -733,6 +797,26 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 userScrollDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
                     DispatchQueue.main.async {
                         self?.isUserScrolling = false
+                    }
+                }
+            }
+            
+            // PERF: Debounced re-highlighting during scroll for large files
+            // When scrolling through a large file, new visible text may be unstyled.
+            // We debounce at 200ms so highlighting runs shortly after scroll settles,
+            // but only if the scroll position changed meaningfully (>50pt).
+            let textLength = textView.text?.count ?? 0
+            if textLength > 10000 {
+                let scrollY = scrollView.contentOffset.y
+                let scrollDelta = abs(scrollY - lastHighlightedScrollY)
+                if scrollDelta > 50 {
+                    scrollHighlightTimer?.invalidate()
+                    scrollHighlightTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            guard let self = self else { return }
+                            self.lastHighlightedScrollY = scrollY
+                            self.applyVisibleRangeHighlighting(to: textView)
+                        }
                     }
                 }
             }

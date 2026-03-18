@@ -24,9 +24,10 @@ final class HoverInfoManager: ObservableObject {
     private init() {}
     
     /// Show hover info for a given word at a specific location
-    func showHover(for word: String, at point: CGPoint, language: String = "swift") {
-        // In a real app, this would be an async call to an LSP or language service
-        if let info = fetchMockDocumentation(for: word, language: language) {
+    func showHover(for word: String, at point: CGPoint, language: String = "swift", tabs: [(name: String, content: String)] = []) {
+        // Try workspace-aware lookup first, then fall back to mock documentation
+        let info = lookupInWorkspace(symbol: word, tabs: tabs, language: language) ?? fetchMockDocumentation(for: word, language: language)
+        if let info = info {
             DispatchQueue.main.async {
                 self.currentInfo = info
                 self.position = point
@@ -48,6 +49,94 @@ final class HoverInfoManager: ObservableObject {
         if isVisible {
             hideHover()
         }
+    }
+    
+    // MARK: - Workspace-Aware Lookup
+    
+    /// Search open tabs for a symbol definition and extract signature + doc comments
+    func lookupInWorkspace(symbol: String, tabs: [(name: String, content: String)], language: String = "swift") -> HoverInfo? {
+        let cleanSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanSymbol.isEmpty else { return nil }
+        
+        // Definition keyword patterns to search for
+        let keywords = ["func", "class", "struct", "enum", "let", "var",
+                        "protocol", "typealias", "def", "function", "fn", "const"]
+        
+        for tab in tabs {
+            let lines = tab.content.components(separatedBy: .newlines)
+            
+            for (index, line) in lines.enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                
+                // Check if this line contains a definition of the symbol
+                var matched = false
+                for keyword in keywords {
+                    // Match patterns like "func symbol", "class symbol", etc.
+                    let pattern = keyword + " " + cleanSymbol
+                    if trimmed.hasPrefix(pattern) {
+                        // Ensure it's a word boundary (next char is not alphanumeric)
+                        let afterSymbol = trimmed.dropFirst(pattern.count)
+                        if afterSymbol.isEmpty || !afterSymbol.first!.isLetter {
+                            matched = true
+                            break
+                        }
+                    }
+                }
+                
+                guard matched else { continue }
+                
+                // Extract the signature (the full definition line, trimmed)
+                let signature = trimmed
+                
+                // Look at preceding lines for doc comments
+                var docLines: [String] = []
+                var lookBack = index - 1
+                while lookBack >= 0 {
+                    let prevLine = lines[lookBack].trimmingCharacters(in: .whitespaces)
+                    if prevLine.hasPrefix("///") {
+                        // Swift-style doc comment
+                        let comment = String(prevLine.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                        docLines.insert(comment, at: 0)
+                    } else if prevLine.hasPrefix("//") {
+                        // Regular comment
+                        let comment = String(prevLine.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                        docLines.insert(comment, at: 0)
+                    } else if prevLine.hasPrefix("#") && !prevLine.hasPrefix("#!") {
+                        // Python/Ruby style comment
+                        let comment = String(prevLine.dropFirst(1)).trimmingCharacters(in: .whitespaces)
+                        docLines.insert(comment, at: 0)
+                    } else if prevLine.hasPrefix("*") || prevLine.hasPrefix("/**") || prevLine.hasPrefix("*/") {
+                        // Block comment lines
+                        let comment = prevLine
+                            .replacingOccurrences(of: "/**", with: "")
+                            .replacingOccurrences(of: "*/", with: "")
+                            .replacingOccurrences(of: "*", with: "")
+                            .trimmingCharacters(in: .whitespaces)
+                        if !comment.isEmpty {
+                            docLines.insert(comment, at: 0)
+                        }
+                    } else {
+                        // Stop at first non-comment line
+                        break
+                    }
+                    lookBack -= 1
+                }
+                
+                let documentation = docLines.isEmpty
+                    ? "Defined in \(tab.name)"
+                    : docLines.joined(separator: "\n")
+                
+                return HoverInfo(
+                    signature: signature,
+                    typeInfo: "Workspace — \(tab.name)",
+                    documentation: documentation,
+                    range: nil,
+                    language: language
+                )
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Mock Data Service
