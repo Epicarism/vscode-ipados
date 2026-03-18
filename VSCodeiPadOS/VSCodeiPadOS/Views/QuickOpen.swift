@@ -125,7 +125,46 @@ struct QuickOpenView: View {
             }
     }
 
+    /// Whether the current search is a ':N' go-to-line command
+    private var isGoToLineMode: Bool {
+        searchText.hasPrefix(":")
+    }
+    
+    /// Line number parsed from ':N' input, or nil
+    private var goToLineNumber: Int? {
+        guard isGoToLineMode else { return nil }
+        let numStr = searchText.dropFirst().trimmingCharacters(in: .whitespaces)
+        return Int(numStr)
+    }
+    
+    /// Whether the current search is a '>' command palette redirect
+    private var isCommandPaletteMode: Bool {
+        searchText.hasPrefix(">")
+    }
+
     private var filteredFiles: [QuickOpenItem] {
+        // ':N' → Go to Line mode — show a single "Go to Line N" item
+        if isGoToLineMode {
+            if let lineNum = goToLineNumber, lineNum > 0 {
+                return [QuickOpenItem(
+                    name: "Go to Line \(lineNum)",
+                    path: editorCore.activeTab?.fileName ?? "",
+                    url: nil,
+                    isOpen: false,
+                    isRecent: false,
+                    language: .plainText
+                )]
+            }
+            return []
+        }
+        
+        // '>' → Command Palette redirect
+        if isCommandPaletteMode {
+            editorCore.showQuickOpen = false
+            editorCore.showCommandPalette = true
+            return []
+        }
+        
         if searchText.isEmpty {
             // Order: open editors → recently opened (top 10) → workspace files
             let openItems    = allFiles.filter { $0.isOpen }.sorted { $0.name < $1.name }
@@ -167,6 +206,15 @@ struct QuickOpenView: View {
     }
 
     private func openFile(_ item: QuickOpenItem) {
+        // Handle Go to Line mode
+        if isGoToLineMode {
+            if let lineNum = goToLineNumber, lineNum > 0 {
+                editorCore.requestedGoToLine = lineNum
+            }
+            dismiss()
+            return
+        }
+        
         if let url = item.url {
             editorCore.openFile(from: url)
         } else {
