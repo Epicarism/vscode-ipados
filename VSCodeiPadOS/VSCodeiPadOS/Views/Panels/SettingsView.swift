@@ -173,6 +173,7 @@ struct SettingsDetailView: View {
     @AppStorage("trimTrailingWhitespace") private var trimTrailingWhitespace: Bool = false
     @AppStorage("insertFinalNewline") private var insertFinalNewline: Bool = false
     @AppStorage("showInvisibleCharacters") private var showInvisibleCharacters: Bool = false
+    @AppStorage("stickyScroll") private var stickyScroll: Bool = true
     
     var body: some View {
         Form {
@@ -217,6 +218,11 @@ struct SettingsDetailView: View {
                     if matchesSearch("Minimap") {
                         Toggle("Minimap", isOn: $minimapEnabled)
                             .accessibilityHint("Toggle the minimap sidebar in the editor")
+                    }
+
+                    if matchesSearch("Sticky Scroll") {
+                        Toggle("Sticky Scroll", isOn: $stickyScroll)
+                            .accessibilityHint("Show the current scope/function name pinned at the top of the editor while scrolling")
                     }
                     
                     if matchesSearch("Line Numbers") {
@@ -361,7 +367,7 @@ struct SettingsDetailView: View {
     private func shouldShow(category: SettingsView.SettingsCategory) -> Bool {
         if !searchText.isEmpty {
             if category == .editor {
-                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Line Numbers") || matchesSearch("Trim Whitespace") || matchesSearch("Final Newline") || matchesSearch("Show Invisible Characters")
+                return matchesSearch("Font Size") || matchesSearch("Font Family") || matchesSearch("Tab Size") || matchesSearch("Word Wrap") || matchesSearch("Minimap") || matchesSearch("Sticky Scroll") || matchesSearch("Line Numbers") || matchesSearch("Trim Whitespace") || matchesSearch("Final Newline") || matchesSearch("Show Invisible Characters")
             }
             if category == .workbench {
                 return matchesSearch("Theme") || matchesSearch("Follow System Appearance") || matchesSearch("System") || matchesSearch("Appearance")

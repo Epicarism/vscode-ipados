@@ -520,6 +520,17 @@ struct RunestoneEditorView: UIViewRepresentable {
             layer.zPosition = 100
             return layer
         }()
+
+        /// Overlay layer that draws a vertical guide line between matched bracket pairs.
+        private let bracketGuideLayer: CAShapeLayer = {
+            let layer = CAShapeLayer()
+            layer.fillColor = UIColor.clear.cgColor
+            layer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.35).cgColor
+            layer.lineWidth = 1.0
+            layer.lineDashPattern = nil
+            layer.zPosition = 99
+            return layer
+        }()
         
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
@@ -824,9 +835,12 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         
         func textViewDidBeginEditing(_ textView: TextView) {
-            // Install the bracket-highlight overlay layer once the view is in the hierarchy
+            // Install the bracket-highlight overlay layers once the view is in the hierarchy
             if bracketHighlightLayer.superlayer == nil {
                 textView.layer.addSublayer(bracketHighlightLayer)
+            }
+            if bracketGuideLayer.superlayer == nil {
+                textView.layer.addSublayer(bracketGuideLayer)
             }
         }
         
@@ -1193,18 +1207,47 @@ struct RunestoneEditorView: UIViewRepresentable {
 
             guard let src = sourcePos, let matchPos = matchingBracketOffset(in: nsText, pos: src) else {
                 bracketHighlightLayer.path = nil
+                bracketGuideLayer.path = nil
                 return
             }
 
-            let path = CGMutablePath()
+            let highlightPath = CGMutablePath()
             let inset: CGFloat = 1.0
+
+            var srcRect: CGRect? = nil
+            var matchRect: CGRect? = nil
+
             for offset in [src, matchPos] {
                 if let r = charRect(at: offset, in: textView) {
-                    path.addRoundedRect(in: r.insetBy(dx: inset, dy: inset),
-                                        cornerWidth: 2, cornerHeight: 2)
+                    highlightPath.addRoundedRect(in: r.insetBy(dx: inset, dy: inset),
+                                                 cornerWidth: 2, cornerHeight: 2)
+                    if offset == src { srcRect = r }
+                    else { matchRect = r }
                 }
             }
-            bracketHighlightLayer.path = path
+            bracketHighlightLayer.path = highlightPath
+
+            // Draw a vertical guide line between the two matched brackets
+            if let top = srcRect, let bottom = matchRect {
+                // Determine which bracket is above the other
+                let upperRect = top.minY <= bottom.minY ? top : bottom
+                let lowerRect = top.minY <= bottom.minY ? bottom : top
+
+                // Only draw a guide when the brackets are on different lines
+                if lowerRect.minY - upperRect.maxY > 1 {
+                    // Guide X: left edge of the opening bracket, centered in its character
+                    let guideX = upperRect.midX
+
+                    let guidePath = CGMutablePath()
+                    guidePath.move(to: CGPoint(x: guideX, y: upperRect.maxY))
+                    guidePath.addLine(to: CGPoint(x: guideX, y: lowerRect.minY))
+                    bracketGuideLayer.path = guidePath
+                } else {
+                    bracketGuideLayer.path = nil
+                }
+            } else {
+                bracketGuideLayer.path = nil
+            }
         }
 
         // MARK: - Cursor Position Calculation
@@ -1552,23 +1595,124 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         
         private func performSelectAllOccurrences(_ textView: TextView) {
-            let text = textView.text as NSString
+            let nsText = textView.text as NSString
             let selectedRange = textView.selectedRange
-            guard selectedRange.length > 0 else { return }
-            
-            let selectedText = text.substring(with: selectedRange)
-            var lastFound = selectedRange
-            var searchRange = NSRange(location: 0, length: text.length)
-            
-            while searchRange.location < text.length {
-                let found = text.range(of: selectedText, options: [], range: searchRange)
-                if found.location == NSNotFound { break }
-                lastFound = found
-                searchRange.location = found.location + found.length
-                searchRange.length = text.length - searchRange.location
+
+            // If nothing selected, try to select the word under the cursor
+            var searchText: String
+            if selectedRange.length > 0 {
+                searchText = nsText.substring(with: selectedRange)
+            } else {
+                // Expand to word under cursor
+                let loc = selectedRange.location
+                var wordStart = loc
+                var wordEnd = loc
+                let wordChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+                while wordStart > 0 {
+                    let ch = nsText.character(at: wordStart - 1)
+                    let scalar = Unicode.Scalar(ch)!
+                    if wordChars.contains(scalar) { wordStart -= 1 } else { break }
+                }
+                while wordEnd < nsText.length {
+                    let ch = nsText.character(at: wordEnd)
+                    let scalar = Unicode.Scalar(ch)!
+                    if wordChars.contains(scalar) { wordEnd += 1 } else { break }
+                }
+                guard wordEnd > wordStart else { return }
+                searchText = nsText.substring(with: NSRange(location: wordStart, length: wordEnd - wordStart))
             }
-            // Without true multi-cursor, jump to last occurrence
-            textView.selectedRange = lastFound
+
+            guard !searchText.isEmpty else { return }
+
+            // Find all occurrences
+            var occurrences: [NSRange] = []
+            var searchRange = NSRange(location: 0, length: nsText.length)
+            while searchRange.location < nsText.length {
+                let found = nsText.range(of: searchText, options: [], range: searchRange)
+                if found.location == NSNotFound { break }
+                occurrences.append(found)
+                searchRange.location = found.location + found.length
+                searchRange.length = nsText.length - searchRange.location
+            }
+
+            guard !occurrences.isEmpty else { return }
+
+            // Highlight all occurrences with a background overlay using a CALayer
+            showOccurrenceHighlights(occurrences: occurrences, in: textView)
+
+            // Move cursor to first occurrence
+            textView.selectedRange = occurrences[0]
+
+            // Show count badge
+            showOccurrenceBadge(count: occurrences.count, in: textView)
+        }
+
+        /// Renders translucent highlight rectangles over all found occurrences using CAShapeLayer.
+        private func showOccurrenceHighlights(occurrences: [NSRange], in textView: TextView) {
+            // Remove any previous occurrence highlight layer
+            textView.layer.sublayers?.removeAll(where: { $0.name == "occurrenceHighlight" })
+
+            guard !occurrences.isEmpty else { return }
+
+            let highlightLayer = CAShapeLayer()
+            highlightLayer.name = "occurrenceHighlight"
+            highlightLayer.fillColor = UIColor.systemBlue.withAlphaComponent(0.25).cgColor
+            highlightLayer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.55).cgColor
+            highlightLayer.lineWidth = 1.0
+            highlightLayer.zPosition = 98
+            textView.layer.addSublayer(highlightLayer)
+
+            let path = CGMutablePath()
+            for range in occurrences {
+                if let startRect = charRect(at: range.location, in: textView),
+                   range.length > 0,
+                   let endRect = charRect(at: range.location + range.length - 1, in: textView) {
+                    // Build a rect spanning from start to end of the occurrence on the same line
+                    let highlightRect = CGRect(
+                        x: startRect.minX,
+                        y: startRect.minY,
+                        width: endRect.maxX - startRect.minX,
+                        height: max(startRect.height, endRect.height)
+                    ).insetBy(dx: 0, dy: 1)
+                    path.addRoundedRect(in: highlightRect, cornerWidth: 2, cornerHeight: 2)
+                }
+            }
+            highlightLayer.path = path
+
+            // Auto-remove highlights after 4 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak textView] in
+                textView?.layer.sublayers?.removeAll(where: { $0.name == "occurrenceHighlight" })
+                textView?.layer.sublayers?.removeAll(where: { $0.name == "occurrenceBadge" })
+            }
+        }
+
+        /// Shows a small count badge ("X occurrences") near the top-right of the text view.
+        private func showOccurrenceBadge(count: Int, in textView: TextView) {
+            // Remove previous badge
+            textView.layer.sublayers?.removeAll(where: { $0.name == "occurrenceBadge" })
+
+            let label = UILabel()
+            label.text = "\(count) occurrence\(count == 1 ? "" : "s")"
+            label.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+            label.textColor = .white
+            label.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.85)
+            label.layer.cornerRadius = 5
+            label.layer.masksToBounds = true
+            label.textAlignment = .center
+            label.sizeToFit()
+            let padding: CGFloat = 8
+            label.frame = label.frame.insetBy(dx: -padding, dy: -3)
+            label.frame.origin = CGPoint(
+                x: textView.bounds.width - label.frame.width - 12,
+                y: (textView.contentOffset.y) + 12
+            )
+            textView.addSubview(label)
+            label.layer.name = "occurrenceBadge"
+
+            // Fade out after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                UIView.animate(withDuration: 0.4) { label.alpha = 0 } completion: { _ in label.removeFromSuperview() }
+            }
         }
         
         private func performSelectLine(_ textView: TextView) {

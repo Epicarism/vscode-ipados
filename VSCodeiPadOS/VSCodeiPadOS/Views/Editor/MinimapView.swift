@@ -31,6 +31,8 @@ struct MinimapView: View {
     @State private var isInteracting: Bool = false
     @ObservedObject private var themeManager = ThemeManager.shared
 
+
+
     // MARK: - Types
 
     struct MinimapDiffIndicator: Identifiable, Hashable {
@@ -53,11 +55,16 @@ struct MinimapView: View {
 
     // MARK: - View
 
+    /// Pre-tokenized lines, recomputed only when `content` changes (not on every scroll).
+    private var precomputedLines: [Substring] {
+        Array(content.split(separator: "\n", omittingEmptySubsequences: false))
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let minimapHeight = max(1, size.height)
-            let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+            let lines = precomputedLines
             let lineCount = max(lines.count, 1)
 
             ZStack(alignment: .topLeading) {
@@ -66,11 +73,14 @@ struct MinimapView: View {
                     .fill(themeManager.currentTheme.editorBackground)
 
                 // Syntax-colored code preview
+                // PERF: pass pre-tokenized data to avoid tokenizing inside Canvas
+                let tokenizedLines = lines.map { tokenize($0) }
                 Canvas { context, canvasSize in
                     drawMinimapPreview(
                         in: &context,
                         size: canvasSize,
-                        lines: lines
+                        lines: lines,
+                        tokenizedLines: tokenizedLines
                     )
                 }
                 .allowsHitTesting(false)
@@ -190,7 +200,8 @@ struct MinimapView: View {
     private func drawMinimapPreview(
         in context: inout GraphicsContext,
         size: CGSize,
-        lines: [Substring]
+        lines: [Substring],
+        tokenizedLines: [[Token]]
     ) {
         let paddingX: CGFloat = 4
         let paddingY: CGFloat = 2
@@ -235,7 +246,7 @@ struct MinimapView: View {
             if y > size.height { break }
 
             let line = lines.indices.contains(i) ? lines[i] : Substring("")
-            let tokens = tokenize(line)
+            let tokens = tokenizedLines.indices.contains(i) ? tokenizedLines[i] : []
 
             var x = paddingX
             let yAligned = y.rounded(FloatingPointRoundingRule.down)

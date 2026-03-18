@@ -537,7 +537,8 @@ struct PaneEditorView: View {
     private var useRunestoneEditor: Bool { FeatureFlags.useRunestoneEditor }
 
     @AppStorage("lineNumbersStyle") private var lineNumbersStyle: String = "on"
-    
+    @AppStorage("stickyScroll") private var stickyScroll: Bool = true
+
     private var fileId: String { tab.url?.path ?? tab.fileName }
     
     var body: some View {
@@ -653,6 +654,12 @@ struct PaneEditorView: View {
                     if splitManager.syncScroll {
                         splitManager.syncScrollOffset(newOffset, fromPaneId: pane.id)
                     }
+                    // Keep scrollPosition in sync for sticky-scroll (Runestone path
+                    // does not update scrollPosition via its own callback).
+                    let derived = Int(newOffset / max(lineHeight, 1))
+                    if derived != scrollPosition {
+                        scrollPosition = derived
+                    }
                 }
                 
                 // Mini minimap
@@ -669,17 +676,23 @@ struct PaneEditorView: View {
                 .frame(width: 60)
             }
             // Sticky Header Overlay (FEAT-040)
-            StickyHeaderView(
-                text: text,
-                currentLine: scrollPosition, // Using scrollPosition as approximate top line
-                theme: ThemeManager.shared.currentTheme,
-                lineHeight: lineHeight,
-                onSelect: { line in
-                    requestedLineSelection = line
-                }
-            )
-            .padding(.leading, 70) // Offset for line numbers + folding icons
-            .padding(.trailing, 60) // Offset for minimap
+            // Shown only when the user has "Sticky Scroll" enabled in Settings.
+            if stickyScroll {
+                StickyHeaderView(
+                    text: text,
+                    currentLine: scrollPosition,
+                    theme: ThemeManager.shared.currentTheme,
+                    lineHeight: lineHeight,
+                    onSelect: { line in
+                        requestedLineSelection = line
+                    }
+                )
+                .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for gutter
+                .padding(.trailing, 60) // Offset for minimap
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(true)
+                .zIndex(50)
+            }
             
             // Inlay Hints Overlay (type hints, parameter names)
             InlayHintsOverlay(

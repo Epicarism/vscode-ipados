@@ -2605,20 +2605,12 @@ struct VSCodeSyntaxHighlighter {
                        "JOIN", "INNER", "LEFT", "RIGHT", "OUTER", "FULL", "ON", "AS", "DISTINCT",
                        "ORDER", "BY", "ASC", "DESC", "GROUP", "HAVING", "LIMIT", "OFFSET", "UNION",
                        "NULL", "IS", "TRUE", "FALSE", "CASE", "WHEN", "THEN", "ELSE", "END",
-                       "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CAST",
-                       "select", "from", "where", "and", "or", "not", "in", "like", "between",
-                       "insert", "into", "values", "update", "set", "delete", "create", "alter", "drop",
-                       "table", "index", "view", "database", "schema", "primary", "key", "foreign", "references",
-                       "join", "inner", "left", "right", "outer", "full", "on", "as", "distinct",
-                       "order", "by", "asc", "desc", "group", "having", "limit", "offset", "union",
-                       "null", "is", "true", "false", "case", "when", "then", "else", "end"]
-        highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text)
-        
+                       "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "CAST"]
+        highlightKeywords(attributed, keywords: keywords, color: UIColor(theme.keyword), text: text, options: .caseInsensitive)
+
         let types = ["INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "FLOAT", "DOUBLE", "DECIMAL",
-                    "VARCHAR", "CHAR", "TEXT", "BLOB", "DATE", "TIME", "DATETIME", "TIMESTAMP", "BOOLEAN",
-                    "int", "integer", "bigint", "smallint", "tinyint", "float", "double", "decimal",
-                    "varchar", "char", "text", "blob", "date", "time", "datetime", "timestamp", "boolean"]
-        highlightKeywords(attributed, keywords: types, color: UIColor(theme.type), text: text)
+                    "VARCHAR", "CHAR", "TEXT", "BLOB", "DATE", "TIME", "DATETIME", "TIMESTAMP", "BOOLEAN"]
+        highlightKeywords(attributed, keywords: types, color: UIColor(theme.type), text: text, options: .caseInsensitive)
         
         highlightComments(attributed, text: text, singleLine: "--", multiLineStart: "/*", multiLineEnd: "*/")
         highlightStrings(attributed, text: text)
@@ -2658,11 +2650,11 @@ struct VSCodeSyntaxHighlighter {
     
     // MARK: - Helper Methods
     
-    private func highlightKeywords(_ attributed: NSMutableAttributedString, keywords: [String], color: UIColor, text: String) {
-        for keyword in keywords {
-            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: keyword))\\b"
-            highlightPattern(attributed, pattern: pattern, color: color, text: text)
-        }
+    private func highlightKeywords(_ attributed: NSMutableAttributedString, keywords: [String], color: UIColor, text: String, options: NSRegularExpression.Options = []) {
+        guard !keywords.isEmpty else { return }
+        let alternation = keywords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let pattern = "\\b(\(alternation))\\b"
+        highlightPattern(attributed, pattern: pattern, color: color, text: text, options: options)
     }
     
     // Static cache: NSRegularExpression is thread-safe once created, so we compile each
