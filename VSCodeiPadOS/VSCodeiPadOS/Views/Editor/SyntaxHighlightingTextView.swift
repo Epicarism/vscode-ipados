@@ -1484,17 +1484,89 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 // MARK: - FoldingLayoutManager
 /// TextKit layout manager that collapses line fragments for lines marked folded in CodeFoldingManager.
 /// This is a view-level folding implementation (it does NOT modify the underlying text).
+/// PERF: Uses cached newline offsets with binary search for O(log n) line lookups instead of O(n) linear scan.
 final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     weak var ownerTextView: EditorTextView?
+
+    // MARK: - Cached newline offsets for O(log n) line index lookup
+    /// Each element is the UTF-16 offset of the start of a line (index 0 = line 0 = offset 0).
+    private var cachedLineStartOffsets: [Int] = [0]
+    /// The text length when the cache was last built.
+    private var cachedTextLength: Int = -1
+    private var textStorageObserver: NSObjectProtocol?
 
     override init() {
         super.init()
         self.delegate = self
+        observeTextStorageChanges()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         self.delegate = self
+        observeTextStorageChanges()
+    }
+
+    deinit {
+        if let obs = textStorageObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+    }
+
+    private func observeTextStorageChanges() {
+        textStorageObserver = NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.invalidateLineCache()
+        }
+    }
+
+    private func invalidateLineCache() {
+        cachedTextLength = -1
+    }
+
+    /// Rebuilds the line start offsets cache if the text has changed.
+    private func rebuildLineCacheIfNeeded(for text: NSString) {
+        let len = text.length
+        guard len != cachedTextLength else { return }
+        cachedTextLength = len
+
+        var offsets: [Int] = []
+        offsets.reserveCapacity(len / 40 + 1) // rough estimate: ~40 chars per line
+        offsets.append(0)
+
+        var searchStart = 0
+        while searchStart < len {
+            let r = text.range(of: "\n", options: [], range: NSRange(location: searchStart, length: len - searchStart))
+            if r.location == NSNotFound { break }
+            let lineStart = r.location + 1
+            if lineStart <= len {
+                offsets.append(lineStart)
+            }
+            searchStart = lineStart
+        }
+
+        cachedLineStartOffsets = offsets
+    }
+
+    /// O(log n) binary search to find the line index for a UTF-16 location.
+    private func lineIndex(atUTF16Location loc: Int) -> Int {
+        if loc <= 0 { return 0 }
+        let offsets = cachedLineStartOffsets
+        // Binary search: find the last offset <= loc
+        var lo = 0
+        var hi = offsets.count
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2
+            if offsets[mid] <= loc {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        return max(0, lo - 1)
     }
 
     func layoutManager(
@@ -1519,9 +1591,10 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let loc = max(0, charRange.location)
 
         let full = (self.textStorage?.string ?? "") as NSString
-        let lineIndex = FoldingLayoutManager.lineIndex(atUTF16Location: loc, in: full)
+        rebuildLineCacheIfNeeded(for: full)
+        let line = lineIndex(atUTF16Location: loc)
 
-        if foldingManager.isLineFolded(fileId: fileId, line: lineIndex) {
+        if foldingManager.isLineFolded(fileId: fileId, line: line) {
             // Collapse this visual line fragment.
             lineFragmentRect.pointee.size.height = 0
             lineFragmentUsedRect.pointee.size.height = 0
@@ -1530,25 +1603,6 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         }
 
         return false
-    }
-
-    private static func lineIndex(atUTF16Location loc: Int, in text: NSString) -> Int {
-        if loc <= 0 { return 0 }
-
-        let capped = min(loc, text.length)
-        var line = 0
-        var searchStart = 0
-
-        while searchStart < capped {
-            let r = text.range(of: "\n", options: [], range: NSRange(location: searchStart, length: capped - searchStart))
-            if r.location == NSNotFound { break }
-            line += 1
-            let next = r.location + 1
-            if next >= capped { break }
-            searchStart = next
-        }
-
-        return line
     }
 }
 

@@ -1101,7 +1101,7 @@ struct IDEEditorView: View {
                             foldingManager: foldingManager,
                             filePath: tab.url?.path
                         )
-                        .frame(width: 58)
+                        .frame(width: 70)
                         .background(theme.sidebarBackground.opacity(0.5))
                         .accessibilityHidden(true)
                     }
@@ -1186,9 +1186,10 @@ struct IDEEditorView: View {
                             inlineSuggestionManager.clearSuggestion()
                         }
                     
-                    if !tab.fileName.hasSuffix(".json") && minimapEnabled {
+                    if minimapEnabled {
                         MinimapView(
                             content: text,
+                            fileId: tab.url?.path ?? tab.fileName,
                             scrollOffset: scrollOffset,
                             scrollViewHeight: geometry.size.height,
                             totalContentHeight: CGFloat(totalLines) * lineHeight,
@@ -1215,8 +1216,8 @@ struct IDEEditorView: View {
                         requestedLineSelection = line
                     }
                 )
-                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
-                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+                .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
+                .padding(.trailing, minimapEnabled ? 80 : 0)
 
                 // Inlay Hints Overlay (type hints, parameter names)
                 InlayHintsOverlay(

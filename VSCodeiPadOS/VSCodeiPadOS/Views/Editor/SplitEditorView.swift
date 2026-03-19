@@ -670,6 +670,7 @@ struct PaneEditorView: View {
                 if minimapEnabled {
                 MinimapView(
                     content: text,
+                    fileId: fileId,
                     scrollOffset: scrollOffset,
                     scrollViewHeight: geometry.size.height,
                     totalContentHeight: CGFloat(totalLines) * lineHeight,

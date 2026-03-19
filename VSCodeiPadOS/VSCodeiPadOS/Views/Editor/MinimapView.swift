@@ -4,11 +4,14 @@ import SwiftUI
 /// - syntax-colored tiny preview
 /// - visible region overlay
 /// - tap/drag to scroll
+/// - fold-aware rendering (hidden folded lines)
 /// - optional git diff indicators (added/modified/deleted)
 struct MinimapView: View {
     // MARK: - External inputs
 
     let content: String
+    /// File identifier for fold-aware rendering. When nil, folding is ignored.
+    var fileId: String? = nil
     /// Current scroll offset (read-only for display). Minimap FOLLOWS the editor, never fights it.
     let scrollOffset: CGFloat
     /// Visible viewport height (read-only for display)
@@ -30,8 +33,7 @@ struct MinimapView: View {
 
     @State private var isInteracting: Bool = false
     @ObservedObject private var themeManager = ThemeManager.shared
-
-
+    @ObservedObject private var foldingManager = CodeFoldingManager.shared
 
     // MARK: - Types
 
@@ -55,17 +57,34 @@ struct MinimapView: View {
 
     // MARK: - View
 
-    /// Pre-tokenized lines, recomputed only when `content` changes (not on every scroll).
-    private var precomputedLines: [Substring] {
+    /// Pre-split lines, recomputed only when `content` changes (not on every scroll).
+    private var allLines: [Substring] {
         Array(content.split(separator: "\n", omittingEmptySubsequences: false))
+    }
+
+    /// Indices of lines that are NOT folded (visible in editor). When no fileId, all lines are visible.
+    private var visibleLineIndices: [Int] {
+        let lines = allLines
+        guard let fid = fileId else {
+            return Array(0..<lines.count)
+        }
+        var indices: [Int] = []
+        indices.reserveCapacity(lines.count)
+        for i in 0..<lines.count {
+            if !foldingManager.isLineFolded(fileId: fid, line: i) {
+                indices.append(i)
+            }
+        }
+        return indices
     }
 
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let minimapHeight = max(1, size.height)
-            let lines = precomputedLines
-            let lineCount = max(lines.count, 1)
+            let lines = allLines
+            let visible = visibleLineIndices
+            let visibleCount = max(visible.count, 1)
 
             ZStack(alignment: .topLeading) {
                 // Background
@@ -73,14 +92,12 @@ struct MinimapView: View {
                     .fill(themeManager.currentTheme.editorBackground)
 
                 // Syntax-colored code preview
-                // PERF: pass pre-tokenized data to avoid tokenizing inside Canvas
-                let tokenizedLines = lines.map { tokenize($0) }
                 Canvas { context, canvasSize in
                     drawMinimapPreview(
                         in: &context,
                         size: canvasSize,
                         lines: lines,
-                        tokenizedLines: tokenizedLines
+                        visibleIndices: visible
                     )
                 }
                 .allowsHitTesting(false)
@@ -88,7 +105,7 @@ struct MinimapView: View {
                 // Git diff indicators (thin left bars)
                 diffIndicatorsLayer(
                     minimapHeight: minimapHeight,
-                    lineCount: lineCount
+                    lineCount: visibleCount
                 )
                 .allowsHitTesting(false)
 
@@ -201,7 +218,7 @@ struct MinimapView: View {
         in context: inout GraphicsContext,
         size: CGSize,
         lines: [Substring],
-        tokenizedLines: [[Token]]
+        visibleIndices: [Int]
     ) {
         let paddingX: CGFloat = 4
         let paddingY: CGFloat = 2
@@ -211,20 +228,19 @@ struct MinimapView: View {
 
         guard contentWidth > 0, contentHeight > 0 else { return }
 
-        let lineCount = max(lines.count, 1)
+        let visibleCount = max(visibleIndices.count, 1)
         
         // FIXED: Use fixed pixels per line (VS Code style) instead of stretching to fill
         // This ensures the minimap always shows a tiny preview regardless of file size
-        let targetPixelsPerLine: CGFloat = 2.5
-        let pixelsPerLine = targetPixelsPerLine
+        let pixelsPerLine: CGFloat = 2.5
         
         // Calculate how many lines we can show in the minimap
-        let visibleLines = Int(contentHeight / pixelsPerLine)
+        let linesInView = Int(contentHeight / pixelsPerLine)
         
         // Calculate scroll offset to show the right portion of the document
         // Use scrollOffset and totalContentHeight to calculate current position
         let scrollRatio = totalContentHeight > 0 ? Double(scrollOffset) / Double(max(totalContentHeight - scrollViewHeight, 1)) : 0
-        let startLine = max(0, Int(scrollRatio * Double(max(0, lineCount - visibleLines))))
+        let startIdx = max(0, Int(scrollRatio * Double(max(0, visibleCount - linesInView))))
 
         // Token-block mode (colored rectangles) - VS Code style minimap
         let minBarHeight: CGFloat = 1
@@ -234,19 +250,22 @@ struct MinimapView: View {
         let maxChars: CGFloat = 120
         let charWidth = contentWidth / maxChars
 
-        // Render lines starting from startLine (scrolls with document)
-        let endLine = min(startLine + visibleLines + 1, lineCount)
+        // Render lines starting from startIdx (scrolls with document)
+        let endIdx = min(startIdx + linesInView + 1, visibleCount)
         
-        // Guard against invalid range (endLine must be >= startLine)
-        guard endLine >= startLine else { return }
+        // Guard against invalid range (endIdx must be >= startIdx)
+        guard endIdx >= startIdx else { return }
         
-        for i in startLine..<endLine {
-            let displayIndex = i - startLine
+        // PERF: Only tokenize lines in the visible window, not all lines
+        for i in startIdx..<endIdx {
+            let displayIndex = i - startIdx
             let y = paddingY + (CGFloat(displayIndex) * pixelsPerLine)
             if y > size.height { break }
 
-            let line = lines.indices.contains(i) ? lines[i] : Substring("")
-            let tokens = tokenizedLines.indices.contains(i) ? tokenizedLines[i] : []
+            // Map from visible index back to original line index
+            let originalLineIndex = visibleIndices.indices.contains(i) ? visibleIndices[i] : 0
+            let line = lines.indices.contains(originalLineIndex) ? lines[originalLineIndex] : Substring("")
+            let tokens = tokenize(line)
 
             var x = paddingX
             let yAligned = y.rounded(FloatingPointRoundingRule.down)
@@ -440,7 +459,7 @@ struct MinimapView: View {
             "true", "false", "nil",
             "self", "super",
             // JS/Python-ish
-            "const", "function", "async", "await", "new", "this",
+            "const", "function", "new", "this",
             "def", "pass", "lambda", "None"
         ]
         return keywords.contains(String(word))
