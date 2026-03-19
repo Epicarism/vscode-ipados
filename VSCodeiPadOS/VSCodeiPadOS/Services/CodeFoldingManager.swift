@@ -655,9 +655,28 @@ final class CodeFoldingManager: ObservableObject {
     
     /// Expands all folded regions
     func expandAll() {
-        for index in foldRegions.indices {
-            foldRegions[index].isFolded = false
+        guard let fileId = currentFileId else {
+            // Fallback: just set flags without text mutation
+            for index in foldRegions.indices {
+                foldRegions[index].isFolded = false
+            }
+            updateCollapsedLines()
+            if let filePath = currentFilePath { saveFoldState(for: filePath) }
+            return
         }
+        
+        // Revert text folds from top-to-bottom so line indices stay stable
+        let sortedByStartAsc = foldRegions.enumerated()
+            .filter { $0.element.isFolded }
+            .sorted { $0.element.startLine < $1.element.startLine }
+        
+        for (index, _) in sortedByStartAsc {
+            foldRegions[index].isFolded = false
+            revertTextFold(fileId: fileId, region: foldRegions[index])
+        }
+        
+        // Sync foldRegionsByFile
+        foldRegionsByFile[fileId] = foldRegions
         updateCollapsedLines()
         
         if let filePath = currentFilePath {
@@ -721,9 +740,28 @@ final class CodeFoldingManager: ObservableObject {
     
     /// Collapses all foldable regions
     func collapseAll() {
-        for index in foldRegions.indices {
-            foldRegions[index].isFolded = true
+        guard let fileId = currentFileId else {
+            // Fallback: just set flags without text mutation
+            for index in foldRegions.indices {
+                foldRegions[index].isFolded = true
+            }
+            updateCollapsedLines()
+            if let filePath = currentFilePath { saveFoldState(for: filePath) }
+            return
         }
+        
+        // Apply text folds from bottom-to-top so line indices stay stable
+        let sortedByStartDesc = foldRegions.enumerated()
+            .filter { !$0.element.isFolded }
+            .sorted { $0.element.startLine > $1.element.startLine }
+        
+        for (index, _) in sortedByStartDesc {
+            foldRegions[index].isFolded = true
+            applyTextFold(fileId: fileId, region: foldRegions[index])
+        }
+        
+        // Sync foldRegionsByFile
+        foldRegionsByFile[fileId] = foldRegions
         updateCollapsedLines()
         
         if let filePath = currentFilePath {
@@ -733,30 +771,52 @@ final class CodeFoldingManager: ObservableObject {
     
     /// Collapses all regions of a specific type
     func collapseAll(ofType type: FoldRegion.FoldType) {
-        for index in foldRegions.indices {
-            if foldRegions[index].type == type {
+        guard let fileId = currentFileId else {
+            for index in foldRegions.indices where foldRegions[index].type == type {
                 foldRegions[index].isFolded = true
             }
+            updateCollapsedLines()
+            if let filePath = currentFilePath { saveFoldState(for: filePath) }
+            return
         }
-        updateCollapsedLines()
         
-        if let filePath = currentFilePath {
-            saveFoldState(for: filePath)
+        let targets = foldRegions.enumerated()
+            .filter { $0.element.type == type && !$0.element.isFolded }
+            .sorted { $0.element.startLine > $1.element.startLine }
+        
+        for (index, _) in targets {
+            foldRegions[index].isFolded = true
+            applyTextFold(fileId: fileId, region: foldRegions[index])
         }
+        
+        foldRegionsByFile[fileId] = foldRegions
+        updateCollapsedLines()
+        if let filePath = currentFilePath { saveFoldState(for: filePath) }
     }
     
     /// Expands all regions of a specific type
     func expandAll(ofType type: FoldRegion.FoldType) {
-        for index in foldRegions.indices {
-            if foldRegions[index].type == type {
+        guard let fileId = currentFileId else {
+            for index in foldRegions.indices where foldRegions[index].type == type {
                 foldRegions[index].isFolded = false
             }
+            updateCollapsedLines()
+            if let filePath = currentFilePath { saveFoldState(for: filePath) }
+            return
         }
-        updateCollapsedLines()
         
-        if let filePath = currentFilePath {
-            saveFoldState(for: filePath)
+        let targets = foldRegions.enumerated()
+            .filter { $0.element.type == type && $0.element.isFolded }
+            .sorted { $0.element.startLine < $1.element.startLine }
+        
+        for (index, _) in targets {
+            foldRegions[index].isFolded = false
+            revertTextFold(fileId: fileId, region: foldRegions[index])
         }
+        
+        foldRegionsByFile[fileId] = foldRegions
+        updateCollapsedLines()
+        if let filePath = currentFilePath { saveFoldState(for: filePath) }
     }
     
     // MARK: - Query Methods
