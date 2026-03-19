@@ -316,8 +316,8 @@ struct CloneRepositoryView: View {
                         .accessibilityLabel("Branch name")
                         .accessibilityHint("Enter a specific branch name, or leave empty to use the default branch")
                     
-                    if discoveredDefaultBranch != nil {
-                        Text("(\(discoveredDefaultBranch!))")
+                    if let branch = discoveredDefaultBranch {
+                        Text("(\(branch))")
                             .font(.system(size: 11))
                             .foregroundColor(theme.lineNumber)
                     }

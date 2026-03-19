@@ -1633,12 +1633,12 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let wordChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
                 while wordStart > 0 {
                     let ch = nsText.character(at: wordStart - 1)
-                    let scalar = Unicode.Scalar(ch)!
+                    guard let scalar = Unicode.Scalar(ch) else { break }
                     if wordChars.contains(scalar) { wordStart -= 1 } else { break }
                 }
                 while wordEnd < nsText.length {
                     let ch = nsText.character(at: wordEnd)
-                    let scalar = Unicode.Scalar(ch)!
+                    guard let scalar = Unicode.Scalar(ch) else { break }
                     if wordChars.contains(scalar) { wordEnd += 1 } else { break }
                 }
                 guard wordEnd > wordStart else { return }

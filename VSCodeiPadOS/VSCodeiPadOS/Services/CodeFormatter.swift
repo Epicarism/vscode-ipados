@@ -330,7 +330,7 @@ class CodeFormatter: ObservableObject {
         var inDoubleQuote = false
         var inBacktick = false
         var escaped = false
-        let target = char.first!
+        guard let target = char.first else { return 0 }
         
         for ch in line {
             if escaped {

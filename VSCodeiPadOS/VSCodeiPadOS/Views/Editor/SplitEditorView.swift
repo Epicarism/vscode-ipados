@@ -546,21 +546,33 @@ struct PaneEditorView: View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
                 // Line numbers + breakpoints + code folding (gutter)
-                //
-                // IMPORTANT: keep gutter in sync with the editor scroll position. The gutter ScrollView
-                // is scroll-disabled, and we offset the content to match the editor's scroll.
+                // VIRTUALIZED: Only renders visible lines for O(viewport) performance
                 if lineNumbersStyle != "off" {
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .trailing, spacing: 0) {
-                            // Match UITextView.textContainerInset.top (see SyntaxHighlightingTextView.swift)
-                            ForEach(0..<totalLines, id: \.self) { lineIndex in
-                                // Skip rendering line numbers for folded lines - this keeps gutter in sync with editor
-                                // FoldingLayoutManager hides text by setting height to 0; we hide line numbers entirely
-                                if !foldingManager.isLineFolded(fileId: fileId, line: lineIndex) {
+                    Canvas { context, size in
+                        // Empty canvas just to reserve space; actual content is in the overlay
+                    }
+                    .frame(width: 70)
+                    .overlay {
+                        GeometryReader { gutterGeometry in
+                            let gutterHeight = gutterGeometry.size.height
+                            let visibleLineCount = max(1, Int(gutterHeight / lineHeight) + 2)
+                            // Calculate the first visible source line from scroll offset
+                            let rawFirstVisible = max(0, Int(scrollOffset / lineHeight) - 1)
+                            
+                            // Build visible line indices accounting for folds
+                            let visibleRange = computeVisibleGutterLines(
+                                from: rawFirstVisible,
+                                count: visibleLineCount,
+                                totalLines: totalLines,
+                                fileId: fileId
+                            )
+                            
+                            VStack(alignment: .trailing, spacing: 0) {
+                                ForEach(visibleRange, id: \.self) { lineIndex in
                                     HStack(spacing: 2) {
                                         // Fold chevron icon
                                         if foldingManager.isFoldable(fileId: fileId, line: lineIndex) {
-                                            Button(action: { 
+                                            Button(action: {
                                                 foldingManager.toggleFold(fileId: fileId, line: lineIndex)
                                             }) {
                                                 Image(systemName: foldingManager.isFolded(fileId: fileId, line: lineIndex) ? "chevron.right" : "chevron.down")
@@ -571,7 +583,6 @@ struct PaneEditorView: View {
                                             }
                                             .buttonStyle(.plain)
                                         } else {
-                                            // Spacer for alignment
                                             Spacer()
                                                 .frame(width: 20)
                                         }
@@ -579,7 +590,7 @@ struct PaneEditorView: View {
                                         // Breakpoint indicator
                                         Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
                                             Circle()
-                                                .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ?Color(UIColor.systemRed) : Color.clear)
+                                                .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color(UIColor.systemRed) : Color.clear)
                                                 .overlay(
                                                     Circle()
                                                         .stroke(Color.red.opacity(0.6), lineWidth: 1)
@@ -589,7 +600,7 @@ struct PaneEditorView: View {
                                         }
                                         .buttonStyle(.plain)
                                         .frame(width: 14, height: lineHeight)
-
+                                        
                                         Text(displayText(for: lineIndex))
                                             .font(.system(size: 12, design: .monospaced))
                                             .foregroundColor(lineIndex + 1 == currentLineNumber ? .primary : .secondary.opacity(0.6))
@@ -601,14 +612,13 @@ struct PaneEditorView: View {
                                     }
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                                 }
-                            
+                            }
+                            .padding(.trailing, 4)
+                            .padding(.top, 8)
+                            .offset(y: -scrollOffset + CGFloat(rawFirstVisible) * lineHeight)
                         }
-                        .padding(.trailing, 4)
-                        .padding(.top, 8)
-                        .offset(y: -scrollOffset)
                     }
-                    .scrollDisabled(true)
-                    .frame(width: 70)
+                    .clipped()
                     .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
                 }
 
@@ -796,8 +806,35 @@ struct PaneEditorView: View {
             }
         }
     }
+
+    /// Computes visible gutter line indices, skipping folded lines. O(viewport) not O(N).
+    private func computeVisibleGutterLines(from rawFirstVisible: Int, count: Int, totalLines: Int, fileId: String) -> [Int] {
+        var result: [Int] = []
+        result.reserveCapacity(count)
+        var sourceLine = 0
+        var visibleCount = 0
+        
+        // Fast-forward to approximately the right source line
+        while sourceLine < totalLines && visibleCount < rawFirstVisible {
+            if !foldingManager.isLineFolded(fileId: fileId, line: sourceLine) {
+                visibleCount += 1
+            }
+            sourceLine += 1
+        }
+        
+        // Now collect 'count' visible lines
+        var collected = 0
+        while sourceLine < totalLines && collected < count {
+            if !foldingManager.isLineFolded(fileId: fileId, line: sourceLine) {
+                result.append(sourceLine)
+                collected += 1
+            }
+            sourceLine += 1
+        }
+        
+        return result
     }
-    
+
     private func displayText(for lineIndex: Int) -> String {
         switch lineNumbersStyle {
         case "relative":
