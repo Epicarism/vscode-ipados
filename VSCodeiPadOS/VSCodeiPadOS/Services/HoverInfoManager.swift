@@ -76,7 +76,7 @@ final class HoverInfoManager: ObservableObject {
                     if trimmed.hasPrefix(pattern) {
                         // Ensure it's a word boundary (next char is not alphanumeric)
                         let afterSymbol = trimmed.dropFirst(pattern.count)
-                        if afterSymbol.isEmpty || !afterSymbol.first!.isLetter {
+                        if afterSymbol.isEmpty || afterSymbol.first?.isLetter != true {
                             matched = true
                             break
                         }

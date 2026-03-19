@@ -32,13 +32,12 @@ struct GoToLineView: View {
                     .accessibilityHint("Enter a line number between 1 and \(maxLine)")
 
                 if !lineNumberText.isEmpty && !isValidLine {
-                    let parsed = Int(lineNumberText)
-                    if parsed == nil || parsed! <= 0 {
-                        Text("Please enter a valid positive number")
+                    if let parsed = Int(lineNumberText), parsed > 0 {
+                        Text("Line number must be between 1 and \(maxLine)")
                             .font(.caption)
                             .foregroundColor(.red)
                     } else {
-                        Text("Line number must be between 1 and \(maxLine)")
+                        Text("Please enter a valid positive number")
                             .font(.caption)
                             .foregroundColor(.red)
                     }
