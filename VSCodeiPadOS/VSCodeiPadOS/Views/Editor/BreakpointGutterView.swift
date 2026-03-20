@@ -430,6 +430,7 @@ struct BreakpointGutterView: View {
                 Image(systemName: bp.type.icon)
                     .font(.system(size: size))
                     .foregroundColor(bp.type.color)
+                    .shadow(color: bp.type.color.opacity(0.4), radius: 2)
             } else {
                 Image(systemName: "circle")
                     .font(.system(size: size))
@@ -439,13 +440,39 @@ struct BreakpointGutterView: View {
         .frame(width: gutterWidth, height: lineHeight)
         .contentShape(Rectangle())
         .onTapGesture {
-            store.toggleBreakpoint(at: bp.line, in: filePath)
+            // Flash animation feedback
+            withAnimation(.easeInOut(duration: 0.15)) {
+                store.toggleBreakpoint(at: bp.line, in: filePath)
+            }
         }
         .onLongPressGesture(minimumDuration: 0.5) {
             editingLine = bp.line
             conditionText = bp.condition ?? ""
             selectedBreakpointType = bp.type
             showingConditionEditor = true
+        }
+        .overlay(alignment: .trailing) {
+            // Show condition hint for conditional breakpoints
+            if bp.type == .conditional, let cond = bp.condition, !cond.isEmpty {
+                Text(cond)
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.orange.opacity(0.8))
+                    .lineLimit(1)
+                    .padding(.horizontal, 2)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(2)
+                    .offset(x: gutterWidth + 2)
+                    .allowsHitTesting(false)
+            } else if bp.type == .hitCount, let count = bp.hitCount {
+                Text("×\(count)")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.yellow.opacity(0.8))
+                    .padding(.horizontal, 2)
+                    .background(Color.yellow.opacity(0.1))
+                    .cornerRadius(2)
+                    .offset(x: gutterWidth + 2)
+                    .allowsHitTesting(false)
+            }
         }
         .accessibilityLabel("\(bp.type.displayName) at line \(bp.line)")
         .accessibilityHint(bp.isEnabled ? "Double tap to remove" : "Double tap to remove, disabled")

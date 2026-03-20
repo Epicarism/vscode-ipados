@@ -18,7 +18,8 @@ enum EditorPerformanceTier: Int, Comparable {
     case large = 1          // 10K–100K lines — reduced minimap, fold detection
     case veryLarge = 2      // 100K–500K lines — no minimap, no indent guides
     case massive = 3        // 500K–1M lines — viewport-only syntax, no overlays
-    case extreme = 4        // > 1M lines — viewport-only everything, minimal features
+    case extreme = 4        // 1M–5M lines — viewport-only everything, minimal features
+    case ultraMassive = 5   // > 5M lines — bare-minimum mode for multi-million LOC files
     
     static func < (lhs: EditorPerformanceTier, rhs: EditorPerformanceTier) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -31,6 +32,7 @@ enum EditorPerformanceTier: Int, Comparable {
         case .veryLarge: return "Very large file mode"
         case .massive: return "Massive file mode"
         case .extreme: return "Extreme size mode"
+        case .ultraMassive: return "Ultra-massive mode (5M+ lines)"
         }
     }
     
@@ -43,6 +45,8 @@ enum EditorPerformanceTier: Int, Comparable {
     var enableInlayHints: Bool { self <= .full }
     var enableBracketGuides: Bool { self <= .veryLarge }
     var enableStickyHeaders: Bool { self <= .large }
+    var enableLineNumbers: Bool { self <= .extreme } // Disable even line numbers for ultra-massive
+    var enableScrollbar: Bool { true } // Always show scrollbar
     
     /// How many lines above/below viewport to syntax-highlight
     var syntaxHighlightBuffer: Int {
@@ -52,6 +56,7 @@ enum EditorPerformanceTier: Int, Comparable {
         case .veryLarge: return 200
         case .massive: return 100
         case .extreme: return 50
+        case .ultraMassive: return 20
         }
     }
     
@@ -61,7 +66,31 @@ enum EditorPerformanceTier: Int, Comparable {
         case .full: return Int.max  // entire file
         case .large: return 5000
         case .veryLarge: return 1000
-        case .massive, .extreme: return 0  // disabled
+        case .massive, .extreme, .ultraMassive: return 0  // disabled
+        }
+    }
+    
+    /// Debounce interval for text changes → SwiftUI binding sync
+    var textSyncDebounce: TimeInterval {
+        switch self {
+        case .full: return 0.3
+        case .large: return 0.5
+        case .veryLarge: return 1.0
+        case .massive: return 1.5
+        case .extreme: return 2.0
+        case .ultraMassive: return 3.0
+        }
+    }
+    
+    /// Debounce interval for syntax highlighting after edits
+    var syntaxHighlightDebounce: TimeInterval {
+        switch self {
+        case .full: return 0.08
+        case .large: return 0.3
+        case .veryLarge: return 1.0
+        case .massive: return 1.5
+        case .extreme: return 2.0
+        case .ultraMassive: return 3.0
         }
     }
 }
@@ -97,17 +126,19 @@ final class LargeFileHandler: ObservableObject {
     
     // Thresholds
     private let byteSizeThresholds: [(Int, EditorPerformanceTier)] = [
-        (50_000_000, .extreme),    // > 50MB
-        (10_000_000, .massive),    // > 10MB
-        (1_000_000, .veryLarge),   // > 1MB
-        (100_000, .large),         // > 100KB
+        (200_000_000, .ultraMassive), // > 200MB
+        (50_000_000, .extreme),       // > 50MB
+        (10_000_000, .massive),       // > 10MB
+        (1_000_000, .veryLarge),      // > 1MB
+        (100_000, .large),            // > 100KB
     ]
     
     private let lineCountThresholds: [(Int, EditorPerformanceTier)] = [
-        (1_000_000, .extreme),     // > 1M lines
-        (500_000, .massive),       // > 500K lines
-        (100_000, .veryLarge),     // > 100K lines
-        (10_000, .large),          // > 10K lines
+        (5_000_000, .ultraMassive),   // > 5M lines
+        (1_000_000, .extreme),        // > 1M lines
+        (500_000, .massive),          // > 500K lines
+        (100_000, .veryLarge),        // > 100K lines
+        (10_000, .large),             // > 10K lines
     ]
     
     // Line offset index for O(1) random access
@@ -182,6 +213,8 @@ final class LargeFileHandler: ObservableObject {
             warning = "⚠️ Massive file (\(formatCount(lineCount)) lines). Operating in viewport-only mode."
         case .extreme:
             warning = "⚠️ Extremely large file (\(formatCount(lineCount)) lines). Minimal features active."
+        case .ultraMassive:
+            warning = "🔥 Ultra-massive file (\(formatCount(lineCount)) lines). Bare-minimum mode — only viewport rendering active."
         }
         
         let info = FileSizeInfo(byteCount: byteCount, lineCount: lineCount, tier: tier, warningMessage: warning, fileId: fileId)

@@ -620,7 +620,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                         guard let self, self.textView != nil else { return }
                         let line = max(0, self.parent.currentLineNumber - 1)
                         CodeFoldingManager.shared.foldAtLine(line)
-                        self.applyFoldedTextToTextView()
+                        // View-level folding: don't mutate text, just notify gutter/overlays
+                        self.notifyFoldingChanged()
                     }
                 }
             )
@@ -630,7 +631,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                         guard let self, self.textView != nil else { return }
                         let line = max(0, self.parent.currentLineNumber - 1)
                         CodeFoldingManager.shared.unfoldAtLine(line)
-                        self.applyFoldedTextToTextView()
+                        // View-level folding: don't mutate text, just notify gutter/overlays
+                        self.notifyFoldingChanged()
                     }
                 }
             )
@@ -813,30 +815,27 @@ struct RunestoneEditorView: UIViewRepresentable {
         /// Handles the collapseAllFolds notification from EditorCore.
         @MainActor private func handleCollapseAllFolds() {
             CodeFoldingManager.shared.collapseAll()
-            // Force-apply the mutated text to Runestone (bypasses hasBeenEdited guard)
-            applyFoldedTextToTextView()
+            // View-level folding: notify gutter and overlays to update visibility
+            notifyFoldingChanged()
         }
 
         /// Handles the expandAllFolds notification from EditorCore.
         @MainActor private func handleExpandAllFolds() {
             CodeFoldingManager.shared.expandAll()
-            // Force-apply the mutated text to Runestone (bypasses hasBeenEdited guard)
-            applyFoldedTextToTextView()
+            // View-level folding: notify gutter and overlays to update visibility
+            notifyFoldingChanged()
         }
 
-        /// Directly applies the current folded text to the Runestone textview,
-        /// bypassing the normal updateUIView guard that blocks changes during editing.
-        @MainActor private func applyFoldedTextToTextView() {
-            guard let textView = textView else { return }
-            let foldedText = CodeFoldingManager.shared.currentText
-            guard !foldedText.isEmpty, foldedText != textView.text else { return }
-            
-            isUpdatingFromTextView = true
-            textView.text = foldedText
-            parent.text = foldedText
-            parent.totalLines = parent.countLines(in: foldedText)
-            rebuildNewlineOffsets(for: foldedText as NSString)
-            isUpdatingFromTextView = false
+        /// Notify the gutter, minimap, and other overlays that fold state changed.
+        /// This is a view-level approach: the underlying text in Runestone is NOT mutated.
+        /// Instead, the gutter (in SplitEditorView) uses CodeFoldingManager.shared.isLineHidden()
+        /// to skip rendering folded lines, and the minimap does the same.
+        /// This preserves undo history, cursor positions, and Runestone's lineManager integrity.
+        @MainActor private func notifyFoldingChanged() {
+            // Post notification so gutter, minimap, breakpoints, etc. re-render
+            NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
+            // Force SwiftUI to re-evaluate overlays
+            parent.editorCore.objectWillChange.send()
         }
 
         // MARK: - Format Document

@@ -299,26 +299,103 @@ class TunnelManager: ObservableObject {
         // Network monitoring handled by health timer
     }
     
-    /// Connect via SSH tunnel (placeholder — requires SSHTunnelBridge)
+    /// Connect via SSH tunnel — delegates to SSHTunnelBridge to detect/start a VS Code tunnel on the remote.
     func connectViaSSH(config: TunnelConfig, sshConfig: SSHConnectionConfig) {
         Self.logger.info("Initiating SSH tunnel connection for: \(config.name)")
         connectionState = .connecting
         activeConfig = config
+        lastError = nil
+        connectionWarning = nil
         
-        // TODO: Integrate SSHTunnelBridge when available
-        Self.logger.warning("SSH tunnel bridge not yet integrated")
-        connectionState = .error("SSH tunnel bridge not yet available")
+        // SSHTunnelBridge.connectViaTunnel is fire-and-forget — it manages its own Task internally.
+        // On success it calls TunnelManager.connectFromBridge(config:resolvedURL:) which updates our state.
+        SSHTunnelBridge.shared.connectViaTunnel(sshConfig: sshConfig)
+        
+        // Monitor bridge state for errors
+        observeBridgeState()
     }
     
-    /// Connect via SSH port forward (placeholder — requires SSHTunnelBridge)
+    /// Connect via SSH port forward — forwards a remote port to localhost and opens in WebView.
     func connectViaSSHPortForward(config: TunnelConfig, sshConfig: SSHConnectionConfig, remotePort: Int = 8080) {
         Self.logger.info("Initiating SSH port forward for: \(config.name) to port \(remotePort)")
         connectionState = .connecting
         activeConfig = config
+        lastError = nil
+        connectionWarning = nil
         
-        // TODO: Integrate SSHTunnelBridge when available
-        Self.logger.warning("SSH tunnel bridge not yet integrated")
-        connectionState = .error("SSH port forward not yet available")
+        // SSHTunnelBridge.connectViaPortForward is fire-and-forget.
+        // On success it calls TunnelManager.connectFromBridge(config:resolvedURL:).
+        SSHTunnelBridge.shared.connectViaPortForward(
+            sshConfig: sshConfig,
+            remotePort: remotePort,
+            localPort: remotePort
+        )
+        
+        // Monitor bridge state for errors
+        observeBridgeState()
+    }
+    
+    /// Convenience: auto-detect the best connection method for an SSH config.
+    /// Starts with VS Code tunnel detection. The bridge will call connectFromBridge on success.
+    func connectViaSSHAuto(sshConfig: SSHConnectionConfig) {
+        let config = TunnelConfig(
+            name: "\(sshConfig.username)@\(sshConfig.host)",
+            url: "ssh://\(sshConfig.host):\(sshConfig.port)",
+            type: .sshTunnel,
+            lastUsed: Date(),
+            tunnelMode: .webview
+        )
+        Self.logger.info("Auto-detecting tunnel for \(sshConfig.host)")
+        
+        // Start with tunnel detection (most common for VS Code remote)
+        connectViaSSH(config: config, sshConfig: sshConfig)
+    }
+    
+    /// Observe SSHTunnelBridge state changes and propagate errors to our connection state.
+    private func observeBridgeState() {
+        connectionTask?.cancel()
+        connectionTask = Task { [weak self] in
+            guard let self else { return }
+            
+            // Poll bridge state until connected or error (max 60s timeout)
+            let startTime = Date()
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                
+                let bridgeState = SSHTunnelBridge.shared.bridgeState
+                switch bridgeState {
+                case .ready(_):
+                    // Bridge resolved URL and called connectFromBridge — we're done
+                    Self.logger.info("Bridge reports ready — tunnel connected")
+                    return
+                case .error(let msg):
+                    Self.logger.error("Bridge error: \(msg)")
+                    self.connectionState = .error(msg)
+                    self.lastError = msg
+                    self.isConnected = false
+                    return
+                case .idle:
+                    // Bridge was reset or disconnected
+                    if self.connectionState == .connecting {
+                        self.connectionState = .error("Tunnel setup was cancelled")
+                        self.isConnected = false
+                    }
+                    return
+                default:
+                    // Still in progress (.connecting, .checkingRemote, .startingTunnel, .portForwarding)
+                    break
+                }
+                
+                // Timeout after 60 seconds
+                if Date().timeIntervalSince(startTime) > 60 {
+                    Self.logger.warning("SSH tunnel connection timed out after 60s")
+                    self.connectionState = .error("Connection timed out")
+                    self.lastError = "SSH tunnel setup timed out. Check your SSH connection and ensure the remote has VS Code CLI installed."
+                    self.isConnected = false
+                    return
+                }
+            }
+        }
     }
     
     // MARK: - Health Monitoring

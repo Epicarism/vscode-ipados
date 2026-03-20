@@ -357,7 +357,7 @@
 		CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RSAAuthDelegate.swift; path = Services/RSAAuthDelegate.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteRunner.swift; path = Services/RemoteRunner.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHGitClient.swift; path = Services/NativeGit/SSHGitClient.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHTunnelBridge.swift; path = Services/SSHTunnelBridge.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHTunnelBridge.swift; path = VSCodeiPadOS/Services/SSHTunnelBridge.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightCache.swift; path = Services/SyntaxHighlightCache.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelFileSystemBridge.swift; path = Services/TunnelFileSystemBridge.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelLSPProxy.swift; path = Services/TunnelLSPProxy.swift; sourceTree = "<group>"; };
@@ -939,6 +939,7 @@
 			CF1A2B3C4D5E6F7A8B9C0E08 /* BreakpointGutterView.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */,
 
 		);
 		runOnlyForDeploymentPostprocessing = 0;
