@@ -77,12 +77,12 @@ final class SSHTunnelBridge: ObservableObject {
     private let sshManager = SSHManager.shared
     private let tunnelManager = TunnelManager.shared
     
-    // Tunnel detection patterns
-    private let tunnelURLPattern = try! NSRegularExpression(
+    // Tunnel detection patterns — use try? to avoid crash if regex is ever rejected
+    private let tunnelURLPattern: NSRegularExpression? = try? NSRegularExpression(
         pattern: "https://[a-zA-Z0-9_-]+\\.vscode\\.dev[^\\s]*",
         options: []
     )
-    private let codeServerURLPattern = try! NSRegularExpression(
+    private let codeServerURLPattern: NSRegularExpression? = try? NSRegularExpression(
         pattern: "https?://[^\\s]+:\\d+",
         options: []
     )
@@ -367,13 +367,15 @@ final class SSHTunnelBridge: ObservableObject {
     private func extractTunnelURL(from output: String) -> URL? {
         // Try vscode.dev tunnel URL pattern
         let range = NSRange(output.startIndex..., in: output)
-        if let match = tunnelURLPattern.firstMatch(in: output, options: [], range: range) {
+        if let pattern = tunnelURLPattern,
+           let match = pattern.firstMatch(in: output, options: [], range: range) {
             let urlString = (output as NSString).substring(with: match.range)
             return URL(string: urlString)
         }
         
         // Try code-server URL pattern
-        if let match = codeServerURLPattern.firstMatch(in: output, options: [], range: range) {
+        if let pattern = codeServerURLPattern,
+           let match = pattern.firstMatch(in: output, options: [], range: range) {
             let urlString = (output as NSString).substring(with: match.range)
             return URL(string: urlString)
         }

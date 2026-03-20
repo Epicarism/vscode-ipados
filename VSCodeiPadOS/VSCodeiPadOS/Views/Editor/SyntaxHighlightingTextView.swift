@@ -757,15 +757,18 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 
                 let visibleText = nsText.substring(with: safeRange)
                 
-                // Highlight only the visible portion
+                // Highlight only the visible portion — measure time for perf monitor
+                let highlightStart = CFAbsoluteTimeGetCurrent()
                 let highlighter = VSCodeSyntaxHighlighter(theme: theme, fontSize: fontSize)
                 let highlightedVisible = highlighter.highlight(visibleText, filename: filename)
+                let highlightMs = (CFAbsoluteTimeGetCurrent() - highlightStart) * 1000
                 
                 // Apply on main thread
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     self.isApplyingHighlighting = false
-                    
+                    // Record syntax highlight timing for performance degradation decisions
+                    EditorPerformanceMonitor.shared.recordSyntaxHighlightTime(highlightMs)
                     // Only apply if text hasn't changed while we were processing
                     guard textView.text == text else { return }
                     
