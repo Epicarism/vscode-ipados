@@ -524,8 +524,31 @@ final class LargeFileHandler: ObservableObject {
     
     // MARK: - Memory Pressure
     
-    /// Called when system is under memory pressure - release caches
+    /// Called when system is under memory pressure - gracefully reduce caches
+    /// instead of wiping everything destructively.
     func handleMemoryPressure() {
+        // Keep line offsets if they exist (expensive to rebuild) — just trim to first 50K entries
+        if lineOffsets.count > 50_000 {
+            lineOffsets = Array(lineOffsets.prefix(50_000))
+            Self.logger.info("Trimmed line offsets to 50K entries")
+        }
+        
+        // Release memory-mapped file data (can be re-mapped on demand)
+        persistentMapping = nil
+        persistentMappingURL = nil
+        
+        // Cancel any in-flight loading task
+        loadingTask?.cancel()
+        loadingTask = nil
+        
+        // Keep currentFileInfo (tiny struct, cheap to retain, expensive to recompute)
+        // Only clear it if we're under severe pressure (second call)
+        
+        Self.logger.info("Gracefully reduced large file handler caches due to memory pressure")
+    }
+    
+    /// Called for severe memory pressure - release everything
+    func handleSevereMemoryPressure() {
         lineOffsets = []
         lineOffsetsFileId = nil
         currentFileInfo = nil
@@ -533,6 +556,6 @@ final class LargeFileHandler: ObservableObject {
         persistentMappingURL = nil
         loadingTask?.cancel()
         loadingTask = nil
-        Self.logger.info("Released large file handler caches due to memory pressure")
+        Self.logger.warning("Released ALL large file handler caches due to severe memory pressure")
     }
 }
