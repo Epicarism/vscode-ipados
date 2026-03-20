@@ -155,7 +155,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             guard let coordinator = coordinator,
                   let tv = coordinator.textView else { return }
             coordinator.isFoldMutation = true
+            // Disable undo registration so fold/unfold doesn't pollute the undo stack
+            tv.undoManager?.disableUndoRegistration()
             tv.text = newText
+            tv.undoManager?.enableUndoRegistration()
             coordinator.isFoldMutation = false
             // Sync binding and line count immediately (fold is a discrete user action)
             coordinator.isUpdatingFromTextView = true
