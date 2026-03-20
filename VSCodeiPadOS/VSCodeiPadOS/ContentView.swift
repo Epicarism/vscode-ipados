@@ -1089,6 +1089,8 @@ struct IDEEditorView: View {
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
+    /// Incrementing version counter for LSP textDocument/didChange notifications.
+    @State private var lspDocumentVersion: Int = 0
     @StateObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
     @StateObject private var inlineSuggestionManager = InlineSuggestionManager()
@@ -1209,8 +1211,27 @@ struct IDEEditorView: View {
                             editorCore.updateActiveTabContent(newValue)
                             // Use debounced cursor update to reduce view refreshes
                             editorCore.updateCursorPosition(CursorPosition(line: currentLineNumber, column: currentColumn))
+                            // Keep autocomplete manager's filename/URI in sync for LSP
+                            autocomplete.currentFilename = tab.fileName
+                            if let fileURL = tab.url {
+                                autocomplete.currentFileURI = fileURL.absoluteString
+                            }
+
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
+
+                            // Notify LSP of document change
+                            if let lspLang = AutocompleteManager.lspLanguageId(forFilename: tab.fileName),
+                               !autocomplete.currentFileURI.isEmpty {
+                                lspDocumentVersion += 1
+                                autocomplete.notifyLSPDocumentChange(
+                                    uri: autocomplete.currentFileURI,
+                                    languageId: lspLang,
+                                    text: newValue,
+                                    version: lspDocumentVersion
+                                )
+                            }
+
                             // Debounce fold detection — 1.5s after last edit
                             foldDetectionWork?.cancel()
                             let foldWork = DispatchWorkItem {
@@ -1388,6 +1409,21 @@ struct IDEEditorView: View {
             // Set initial lineHeight based on font size
             lineHeight = ceil(editorCore.editorFontSize * 1.4)
 
+            // Wire autocomplete filename + LSP URI for the current tab
+            autocomplete.currentFilename = tab.fileName
+            if let fileURL = tab.url {
+                autocomplete.currentFileURI = fileURL.absoluteString
+            }
+            if let lspLang = AutocompleteManager.lspLanguageId(forFilename: tab.fileName),
+               !autocomplete.currentFileURI.isEmpty {
+                lspDocumentVersion = 1
+                autocomplete.notifyLSPDocumentChange(
+                    uri: autocomplete.currentFileURI,
+                    languageId: lspLang,
+                    text: tab.content,
+                    version: lspDocumentVersion
+                )
+            }
         }
         .onChange(of: tab.id) { oldTabId, _ in
             // ── Tab switch: save outgoing state, load incoming state ──────────
@@ -1408,6 +1444,25 @@ struct IDEEditorView: View {
             // 2b. Clear stale UI state from the previous tab
             showAutocomplete = false
             autocomplete.hideSuggestions()
+
+            // Wire LSP for the incoming tab
+            autocomplete.currentFilename = tab.fileName
+            if let fileURL = tab.url {
+                autocomplete.currentFileURI = fileURL.absoluteString
+            } else {
+                autocomplete.currentFileURI = ""
+            }
+            if let lspLang = AutocompleteManager.lspLanguageId(forFilename: tab.fileName),
+               !autocomplete.currentFileURI.isEmpty {
+                lspDocumentVersion = 1
+                autocomplete.notifyLSPDocumentChange(
+                    uri: autocomplete.currentFileURI,
+                    languageId: lspLang,
+                    text: tab.content,
+                    version: lspDocumentVersion
+                )
+            }
+
             inlineSuggestionManager.clearSuggestion()
             if editorCore.showSearch {
                 editorCore.showSearch = false

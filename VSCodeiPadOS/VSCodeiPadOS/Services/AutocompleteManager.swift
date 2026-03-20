@@ -9,10 +9,14 @@ typealias AutocompleteSuggestionKind = AutocompleteManager.SuggestionKind
 /// - Basic autocomplete dropdown state (showSuggestions/selectedIndex)
 /// - Current file symbol extraction
 /// - Swift stdlib completions (top-level + a small set of member completions)
+/// - LSP-powered completions when a tunnel is connected
 final class AutocompleteManager: ObservableObject {
 
     /// Current filename for language detection (set by editor)
     var currentFilename: String = ""
+
+    /// Current file URI for LSP document synchronization (set by editor)
+    var currentFileURI: String = ""
 
     // MARK: - UI-facing legacy API (kept for existing views)
 
@@ -29,6 +33,7 @@ final class AutocompleteManager: ObservableObject {
         case symbol
         case member
         case snippet
+        case lsp
     }
 
     struct Suggestion: Identifiable, Hashable {
@@ -271,7 +276,16 @@ final class AutocompleteManager: ObservableObject {
     ///
     /// FEAT-046: extracts symbols from `text` and mixes them into the suggestion list.
     /// FEAT-047: adds a curated set of Swift stdlib completions.
+    /// LSP completions are requested asynchronously in parallel.
     func updateSuggestions(for text: String, cursorPosition: Int) {
+        // Fire off LSP completions asynchronously (non-blocking).
+        // Must happen before any early returns so LSP always fires when connected.
+        let lspURI = currentFileURI
+        let lspFilename = currentFilename
+        if !lspURI.isEmpty, let lspLangId = Self.lspLanguageId(forFilename: lspFilename) {
+            requestLSPCompletions(uri: lspURI, languageId: lspLangId, text: text, cursorOffset: cursorPosition)
+        }
+
         let safeCursor = max(0, min(cursorPosition, text.count))
         guard let context = completionContext(in: text, cursorPosition: safeCursor) else {
             apply(items: [])
@@ -506,6 +520,144 @@ final class AutocompleteManager: ObservableObject {
         suggestions = items.map { $0.displayText }
         showSuggestions = !items.isEmpty
         selectedIndex = 0
+    }
+
+    // MARK: - LSP Integration
+
+    /// Maps file extensions to LSP language identifiers.
+    /// Covers Swift, TypeScript, Python, JavaScript, and other common languages.
+    static func lspLanguageId(forFilename filename: String) -> String? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "swift":                     return "swift"
+        case "js":                        return "javascript"
+        case "jsx":                       return "javascriptreact"
+        case "mjs", "cjs":               return "javascript"
+        case "ts":                        return "typescript"
+        case "tsx":                       return "typescriptreact"
+        case "py", "pyw":                return "python"
+        case "c":                         return "c"
+        case "cpp", "cc", "cxx":         return "cpp"
+        case "h":                         return "c"
+        case "hpp", "hxx":               return "cpp"
+        case "go":                        return "go"
+        case "rs":                        return "rust"
+        case "rb":                        return "ruby"
+        case "java":                      return "java"
+        case "kt", "kts":                return "kotlin"
+        case "json":                      return "json"
+        case "html", "htm":              return "html"
+        case "css", "scss":              return "css"
+        default:                           return nil
+        }
+    }
+
+    /// Tracks which documents have been opened with the LSP server (uri -> version).
+    private var lspDocumentVersions: [String: Int] = [:]
+
+    /// The currently in-flight LSP completion request (cancelled on each keystroke).
+    private var lspCompletionTask: Task<Void, Never>?
+
+    /// Converts a cursor offset into LSP (line, character) coordinates.
+    private func lspPosition(in text: String, cursorOffset: Int) -> (line: Int, character: Int) {
+        let safeOffset = min(max(0, cursorOffset), text.count)
+        let cursorIdx = text.index(text.startIndex, offsetBy: safeOffset)
+
+        let preceding = text[text.startIndex..<cursorIdx]
+        let lineNumber = preceding.filter { $0 == "\n" }.count
+
+        let lastNewline = preceding.lastIndex(of: "\n")
+        let charOffset: Int
+        if let lastNL = lastNewline {
+            charOffset = preceding.distance(from: preceding.index(after: lastNL), to: cursorIdx)
+        } else {
+            charOffset = preceding.distance(from: preceding.startIndex, to: cursorIdx)
+        }
+        return (lineNumber, charOffset)
+    }
+
+    /// Requests completions from the remote LSP server and merges them with
+    /// any already-displayed local suggestions.  LSP results arrive
+    /// asynchronously and replace/extend the current list.
+    func requestLSPCompletions(
+        uri: String,
+        languageId: String,
+        text: String,
+        cursorOffset: Int
+    ) {
+        // Cancel any previous in-flight request so we only keep the latest.
+        lspCompletionTask?.cancel()
+        lspCompletionTask = Task { @MainActor in
+            let proxy = TunnelLSPProxy.shared
+            guard proxy.isInitialized,
+                  proxy.activeLSPServers.contains(languageId) else { return }
+
+            let (line, character) = lspPosition(in: text, cursorOffset: cursorOffset)
+            let position = LSPPosition(line: line, character: character)
+
+            do {
+                let items = try await proxy.completion(
+                    uri: uri,
+                    position: position,
+                    languageId: languageId
+                )
+
+                // Guard against cancellation after the await.
+                guard !Task.isCancelled else { return }
+
+                // Map LSP items → Suggestion with high scores so they sort above local results.
+                let lspSuggestions: [Suggestion] = items.map { item in
+                    let displayText: String
+                    if let detail = item.detail, !detail.isEmpty {
+                        displayText = "\(item.label)  \(detail)"
+                    } else {
+                        displayText = item.label
+                    }
+                    let insertText = item.insertText ?? item.label
+                    let score: Int
+                    if item.preselect == true {
+                        score = 1200
+                    } else if let sortText = item.sortText, let sortVal = Int(sortText) {
+                        score = min(1199, 1100 + sortVal)
+                    } else {
+                        score = 1150
+                    }
+                    return Suggestion(kind: .lsp, displayText: displayText,
+                                      insertText: insertText, score: score)
+                }
+
+                // Merge with whatever local suggestions are currently displayed.
+                let existing = self.suggestionItems
+                let merged = self.mergeAndSort(existing + lspSuggestions)
+                self.apply(items: merged)
+            } catch {
+                // LSP request failed — local suggestions remain visible, nothing to do.
+            }
+        }
+    }
+
+    /// Sends `textDocument/didOpen` or `textDocument/didChange` to the LSP
+    /// server so that it stays in sync with the editor buffer.
+    ///
+    /// ContentView should call this on every text change and on tab switch.
+    func notifyLSPDocumentChange(uri: String, languageId: String, text: String, version: Int) {
+        Task { @MainActor in
+            let proxy = TunnelLSPProxy.shared
+            guard proxy.isInitialized,
+                  proxy.activeLSPServers.contains(languageId) else { return }
+
+            let wasOpen = lspDocumentVersions[uri] != nil
+            lspDocumentVersions[uri] = version
+
+            if wasOpen {
+                // Full-sync didChange
+                let change = LSPTextDocumentContentChange(range: nil, rangeLength: nil, text: text)
+                proxy.didChange(uri: uri, languageId: languageId, version: version, changes: [change])
+            } else {
+                // First time → didOpen
+                proxy.didOpen(uri: uri, languageId: languageId, version: version, text: text)
+            }
+        }
     }
 }
 
