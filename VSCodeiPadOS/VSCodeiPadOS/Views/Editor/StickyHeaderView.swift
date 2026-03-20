@@ -8,6 +8,42 @@ struct StickyHeaderView: View {
     let onSelect: (Int) -> Void
     
     @State private var stickyLines: [(line: Int, content: String, depth: Int)] = []
+
+    // PERF: Deduplicated declaration prefixes — checked via Set lookup instead of 45+ hasPrefix calls
+    private static let declarationPrefixes: Set<String> = [
+        // Swift
+        "class ", "struct ", "enum ", "func ", "extension ", "protocol ",
+        // JavaScript / TypeScript
+        "function ", "const ", "export ", "module ", "async function ", "var ", "let ",
+        // Python
+        "def ", "async def ",
+        // Rust
+        "fn ", "impl ", "trait ", "mod ",
+        "pub fn ", "pub struct ", "pub enum ", "pub trait ", "pub mod ", "pub async fn ",
+        // Go
+        "type ", "package ", "import ",
+        // C / C++
+        "void ", "int ", "namespace ", "template ", "typedef ",
+        // Ruby
+        "require ", "attr_",
+        // Java / Kotlin
+        "interface ", "fun ", "public ", "private ", "protected ",
+        "object ", "companion object ",
+    ]
+
+    /// Check if a trimmed, lowercased line looks like a declaration
+    private static func isDeclaration(_ trimmed: String) -> Bool {
+        // Special checks that aren't simple prefix matches
+        if trimmed.hasPrefix("@") { return true }
+        if trimmed.hasPrefix("#include") || trimmed.hasPrefix("#define") { return true }
+        if trimmed.contains(" body: some View") { return true }
+        // Check known prefixes
+        let lower = trimmed.lowercased()
+        for prefix in declarationPrefixes {
+            if lower.hasPrefix(prefix) { return true }
+        }
+        return false
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,21 +65,21 @@ struct StickyHeaderView: View {
             }
         }
         .onChange(of: currentLine) { _, _ in updateStickyLines() }
+        .onChange(of: text) { _, _ in updateStickyLines() }
         .onAppear { updateStickyLines() }
     }
     
     private func updateStickyLines() {
-        // Scan upwards from currentLine for declaration keywords
-        // Supports: Swift, JavaScript/TypeScript, Python, Rust, Go, C/C++, Ruby, Java/Kotlin
-        
-        let lines = text.components(separatedBy: .newlines)
+        // PERF: Extract only lines 0...currentLine instead of splitting entire document.
+        // For a 1M-line file with cursor at line 500, this only scans 500 lines, not 1M.
+        let lines = extractLines(from: text, through: currentLine)
         guard currentLine < lines.count else { return }
         
         var found: [(line: Int, content: String, depth: Int)] = []
         var minIndent = Int.max
         
         // Scan upwards
-        for i in stride(from: currentLine, through: 0, by: -1) {
+        for i in stride(from: min(currentLine, lines.count - 1), through: 0, by: -1) {
             let line = lines[i]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             
@@ -51,81 +87,9 @@ struct StickyHeaderView: View {
             
             let indent = line.prefix(while: { $0 == " " }).count / 4
             
-            // Heuristic: declarations usually have less indentation than current scope
-            // and contain keywords
-            // Supports: Swift, JavaScript/TypeScript, Python, Rust, Go, C/C++, Ruby, Java/Kotlin
             if indent < minIndent {
-                let lower = trimmed.lowercased()
-                let isDeclaration =
-                    // Swift
-                    lower.hasPrefix("class ") ||
-                    lower.hasPrefix("struct ") ||
-                    lower.hasPrefix("enum ") ||
-                    lower.hasPrefix("func ") ||
-                    lower.hasPrefix("extension ") ||
-                    lower.hasPrefix("protocol ") ||
-                    trimmed.contains(" body: some View") ||
-                    // JavaScript / TypeScript
-                    lower.hasPrefix("function ") ||
-                    lower.hasPrefix("class ") ||
-                    lower.hasPrefix("const ") ||
-                    lower.hasPrefix("export ") ||
-                    lower.hasPrefix("module ") ||
-                    lower.hasPrefix("async function ") ||
-                    lower.hasPrefix("var ") ||
-                    lower.hasPrefix("let ") ||
-                    // Python
-                    lower.hasPrefix("def ") ||
-                    lower.hasPrefix("class ") ||
-                    lower.hasPrefix("async def ") ||
-                    lower.hasPrefix("@") ||
-                    // Rust
-                    lower.hasPrefix("fn ") ||
-                    lower.hasPrefix("struct ") ||
-                    lower.hasPrefix("enum ") ||
-                    lower.hasPrefix("impl ") ||
-                    lower.hasPrefix("trait ") ||
-                    lower.hasPrefix("mod ") ||
-                    lower.hasPrefix("pub fn ") ||
-                    lower.hasPrefix("pub struct ") ||
-                    lower.hasPrefix("pub enum ") ||
-                    lower.hasPrefix("pub trait ") ||
-                    lower.hasPrefix("pub mod ") ||
-                    lower.hasPrefix("pub async fn ") ||
-                    // Go
-                    lower.hasPrefix("func ") ||
-                    lower.hasPrefix("type ") ||
-                    lower.hasPrefix("package ") ||
-                    lower.hasPrefix("import ") ||
-                    // C / C++
-                    lower.hasPrefix("void ") ||
-                    lower.hasPrefix("int ") ||
-                    lower.hasPrefix("class ") ||
-                    lower.hasPrefix("struct ") ||
-                    lower.hasPrefix("namespace ") ||
-                    lower.hasPrefix("template ") ||
-                    lower.hasPrefix("typedef ") ||
-                    lower.hasPrefix("#include") ||
-                    lower.hasPrefix("#define") ||
-                    // Ruby
-                    lower.hasPrefix("def ") ||
-                    lower.hasPrefix("class ") ||
-                    lower.hasPrefix("module ") ||
-                    lower.hasPrefix("require ") ||
-                    lower.hasPrefix("attr_") ||
-                    // Java / Kotlin
-                    lower.hasPrefix("class ") ||
-                    lower.hasPrefix("interface ") ||
-                    lower.hasPrefix("fun ") ||
-                    lower.hasPrefix("public ") ||
-                    lower.hasPrefix("private ") ||
-                    lower.hasPrefix("protected ") ||
-                    lower.hasPrefix("object ") ||
-                    lower.hasPrefix("companion object ") ||
-                    lower.hasPrefix("@")
-                
-                if isDeclaration {
-                    found.insert((i, line, indent), at: 0)
+                if Self.isDeclaration(trimmed) {
+                    found.append((i, line, indent))
                     minIndent = indent
                 }
             }
@@ -133,11 +97,38 @@ struct StickyHeaderView: View {
             if minIndent == 0 { break }
         }
         
+        // Reverse since we scanned backwards (avoids O(n) insert-at-0)
+        found.reverse()
+        
         // Limit to 3 levels to avoid clutter
         if found.count > 3 {
             found = Array(found.suffix(3))
         }
         
         self.stickyLines = found
+    }
+
+    /// PERF: Extract lines 0...throughLine without splitting the entire document.
+    /// Returns an array of line strings up to and including the target line.
+    private func extractLines(from text: String, through targetLine: Int) -> [String] {
+        var lines: [String] = []
+        lines.reserveCapacity(min(targetLine + 1, 1000))
+        var lineStart = text.startIndex
+        var currentLine = 0
+        var i = text.startIndex
+        while i < text.endIndex {
+            if text[i] == "\n" {
+                lines.append(String(text[lineStart..<i]))
+                if currentLine >= targetLine { return lines }
+                currentLine += 1
+                lineStart = text.index(after: i)
+            }
+            i = text.index(after: i)
+        }
+        // Last line
+        if currentLine <= targetLine {
+            lines.append(String(text[lineStart..<text.endIndex]))
+        }
+        return lines
     }
 }

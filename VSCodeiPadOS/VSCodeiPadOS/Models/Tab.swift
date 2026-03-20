@@ -54,11 +54,20 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     // MARK: - Per-Tab Editor State (not persisted, transient UI state)
 
     /// Saved scroll offset (pixels) — restored when switching back to this tab.
-    /// Not included in Codable encoding because it is a transient UI value.
+    /// Excluded from Codable via CodingKeys.
     var savedScrollOffset: CGFloat = 0
 
     /// Saved cursor character index — restored when switching back to this tab.
+    /// Excluded from Codable via CodingKeys.
     var savedCursorIndex: Int = 0
+
+    // FIX: Exclude transient UI state from Codable encoding/decoding
+    enum CodingKeys: String, CodingKey {
+        case id, fileName, content, language, url
+        case remotePath, remoteHost
+        case isUnsaved, isActive, isPinned, isPreview
+        case fileEncoding
+    }
     
     /// Convenience accessor for the encoding as a Foundation String.Encoding
     var stringEncoding: String.Encoding {

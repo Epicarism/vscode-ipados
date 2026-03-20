@@ -152,8 +152,10 @@ class MultiCursorState: ObservableObject {
     /// Insert text at all cursor positions
     func insertText(_ text: String, in fullText: inout String) {
         // Process from start -> end while tracking how prior edits shift later cursor positions.
+        // FIX: Use utf16.count for all offset/delta math since NSRange operates in UTF-16 code units.
         let sortedCursors = cursors.sorted { $0.position < $1.position }
         var delta = 0
+        let textUTF16Len = text.utf16.count
 
         for cursor in sortedCursors {
             guard let cursorIndex = cursors.firstIndex(where: { $0.id == cursor.id }) else { continue }
@@ -167,19 +169,22 @@ class MultiCursorState: ObservableObject {
                 fullText.replaceSubrange(swiftRange, with: text)
 
                 // Cursor ends after inserted text; selection cleared.
-                cursors[cursorIndex].position = effectiveLocation + text.count
+                cursors[cursorIndex].position = effectiveLocation + textUTF16Len
                 cursors[cursorIndex].anchor = nil
 
-                delta += (text.count - selectionRange.length)
+                delta += (textUTF16Len - selectionRange.length)
             } else {
                 let effectivePosition = cursor.position + delta
-                let clamped = min(max(0, effectivePosition), fullText.count)
-                let stringIndex = fullText.index(fullText.startIndex, offsetBy: clamped)
+                let fullTextUTF16Len = (fullText as NSString).length
+                let clamped = min(max(0, effectivePosition), fullTextUTF16Len)
+                
+                // Convert UTF-16 offset to Swift String.Index safely
+                let stringIndex = String.Index(utf16Offset: clamped, in: fullText)
 
                 fullText.insert(contentsOf: text, at: stringIndex)
 
-                cursors[cursorIndex].position = clamped + text.count
-                delta += text.count
+                cursors[cursorIndex].position = clamped + textUTF16Len
+                delta += textUTF16Len
             }
         }
 
@@ -210,12 +215,19 @@ class MultiCursorState: ObservableObject {
                 let effectivePosition = cursor.position + delta
                 guard effectivePosition > 0 else { continue }
 
-                let deleteOffset = effectivePosition - 1
-                let deleteIndex = fullText.index(fullText.startIndex, offsetBy: deleteOffset)
-                fullText.remove(at: deleteIndex)
+                // Delete one character before cursor using UTF-16 offset
+                let deleteUTF16Offset = effectivePosition - 1
+                let nsString = fullText as NSString
+                guard deleteUTF16Offset < nsString.length else { continue }
+                
+                // Get the range of the composed character at this UTF-16 position
+                let charRange = nsString.rangeOfComposedCharacterSequence(at: deleteUTF16Offset)
+                guard let swiftRange = Range(charRange, in: fullText) else { continue }
+                
+                fullText.removeSubrange(swiftRange)
 
-                cursors[cursorIndex].position = deleteOffset
-                delta -= 1
+                cursors[cursorIndex].position = charRange.location
+                delta -= charRange.length
             }
         }
 

@@ -58,13 +58,14 @@ struct MinimapView: View {
     // MARK: - View
 
     /// Pre-split lines, recomputed only when `content` changes (not on every scroll).
+    /// NOTE: body computes this once and passes to helpers to avoid redundant splits.
     private var allLines: [Substring] {
         Array(content.split(separator: "\n", omittingEmptySubsequences: false))
     }
 
     /// Indices of lines that are NOT folded (visible in editor). When no fileId, all lines are visible.
-    private var visibleLineIndices: [Int] {
-        let lines = allLines
+    /// Takes pre-computed lines to avoid re-splitting content.
+    private func computeVisibleLineIndices(lines: [Substring]) -> [Int] {
         guard let fid = fileId else {
             return Array(0..<lines.count)
         }
@@ -83,7 +84,7 @@ struct MinimapView: View {
             let size = geometry.size
             let minimapHeight = max(1, size.height)
             let lines = allLines
-            let visible = visibleLineIndices
+            let visible = computeVisibleLineIndices(lines: lines)
             let visibleCount = max(visible.count, 1)
 
             ZStack(alignment: .topLeading) {
@@ -444,25 +445,25 @@ struct MinimapView: View {
         return tokens
     }
 
+    // PERF: Static keyword set — compiled once, not on every call
+    private static let keywordSet: Set<String> = [
+        "import", "export", "from", "as",
+        "struct", "class", "enum", "protocol", "extension", "func", "var", "let",
+        "if", "else", "for", "while", "repeat", "switch", "case", "default",
+        "break", "continue", "return", "throw", "throws", "try", "catch",
+        "do", "in", "where", "guard", "defer",
+        "public", "private", "fileprivate", "internal", "open",
+        "static", "final", "override", "mutating", "nonmutating",
+        "async", "await",
+        "true", "false", "nil",
+        "self", "super",
+        // JS/Python-ish
+        "const", "function", "new", "this",
+        "def", "pass", "lambda", "None"
+    ]
+
     private func isKeyword(_ word: Substring) -> Bool {
-        // Small superset of common Swift/JS/Python keywords.
-        // (We can't depend on a full parser here.)
-        let keywords: Set<String> = [
-            "import", "export", "from", "as",
-            "struct", "class", "enum", "protocol", "extension", "func", "var", "let",
-            "if", "else", "for", "while", "repeat", "switch", "case", "default",
-            "break", "continue", "return", "throw", "throws", "try", "catch",
-            "do", "in", "where", "guard", "defer",
-            "public", "private", "fileprivate", "internal", "open",
-            "static", "final", "override", "mutating", "nonmutating",
-            "async", "await",
-            "true", "false", "nil",
-            "self", "super",
-            // JS/Python-ish
-            "const", "function", "new", "this",
-            "def", "pass", "lambda", "None"
-        ]
-        return keywords.contains(String(word))
+        Self.keywordSet.contains(String(word))
     }
 
     private func looksLikeTypeName(_ word: Substring) -> Bool {

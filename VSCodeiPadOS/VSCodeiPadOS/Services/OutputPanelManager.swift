@@ -137,10 +137,11 @@ enum ANSIParser {
         while !scanner.isAtEnd {
             // Scan up to escape character
             if let plainText = scanner.scanUpToString("\u{1B}") {
-                let startIndex = strippedText.count
+                // FIX: Use UTF-16 length for NSRange compatibility (not Swift Character count)
+                let startIndex = (strippedText as NSString).length
                 strippedText += plainText
                 if !currentAttrs.isEmpty {
-                    let range = NSRange(location: startIndex, length: plainText.count)
+                    let range = NSRange(location: startIndex, length: (plainText as NSString).length)
                     attributes[range] = currentAttrs
                 }
             }
@@ -166,10 +167,11 @@ enum ANSIParser {
             } else if !scanner.isAtEnd {
                 // No escape found, take rest of string
                 let remaining = String(text[scanner.currentIndex...])
-                let startIndex = strippedText.count
+                // FIX: Use UTF-16 length for NSRange compatibility
+                let startIndex = (strippedText as NSString).length
                 strippedText += remaining
                 if !currentAttrs.isEmpty {
-                    let range = NSRange(location: startIndex, length: remaining.count)
+                    let range = NSRange(location: startIndex, length: (remaining as NSString).length)
                     attributes[range] = currentAttrs
                 }
                 break

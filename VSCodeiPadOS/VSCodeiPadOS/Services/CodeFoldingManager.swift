@@ -287,8 +287,8 @@ final class CodeFoldingManager: ObservableObject {
         // Store regions in the per-file dictionary
         if let fileId = currentFileId {
             foldRegionsLock.lock()
+            defer { foldRegionsLock.unlock() }
             foldRegionsByFile[fileId] = regions
-            foldRegionsLock.unlock()
         }
         
         // Restore previous fold state for this file
@@ -508,8 +508,8 @@ final class CodeFoldingManager: ObservableObject {
         let regionsToSave: [FoldRegion]
         if let fileId = currentFileId {
             foldRegionsLock.lock()
+            defer { foldRegionsLock.unlock() }
             let storedRegions = foldRegionsByFile[fileId]
-            foldRegionsLock.unlock()
             regionsToSave = storedRegions ?? foldRegions
         } else {
             regionsToSave = foldRegions
@@ -683,8 +683,8 @@ final class CodeFoldingManager: ObservableObject {
         
         // Sync foldRegionsByFile
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         foldRegionsByFile[fileId] = foldRegions
-        foldRegionsLock.unlock()
         updateCollapsedLines()
         
         if let filePath = currentFilePath {
@@ -770,8 +770,8 @@ final class CodeFoldingManager: ObservableObject {
         
         // Sync foldRegionsByFile
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         foldRegionsByFile[fileId] = foldRegions
-        foldRegionsLock.unlock()
         updateCollapsedLines()
         
         if let filePath = currentFilePath {
@@ -800,8 +800,8 @@ final class CodeFoldingManager: ObservableObject {
         }
         
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         foldRegionsByFile[fileId] = foldRegions
-        foldRegionsLock.unlock()
         updateCollapsedLines()
         if let filePath = currentFilePath { saveFoldState(for: filePath) }
     }
@@ -827,8 +827,8 @@ final class CodeFoldingManager: ObservableObject {
         }
         
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         foldRegionsByFile[fileId] = foldRegions
-        foldRegionsLock.unlock()
         updateCollapsedLines()
         if let filePath = currentFilePath { saveFoldState(for: filePath) }
     }
@@ -848,8 +848,8 @@ final class CodeFoldingManager: ObservableObject {
     /// Checks if a line should be hidden for a specific file (thread-safe via lock)
     nonisolated func isLineFolded(fileId: String, line: Int) -> Bool {
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         let regions = foldRegionsByFile[fileId]
-        foldRegionsLock.unlock()
         guard let regions else { return false }
         for region in regions where region.isFolded {
             if line > region.startLine && line <= region.endLine {
@@ -879,8 +879,8 @@ final class CodeFoldingManager: ObservableObject {
     /// Checks if a line is foldable for a specific file
     func isFoldable(fileId: String, line: Int) -> Bool {
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         let regions = foldRegionsByFile[fileId]
-        foldRegionsLock.unlock()
         guard let regions else { return false }
         return regions.contains { $0.startLine == line }
     }
@@ -888,39 +888,42 @@ final class CodeFoldingManager: ObservableObject {
     /// Checks if a region at a given line is folded for a specific file
     func isFolded(fileId: String, line: Int) -> Bool {
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         let regions = foldRegionsByFile[fileId]
-        foldRegionsLock.unlock()
         guard let regions else { return false }
         return regions.first { $0.startLine == line }?.isFolded ?? false
     }
     
     /// Toggles the fold state at a specific line for a specific file
     func toggleFold(fileId: String, line: Int) {
-        foldRegionsLock.lock()
-        guard var regions = foldRegionsByFile[fileId] else {
-            foldRegionsLock.unlock()
-            return
-        }
-        foldRegionsLock.unlock()
-        
-        if let regionIndex = regions.firstIndex(where: { $0.startLine == line }) {
-            let wasFolded = regions[regionIndex].isFolded
-            regions[regionIndex].isFolded.toggle()
-            
+        let regions: [FoldRegion]?
+        do {
             foldRegionsLock.lock()
-            foldRegionsByFile[fileId] = regions
-            foldRegionsLock.unlock()
+            defer { foldRegionsLock.unlock() }
+            regions = foldRegionsByFile[fileId]
+        }
+        guard var mutableRegions = regions else { return }
+        
+        if let regionIndex = mutableRegions.firstIndex(where: { $0.startLine == line }) {
+            let wasFolded = mutableRegions[regionIndex].isFolded
+            mutableRegions[regionIndex].isFolded.toggle()
+            
+            do {
+                foldRegionsLock.lock()
+                defer { foldRegionsLock.unlock() }
+                foldRegionsByFile[fileId] = mutableRegions
+            }
             
             // Update current file regions if this is the active file
             if fileId == currentFileId {
-                self.foldRegions = regions
+                self.foldRegions = mutableRegions
                 updateCollapsedLines()
             } else {
                 objectWillChange.send()
             }
             
             // Apply or revert text fold using the local regions (not self.foldRegions which may be different file)
-            let region = regions[regionIndex]
+            let region = mutableRegions[regionIndex]
             if wasFolded {
                 revertTextFold(fileId: fileId, region: region)
             } else {
@@ -935,23 +938,23 @@ final class CodeFoldingManager: ObservableObject {
     /// Gets fold regions for a specific file
     func getFoldRegions(for fileId: String) -> [FoldRegion] {
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         let result = foldRegionsByFile[fileId] ?? []
-        foldRegionsLock.unlock()
         return result
     }
     
     /// Clears fold regions for a specific file from memory
     func clearFoldRegions(for fileId: String) {
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         foldRegionsByFile.removeValue(forKey: fileId)
-        foldRegionsLock.unlock()
     }
     
     /// Clears all fold regions from memory
     func clearAllFoldRegions() {
         foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
         foldRegionsByFile.removeAll()
-        foldRegionsLock.unlock()
     }
     
     /// Gets folded line ranges for text hiding

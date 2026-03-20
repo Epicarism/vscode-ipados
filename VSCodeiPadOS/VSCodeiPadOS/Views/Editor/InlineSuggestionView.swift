@@ -99,15 +99,13 @@ struct InlineSuggestionView: View {
         let fontLineHeight = font.lineHeight
         let baselineAdjustment = max(0, (lineHeight - fontLineHeight) / 2)
         
-        let lines = code.components(separatedBy: .newlines)
+        // PERF: Extract only the single line we need instead of splitting entire document
+        let currentLineIndex = cursorPosition.line
+        let currentLine = extractLine(from: code, at: currentLineIndex)
         
         // Calculate the starting position
         let startX: CGFloat
         let startY: CGFloat
-        
-        // Get the current line text up to cursor position
-        let currentLineIndex = min(cursorPosition.line, max(0, lines.count - 1))
-        let currentLine = lines.indices.contains(currentLineIndex) ? lines[currentLineIndex] : ""
         
         // Calculate visual column for current position
         let visualColumn = visualColumn(in: currentLine, utf16Column: cursorPosition.column, tabSize: tabSize)
@@ -216,7 +214,7 @@ struct InlineSuggestionView: View {
     private func isCursorVisible() -> Bool {
         let cursorLine = cursorPosition.line
         // Allow some margin for visibility (show if within viewport ± a few lines)
-        let visibleRange = scrollPosition...(scrollPosition + 50) // Assuming ~50 visible lines
+        let visibleRange = scrollPosition...(scrollPosition + 50)
         return visibleRange.contains(cursorLine)
     }
     
@@ -235,6 +233,28 @@ struct InlineSuggestionView: View {
             }
         }
         return col
+    }
+
+    /// PERF: Extract a single line by index without splitting the entire document.
+    /// O(lineIndex) scan for newlines — far cheaper than O(N) full split for large files.
+    private func extractLine(from text: String, at lineIndex: Int) -> String {
+        var currentLine = 0
+        var lineStart = text.startIndex
+        var i = text.startIndex
+        while i < text.endIndex {
+            if text[i] == "\n" {
+                if currentLine == lineIndex {
+                    return String(text[lineStart..<i])
+                }
+                currentLine += 1
+                lineStart = text.index(after: i)
+            }
+            i = text.index(after: i)
+        }
+        if currentLine == lineIndex {
+            return String(text[lineStart..<text.endIndex])
+        }
+        return ""
     }
 }
 

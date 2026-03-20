@@ -178,8 +178,12 @@ final class NotificationManager: ObservableObject {
     }
     
     func markAllRead() {
-        for i in allNotifications.indices {
-            allNotifications[i].isRead = true
+        // FIX: Subscript mutation of value-type elements in @Published array
+        // doesn't trigger objectWillChange. Use map to create a new array.
+        allNotifications = allNotifications.map {
+            var notification = $0
+            notification.isRead = true
+            return notification
         }
     }
     

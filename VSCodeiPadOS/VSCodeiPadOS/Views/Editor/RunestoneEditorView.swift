@@ -140,6 +140,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         // Store reference for coordinator
         context.coordinator.textView = textView
+        context.coordinator.multiCursorManager.textView = textView
 
         // Accessibility
         textView.accessibilityLabel = "Code editor"
@@ -210,6 +211,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         // race condition where stale content overwrites new tab's content
         if isFileSwitching {
             context.coordinator.cancelPendingTextSync()
+            context.coordinator.multiCursorManager.reset()
             
             // User switched to a different file - safe to call setState()
             context.coordinator.lastFilename = filename
@@ -500,6 +502,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         private var forceSyncObserver: NSObjectProtocol?
         private var editorActionObservers: [NSObjectProtocol] = []
 
+        // MARK: - Multi-Cursor
+        let multiCursorManager = RunestoneMultiCursorManager()
         // MARK: - Newline Index Cache for O(log n) Cursor Position
         /// Sorted array of character offsets where each newline ('\n') occurs.
         /// Built once on file load / setState, updated incrementally on edits.
@@ -573,6 +577,21 @@ struct RunestoneEditorView: UIViewRepresentable {
                 )
             }
 
+            // Multi-cursor: Add Cursor Above/Below (Cmd+Option+Up/Down)
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .addCursorAbove, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.multiCursorManager.addCursorAbove()
+                    }
+                }
+            )
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .addCursorBelow, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.multiCursorManager.addCursorBelow()
+                    }
+                }
+            )
             // Listen for code folding notifications from EditorCore
             editorActionObservers.append(
                 NotificationCenter.default.addObserver(forName: .collapseAllFolds, object: nil, queue: .main) { [weak self] _ in
@@ -623,6 +642,14 @@ struct RunestoneEditorView: UIViewRepresentable {
                 NotificationCenter.default.addObserver(forName: .showProblems, object: nil, queue: .main) { _ in
                     MainActor.assumeIsolated {
                         NotificationCenter.default.post(name: .switchToProblemsPanel, object: nil)
+                    }
+                }
+            )
+            // Escape key: exit multi-cursor mode (also hides search)
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .hideSearch, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.multiCursorManager.reset()
                     }
                 }
             )
@@ -849,6 +876,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         func textViewDidChangeSelection(_ textView: TextView) {
             updateCursorPosition(in: textView)
             updateBracketHighlight(in: textView)
+            // Refresh multi-cursor overlay positions (they move when primary cursor moves on scroll/layout)
+            if multiCursorManager.isActive {
+                multiCursorManager.updateDisplay()
+            }
         }
         
         func textViewDidBeginEditing(_ textView: TextView) {
@@ -867,6 +898,24 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
 
+            // ---------------------------------------------------------------
+            // MARK: Multi-cursor text input interception
+            // ---------------------------------------------------------------
+            if multiCursorManager.isActive {
+                if text.isEmpty && range.length > 0 {
+                    // Backspace/delete - handle at all cursors
+                    if multiCursorManager.deleteBackward() {
+                        textViewDidChange(textView)
+                        return false
+                    }
+                } else if !text.isEmpty {
+                    // Text insertion - handle at all cursors
+                    if multiCursorManager.insertText(text) {
+                        textViewDidChange(textView)
+                        return false
+                    }
+                }
+            }
             // ---------------------------------------------------------------
             // MARK: Tab key
             // ---------------------------------------------------------------
@@ -1152,6 +1201,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             MainActor.assumeIsolated {
                 parent.scrollOffset = scrollView.contentOffset.y
             }
+            // Refresh multi-cursor overlay positions on scroll
+            if multiCursorManager.isActive {
+                multiCursorManager.updateDisplay()
+            }
         }
         
         // MARK: - Bracket Matching Highlight
@@ -1325,8 +1378,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             case .moveLineDown: performMoveLineDown(textView)
             case .duplicateLineUp: performDuplicateLine(textView, above: true)
             case .duplicateLineDown: performDuplicateLine(textView, above: false)
-            case .addNextOccurrence: performAddNextOccurrence(textView)
-            case .selectAllOccurrences: performSelectAllOccurrences(textView)
+            case .addNextOccurrence: multiCursorManager.addNextOccurrence()
+            case .selectAllOccurrences: multiCursorManager.selectAllOccurrences()
             case .selectLine: performSelectLine(textView)
             case .indentLines: performIndentLines(textView)
             case .outdentLines: performOutdentLines(textView)

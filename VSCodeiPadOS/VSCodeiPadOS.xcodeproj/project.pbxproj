@@ -116,6 +116,7 @@
 		1163 /* GitHubAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2163 /* GitHubAuthManager.swift */; };
 		1164 /* GitHubLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2164 /* GitHubLoginView.swift */; };
 		1165 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2165 /* KeychainManager.swift */; };
+		1166 /* RunestoneMultiCursorManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2166 /* RunestoneMultiCursorManager.swift */; };
 		16AE4B084CAA297D994F0E3F /* RunConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE15C63C875548573754E1A7 /* RunConfigView.swift */; };
 		1891B5EB0E9AC0B667F2690B /* RemoteFileSystemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECCE0B750BBF4DDD8099FDF /* RemoteFileSystemProvider.swift */; };
 		1901 /* KeyCommandBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2901 /* KeyCommandBridge.swift */; };
@@ -262,6 +263,7 @@
 		2146 /* NativeGitWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeGitWriter.swift; sourceTree = "<group>"; };
 		2147 /* RunestoneEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneEditorView.swift; sourceTree = "<group>"; };
 		2148 /* RunestoneThemeAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneThemeAdapter.swift; sourceTree = "<group>"; };
+		2166 /* RunestoneMultiCursorManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunestoneMultiCursorManager.swift; sourceTree = "<group>"; };
 		2150 /* JSRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSRunner.swift; sourceTree = "<group>"; };
 		2151 /* CodeAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAnalyzer.swift; sourceTree = "<group>"; };
 		2152 /* RunnerSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerSelector.swift; sourceTree = "<group>"; };
@@ -467,6 +469,7 @@
 				2142 /* SSHManager.swift */,
 				BB11CC22DD33EE44FF550001 /* EmmetEngine.swift */,
 				2148 /* RunestoneThemeAdapter.swift */,
+
 				4013 /* NativeGit */,
 				4014 /* OnDevice */,
 				4015 /* Runners */,
@@ -527,6 +530,7 @@
 				2035 /* MinimapView.swift */,
 				2036 /* SyntaxHighlightingTextView.swift */,
 				2147 /* RunestoneEditorView.swift */,
+				2166 /* RunestoneMultiCursorManager.swift */,
 				335856227DA8D31DBD7AA45A /* IndentGuidesOverlay.swift */,
 			);
 			path = Editor;
@@ -870,6 +874,7 @@
 				43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */,
 				BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */,
 				1D991EE41B48E67BE7F0460D /* IndentGuidesOverlay.swift in Sources */,
+				1166 /* RunestoneMultiCursorManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
