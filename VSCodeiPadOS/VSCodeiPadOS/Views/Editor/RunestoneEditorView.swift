@@ -12,6 +12,7 @@ import UIKit
 import Runestone
 import TreeSitterSwiftRunestone
 import TreeSitterJavaScriptRunestone
+import TreeSitterTypeScriptRunestone
 import TreeSitterPythonRunestone
 import TreeSitterJSONRunestone
 import TreeSitterHTMLRunestone
@@ -397,9 +398,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         case "js", "mjs", "cjs", "jsx":
             return TreeSitterLanguage.javaScript
         
-        // TypeScript - use JavaScript grammar (closest available match; captures keywords/strings/comments)
+        // TypeScript - use dedicated TypeScript grammar (handles types, interfaces, generics, decorators)
         case "ts", "mts", "cts", "tsx":
-            return TreeSitterLanguage.javaScript
+            return TreeSitterLanguage.typeScript
         
         // Python
         case "py", "pyw", "pyi":

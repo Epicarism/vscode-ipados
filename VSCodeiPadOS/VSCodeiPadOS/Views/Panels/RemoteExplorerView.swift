@@ -13,6 +13,16 @@ struct RemoteExplorerView: View {
     @State private var activeTerminal: TerminalManager?
     @State private var connectionTask: Task<Void, Never>?
     @State private var isConnecting = false
+
+    // Toolbar new file/folder alerts
+    @State private var remoteShowingNewFileAlert = false
+    @State private var remoteNewFileName = ""
+    @State private var remoteNewFileTargetPath = "~"
+    @State private var remoteShowingNewFolderAlert = false
+    @State private var remoteNewFolderName = ""
+    @State private var remoteNewFolderTargetPath = "~"
+    @State private var remoteToolbarOperationError: String?
+    @State private var remoteShowingToolbarOperationError = false
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -120,6 +130,27 @@ struct RemoteExplorerView: View {
                         .foregroundColor(theme.sidebarForeground.opacity(0.6))
                 }
                 Spacer()
+                // New File / New Folder menu
+                Menu {
+                    Button {
+                        remoteNewFileName = "untitled.txt"
+                        remoteNewFileTargetPath = remoteFileNavigator.rootNode?.path ?? "~"
+                        remoteShowingNewFileAlert = true
+                    } label: {
+                        Label("New File", systemImage: "doc.badge.plus")
+                    }
+                    Button {
+                        remoteNewFolderName = "New Folder"
+                        remoteNewFolderTargetPath = remoteFileNavigator.rootNode?.path ?? "~"
+                        remoteShowingNewFolderAlert = true
+                    } label: {
+                        Label("New Folder", systemImage: "folder.badge.plus")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14))
+                        .foregroundColor(theme.sidebarForeground.opacity(0.7))
+                }
                 Button(action: {
                     activeTerminal?.disconnect()
                     activeTerminal = nil
@@ -180,6 +211,47 @@ struct RemoteExplorerView: View {
                 }
                 .padding(.horizontal, 8)
             }
+        }
+        .alert("New File", isPresented: $remoteShowingNewFileAlert) {
+            TextField("File name", text: $remoteNewFileName)
+            Button("Cancel", role: .cancel) { }
+            Button("Create") {
+                guard !remoteNewFileName.isEmpty else { return }
+                remoteFileNavigator.createFile(name: remoteNewFileName, inDirectory: remoteNewFileTargetPath) { result in
+                    Task { @MainActor in
+                        switch result {
+                        case .success:
+                            remoteFileNavigator.refreshRoot()
+                        case .failure(let error):
+                            remoteToolbarOperationError = error.localizedDescription
+                            remoteShowingToolbarOperationError = true
+                        }
+                    }
+                }
+            }
+        }
+        .alert("New Folder", isPresented: $remoteShowingNewFolderAlert) {
+            TextField("Folder name", text: $remoteNewFolderName)
+            Button("Cancel", role: .cancel) { }
+            Button("Create") {
+                guard !remoteNewFolderName.isEmpty else { return }
+                remoteFileNavigator.createRemoteDirectory(name: remoteNewFolderName, inDirectory: remoteNewFolderTargetPath) { result in
+                    Task { @MainActor in
+                        switch result {
+                        case .success:
+                            remoteFileNavigator.refreshRoot()
+                        case .failure(let error):
+                            remoteToolbarOperationError = error.localizedDescription
+                            remoteShowingToolbarOperationError = true
+                        }
+                    }
+                }
+            }
+        }
+        .alert("Error", isPresented: $remoteShowingToolbarOperationError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(remoteToolbarOperationError ?? "An unknown error occurred.")
         }
     }
     
@@ -410,7 +482,80 @@ struct SavedConnectionRow: View {
         sftpManager = nil
         terminal = nil
     }
-    
+
+    // MARK: - File Operations
+
+    func createFile(name: String, inDirectory dirPath: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
+        guard let sftpManager = sftpManager else {
+            completion(.failure(NSError(domain: "SFTP", code: -1, userInfo: [NSLocalizedDescriptionKey: "SFTP not initialized"])))
+            return
+        }
+        let remotePath = dirPath == "~" ? "~/\(name)" : "\(dirPath)/\(name)"
+        sftpManager.writeTextFile(remotePath: remotePath, content: "") { result in
+            completion(result)
+        }
+    }
+
+    func createRemoteDirectory(name: String, inDirectory dirPath: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
+        guard let sftpManager = sftpManager else {
+            completion(.failure(NSError(domain: "SFTP", code: -1, userInfo: [NSLocalizedDescriptionKey: "SFTP not initialized"])))
+            return
+        }
+        let remotePath = dirPath == "~" ? "~/\(name)" : "\(dirPath)/\(name)"
+        sftpManager.createDirectory(remotePath: remotePath) { result in
+            completion(result)
+        }
+    }
+
+    func renameItem(at oldPath: String, to newName: String, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
+        guard let sftpManager = sftpManager else {
+            completion(.failure(NSError(domain: "SFTP", code: -1, userInfo: [NSLocalizedDescriptionKey: "SFTP not initialized"])))
+            return
+        }
+        let parentPath = (oldPath as NSString).deletingLastPathComponent
+        let newPath = parentPath.isEmpty ? newName : "\(parentPath)/\(newName)"
+        sftpManager.rename(from: oldPath, to: newPath) { result in
+            completion(result)
+        }
+    }
+
+    func deleteItem(at path: String, isDirectory: Bool, completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
+        guard let sftpManager = sftpManager else {
+            completion(.failure(NSError(domain: "SFTP", code: -1, userInfo: [NSLocalizedDescriptionKey: "SFTP not initialized"])))
+            return
+        }
+        sftpManager.delete(remotePath: path, recursive: isDirectory) { result in
+            completion(result)
+        }
+    }
+
+    func refreshParentDirectory(of path: String) {
+        let parentPath = (path as NSString).deletingLastPathComponent
+        let resolvedParent: String
+        if parentPath.isEmpty || parentPath == "." {
+            resolvedParent = rootNode?.path ?? "~"
+        } else {
+            resolvedParent = parentPath
+        }
+        if let root = rootNode {
+            let parentNode = Self.findNode(in: root, path: resolvedParent)
+            listDirectory(path: resolvedParent, parent: parentNode)
+        }
+    }
+
+    func refreshRoot() {
+        guard let root = rootNode else { return }
+        listDirectory(path: root.path, parent: nil)
+    }
+
+    private static func findNode(in node: RemoteFileNode, path: String) -> RemoteFileNode? {
+        if node.path == path { return node }
+        for child in node.children {
+            if let found = findNode(in: child, path: path) { return found }
+        }
+        return nil
+    }
+
     /// Recursively finds a node by path in the tree and updates its children
     private static func updateNodeChildren(in node: inout RemoteFileNode, path: String, children: [RemoteFileNode]) {
         if node.path == path {
@@ -433,7 +578,18 @@ struct RemoteFileTreeView: View {
     @ObservedObject var editorCore: EditorCore
     let theme: Theme
     let level: Int
-    
+
+    // MARK: - Alert state
+    @State private var showingNewFileAlert = false
+    @State private var newFileName = ""
+    @State private var showingNewFolderAlert = false
+    @State private var newFolderName = ""
+    @State private var showingRenameAlert = false
+    @State private var newName = ""
+    @State private var showingDeleteConfirmation = false
+    @State private var operationError: String?
+    @State private var showingOperationError = false
+
     init(node: RemoteFileNode, navigator: RemoteFileNavigator, editorCore: EditorCore, theme: Theme, level: Int = 0) {
         self.node = node
         self.navigator = navigator
@@ -441,11 +597,11 @@ struct RemoteFileTreeView: View {
         self.theme = theme
         self.level = level
     }
-    
+
     var isExpanded: Bool {
         navigator.expandedPaths.contains(node.path)
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: {
@@ -466,15 +622,15 @@ struct RemoteFileTreeView: View {
                         Spacer()
                             .frame(width: 12)
                     }
-                    
+
                     Image(systemName: node.isDirectory ? (isExpanded ? "folder.fill" : "folder") : "doc")
                         .font(.system(size: 12))
                         .foregroundColor(node.isDirectory ? .accentColor : theme.sidebarForeground.opacity(0.8))
-                    
+
                     Text(node.name)
                         .font(.system(size: 12))
                         .foregroundColor(theme.sidebarForeground)
-                    
+
                     Spacer()
                 }
                 .padding(.leading, CGFloat(level * 16))
@@ -482,7 +638,129 @@ struct RemoteFileTreeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            
+            .contextMenu {
+                // New File / New Folder (only for directories)
+                if node.isDirectory {
+                    Button {
+                        newFileName = "untitled.txt"
+                        showingNewFileAlert = true
+                    } label: {
+                        Label("New File", systemImage: "doc.badge.plus")
+                    }
+
+                    Button {
+                        newFolderName = "New Folder"
+                        showingNewFolderAlert = true
+                    } label: {
+                        Label("New Folder", systemImage: "folder.badge.plus")
+                    }
+
+                    Divider()
+                }
+
+                // Rename
+                Button {
+                    newName = node.name
+                    showingRenameAlert = true
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+
+                // Delete
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+
+                Divider()
+
+                // Copy Path
+                Button {
+                    UIPasteboard.general.string = node.path
+                } label: {
+                    Label("Copy Path", systemImage: "doc.on.doc")
+                }
+            }
+            // MARK: - Alerts
+            .alert("New File", isPresented: $showingNewFileAlert) {
+                TextField("File name", text: $newFileName)
+                Button("Cancel", role: .cancel) { }
+                Button("Create") {
+                    guard !newFileName.isEmpty else { return }
+                    navigator.createFile(name: newFileName, inDirectory: node.path) { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success:
+                                navigator.refreshParentDirectory(of: node.path + "/" + newFileName)
+                            case .failure(let error):
+                                operationError = error.localizedDescription
+                                showingOperationError = true
+                            }
+                        }
+                    }
+                }
+            }
+            .alert("New Folder", isPresented: $showingNewFolderAlert) {
+                TextField("Folder name", text: $newFolderName)
+                Button("Cancel", role: .cancel) { }
+                Button("Create") {
+                    guard !newFolderName.isEmpty else { return }
+                    navigator.createRemoteDirectory(name: newFolderName, inDirectory: node.path) { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success:
+                                navigator.refreshParentDirectory(of: node.path + "/" + newFolderName)
+                            case .failure(let error):
+                                operationError = error.localizedDescription
+                                showingOperationError = true
+                            }
+                        }
+                    }
+                }
+            }
+            .alert("Rename", isPresented: $showingRenameAlert) {
+                TextField("Name", text: $newName)
+                Button("Cancel", role: .cancel) { }
+                Button("Rename") {
+                    guard !newName.isEmpty, newName != node.name else { return }
+                    navigator.renameItem(at: node.path, to: newName) { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success:
+                                navigator.refreshParentDirectory(of: node.path)
+                            case .failure(let error):
+                                operationError = error.localizedDescription
+                                showingOperationError = true
+                            }
+                        }
+                    }
+                }
+            }
+            .alert("Delete \"\(node.name)\"?", isPresented: $showingDeleteConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    navigator.deleteItem(at: node.path, isDirectory: node.isDirectory) { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success:
+                                navigator.refreshParentDirectory(of: node.path)
+                            case .failure(let error):
+                                operationError = error.localizedDescription
+                                showingOperationError = true
+                            }
+                        }
+                    }
+                }
+            } message: {
+                Text("This action cannot be undone.")
+            }
+            .alert("Error", isPresented: $showingOperationError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(operationError ?? "An unknown error occurred.")
+            }
+
             if isExpanded, !node.children.isEmpty {
                 ForEach(node.children) { child in
                     RemoteFileTreeView(
@@ -496,7 +774,7 @@ struct RemoteFileTreeView: View {
             }
         }
     }
-    
+
     private func toggleExpanded() {
         if isExpanded {
             navigator.expandedPaths.remove(node.path)
