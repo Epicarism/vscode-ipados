@@ -473,20 +473,11 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
                 )
                 return
             } else if rsaKeyPair != nil {
-                // RSA key: NIOSSHPrivateKey cannot wrap RSA natively, so we offer .none
-                // to signal a public-key attempt without providing an NIOSSHPrivateKey.
-                // The actual RSA signing is performed by RSAAuthChannelHandler in the
-                // channel pipeline (see RSAAuthDelegate.swift). We must NOT fall through
-                // to the password block or the raw PEM would be submitted as a password.
-                AppLogger.ssh.info("RSA key detected: offering .none auth token (RSA signing via RSAAuthChannelHandler)")
-                nextChallengePromise.succeed(
-                    NIOSSHUserAuthenticationOffer(
-                        username: username,
-                        serviceName: "ssh-connection",
-                        offer: .none
-                    )
-                )
-                return
+                // RSA key detected but NIOSSHPrivateKey cannot wrap RSA natively.
+                // NIOSSH only supports Ed25519 and ECDSA for public key auth.
+                // Log a warning and fall through to password fallback if available.
+                AppLogger.ssh.warning("RSA key detected but NIOSSH does not support RSA public key auth. Consider converting to Ed25519: ssh-keygen -t ed25519. Falling through to password auth if available.")
+                // Don't return — fall through to password fallback below
             }
         }
         
