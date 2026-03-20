@@ -610,7 +610,10 @@ struct ContentView: View {
                                 DispatchQueue.main.async {
                                     isLoadingFile = true
                                     editorCore.openFile(from: url)
-                                    isLoadingFile = false
+                                    // Defer reset to next runloop so SwiftUI can render the loading overlay
+                                    DispatchQueue.main.async {
+                                        isLoadingFile = false
+                                    }
                                 }
                             }
                         }
@@ -618,7 +621,7 @@ struct ContentView: View {
                     return true
                 }
                 .overlay {
-                    if isLoadingFile {
+                    if isLoadingFile || LargeFileHandler.shared.isLoadingLargeFile {
                         ZStack {
                             Color.black.opacity(0.25)
                             VStack(spacing: 8) {

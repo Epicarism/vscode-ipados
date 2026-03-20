@@ -511,7 +511,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             
             // PERFORMANCE FIX: Aggressive debounce strategy based on document size
             // For large files, syntax highlighting is EXTREMELY expensive and causes lag
-            let textLength = textView.text.count
+            let textLength = (textView.text as NSString).length  // O(1) vs String.count O(N)
             
             // Large file threshold - above this, skip highlighting during active typing entirely
             let largeFileThreshold = 10000
@@ -808,7 +808,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 }
                 
                 // Re-highlight visible range when drag ends without deceleration (large files)
-                if let textView = scrollView as? UITextView, (textView.text?.count ?? 0) > 10000 {
+                if let textView = scrollView as? UITextView, ((textView.text as? NSString)?.length ?? 0) > 10000 {
                     scrollHighlightTimer?.invalidate()
                     lastHighlightedScrollY = scrollView.contentOffset.y
                     applyVisibleRangeHighlighting(to: textView)
@@ -826,7 +826,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             }
             
             // Re-highlight visible range when deceleration ends (large files)
-            if let textView = scrollView as? UITextView, (textView.text?.count ?? 0) > 10000 {
+            if let textView = scrollView as? UITextView, ((textView.text as? NSString)?.length ?? 0) > 10000 {
                 scrollHighlightTimer?.invalidate()
                 lastHighlightedScrollY = scrollView.contentOffset.y
                 applyVisibleRangeHighlighting(to: textView)
@@ -851,7 +851,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             // When scrolling through a large file, new visible text may be unstyled.
             // We debounce at 200ms so highlighting runs shortly after scroll settles,
             // but only if the scroll position changed meaningfully (>50pt).
-            let textLength = textView.text?.count ?? 0
+            let textLength = (textView.text as? NSString)?.length ?? 0  // O(1) vs String.count O(N)
             if textLength > 10000 {
                 let scrollY = scrollView.contentOffset.y
                 let scrollDelta = abs(scrollY - lastHighlightedScrollY)

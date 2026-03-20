@@ -2557,7 +2557,16 @@ extension EditorCore {
         for path in savedPaths {
             let fileURL = workspaceURL.appendingPathComponent(path)
             if FileManager.default.fileExists(atPath: fileURL.path) {
-                if let data = try? Data(contentsOf: fileURL),
+                // Guard against blocking main thread with large files during restore
+                let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
+                if fileSize > 5_000_000 {
+                    // Too large for synchronous restore — create empty tab, load on demand
+                    let tab = Tab(fileName: fileURL.lastPathComponent, content: "", url: fileURL)
+                    tabs.append(tab)
+                    if path == activeTabPath {
+                        activeTabId = tab.id
+                    }
+                } else if let data = try? Data(contentsOf: fileURL),
                    let result = self.detectEncodedContent(from: data) {
                     let tab = Tab(
                         fileName: fileURL.lastPathComponent,

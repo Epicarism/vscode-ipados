@@ -122,8 +122,10 @@ struct VSCodeiPadOSApp: App {
             let tab = editorCore.tabs[index]
             guard let url = tab.url,
                   !tab.isUnsaved,
-                  FileManager.default.fileExists(atPath: url.path),
-                  let data = try? Data(contentsOf: url),
+                  FileManager.default.fileExists(atPath: url.path) else { continue }
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            guard fileSize < 5_000_000 else { continue }
+            guard let data = try? Data(contentsOf: url),
                   let diskContent = String(data: data, encoding: tab.stringEncoding),
                   diskContent != tab.content else { continue }
             // Content differs from what is in memory — reload silently
