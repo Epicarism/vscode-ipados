@@ -493,7 +493,11 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         
         // Fall back to password auth if key parsing failed
         // (some users might paste a password in the key field)
-        if !attemptedPasswordFallback && availableMethods.contains(.password) {
+        // IMPORTANT: Do NOT fall back to submitting the PEM key string as a
+        // password when an RSA key pair is present — that would send the raw
+        // private key bytes to the server as a plaintext password, which is
+        // both a security hazard and will always fail authentication.
+        if rsaKeyPair == nil && !attemptedPasswordFallback && availableMethods.contains(.password) {
             attemptedPasswordFallback = true
             nextChallengePromise.succeed(
                 NIOSSHUserAuthenticationOffer(
@@ -791,14 +795,28 @@ final class KnownHostsManager: @unchecked Sendable {
         return []
     }
     
-    /// Compute a fingerprint string for a host key
+    /// Compute a fingerprint string for a host key.
+    /// Uses the SSH wire-format encoding of the key (same bytes the server
+    /// sends) so the fingerprint matches `ssh-keygen -l` output.
     func fingerprintForKey(_ key: NIOSSHPublicKey) -> String {
-        // Use the raw key bytes to compute SHA-256 fingerprint
+        // Use the OpenSSH public key string representation to get the wire-format bytes
+        // This avoids using internal `writeSSHHostKey` API
+        let openSSHString = String(openSSHPublicKey: key)
+        let parts = openSSHString.split(separator: " ")
+        guard parts.count >= 2, let keyData = Data(base64Encoded: String(parts[1])) else {
+            // Fallback: hash the string representation itself
+            var hasher = SHA256()
+            hasher.update(data: Data(openSSHString.utf8))
+            let digest = hasher.finalize()
+            let base64 = Data(digest).base64EncodedString()
+            return "SHA256:\(base64)"
+        }
+        // Hash the raw public key bytes (same as OpenSSH fingerprint)
         var hasher = SHA256()
-        let keyDescription = "\(key)"
-        hasher.update(data: Data(keyDescription.utf8))
+        hasher.update(data: keyData)
         let digest = hasher.finalize()
-        return digest.map { String(format: "%02x", $0) }.joined(separator: ":")
+        let base64 = Data(digest).base64EncodedString()
+        return "SHA256:\(base64)"
     }
 }
 
@@ -991,12 +1009,27 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             return true
         }
 
-        // Skip cipher name, kdf name, kdf options
+        // Read cipher name to check if private section is encrypted
+        let cipherStartPos = pos
+        guard let cipherLen = readUInt32() else { return false }
+        let cipherName: String?
+        if Int(cipherLen) > 0 && pos + Int(cipherLen) <= data.count {
+            cipherName = String(data: data[pos..<(pos + Int(cipherLen))], encoding: .utf8)
+        } else {
+            cipherName = nil
+        }
+        // Reset pos and skip all three strings (cipher, kdf, kdf options)
+        pos = cipherStartPos
         guard skipString(), skipString(), skipString() else { return false }
         // Skip number-of-keys field
         guard readUInt32() != nil else { return false }
         // Skip public key blob(s) — there is at least one
         guard skipString() else { return false }
+        
+        // If the private section is encrypted, we can't read the key type from it
+        if let cipher = cipherName, cipher != "none" {
+            return false
+        }
         // Skip the (possibly encrypted) private section length prefix
         guard let privLen = readUInt32() else { return false }
         // We need at least 8 bytes (two check ints) + 4 bytes (key-type length)
@@ -1030,7 +1063,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         var useRSAAuth = false
         if case .privateKey(let keyString, let passphrase) = config.authMethod {
             let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
-            let isRSAPEM = trimmed.contains("BEGIN RSA PRIVATE KEY")
+            let isRSAPEM = trimmed.contains("BEGIN RSA PRIVATE KEY") || trimmed.contains("BEGIN PRIVATE KEY")
             var isRSAOpenSSH = false
             if !isRSAPEM, trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
                 let lines = trimmed.components(separatedBy: "\n")
@@ -1062,7 +1095,11 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         case .password(let password):
             authDelegate = PasswordAuthDelegate(username: config.username, password: password)
         case .privateKey(let key, let passphrase):
-            authDelegate = PrivateKeyAuthDelegate(username: config.username, privateKeyString: key, passphrase: passphrase)
+            if useRSAAuth, let rsaKeyPair = try? RSAKeyParser.parse(key, passphrase: passphrase) {
+                authDelegate = try RSAUserAuthDelegate(username: config.username, rsaKeyPair: rsaKeyPair)
+            } else {
+                authDelegate = PrivateKeyAuthDelegate(username: config.username, privateKeyString: key, passphrase: passphrase)
+            }
         }
         
         // Use verifying host key delegate for production security
@@ -1081,11 +1118,11 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                     allocator: channel.allocator,
                     inboundChildChannelInitializer: nil
                 )
-                // When RSA auth is active, add the RSA channel handler BEFORE the SSH handler
-                // so it can intercept SSH_MSG_USERAUTH_PK_OK and perform RSA signing
+                // When RSA auth is active, add the RSA channel handler AFTER the SSH handler
+                // so it receives decrypted SSH messages (not raw TCP bytes)
                 if let rsaHandler = rsaAuthHandler {
-                    return channel.pipeline.addHandler(rsaHandler).flatMap {
-                        channel.pipeline.addHandler(handler)
+                    return channel.pipeline.addHandler(handler).flatMap {
+                        channel.pipeline.addHandler(rsaHandler)
                     }
                 } else {
                     return channel.pipeline.addHandlers([handler])
@@ -1153,8 +1190,10 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             throw SSHClientError.invalidPrivateKey
         }
 
-        // Detect encrypted OpenSSH keys and return a clear error instead of
-        // silently failing later during authentication.
+        // Detect encrypted OpenSSH keys.
+        // RSAKeyParser can handle encrypted PKCS#1 keys, but encrypted OpenSSH
+        // format keys require a passphrase prompt rather than a silent reject.
+        // We surface passphraseRequired so the UI can prompt instead of failing.
         if keyString.contains("BEGIN OPENSSH PRIVATE KEY") {
             let lines = keyString.components(separatedBy: "\n")
                 .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
@@ -1174,9 +1213,11 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                         if pos + cipherLen <= data.count,
                            let cipher = String(data: data[pos..<(pos + cipherLen)], encoding: .utf8),
                            cipher != "none" {
-                            throw SSHClientError.unsupportedKeyType(
-                                "Encrypted key (\(cipher)). To use this key, remove its passphrase:\n  ssh-keygen -p -m OpenSSH -f <keyfile>\nThen press Enter twice for an empty passphrase."
-                            )
+                            // Key is encrypted — throw passphraseRequired so the
+                            // caller can prompt the user for a passphrase rather
+                            // than rejecting the key outright.
+                            AppLogger.ssh.info("Encrypted OpenSSH key detected (cipher: \(cipher)) — passphrase required")
+                            throw SSHClientError.passphraseRequired
                         }
                     }
                 }

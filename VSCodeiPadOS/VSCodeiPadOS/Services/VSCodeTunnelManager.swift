@@ -103,6 +103,17 @@ enum TunnelConnectionState: Equatable {
     }
 }
 
+// MARK: - Tunnel Editor State
+
+/// Live editor state reported by VS Code through the JS bridge.
+struct TunnelEditorState {
+    var fileName: String
+    var cursorLine: Int
+    var cursorColumn: Int
+    var language: String
+    var isDirty: Bool
+}
+
 // MARK: - Tunnel Manager
 
 @MainActor
@@ -124,6 +135,7 @@ class TunnelManager: ObservableObject {
     @Published var tunnelMode: TunnelMode = .webview
     @Published var currentRemoteFile: String?
     @Published var remoteWorkspacePath: String?
+    @Published var tunnelEditorState: TunnelEditorState?
     
     private let configsKey = "tunnelConfigs"
     private let activeConfigKey = "activeTunnelConfigId"
@@ -192,7 +204,7 @@ class TunnelManager: ObservableObject {
                 name: config.name,
                 host: URL(string: config.url)?.host ?? config.url,
                 port: URL(string: config.url)?.port ?? 22,
-                username: "root",
+                username: URL(string: config.url)?.user ?? "root",
                 authMethod: .password("")
             ))
             observeBridgeState()

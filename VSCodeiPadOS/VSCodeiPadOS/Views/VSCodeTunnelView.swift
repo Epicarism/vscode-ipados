@@ -337,44 +337,135 @@ struct VSCodeTunnelView: View {
                 .background(themeManager.currentTheme.editorBackground)
             }
             
-            // Toolbar overlay (top bar with Exit + Reload)
-            VStack {
-                HStack {
-                    Button(action: { tunnelManager.disconnect() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "xmark.circle.fill")
-                            Text("Exit")
-                                .font(.caption)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(16)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Exit VS Code session")
-                    .accessibilityHint("Disconnects and returns to the server list")
-                    .padding(8)
-                    
-                    Spacer()
-                    
-                    Button(action: { reloadToken = UUID(); webViewNeedsReload = true }) {
-                        Image(systemName: "arrow.clockwise")
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(16)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Reload VS Code")
-                    .accessibilityHint("Reloads the VS Code web view")
-                    .padding(8)
-                }
+            // ── Glove Mode native toolbar ──────────────────────────────────────
+            VStack(spacing: 0) {
+                gloveModeToolbar(config: config)
                 Spacer()
             }
         }
     }
     
+    // MARK: - Glove Mode Native Toolbar
+
+    @ViewBuilder
+    private func gloveModeToolbar(config: TunnelConfig) -> some View {
+        HStack(spacing: 12) {
+
+            // ── Connection status dot ──────────────────────────────────────────
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(connectionDotColor)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: connectionDotColor.opacity(0.6), radius: 3)
+                    .accessibilityHidden(true)
+
+                Text(config.name)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Divider()
+                .frame(height: 14)
+
+            // ── Current file name (from tunnelEditorState) ────────────────────
+            HStack(spacing: 4) {
+                if let state = tunnelManager.tunnelEditorState, !state.fileName.isEmpty {
+                    if state.isDirty {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
+                            .accessibilityLabel("Unsaved changes")
+                    }
+                    Text(state.fileName)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text("Ln \(state.cursorLine), Col \(state.cursorColumn)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                    if !state.language.isEmpty {
+                        Text(state.language)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                    }
+                } else {
+                    Text("No file open")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            Spacer()
+
+            // ── Settings gear ─────────────────────────────────────────────────
+            Button(action: {
+                // Reserved for native settings panel
+            }) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+            .accessibilityHint("Opens VS Code settings")
+
+            // ── Reload ────────────────────────────────────────────────────────
+            Button(action: { reloadToken = UUID(); webViewNeedsReload = true }) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Reload VS Code")
+            .accessibilityHint("Reloads the VS Code web view")
+
+            // ── Disconnect ────────────────────────────────────────────────────
+            Button(action: { tunnelManager.disconnect() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                    Text("Disconnect")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(.red.opacity(0.85))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.red.opacity(0.10), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Disconnect from \(config.name)")
+            .accessibilityHint("Closes the VS Code session and returns to the server list")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.4)
+        }
+    }
+
+    /// The colour of the connection-status dot in the glove mode toolbar.
+    private var connectionDotColor: Color {
+        switch tunnelManager.connectionState {
+        case .connected:              return .green
+        case .connecting:             return .yellow
+        case .reconnecting:           return .orange
+        case .disconnected, .error:   return .red
+        }
+    }
+
     // MARK: - Connecting View
     
     private func connectingView(config: TunnelConfig) -> some View {

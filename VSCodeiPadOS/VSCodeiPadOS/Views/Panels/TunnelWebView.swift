@@ -203,7 +203,7 @@ struct TunnelWebView: UIViewRepresentable {
     // MARK: - Bridge JavaScript
     
     static var bridgeJavaScript: String {
-        """
+        #"""
         (function() {
             'use strict';
             if (window.__iPadBridgeInjected) return;
@@ -278,18 +278,50 @@ struct TunnelWebView: UIViewRepresentable {
             }
             
             function setupEditorMonitor() {
-                // Watch for active editor tab changes
-                var tabObserver = new MutationObserver(function() {
+                // Debounce helper
+                function debounce(fn, ms) {
+                    var t;
+                    return function() { clearTimeout(t); t = setTimeout(fn, ms); };
+                }
+
+                function reportCurrentState() {
+                    // Active file name from the focused tab
                     var activeTab = document.querySelector('.tab.active .label-name');
-                    if (activeTab) {
-                        var title = activeTab.textContent || '';
-                        window.iPadBridge.reportEditorState({
-                            activeFile: title,
-                            timestamp: Date.now()
-                        });
+                    var activeFile = activeTab ? (activeTab.textContent || '') : '';
+
+                    // Dirty indicator — VS Code adds a dot or "•" class to dirty tabs
+                    var dirtyDot = document.querySelector('.tab.active.dirty');
+                    var isDirty  = !!dirtyDot;
+
+                    // Language from the status bar
+                    var langEl   = document.querySelector('.statusbar-item[id*="status.editor.mode"] .statusbar-item-label')
+                                || document.querySelector('.language-status-item')
+                                || document.querySelector('[class*="language-picker"]');
+                    var language = langEl ? (langEl.textContent || '').trim() : '';
+
+                    // Cursor position from the status bar (e.g. "Ln 12, Col 4")
+                    var cursorEl  = document.querySelector('.statusbar-item[id*="status.editor.selection"] .statusbar-item-label')
+                                 || document.querySelector('[class*="editor.selection"]');
+                    var cursorLine = 1, cursorCol = 1;
+                    if (cursorEl) {
+                        var m = (cursorEl.textContent || '').match(/Ln\s*(\d+),?\s*Col\s*(\d+)/i);
+                        if (m) { cursorLine = parseInt(m[1], 10); cursorCol = parseInt(m[2], 10); }
                     }
-                });
-                
+
+                    window.iPadBridge.reportEditorState({
+                        activeFile: activeFile,
+                        isDirty:    isDirty,
+                        language:   language,
+                        cursorLine: cursorLine,
+                        cursorColumn: cursorCol,
+                        timestamp:  Date.now()
+                    });
+                }
+
+                var debouncedReport = debounce(reportCurrentState, 300);
+
+                // Watch tab changes
+                var tabObserver = new MutationObserver(debouncedReport);
                 var tabContainer = document.querySelector('.tabs-container');
                 if (tabContainer) {
                     tabObserver.observe(tabContainer, {
@@ -297,64 +329,111 @@ struct TunnelWebView: UIViewRepresentable {
                         attributeFilter: ['class']
                     });
                 }
+
+                // Watch status bar for cursor / language changes
+                var statusBar = document.querySelector('.statusbar');
+                if (statusBar) {
+                    var statusObserver = new MutationObserver(debouncedReport);
+                    statusObserver.observe(statusBar, {
+                        childList: true, subtree: true, characterData: true
+                    });
+                }
+
+                // Report immediately on setup
+                reportCurrentState();
             }
             
             console.log('[iPadBridge] Bridge injected successfully');
         })();
-        """
+        """#
     }
     
     // MARK: - iPad CSS Overrides
     
     static var iPadCSSOverrides: String {
-        """
+        #"""
         (function() {
             var style = document.createElement('style');
             style.id = 'ipad-overrides';
             style.textContent = `
-                /* Smoother scrolling on iPad */
+                /* ── Glove Mode: hide VS Code's own title bar (we use native toolbar) ── */
+                .titlebar,
+                .monaco-workbench .part.titlebar,
+                .title-label,
+                .window-title,
+                .titlebar-left,
+                .titlebar-center,
+                .titlebar-right {
+                    display: none !important;
+                    height: 0 !important;
+                    overflow: hidden !important;
+                }
+
+                /* Push the workbench up to reclaim title bar space */
+                .monaco-workbench {
+                    top: 0 !important;
+                }
+
+                /* ── Maximise editor real-estate ── */
+                .part.editor {
+                    top: 0 !important;
+                }
+
+                /* ── iPad-optimised font size for readability ── */
+                .monaco-editor .view-lines {
+                    font-size: 15px !important;
+                    line-height: 1.6 !important;
+                }
+
+                /* ── Smoother scrolling on iPad ── */
                 .editor-scrollable {
                     -webkit-overflow-scrolling: touch !important;
                 }
-                
-                /* Better touch targets in gutter */
+
+                /* ── Better touch targets in gutter (44 pt min per HIG) ── */
                 .monaco-editor .margin {
                     touch-action: none;
                     min-width: 44px;
                 }
-                
-                /* Larger scrollbar for touch */
+
+                /* ── Larger scrollbar thumb for touch ── */
                 .monaco-editor .decorationsOverviewRuler {
                     width: 14px !important;
                 }
-                
-                /* Activity bar touch targets */
+
+                /* ── Activity bar HIG-compliant touch targets ── */
                 .activitybar .action-item {
                     min-height: 44px;
                     min-width: 44px;
                 }
-                
-                /* Better sidebar touch experience */
+
+                /* ── Sidebar file rows big enough to tap ── */
                 .explorer-item {
-                    min-height: 32px;
+                    min-height: 36px;
                     padding: 4px 0;
                 }
-                
-                /* Prevent text selection issues on touch */
+
+                /* ── Prevent phantom text-selection on touch drag ── */
                 .monaco-editor .view-overlays {
                     -webkit-user-select: none;
                 }
-                
-                /* Hide elements not useful on iPad */
+
+                /* ── Hide minimap shadow (visual noise, wastes width) ── */
                 .monaco-editor .minimap-shadow-visible {
                     display: none !important;
                 }
+
+                /* ── Tab bar: taller for easier tapping ── */
+                .tabs-container .tab {
+                    min-height: 40px;
+                    line-height: 40px;
+                }
             `;
             if (!document.getElementById('ipad-overrides')) {
-                document.head.appendChild(style);
+                (document.head || document.documentElement).appendChild(style);
             }
         })();
-        """
+        """#
     }
     
     // MARK: - Coordinator
@@ -399,6 +478,20 @@ struct TunnelWebView: UIViewRepresentable {
                 if let path = body["path"] as? String {
                     DispatchQueue.main.async { [weak self] in
                         self?.tunnelManager.currentRemoteFile = path
+                        // Update editor state file name so the native toolbar reflects it
+                        let fileName = URL(fileURLWithPath: path).lastPathComponent
+                        if var state = self?.tunnelManager.tunnelEditorState {
+                            state.fileName = fileName
+                            self?.tunnelManager.tunnelEditorState = state
+                        } else {
+                            self?.tunnelManager.tunnelEditorState = TunnelEditorState(
+                                fileName: fileName,
+                                cursorLine: 1,
+                                cursorColumn: 1,
+                                language: "",
+                                isDirty: false
+                            )
+                        }
                     }
                 }
                 
@@ -412,16 +505,32 @@ struct TunnelWebView: UIViewRepresentable {
                 sendThemeToWebView()
                 
             case "editorState":
-                if let state = body["state"] as? [String: Any],
-                   let activeFile = state["activeFile"] as? String {
+                if let state = body["state"] as? [String: Any] {
                     DispatchQueue.main.async { [weak self] in
+                        let activeFile  = state["activeFile"]  as? String ?? ""
+                        let language    = state["language"]    as? String ?? ""
+                        let cursorLine  = state["cursorLine"]  as? Int    ?? 1
+                        let cursorCol   = state["cursorColumn"] as? Int   ?? 1
+                        let isDirty     = state["isDirty"]     as? Bool   ?? false
+
                         self?.tunnelManager.currentRemoteFile = activeFile
+                        self?.tunnelManager.tunnelEditorState = TunnelEditorState(
+                            fileName: activeFile,
+                            cursorLine: cursorLine,
+                            cursorColumn: cursorCol,
+                            language: language,
+                            isDirty: isDirty
+                        )
+                        Self.logger.debug("Editor state: \(activeFile) Ln\(cursorLine) Col\(cursorCol) [\(language)] dirty=\(isDirty)")
                     }
                 }
                 
             case "command":
                 if let command = body["command"] as? String {
-                    Self.logger.info("VS Code command: \(command)")
+                    Self.logger.info("VS Code command received: \(command)")
+                    DispatchQueue.main.async { [weak self] in
+                        self?.handleVSCodeCommand(command, args: body["args"])
+                    }
                 }
                 
             default:
@@ -633,6 +742,45 @@ struct TunnelWebView: UIViewRepresentable {
             }
         }
         
+        // MARK: - VS Code Command Mapping
+
+        /// Maps common VS Code command identifiers to native iPad actions.
+        private func handleVSCodeCommand(_ command: String, args: Any?) {
+            switch command {
+            case "workbench.action.files.save":
+                // Mark the current file as clean in editor state
+                if var state = tunnelManager.tunnelEditorState {
+                    state.isDirty = false
+                    tunnelManager.tunnelEditorState = state
+                }
+                Self.logger.info("[GloveMode] Native save acknowledged for: \(self.tunnelManager.currentRemoteFile ?? "unknown")")
+
+            case "workbench.action.files.saveAll":
+                if var state = tunnelManager.tunnelEditorState {
+                    state.isDirty = false
+                    tunnelManager.tunnelEditorState = state
+                }
+                Self.logger.info("[GloveMode] Native saveAll acknowledged")
+
+            case "workbench.action.closeActiveEditor":
+                if var state = tunnelManager.tunnelEditorState {
+                    state.fileName = ""
+                    state.isDirty  = false
+                    tunnelManager.tunnelEditorState = state
+                }
+                tunnelManager.currentRemoteFile = nil
+
+            case "workbench.action.openSettings":
+                Self.logger.info("[GloveMode] Settings command — could open native settings panel")
+
+            case "workbench.action.terminal.toggleTerminal":
+                Self.logger.info("[GloveMode] Terminal toggle command received")
+
+            default:
+                Self.logger.debug("[GloveMode] Unmapped command: \(command)")
+            }
+        }
+
         private func sendThemeToWebView() {
             guard let webView = webView else { return }
             let isDark = UITraitCollection.current.userInterfaceStyle == .dark

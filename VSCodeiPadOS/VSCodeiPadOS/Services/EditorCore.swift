@@ -48,7 +48,7 @@ class DiagnosticsService: ObservableObject {
     
     /// Rebuild the flat diagnostics array from per-file storage
     private func rebuildDiagnostics() {
-        diagnostics = diagnosticsByFile.values.flatMap { $0 }.sorted {
+        diagnostics = diagnosticsByFile.values.lazy.flatMap { $0 }.sorted {
             if $0.file != $1.file { return $0.file < $1.file }
             return $0.line < $1.line
         }
@@ -70,18 +70,16 @@ class DiagnosticsService: ObservableObject {
     
     func analyzeFile(content: String, filename: String, filePath: String) {
         var items: [DiagnosticItem] = []
-        let lines = content.components(separatedBy: "\n")
         let ext = (filename as NSString).pathExtension.lowercased()
-        
-        for (index, line) in lines.enumerated() {
-            let lineNum = index + 1
-            
+        var lineNum = 0
+        content.enumerateLines { line, _ in
+            lineNum += 1
             // Universal checks
-            if line.count > 120 {
-                items.append(DiagnosticItem(message: "Line exceeds 120 characters (\(line.count))", file: filename, line: lineNum, column: 121, severity: .info))
+            if line.utf16.count > 120 {
+                items.append(DiagnosticItem(message: "Line exceeds 120 characters (\(line.utf16.count))", file: filename, line: lineNum, column: 121, severity: .info))
             }
             if line.hasSuffix(" ") || line.hasSuffix("\t") {
-                items.append(DiagnosticItem(message: "Trailing whitespace", file: filename, line: lineNum, column: line.count, severity: .info))
+                items.append(DiagnosticItem(message: "Trailing whitespace", file: filename, line: lineNum, column: line.utf16.count, severity: .info))
             }
             
             // TODO/FIXME/HACK
@@ -1451,13 +1449,11 @@ mod tests {
         
         // Trim trailing whitespace from each line
         if trimWhitespace {
-            let lines = result.components(separatedBy: "\n")
-            let trimmedLines = lines.map { line in
-                var trimmed = line
-                while trimmed.hasSuffix(" ") || trimmed.hasSuffix("\t") {
-                    trimmed.removeLast()
-                }
-                return trimmed
+            var trimmedLines: [String] = []
+            result.enumerateLines { line, _ in
+                var t = line
+                while t.hasSuffix(" ") || t.hasSuffix("\t") { t.removeLast() }
+                trimmedLines.append(t)
             }
             result = trimmedLines.joined(separator: "\n")
         }
@@ -1816,13 +1812,14 @@ mod tests {
         var results: [(file: String, line: Int, text: String)] = []
         
         for tab in tabs {
-            let lines = tab.content.components(separatedBy: .newlines)
-            for (index, line) in lines.enumerated() {
+            var lineIndex = 0
+            tab.content.enumerateLines { line, _ in
+                defer { lineIndex += 1 }
                 let pattern = "\\b" + NSRegularExpression.escapedPattern(for: symbol) + "\\b"
                 if let regex = try? NSRegularExpression(pattern: pattern, options: []),
                    regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
                     let filePath = tab.url?.path ?? tab.fileName
-                    results.append((file: filePath, line: index, text: line.trimmingCharacters(in: .whitespaces)))
+                    results.append((file: filePath, line: lineIndex, text: line.trimmingCharacters(in: .whitespaces)))
                 }
             }
         }
@@ -1886,14 +1883,15 @@ mod tests {
         var results: [(file: String, line: Int, text: String)] = []
         
         for tab in tabs {
-            let lines = tab.content.components(separatedBy: .newlines)
-            for (index, line) in lines.enumerated() {
+            var lineIndex = 0
+            tab.content.enumerateLines { line, _ in
+                defer { lineIndex += 1 }
                 // Use regex to match whole-word occurrences
                 let pattern = "\\b" + NSRegularExpression.escapedPattern(for: trimmed) + "\\b"
                 if let regex = try? NSRegularExpression(pattern: pattern, options: []),
                    regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
                     let filePath = tab.url?.path ?? tab.fileName
-                    results.append((file: filePath, line: index, text: line.trimmingCharacters(in: .whitespaces)))
+                    results.append((file: filePath, line: lineIndex, text: line.trimmingCharacters(in: .whitespaces)))
                 }
             }
         }
@@ -1929,7 +1927,7 @@ mod tests {
         guard let primary = multiCursorState.primaryCursor else { return }
         
         // Find current line and column
-        let lines = content.components(separatedBy: "\n")
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var currentLine = 0
         var charCount = 0
         var columnInLine = 0
@@ -1966,7 +1964,7 @@ mod tests {
         guard let primary = multiCursorState.primaryCursor else { return }
         
         // Find current line and column
-        let lines = content.components(separatedBy: "\n")
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var currentLine = 0
         var charCount = 0
         var columnInLine = 0
@@ -2210,7 +2208,7 @@ mod tests {
         guard let index = activeTabIndex else { return }
         let content = tabs[index].content
         let fileName = tabs[index].fileName
-        var lines = content.components(separatedBy: "\n")
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         // Block comment languages use wrapping instead of line prefix
         if let (blockPrefix, blockSuffix) = blockCommentWrappers(for: fileName) {
@@ -2324,7 +2322,7 @@ mod tests {
     func deleteLine() {
         guard let index = activeTabIndex else { return }
         let content = tabs[index].content
-        var lines = content.components(separatedBy: "\n")
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         guard !lines.isEmpty else { return }
 
         let cursorPos = multiCursorState.primaryCursor?.position ?? 0
@@ -2349,7 +2347,7 @@ mod tests {
     func moveLineUp() {
         guard let index = activeTabIndex else { return }
         let content = tabs[index].content
-        var lines = content.components(separatedBy: "\n")
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         let cursorPos = multiCursorState.primaryCursor?.position ?? 0
         let info = lineInfo(for: cursorPos, in: lines)
@@ -2373,7 +2371,7 @@ mod tests {
     func moveLineDown() {
         guard let index = activeTabIndex else { return }
         let content = tabs[index].content
-        var lines = content.components(separatedBy: "\n")
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         let cursorPos = multiCursorState.primaryCursor?.position ?? 0
         let info = lineInfo(for: cursorPos, in: lines)
@@ -2398,7 +2396,7 @@ mod tests {
     func duplicateLineUp() {
         guard let index = activeTabIndex else { return }
         let content = tabs[index].content
-        var lines = content.components(separatedBy: "\n")
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         let cursorPos = multiCursorState.primaryCursor?.position ?? 0
         let info = lineInfo(for: cursorPos, in: lines)
@@ -2417,7 +2415,7 @@ mod tests {
     func duplicateLineDown() {
         guard let index = activeTabIndex else { return }
         let content = tabs[index].content
-        var lines = content.components(separatedBy: "\n")
+        var lines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
         let cursorPos = multiCursorState.primaryCursor?.position ?? 0
         let info = lineInfo(for: cursorPos, in: lines)
