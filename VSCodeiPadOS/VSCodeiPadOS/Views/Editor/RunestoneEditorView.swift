@@ -1315,10 +1315,13 @@ struct RunestoneEditorView: UIViewRepresentable {
                 UInt16(UnicodeScalar("]").value)
             ]
             let ch = str.character(at: pos)
+            // Bound bracket scan to ±10K chars (~300 lines) to avoid O(N) on large files
+            let maxScanDistance = 10_000
             if let idx = opens.firstIndex(of: ch) {
                 let close = closes[idx]
                 var depth = 1; var i = pos + 1
-                while i < str.length {
+                let scanLimit = min(str.length, pos + maxScanDistance)
+                while i < scanLimit {
                     let c = str.character(at: i)
                     if c == ch { depth += 1 } else if c == close { depth -= 1; if depth == 0 { return i } }
                     i += 1
@@ -1326,7 +1329,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             } else if let idx = closes.firstIndex(of: ch) {
                 let open = opens[idx]
                 var depth = 1; var i = pos - 1
-                while i >= 0 {
+                let scanLimit = max(0, pos - maxScanDistance)
+                while i >= scanLimit {
                     let c = str.character(at: i)
                     if c == ch { depth += 1 } else if c == open { depth -= 1; if depth == 0 { return i } }
                     i -= 1

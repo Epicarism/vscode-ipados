@@ -175,6 +175,30 @@ class TunnelManager: ObservableObject {
     func connect(to config: TunnelConfig) {
         Self.logger.info("Connecting to tunnel: \(config.name) at \(config.url)")
         
+        // Route SSH tunnel configs through the SSH bridge instead of HTTP validation
+        if config.type == .sshTunnel {
+            connectionState = .connecting
+            lastError = nil
+            reconnectAttempts = 0
+            var updatedConfig = config
+            updatedConfig.lastUsed = Date()
+            if let index = configs.firstIndex(where: { $0.id == config.id }) {
+                configs[index] = updatedConfig
+                saveConfigs()
+            }
+            activeConfig = updatedConfig
+            UserDefaults.standard.set(config.id.uuidString, forKey: activeConfigKey)
+            SSHTunnelBridge.shared.connectViaTunnel(sshConfig: SSHConnectionConfig(
+                name: config.name,
+                host: URL(string: config.url)?.host ?? config.url,
+                port: URL(string: config.url)?.port ?? 22,
+                username: "root",
+                authMethod: .password("")
+            ))
+            observeBridgeState()
+            return
+        }
+
         // Validate URL
         guard let url = URL(string: config.url), url.scheme != nil else {
             connectionState = .error("Invalid URL format")
@@ -437,16 +461,23 @@ class TunnelManager: ObservableObject {
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "HEAD"
-            request.timeoutInterval = 10
+            request.timeoutInterval = 15
             
             let (_, response) = try await URLSession.shared.data(for: request)
             
             if let httpResponse = response as? HTTPURLResponse,
-               (200...399).contains(httpResponse.statusCode) {
+               (200...399).contains(httpResponse.statusCode) || httpResponse.statusCode == 401 {
                 // Server is responding — reset reconnect counter
                 reconnectAttempts = 0
             }
         } catch {
+            // Some servers (e.g. vscode.dev) don't respond to HEAD requests.
+            // If it's just a timeout, don't immediately reconnect — the WebView may still work fine.
+            if (error as NSError).code == NSURLErrorTimedOut {
+                Self.logger.info("Health check timed out — server may not respond to HEAD. Skipping reconnect.")
+                // Don't trigger reconnect for timeouts, WebView handles its own connectivity
+                return
+            }
             Self.logger.warning("Health check failed: \(error.localizedDescription)")
             await attemptReconnect(url: url)
         }
@@ -584,66 +615,5 @@ class TunnelManager: ObservableObject {
         """
         
         return try? await webView.evaluateJavaScript(js) as? String
-    }
-}
-
-// MARK: - WKWebView Extension for Tunnel Bridge
-
-extension WKWebView {
-    /// Inject the native bridge script for communication between native app and VS Code WebView
-    func injectTunnelBridge() {
-        let bridgeScript = WKUserScript(
-            source: """
-            (function() {
-                // Native bridge object
-                window.CodePadBridge = {
-                    isNative: true,
-                    platform: 'iPadOS',
-                    
-                    // Send message to native app
-                    postMessage: function(type, data) {
-                        window.webkit.messageHandlers.tunnelBridge.postMessage({
-                            type: type,
-                            data: data || {}
-                        });
-                    },
-                    
-                    // Request file open in native editor
-                    openInNativeEditor: function(path, content) {
-                        this.postMessage('openNative', { path: path, content: content });
-                    },
-                    
-                    // Notify native app of file changes
-                    notifyFileChanged: function(path) {
-                        this.postMessage('fileChanged', { path: path });
-                    },
-                    
-                    // Request native file picker
-                    requestFilePicker: function() {
-                        this.postMessage('filePicker', {});
-                    },
-                    
-                    // Sync theme with native app
-                    syncTheme: function(theme) {
-                        this.postMessage('themeSync', theme);
-                    }
-                };
-                
-                // Listen for messages from native app
-                window.addEventListener('nativeBridge', function(event) {
-                    const msg = event.detail;
-                    if (msg.type === 'themeUpdate') {
-                        document.documentElement.style.setProperty('--vscode-editor-background', msg.data.background);
-                        document.documentElement.style.setProperty('--vscode-editor-foreground', msg.data.foreground);
-                    }
-                });
-                
-                console.log('[CodePad] Native bridge initialized');
-            })();
-            """,
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
-        )
-        configuration.userContentController.addUserScript(bridgeScript)
     }
 }

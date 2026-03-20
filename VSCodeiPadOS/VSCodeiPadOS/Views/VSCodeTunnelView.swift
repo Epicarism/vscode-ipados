@@ -230,6 +230,7 @@ struct VSCodeTunnelView: View {
     @State private var errorMessage: String?
     @State private var showingAddTunnel = false
     @State private var webViewNeedsReload = false
+    @State private var reloadToken = UUID()
     
     var body: some View {
         Group {
@@ -276,6 +277,7 @@ struct VSCodeTunnelView: View {
                 if config.tunnelMode == .webview {
                     // Enhanced tunnel WebView with iPad bridge
                     TunnelWebView(url: url)
+                        .id(reloadToken)
                         .ignoresSafeArea()
                 } else {
                     // Legacy WebView
@@ -350,7 +352,7 @@ struct VSCodeTunnelView: View {
                     
                     Spacer()
                     
-                    Button(action: { webViewNeedsReload = true }) {
+                    Button(action: { reloadToken = UUID(); webViewNeedsReload = true }) {
                         Image(systemName: "arrow.clockwise")
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
