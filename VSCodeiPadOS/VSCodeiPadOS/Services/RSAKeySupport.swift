@@ -907,3 +907,85 @@ extension Data {
 private extension Data.SubSequence {
     func asData() -> Data { Data(self) }
 }
+
+// MARK: - Ed25519 Key Generation
+
+import CryptoKit
+
+/// Generates and exports Ed25519 SSH key pairs using Apple CryptoKit.
+/// Produces keys in standard OpenSSH format compatible with ssh-keygen.
+struct Ed25519KeyPair {
+    let privateKey: Curve25519.Signing.PrivateKey
+    
+    var publicKeyData: Data { Data(privateKey.publicKey.rawRepresentation) }
+    var privateKeyData: Data { Data(privateKey.rawRepresentation) }
+    
+    /// Generate a new Ed25519 key pair
+    static func generate() -> Ed25519KeyPair {
+        Ed25519KeyPair(privateKey: Curve25519.Signing.PrivateKey())
+    }
+    
+    /// Public key blob in SSH wire format: string("ssh-ed25519") + string(pubkey_32_bytes)
+    var publicKeyBlob: Data {
+        var blob = Data()
+        blob.appendSSHString("ssh-ed25519")
+        blob.appendSSHBytes(publicKeyData)
+        return blob
+    }
+    
+    /// Public key in OpenSSH authorized_keys format: "ssh-ed25519 <base64> generated-by-codepad"
+    var openSSHPublicKey: String {
+        let encoded = publicKeyBlob.base64EncodedString()
+        return "ssh-ed25519 \(encoded) generated-by-codepad"
+    }
+    
+    /// Private key in OpenSSH PEM format (unencrypted openssh-key-v1)
+    var openSSHPrivateKey: String {
+        let pem = buildOpenSSHPrivateKeyPEM()
+        return pem
+    }
+    
+    /// Build the openssh-key-v1 private key format
+    private func buildOpenSSHPrivateKeyPEM() -> String {
+        // --- Public key blob ---
+        let pubBlob = publicKeyBlob
+        
+        // --- Private section (encrypted part, but we use "none" cipher) ---
+        let checkInt = UInt32.random(in: 0...UInt32.max)
+        var privSection = Data()
+        privSection.appendSSHUInt32(checkInt)  // checkint1
+        privSection.appendSSHUInt32(checkInt)  // checkint2 (must match)
+        privSection.appendSSHString("ssh-ed25519")  // key type
+        privSection.appendSSHBytes(publicKeyData)    // public key (32 bytes)
+        // Ed25519 private key in OpenSSH format is 64 bytes: seed(32) + pubkey(32)
+        var fullPrivKey = Data(privateKey.rawRepresentation)  // 32-byte seed
+        fullPrivKey.append(contentsOf: privateKey.publicKey.rawRepresentation)  // 32-byte pubkey
+        privSection.appendSSHBytes(fullPrivKey)  // 64-byte private key
+        privSection.appendSSHString("generated-by-codepad")  // comment
+        // Pad to block size (8 bytes for "none" cipher)
+        let blockSize = 8
+        while privSection.count % blockSize != 0 {
+            privSection.append(UInt8(privSection.count % blockSize + 1))
+        }
+        
+        // --- Full key file ---
+        var keyFile = Data()
+        // Magic
+        keyFile.append(contentsOf: "openssh-key-v1".utf8)
+        keyFile.append(0)  // null terminator
+        // Cipher, KDF, KDF options
+        keyFile.appendSSHString("none")  // cipher
+        keyFile.appendSSHString("none")  // kdf
+        keyFile.appendSSHString("")      // kdf options (empty string)
+        // Number of keys
+        keyFile.appendSSHUInt32(1)
+        // Public key blob (length-prefixed)
+        keyFile.appendSSHBytes(pubBlob)
+        // Private section (length-prefixed)
+        keyFile.appendSSHBytes(privSection)
+        
+        // PEM encode
+        let base64 = keyFile.base64EncodedString(options: .lineLength64Characters)
+        return "-----BEGIN OPENSSH PRIVATE KEY-----\n\(base64)\n-----END OPENSSH PRIVATE KEY-----\n"
+    }
+}

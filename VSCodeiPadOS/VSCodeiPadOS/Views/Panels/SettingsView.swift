@@ -400,6 +400,11 @@ struct SettingsDetailView: View {
                         ConnectedModeSettingsSection()
                     }
                 }
+                Section(header: Text("SSH Key Management").accessibilityAddTraits(.isHeader)) {
+                    if matchesSearch("SSH") || matchesSearch("Key") || matchesSearch("Tunnel") || matchesSearch("Connected") {
+                        SSHKeyManagementSection()
+                    }
+                }
             }
             if shouldShow(category: .accounts) {
                 Section(header: Text("GitHub Account").accessibilityAddTraits(.isHeader)) {
@@ -433,7 +438,7 @@ struct SettingsDetailView: View {
                 return matchesSearch("Theme") || matchesSearch("Follow System Appearance") || matchesSearch("System") || matchesSearch("Appearance")
             }
             if category == .connectedMode {
-                return matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected")
+                return matchesSearch("Tunnel") || matchesSearch("Server") || matchesSearch("VS Code") || matchesSearch("Connected") || matchesSearch("SSH") || matchesSearch("Key")
             }
             if category == .features {
                 return matchesSearch("Auto Save") || matchesSearch("Format On Save") || matchesSearch("Bracket Pair Colorization") || matchesSearch("Indent Guides") || matchesSearch("Inline Suggestions")
@@ -692,6 +697,188 @@ struct ConnectedModeSettingsSection: View {
 }
 
 
+
+// MARK: - SSH Key Management Section
+
+struct SSHKeyManagementSection: View {
+    @State private var publicKey: String = ""
+    @State private var privateKey: String = ""
+    @State private var keyType: String = ""
+    @State private var isGenerating: Bool = false
+    @State private var errorMessage: String = ""
+
+    private let publicKeyKeychainKey  = "ssh_public_key"
+    private let privateKeyKeychainKey = "ssh_private_key"
+    private let keyTypeKeychainKey    = "ssh_key_type"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Generate an SSH key pair for authenticating with remote servers.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 12) {
+                Button(action: { generateKey(type: "ed25519") }) {
+                    Label("Generate Ed25519", systemImage: "key")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isGenerating)
+                .accessibilityHint("Generate an Ed25519 SSH key pair")
+
+                Button(action: { generateKey(type: "rsa4096") }) {
+                    Label("Generate RSA 4096", systemImage: "key.fill")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isGenerating)
+                .accessibilityHint("Generate a 4096-bit RSA SSH key pair")
+            }
+
+            if isGenerating {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Generating key pair…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+
+            if !publicKey.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Public Key (\(keyType))")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button(action: { UIPasteboard.general.string = publicKey }) {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .accessibilityHint("Copy public key to clipboard")
+                    }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(publicKey)
+                            .font(.system(.caption2, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 60)
+                    Text("Add this public key to ~/.ssh/authorized_keys on the remote server.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+                .background(Color.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            if !privateKey.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Private Key")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Button(action: { UIPasteboard.general.string = privateKey }) {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .accessibilityHint("Copy private key to clipboard")
+                    }
+                    Text("⚠️ Never share your private key. Keep it secret and secure.")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                        .fontWeight(.semibold)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(privateKey)
+                            .font(.system(.caption2, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 60)
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .onAppear(perform: loadStoredKeys)
+    }
+
+    // MARK: - Key Loading
+
+    private func loadStoredKeys() {
+        publicKey  = KeychainHelper.shared.get(publicKeyKeychainKey)  ?? ""
+        privateKey = KeychainHelper.shared.get(privateKeyKeychainKey) ?? ""
+        keyType    = KeychainHelper.shared.get(keyTypeKeychainKey)    ?? ""
+    }
+
+    // MARK: - Key Generation
+
+    private func generateKey(type: String) {
+        isGenerating = true
+        errorMessage = ""
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var pub   = ""
+            var priv  = ""
+            var label = ""
+
+            switch type {
+            case "ed25519":
+                label = "Ed25519"
+                (pub, priv) = generateEd25519()
+            case "rsa4096":
+                label = "RSA-4096"
+                (pub, priv) = generateRSA(bits: 4096)
+            default:
+                break
+            }
+
+            DispatchQueue.main.async {
+                if pub.isEmpty || priv.isEmpty {
+                    errorMessage = "Key generation failed. Please try again."
+                } else {
+                    publicKey  = pub
+                    privateKey = priv
+                    keyType    = label
+                    KeychainHelper.shared.set(pub,   forKey: publicKeyKeychainKey)
+                    KeychainHelper.shared.set(priv,  forKey: privateKeyKeychainKey)
+                    KeychainHelper.shared.set(label, forKey: keyTypeKeychainKey)
+                }
+                isGenerating = false
+            }
+        }
+    }
+
+    // MARK: - Ed25519 (CryptoKit)
+
+    private func generateEd25519() -> (String, String) {
+        let keyPair = Ed25519KeyPair.generate()
+        return (keyPair.openSSHPublicKey, keyPair.openSSHPrivateKey)
+    }
+
+    // MARK: - RSA (Security framework + OpenSSH format)
+
+    private func generateRSA(bits: Int) -> (String, String) {
+        guard let keyPair = try? RSAKeyPair.generate(bits: bits) else {
+            return ("", "")
+        }
+        return (keyPair.openSSHPublicKey(comment: "generated-by-codepad"), keyPair.openSSHPrivateKeyPEM())
+    }
+}
 
 #Preview {
     SettingsView()
