@@ -269,6 +269,54 @@ class TunnelManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: activeConfigKey)
     }
     
+    // MARK: - SSH Bridge Integration
+    
+    /// Called by SSHTunnelBridge when it has a resolved URL from SSH tunnel or port forward.
+    /// Skips HTTP validation since the URL was already verified via SSH.
+    func connectFromBridge(config: TunnelConfig, resolvedURL: URL) {
+        Self.logger.info("Connecting from SSH bridge: \(config.name) at \(resolvedURL)")
+        
+        // Update state
+        activeConfig = config
+        connectionState = .connected
+        isConnected = true
+        lastError = nil
+        connectionWarning = nil
+        reconnectAttempts = 0
+        
+        // Set WebView URL
+        webViewURL = resolvedURL
+        tunnelMode = config.tunnelMode
+        
+        // Add to configs if not already present
+        if !configs.contains(where: { $0.id == config.id }) {
+            configs.append(config)
+            saveConfigs()
+        }
+        
+        // Start health monitoring for the resolved URL
+        startHealthMonitoring(url: resolvedURL)
+        setupNetworkMonitor()
+    }
+    
+    /// Connect via SSH using SSHTunnelBridge
+    func connectViaSSH(config: TunnelConfig, sshConfig: SSHConnectionConfig) {
+        Self.logger.info("Initiating SSH tunnel connection for: \(config.name)")
+        connectionState = .connecting
+        activeConfig = config
+        
+        SSHTunnelBridge.shared.connectViaTunnel(sshConfig: sshConfig)
+    }
+    
+    /// Connect via SSH port forward using SSHTunnelBridge
+    func connectViaSSHPortForward(config: TunnelConfig, sshConfig: SSHConnectionConfig, remotePort: Int = 8080) {
+        Self.logger.info("Initiating SSH port forward for: \(config.name) to port \(remotePort)")
+        connectionState = .connecting
+        activeConfig = config
+        
+        SSHTunnelBridge.shared.connectViaPortForward(sshConfig: sshConfig, remotePort: remotePort)
+    }
+    
     // MARK: - Health Monitoring
     
     private func startHealthMonitoring(url: URL) {

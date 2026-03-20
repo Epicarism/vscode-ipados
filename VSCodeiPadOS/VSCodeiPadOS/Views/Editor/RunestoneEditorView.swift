@@ -1204,12 +1204,18 @@ struct RunestoneEditorView: UIViewRepresentable {
                 multiCursorManager.updateDisplay()
             }
             // Viewport-aware highlighting optimization
+            let estimatedLineHeight: CGFloat = {
+                if let tv = scrollView as? TextView, let font = tv.font {
+                    return font.lineHeight
+                }
+                return max(1, CGFloat(parent.fontSize) * 1.4)
+            }()
             MainActor.assumeIsolated {
                 ViewportHighlightManager.shared.updateScrollPosition(
                     offset: scrollView.contentOffset.y,
                     viewportHeight: scrollView.bounds.height,
-                    lineHeight: 20.0,
-                    totalLines: max(1, Int(scrollView.contentSize.height / 20.0))
+                    lineHeight: estimatedLineHeight,
+                    totalLines: max(1, Int(scrollView.contentSize.height / estimatedLineHeight))
                 )
             }
         }

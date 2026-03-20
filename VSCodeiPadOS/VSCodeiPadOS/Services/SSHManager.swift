@@ -74,9 +74,8 @@ enum SSHClientError: Error, LocalizedError {
         case .notImplemented: return "SSH feature not yet implemented"
         case .portForwardFailed(let reason): return "Port forwarding failed: \(reason)"
         case .passphraseRequired: return "This private key is encrypted and requires a passphrase"
-
+        }
     }
-}
 }
 
 // MARK: - Command Output Types
@@ -920,9 +919,21 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     }
     
     private var group: MultiThreadedEventLoopGroup?
-    private var channel: Channel?
-    private var shellChannel: Channel?
+    private var _channel: Channel?
+    private var _shellChannel: Channel?
     
+    /// Thread-safe access to SSH channels (accessed from both main thread and NIO event loops)
+    private let channelLock = NSLock()
+    
+    private var channel: Channel? {
+        get { channelLock.lock(); defer { channelLock.unlock() }; return _channel }
+        set { channelLock.lock(); defer { channelLock.unlock() }; _channel = newValue }
+    }
+    
+    private var shellChannel: Channel? {
+        get { channelLock.lock(); defer { channelLock.unlock() }; return _shellChannel }
+        set { channelLock.lock(); defer { channelLock.unlock() }; _shellChannel = newValue }
+    }
     /// In-memory passphrase cache (not persisted to keychain)
     private var passphraseCache: [String: String] = [:]
     private let passphraseCacheLock = NSLock()

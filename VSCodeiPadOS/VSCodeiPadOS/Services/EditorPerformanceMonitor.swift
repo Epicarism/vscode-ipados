@@ -59,6 +59,10 @@ final class EditorPerformanceMonitor: ObservableObject {
     private let timingWindowSize = 20   // Last 20 measurements
     
     private init() {}
+
+    deinit {
+        stopMonitoring()
+    }
     
     // MARK: - Start/Stop Monitoring
     

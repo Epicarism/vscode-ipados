@@ -205,23 +205,88 @@ final class LargeFileHandler: ObservableObject {
         return .full
     }
     
+    // MARK: - Feature Gating
+    
+    /// Editor feature categories for tier-based gating
+    enum PerformanceFeature {
+        case syntaxHighlighting
+        case codeFolding
+        case minimap
+        case inlayHints
+        case bracketMatching
+        case wordWrap
+        case gitGutter
+        case indentGuides
+        case stickyHeaders
+    }
+    
+    /// Check if a feature should be enabled for the current file size/tier
+    func shouldEnableFeature(_ feature: PerformanceFeature) -> Bool {
+        switch feature {
+        case .syntaxHighlighting: return currentTier.enableFullSyntaxHighlight
+        case .codeFolding: return currentTier.enableFoldDetection
+        case .minimap: return currentTier.enableMinimap
+        case .inlayHints: return currentTier.enableInlayHints
+        case .bracketMatching: return currentTier.enableBracketGuides
+        case .wordWrap: return currentTier <= .veryLarge
+        case .gitGutter: return currentTier.enableGitGutter
+        case .indentGuides: return currentTier.enableIndentGuides
+        case .stickyHeaders: return currentTier.enableStickyHeaders
+        }
+    }
+    
+    /// Check if a feature should be enabled for a specific file size
+    func shouldEnableFeature(_ feature: PerformanceFeature, for fileSize: Int) -> Bool {
+        var tier: EditorPerformanceTier = .full
+        for (threshold, tierValue) in byteSizeThresholds {
+            if fileSize > threshold {
+                tier = max(tier, tierValue)
+                break
+            }
+        }
+        // Temporarily check with the computed tier
+        switch feature {
+        case .syntaxHighlighting: return tier.enableFullSyntaxHighlight
+        case .codeFolding: return tier.enableFoldDetection
+        case .minimap: return tier.enableMinimap
+        case .inlayHints: return tier.enableInlayHints
+        case .bracketMatching: return tier.enableBracketGuides
+        case .wordWrap: return tier <= .veryLarge
+        case .gitGutter: return tier.enableGitGutter
+        case .indentGuides: return tier.enableIndentGuides
+        case .stickyHeaders: return tier.enableStickyHeaders
+        }
+    }
+    
+    /// Get total line count, building index on demand if needed
+    var lineCount: Int {
+        if lineOffsets.isEmpty {
+            return currentFileInfo?.lineCount ?? 0
+        }
+        return lineOffsets.count + 1  // offsets track newline positions; +1 for last line
+    }
+    
     // MARK: - Viewport-Based Content Loading
     
     /// Get text for a specific line range (for viewport-based rendering)
+    /// Handles edge cases: empty file, range beyond file, negative start
     func getLines(from startLine: Int, count: Int, in text: String) -> String {
+        guard !text.isEmpty, count > 0 else { return "" }
+        let effectiveStart = max(0, startLine)
         // PERF: Use line offset index when available for O(1) start position
+        // Build index on-demand if needed and we have persistent mapping
         if !lineOffsets.isEmpty {
             let nsText = text as NSString
             let startOffset: Int
-            if startLine == 0 {
+            if effectiveStart == 0 {
                 startOffset = 0
-            } else if startLine - 1 < lineOffsets.count {
-                startOffset = lineOffsets[startLine - 1]
+            } else if effectiveStart - 1 < lineOffsets.count {
+                startOffset = lineOffsets[effectiveStart - 1]
             } else {
                 return "" // Beyond indexed lines
             }
             
-            let endLine = startLine + count
+            let endLine = effectiveStart + count
             let endOffset: Int
             if endLine - 1 < lineOffsets.count {
                 endOffset = lineOffsets[endLine - 1]
@@ -231,26 +296,38 @@ final class LargeFileHandler: ObservableObject {
             
             let safeStart = min(startOffset, nsText.length)
             let safeEnd = min(endOffset, nsText.length)
+            guard safeEnd > safeStart else { return "" }
             let range = NSRange(location: safeStart, length: safeEnd - safeStart)
             return nsText.substring(with: range)
         }
         
-        // Fallback: O(n) iteration
+        // Fallback: O(n) iteration — also builds line offset index for next call
         let nsText = text as NSString
         var currentLine = 0
         var lineStart = 0
         var resultStart = -1
         var resultEnd = nsText.length
         
-        while lineStart < nsText.length && currentLine < startLine + count {
+        // Build offset index as we iterate (amortized)
+        var buildingOffsets: [Int] = []
+        if lineOffsets.isEmpty && nsText.length > 100_000 {
+            buildingOffsets.reserveCapacity(nsText.length / 40)
+        }
+        
+        while lineStart < nsText.length && currentLine < effectiveStart + count {
             let lineRange = nsText.lineRange(for: NSRange(location: lineStart, length: 0))
             
-            if currentLine == startLine {
+            if currentLine == effectiveStart {
                 resultStart = lineRange.location
             }
-            if currentLine == startLine + count - 1 {
+            if currentLine == effectiveStart + count - 1 {
                 resultEnd = lineRange.location + lineRange.length
                 break
+            }
+            
+            // Track newline offsets while we're iterating
+            if !buildingOffsets.isEmpty || (lineOffsets.isEmpty && nsText.length > 100_000) {
+                buildingOffsets.append(lineRange.location + lineRange.length)
             }
             
             lineStart = lineRange.location + lineRange.length
@@ -260,7 +337,6 @@ final class LargeFileHandler: ObservableObject {
         if resultStart < 0 { resultStart = 0 }
         let range = NSRange(location: resultStart, length: min(resultEnd - resultStart, nsText.length - resultStart))
         return nsText.substring(with: range)
-    }
     
     /// Get line offset for a specific line number using cached index
     func lineOffset(for lineNumber: Int) -> Int? {

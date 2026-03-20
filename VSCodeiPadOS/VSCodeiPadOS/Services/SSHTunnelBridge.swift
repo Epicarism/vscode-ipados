@@ -146,10 +146,20 @@ final class SSHTunnelBridge: ObservableObject {
                 let hasCodeCLI = !codeCheck.stdout.contains("NOT_FOUND")
                 
                 if !hasCodeCLI {
+                    // Detect remote OS/architecture for correct CLI binary
+                    let archResult = try await self.sshManager.executeCommand("uname -m")
+                    let arch = archResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let platform: String
+                    switch arch {
+                    case "x86_64", "amd64": platform = "cli-alpine-x64"
+                    case "aarch64", "arm64": platform = "cli-alpine-arm64"
+                    default: platform = "cli-linux-x64"
+                    }
+                    
                     // Try to install the CLI
-                    self.appendLog("VS Code CLI not found. Attempting installation...")
+                    self.appendLog("VS Code CLI not found. Installing for \(arch) (\(platform))...")
                     let installResult = try await self.sshManager.executeCommand(
-                        "curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' -o /tmp/vscode_cli.tar.gz && tar -xf /tmp/vscode_cli.tar.gz -C /tmp && chmod +x /tmp/code && echo INSTALL_OK || echo INSTALL_FAIL"
+                        "curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=\(platform)' -o /tmp/vscode_cli.tar.gz && tar -xf /tmp/vscode_cli.tar.gz -C /tmp && chmod +x /tmp/code && echo INSTALL_OK || echo INSTALL_FAIL"
                     )
                     
                     if installResult.stdout.contains("INSTALL_FAIL") {
@@ -165,7 +175,7 @@ final class SSHTunnelBridge: ObservableObject {
                 self.appendLog("Starting VS Code tunnel...")
                 
                 let codeBin = hasCodeCLI ? "code" : "/tmp/code"
-                let tunnelCmd = "\(codeBin) tunnel --accept-server-license-terms 2>&1 &"
+                let tunnelCmd = "\(codeBin) tunnel --accept-server-license-terms > /tmp/vscode-tunnel.log 2>&1 &"
                 let startResult = try await self.sshManager.executeCommand(tunnelCmd)
                 self.appendLog("Tunnel start command sent.")
                 
@@ -215,6 +225,11 @@ final class SSHTunnelBridge: ObservableObject {
                 Self.logger.error("SSH tunnel bridge error: \(msg)")
                 self.appendLog("Error: \(msg)")
                 self.bridgeState = .error(msg)
+                // Propagate error to TunnelManager so UI shows failure
+                await MainActor.run {
+                    TunnelManager.shared.connectionState = .error(msg)
+                    TunnelManager.shared.lastError = msg
+                }
             }
         }
     }
@@ -289,6 +304,11 @@ final class SSHTunnelBridge: ObservableObject {
                 Self.logger.error("Port forward error: \(msg)")
                 self.appendLog("Error: \(msg)")
                 self.bridgeState = .error(msg)
+                // Propagate error to TunnelManager so UI shows failure
+                await MainActor.run {
+                    TunnelManager.shared.connectionState = .error(msg)
+                    TunnelManager.shared.lastError = msg
+                }
             }
         }
     }

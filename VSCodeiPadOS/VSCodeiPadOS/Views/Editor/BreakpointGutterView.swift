@@ -94,8 +94,50 @@ final class BreakpointStore: ObservableObject {
     
     /// Sync breakpoints from DebugManager into BreakpointStore
     private func syncFromDebugManager() {
-        // Only sync if DebugManager has active session
-        // This prevents circular updates
+        let debugManager = DebugManager.shared
+        
+        // Iterate all files tracked by DebugManager
+        for (filePath, lineSet) in debugManager.breakpointsByFile {
+            var synced: [Breakpoint] = []
+            
+            for line in lineSet {
+                let key = "\(filePath)::\(line)"
+                let isEnabled = debugManager.breakpointEnabledStates[key] ?? true
+                let condition = debugManager.breakpointConditions[key]
+                
+                // Check if we already have this breakpoint locally
+                if var existing = breakpoints[filePath]?.first(where: { $0.line == line + 1 }) {
+                    // Update from debug manager (DebugManager uses 0-based, we use 1-based)
+                    existing.isEnabled = isEnabled
+                    if let cond = condition, !cond.isEmpty {
+                        existing.type = .conditional
+                        existing.condition = cond
+                    }
+                    synced.append(existing)
+                } else {
+                    // Create new breakpoint (convert 0-based to 1-based)
+                    var bp = Breakpoint(line: line + 1, type: .normal, isEnabled: isEnabled)
+                    if let cond = condition, !cond.isEmpty {
+                        bp.type = .conditional
+                        bp.condition = cond
+                    }
+                    synced.append(bp)
+                }
+            }
+            
+            breakpoints[filePath] = synced
+        }
+        
+        // Remove local breakpoints for files no longer in DebugManager
+        let debugFiles = Set(debugManager.breakpointsByFile.keys)
+        for filePath in breakpoints.keys {
+            if !debugFiles.contains(filePath) && !(debugManager.breakpointsByFile[filePath]?.isEmpty ?? true) {
+                // Keep local breakpoints for files not tracked by debug manager
+                // Only remove if debug manager explicitly has the file with empty set
+            }
+        }
+        
+        saveToDisk()
     }
     
     // MARK: - Query
@@ -343,13 +385,22 @@ struct BreakpointGutterView: View {
     // MARK: - Computed
     
     private var visibleBreakpoints: [Breakpoint] {
-        store.breakpoints(for: filePath).filter { bp in
-            visibleLineRange.contains(bp.line)
+        let foldingManager = CodeFoldingManager.shared
+        return store.breakpoints(for: filePath).filter { bp in
+            // Skip breakpoints on folded/hidden lines
+            if foldingManager.isLineHidden(fileId: filePath, line: bp.line - 1) {
+                return false
+            }
+            return visibleLineRange.contains(bp.line)
         }
     }
     
     private func yPosition(for line: Int) -> CGFloat {
-        let lineIndex = CGFloat(line - visibleLineRange.lowerBound)
+        // Account for folded lines when calculating Y position
+        let foldingManager = CodeFoldingManager.shared
+        let displayLine = foldingManager.sourceLineToDisplayLine(fileId: filePath, sourceLine: line - 1)
+        let displayStart = foldingManager.sourceLineToDisplayLine(fileId: filePath, sourceLine: visibleLineRange.lowerBound - 1)
+        let lineIndex = CGFloat(displayLine - displayStart)
         return contentTopInset + (lineIndex + 0.5) * lineHeight
     }
     

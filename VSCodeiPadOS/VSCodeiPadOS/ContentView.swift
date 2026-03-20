@@ -1049,6 +1049,7 @@ struct IDEEditorView: View {
     @StateObject private var foldingManager = CodeFoldingManager.shared
     @StateObject private var findViewModel = FindViewModel()
     @StateObject private var inlineSuggestionManager = InlineSuggestionManager()
+    @ObservedObject private var perfMonitor = EditorPerformanceMonitor.shared
 
     
     // MARK: - Shared Autocomplete Handlers
@@ -1191,7 +1192,7 @@ struct IDEEditorView: View {
                             inlineSuggestionManager.clearSuggestion()
                         }
                     
-                    if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap {
+                    if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap && !perfMonitor.shouldDegradeFeatures {
                         MinimapView(
                             content: text,
                             fileId: tab.url?.path ?? tab.fileName,
