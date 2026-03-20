@@ -611,45 +611,8 @@ final class HybridSSHAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
 }
 
 // MARK: - Data Extensions for SSH Wire Format
-
-extension Data {
-    /// Append an SSH string (uint32 length + bytes)
-    mutating func appendSSHString(_ string: String) {
-        let bytes = Array(string.utf8)
-        appendSSHUInt32(UInt32(bytes.count))
-        append(contentsOf: bytes)
-    }
-    
-    /// Append SSH bytes (uint32 length + raw bytes)
-    mutating func appendSSHBytes(_ data: Data) {
-        appendSSHUInt32(UInt32(data.count))
-        append(data)
-    }
-    
-    /// Append SSH mpint (arbitrary precision integer)
-    mutating func appendSSHMPInt(_ data: Data) {
-        var bytes = [UInt8](data)
-        
-        // Strip leading zeros (but keep at least one byte)
-        while bytes.count > 1 && bytes.first == 0 {
-            bytes.removeFirst()
-        }
-        
-        // If high bit is set, prepend a zero byte
-        if let first = bytes.first, first & 0x80 != 0 {
-            bytes.insert(0, at: 0)
-        }
-        
-        appendSSHUInt32(UInt32(bytes.count))
-        append(contentsOf: bytes)
-    }
-    
-    /// Append a uint32 in network byte order (big-endian)
-    mutating func appendSSHUInt32(_ value: UInt32) {
-        var bigEndian = value.bigEndian
-        append(Data(bytes: &bigEndian, count: 4))
-    }
-}
+// NOTE: appendSSHString, appendSSHBytes, appendSSHMPInt, appendSSHUInt32
+// are defined in RSAKeySupport.swift to avoid duplicate symbols.
 
 // MARK: - ByteBuffer SSH Extensions
 

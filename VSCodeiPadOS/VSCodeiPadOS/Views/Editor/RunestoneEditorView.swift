@@ -1433,6 +1433,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
         
         private func performToggleComment(_ textView: TextView) {
+            let oldText = textView.text
             // Block comment languages (HTML, CSS, etc.) use wrapping instead of line prefix
             if let (blockPrefix, blockSuffix) = blockCommentWrappers() {
                 performToggleBlockComment(textView, prefix: blockPrefix, suffix: blockSuffix)
@@ -1492,11 +1493,15 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: min(selectedRange.location + (allCommented ? -(prefix.count + 1) : (prefix.count + 1)), max(0, (textView.text as NSString).length)),
                 length: max(0, selectedRange.length + lengthDiff)
             )
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performToggleBlockComment(_ textView: TextView, prefix: String, suffix: String) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1543,11 +1548,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             let fullText = NSMutableString(string: textView.text)
             fullText.replaceCharacters(in: lineRange, with: newText)
             textView.text = fullText as String
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performDeleteLine(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1557,11 +1566,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             fullText.replaceCharacters(in: lineRange, with: "")
             textView.text = fullText as String
             textView.selectedRange = NSRange(location: min(lineRange.location, max(0, (textView.text as NSString).length)), length: 0)
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performMoveLineUp(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1589,11 +1602,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             let newLocation = prevLineRange.location + (selectedRange.location - lineRange.location)
             textView.selectedRange = NSRange(location: newLocation, length: selectedRange.length)
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performMoveLineDown(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1622,11 +1639,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             let newLocation = lineRange.location + nextLine.count + (selectedRange.location - lineRange.location)
             textView.selectedRange = NSRange(location: min(newLocation, (textView.text as NSString).length), length: selectedRange.length)
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performDuplicateLine(_ textView: TextView, above: Bool) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1647,6 +1668,9 @@ struct RunestoneEditorView: UIViewRepresentable {
                 textView.text = fullText as String
                 // Cursor moves to duplicated line below
                 textView.selectedRange = NSRange(location: selectedRange.location + lineText.count, length: selectedRange.length)
+            }
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
             }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
@@ -1891,6 +1915,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         }
 
         private func performIndentLines(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1921,11 +1946,15 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: selectedRange.location + indent.count,
                 length: max(0, selectedRange.length + lengthDiff - indent.count)
             )
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performOutdentLines(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: selectedRange)
@@ -1975,11 +2004,15 @@ struct RunestoneEditorView: UIViewRepresentable {
                 location: newLocation,
                 length: max(0, selectedRange.length + lengthDiff + firstLineRemoved)
             )
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performJoinLines(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: NSRange(location: selectedRange.location, length: 0))
@@ -2010,11 +2043,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             
             // Place cursor at the join point
             textView.selectedRange = NSRange(location: currentLineText.count, length: 0)
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performInsertLineBelow(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: NSRange(location: selectedRange.location, length: 0))
@@ -2036,11 +2073,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Place cursor at end of new line (after indent)
             let newCursorPos = lineEnd + 1 + indent.count
             textView.selectedRange = NSRange(location: newCursorPos, length: 0)
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
         
         private func performInsertLineAbove(_ textView: TextView) {
+            let oldText = textView.text
             let text = textView.text as NSString
             let selectedRange = textView.selectedRange
             let lineRange = text.lineRange(for: NSRange(location: selectedRange.location, length: 0))
@@ -2060,6 +2101,9 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Place cursor at end of indent on the new line
             let newCursorPos = lineRange.location + indent.count
             textView.selectedRange = NSRange(location: newCursorPos, length: 0)
+            textView.undoManager?.registerUndo(withTarget: textView) { tv in
+                tv.text = oldText
+            }
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }

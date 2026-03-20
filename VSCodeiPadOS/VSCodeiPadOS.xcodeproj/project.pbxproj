@@ -354,14 +354,14 @@
 		CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FileDragModifier.swift; path = Utils/FileDragModifier.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0A /* FoldingLayoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoldingLayoutManager.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticFeedback.swift; path = Utils/HapticFeedback.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSAAuthDelegate.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteRunner.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHGitClient.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTunnelBridge.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RSAAuthDelegate.swift; path = Services/RSAAuthDelegate.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteRunner.swift; path = Services/RemoteRunner.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHGitClient.swift; path = Services/NativeGit/SSHGitClient.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHTunnelBridge.swift; path = Services/SSHTunnelBridge.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightCache.swift; path = Services/SyntaxHighlightCache.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelFileSystemBridge.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelLSPProxy.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelWebSocketClient.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelFileSystemBridge.swift; path = Services/TunnelFileSystemBridge.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelLSPProxy.swift; path = Services/TunnelLSPProxy.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelWebSocketClient.swift; path = Services/TunnelWebSocketClient.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -939,6 +939,17 @@
 			CF1A2B3C4D5E6F7A8B9C0E10 /* SyntaxHighlightCache.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E08 /* BreakpointGutterView.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E09 /* FileDragModifier.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0A /* FoldingLayoutManager.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0C /* RSAAuthDelegate.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0D /* RemoteRunner.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0E /* SSHGitClient.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E11 /* TunnelFileSystemBridge.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E12 /* TunnelLSPProxy.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E13 /* TunnelWebSocketClient.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E14 /* WorkspaceSettings.swift in Sources */,
 		);
 		runOnlyForDeploymentPostprocessing = 0;
 	};

@@ -450,6 +450,28 @@ struct TunnelWebView: UIViewRepresentable {
         
         private func handleFileSave(path: String, content: String) {
             Self.logger.info("Save file via bridge: \(path) (\(content.count) bytes)")
+            if TunnelWebSocketClient.shared.state.isActive {
+                Task {
+                    do {
+                        let message = TunnelMessage(
+                            type: .fileSystem,
+                            action: "writeFile",
+                            payload: ["path": path, "content": content]
+                        )
+                        try await TunnelWebSocketClient.shared.send(message)
+                        Self.logger.info("File saved to remote: \(path)")
+                    } catch {
+                        Self.logger.error("Remote save failed, falling back to local: \(error)")
+                        // Fall back to local save
+                        saveLocally(path: path, content: content)
+                    }
+                }
+            } else {
+                saveLocally(path: path, content: content)
+            }
+        }
+
+        private func saveLocally(path: String, content: String) {
             Task {
                 do {
                     guard let data = content.data(using: .utf8) else {
