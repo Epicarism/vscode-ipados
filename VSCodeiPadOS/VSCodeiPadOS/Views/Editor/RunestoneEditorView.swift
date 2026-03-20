@@ -282,7 +282,7 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Report line height back so minimap and gutter use the correct value.
         // Only update when lineHeight binding is writable (not .constant(0)).
         let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-        let computedLineHeight = ceil(font.lineHeight * 1.4)
+        let computedLineHeight = ceil(font.lineHeight * 1.3)
         if lineHeight != 0 && abs(lineHeight - computedLineHeight) > 0.5 {
             DispatchQueue.main.async {
                 self.lineHeight = computedLineHeight
@@ -1202,7 +1202,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 multiCursorManager.updateDisplay()
             }
             // Viewport-aware highlighting optimization
-            let estimatedLineHeight: CGFloat = max(1, CGFloat(parent.fontSize) * 1.4)
+            let estimatedLineHeight: CGFloat = max(1, CGFloat(parent.fontSize) * 1.3)
             ViewportHighlightManager.shared.updateScrollPosition(
                 offset: scrollView.contentOffset.y,
                 viewportHeight: scrollView.bounds.height,

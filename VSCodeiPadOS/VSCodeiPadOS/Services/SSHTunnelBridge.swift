@@ -280,7 +280,7 @@ final class SSHTunnelBridge: ObservableObject {
                 self.localForwardPort = effectiveLocalPort
                 self.appendLog("Forwarding localhost:\(effectiveLocalPort) → \(sshConfig.host):\(remotePort)...")
                 
-                try await self.sshManager.setupLocalForward(
+                try await self.sshManager.setupPortForward(
                     localPort: effectiveLocalPort,
                     remoteHost: "127.0.0.1",
                     remotePort: remotePort
@@ -322,7 +322,7 @@ final class SSHTunnelBridge: ObservableObject {
         // Stop any port forwarding
         if let port = localForwardPort {
             Task {
-                try? await sshManager.stopLocalForward(localPort: port)
+                try? await sshManager.cancelPortForward(localPort: port)
             }
             localForwardPort = nil
         }

@@ -78,6 +78,7 @@ final class BreakpointStore: ObservableObject {
     @Published private(set) var breakpoints: [String: [Breakpoint]] = [:] // keyed by filePath
     
     private let persistenceKey = "breakpointStore_v1"
+    private var saveWorkItem: DispatchWorkItem?
     
     init() {
         loadFromDisk()
@@ -305,12 +306,19 @@ final class BreakpointStore: ObservableObject {
     // MARK: - Persistence
     
     private func saveToDisk() {
-        do {
-            let data = try JSONEncoder().encode(breakpoints)
-            UserDefaults.standard.set(data, forKey: persistenceKey)
-        } catch {
-            Self.logger.error("Failed to save breakpoints: \(error)")
+        // Debounce saves — coalesce rapid mutations into a single disk write
+        saveWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            do {
+                let data = try JSONEncoder().encode(self.breakpoints)
+                UserDefaults.standard.set(data, forKey: self.persistenceKey)
+            } catch {
+                Self.logger.error("Failed to save breakpoints: \(error)")
+            }
         }
+        saveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
     
     private func loadFromDisk() {
@@ -362,7 +370,7 @@ struct BreakpointGutterView: View {
             
             // Tap targets for empty gutter lines
             ForEach(visibleLineRange.lowerBound..<visibleLineRange.upperBound, id: \.self) { line in
-                if !store.hasBreakpoint(at: line, in: filePath) {
+                if !breakpointLineSet.contains(line) {
                     Color.clear
                         .frame(width: gutterWidth, height: lineHeight)
                         .contentShape(Rectangle())
@@ -384,9 +392,16 @@ struct BreakpointGutterView: View {
     
     // MARK: - Computed
     
+    /// O(1) lookup set for breakpoint lines in this file
+    private var breakpointLineSet: Set<Int> {
+        Set(store.breakpoints(for: filePath).map { $0.line })
+    }
+    
     private var visibleBreakpoints: [Breakpoint] {
         let foldingManager = CodeFoldingManager.shared
+        let bpLines = breakpointLineSet
         return store.breakpoints(for: filePath).filter { bp in
+            guard bpLines.contains(bp.line) else { return false }
             // Skip breakpoints on folded/hidden lines
             if foldingManager.isLineHidden(fileId: filePath, line: bp.line - 1) {
                 return false

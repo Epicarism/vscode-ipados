@@ -216,7 +216,7 @@ final class ViewportHighlightManager: ObservableObject {
     
     // Token storage per file
     private var tokensByFile: [String: [Int: [SemanticToken]]] = [:]  // fileId -> (line -> tokens)
-    private var dirtyLines: Set<Int> = []
+    private var dirtyLines: [String: Set<Int>] = [:]  // fileId -> dirty line numbers
     
     // Cancellables
     private var cancellables = Set<AnyCancellable>()
@@ -443,14 +443,15 @@ final class ViewportHighlightManager: ObservableObject {
         for line in lines {
             tokensByFile[fileId]?[line] = tokens.filter { $0.line == line }
         }
-        dirtyLines.formUnion(Set(lines))
+        dirtyLines[fileId, default: []].formUnion(Set(lines))
         
         // Refresh if dirty lines are visible
         if let viewport = currentViewport {
-            let dirtyVisible = dirtyLines.filter { viewport.contains(line: $0) }
+            let fileDirty = dirtyLines[fileId] ?? []
+            let dirtyVisible = fileDirty.filter { viewport.contains(line: $0) }
             if !dirtyVisible.isEmpty {
                 refreshVisibleTokens(viewport: viewport, fileId: fileId)
-                dirtyLines.subtract(dirtyVisible)
+                dirtyLines[fileId]?.subtract(dirtyVisible)
             }
         }
     }
@@ -460,7 +461,7 @@ final class ViewportHighlightManager: ObservableObject {
         for line in lines {
             tokensByFile[fileId]?.removeValue(forKey: line)
         }
-        dirtyLines.formUnion(Set(lines))
+        dirtyLines[fileId, default: []].formUnion(Set(lines))
     }
     
     /// Clear all tokens for a file
@@ -483,16 +484,22 @@ final class ViewportHighlightManager: ObservableObject {
         let text = textStorage.string
         let lines = text.components(separatedBy: "\n")
         
+        // Pre-compute line start offsets O(n) once, then O(1) per token
+        var lineStartOffsets = [0]
+        lineStartOffsets.reserveCapacity(lines.count)
+        var runningOffset = 0
+        for line in lines {
+            runningOffset += line.count + 1  // +1 for newline
+            lineStartOffsets.append(runningOffset)
+        }
+        
         textStorage.beginEditing()
         
         for token in visibleSemanticTokens {
             guard token.line < lines.count else { continue }
             
-            // Calculate character offset for this line
-            var charOffset = 0
-            for i in 0..<token.line {
-                charOffset += lines[i].count + 1  // +1 for newline
-            }
+            // O(1) character offset lookup
+            let charOffset = lineStartOffsets[token.line]
             
             let nsRange = NSRange(
                 location: charOffset + token.startColumn,

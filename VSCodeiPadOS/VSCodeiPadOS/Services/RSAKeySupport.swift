@@ -192,7 +192,7 @@ final class RSAKeyPair: @unchecked Sendable {
         
         var signData = Data()
         // string    session identifier
-        signData.appendSSHString(sessionId)
+        signData.appendSSHBytes(sessionId)
         // byte      SSH_MSG_USERAUTH_REQUEST (50)
         signData.append(50)
         // string    user name
@@ -206,7 +206,7 @@ final class RSAKeyPair: @unchecked Sendable {
         // string    public key algorithm name
         signData.appendSSHString(algorithmName)
         // string    public key blob
-        signData.appendSSHString(pkBlob)
+        signData.appendSSHBytes(pkBlob)
         
         return signData
     }
@@ -870,14 +870,14 @@ enum RSAKeyParser {
 // MARK: - SSH Data Extensions
 
 extension Data {
-    /// Append an SSH string (uint32 length + bytes)
+    /// Append an SSH string (uint32 length + UTF-8 bytes)
     mutating func appendSSHString(_ string: String) {
         let data = Data(string.utf8)
-        appendSSHString(data)
+        appendSSHBytes(data)
     }
     
-    /// Append an SSH string (uint32 length + bytes)
-    mutating func appendSSHString(_ data: Data) {
+    /// Append SSH bytes (uint32 length + raw bytes)
+    mutating func appendSSHBytes(_ data: Data) {
         var length = UInt32(data.count).bigEndian
         append(Data(bytes: &length, count: 4))
         append(data)
@@ -894,7 +894,13 @@ extension Data {
         if let first = stripped.first, first & 0x80 != 0 {
             stripped = Data([0x00]) + stripped
         }
-        appendSSHString(stripped)
+        appendSSHBytes(stripped)
+    }
+    
+    /// Append a uint32 in network byte order (big-endian)
+    mutating func appendSSHUInt32(_ value: UInt32) {
+        var bigEndian = value.bigEndian
+        append(Data(bytes: &bigEndian, count: 4))
     }
 }
 

@@ -667,7 +667,8 @@ final class TreeSitterFoldingEngine {
         let startTime = CACurrentMediaTime()
         
         let expandedStart = max(0, editedLineRange.lowerBound - 5)
-        let expandedEnd = min(source.components(separatedBy: "\n").count - 1, editedLineRange.upperBound + 5)
+        let lineCount = source.utf8.lazy.filter { $0 == UInt8(ascii: "\n") }.count + 1
+        let expandedEnd = min(lineCount - 1, editedLineRange.upperBound + 5)
         
         var kept = existingRegions.filter { region in
             region.endLine < expandedStart || region.startLine > expandedEnd
@@ -956,7 +957,7 @@ final class TreeSitterFoldingEngine {
         var seen = Set<String>()
         
         for region in regions {
-            let key = "\(region.startLine)-\(region.endLine)"
+            let key = "\(region.startLine)-\(region.endLine)-\(region.type.rawValue)"
             if !seen.contains(key) {
                 seen.insert(key)
                 result.append(region)

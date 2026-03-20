@@ -115,7 +115,7 @@ struct AnyCodable: Codable {
 
 // MARK: - Connection State
 
-enum TunnelConnectionState: Equatable {
+enum WebSocketConnectionState: Equatable {
     case disconnected
     case connecting
     case authenticating
@@ -141,7 +141,7 @@ enum TunnelConnectionState: Equatable {
         }
     }
     
-    static func == (lhs: TunnelConnectionState, rhs: TunnelConnectionState) -> Bool {
+    static func == (lhs: WebSocketConnectionState, rhs: WebSocketConnectionState) -> Bool {
         switch (lhs, rhs) {
         case (.disconnected, .disconnected): return true
         case (.connecting, .connecting): return true
@@ -205,7 +205,7 @@ final class TunnelWebSocketClient: ObservableObject {
     
     // MARK: - Published State
     
-    @Published var state: TunnelConnectionState = .disconnected
+    @Published var state: WebSocketConnectionState = .disconnected
     @Published var metrics: TunnelConnectionMetrics = TunnelConnectionMetrics()
     @Published var lastError: String?
     

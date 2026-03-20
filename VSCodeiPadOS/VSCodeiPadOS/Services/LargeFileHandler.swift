@@ -417,18 +417,22 @@ final class LargeFileHandler: ObservableObject {
                     bytesRead += chunk.count
                     
                     let pct = Double(bytesRead) / Double(max(1, fileSize))
-                    await MainActor.run {
+                    await MainActor.run { [weak self] in
+                        self?.loadProgress = pct
                         progress(pct)
                     }
                 }
                 
                 let text = String(data: result, encoding: .utf8) ?? String(data: result, encoding: .ascii) ?? ""
                 
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    self?.isLoadingLargeFile = false
+                    self?.loadProgress = 1.0
                     completion(.success(text))
                 }
             } catch {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    self?.isLoadingLargeFile = false
                     completion(.failure(error))
                 }
             }
@@ -444,11 +448,11 @@ final class LargeFileHandler: ObservableObject {
             let startTime = CFAbsoluteTimeGetCurrent()
             
             var offsets: [Int] = []
-            offsets.reserveCapacity(content.utf8.count / 40)  // Estimate ~40 bytes per line
+            offsets.reserveCapacity(content.count / 40)  // Estimate ~40 chars per line
             
             var offset = 0
-            for byte in content.utf8 {
-                if byte == UInt8(ascii: "\n") {
+            for codeUnit in content.utf16 {
+                if codeUnit == 0x000A { // newline in UTF-16
                     offsets.append(offset + 1)  // Start of next line
                 }
                 offset += 1

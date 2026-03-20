@@ -794,19 +794,7 @@ struct PaneEditorView: View {
                     .frame(width: 20)
             }
             
-            // Breakpoint indicator
-            Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
-                Circle()
-                    .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color(UIColor.systemRed) : Color.clear)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.red.opacity(0.6), lineWidth: 1)
-                            .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
-                    )
-                    .frame(width: 10, height: 10)
-            }
-            .buttonStyle(.plain)
-            .frame(width: 14, height: lineHeight)
+            // Breakpoint indicator handled by BreakpointGutterView overlay
             
             Text(displayText(for: lineIndex))
                 .font(.system(size: 12, design: .monospaced))
