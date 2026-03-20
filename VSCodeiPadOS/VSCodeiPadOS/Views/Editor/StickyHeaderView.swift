@@ -8,8 +8,9 @@ struct StickyHeaderView: View {
     let onSelect: (Int) -> Void
     
     @State private var stickyLines: [(line: Int, content: String, depth: Int)] = []
+    @State private var updateTask: Task<Void, Never>?
 
-    // PERF: Deduplicated declaration prefixes — checked via Set lookup instead of 45+ hasPrefix calls
+    // Declaration prefixes — iterated with hasPrefix (Set gives dedup, not O(1) prefix matching)
     private static let declarationPrefixes: Set<String> = [
         // Swift
         "class ", "struct ", "enum ", "func ", "extension ", "protocol ",
@@ -49,7 +50,7 @@ struct StickyHeaderView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(stickyLines, id: \.line) { item in
                 HStack {
-                    Text(item.content.trimmingCharacters(in: .whitespaces))
+                    Text(item.content)
                         .font(.system(size: 14, weight: .regular, design: .monospaced))
                         .foregroundColor(theme.editorForeground)
                         .padding(.leading, CGFloat(item.depth) * 16 + 4)
@@ -65,7 +66,14 @@ struct StickyHeaderView: View {
             }
         }
         .onChange(of: currentLine) { _, _ in updateStickyLines() }
-        .onChange(of: text) { _, _ in updateStickyLines() }
+        .onChange(of: text) { _, _ in
+            updateTask?.cancel()
+            updateTask = Task {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run { updateStickyLines() }
+            }
+        }
         .onAppear { updateStickyLines() }
     }
     
@@ -85,11 +93,12 @@ struct StickyHeaderView: View {
             
             if trimmed.isEmpty || trimmed.hasPrefix("//") { continue }
             
-            let indent = line.prefix(while: { $0 == " " }).count / 4
+            let spaceCount = line.prefix(while: { $0 == " " || $0 == "\t" }).reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
+            let indent = spaceCount / 4
             
             if indent < minIndent {
                 if Self.isDeclaration(trimmed) {
-                    found.append((i, line, indent))
+                    found.append((i, trimmed, indent))
                     minIndent = indent
                 }
             }

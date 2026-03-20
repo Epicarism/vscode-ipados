@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import Network
+import WebKit
 import os
 
 // MARK: - Tunnel Configuration
@@ -19,6 +20,7 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
     var url: String
     var type: TunnelType
     var lastUsed: Date?
+    var tunnelMode: TunnelMode = .webview
     
     enum TunnelType: String, Codable, CaseIterable {
         case vscodeDevTunnel = "VS Code Tunnel"
@@ -42,6 +44,20 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
             case .codespaces: return "https://codespace-name.github.dev"
             case .custom: return "https://..."
             }
+        }
+    }
+}
+
+// MARK: - Tunnel Mode
+
+enum TunnelMode: String, Codable, CaseIterable {
+    case webview = "WebView"
+    case hybrid = "Hybrid"
+    
+    var description: String {
+        switch self {
+        case .webview: return "Full WebView — VS Code runs entirely in browser"
+        case .hybrid: return "Hybrid — Native editor + remote file system via tunnel"
         }
     }
 }
@@ -98,6 +114,13 @@ class TunnelManager: ObservableObject {
     @Published var connectionState: TunnelConnectionState = .disconnected
     @Published var lastError: String?
     @Published var connectionWarning: String?
+    
+    // WebView tunnel properties
+    @Published var webViewURL: URL?
+    @Published var isWebViewReady: Bool = false
+    @Published var tunnelMode: TunnelMode = .webview
+    @Published var currentRemoteFile: String?
+    @Published var remoteWorkspacePath: String?
     
     private let configsKey = "tunnelConfigs"
     private let activeConfigKey = "activeTunnelConfigId"
@@ -317,5 +340,173 @@ class TunnelManager: ObservableObject {
         
         // Retry validation
         await validateAndConnect(url: url)
+    }
+    
+    // MARK: - WebView Bridge
+    
+    /// Connect in hybrid mode — use tunnel for remote file system but native editor
+    func connectHybrid(to config: TunnelConfig) {
+        var hybridConfig = config
+        hybridConfig.tunnelMode = .hybrid
+        tunnelMode = .hybrid
+        connect(to: hybridConfig)
+    }
+    
+    /// Build the VS Code URL with optional workspace/file path
+    func buildTunnelURL(for config: TunnelConfig, file: String? = nil) -> URL? {
+        guard var components = URLComponents(string: config.url) else { return nil }
+        
+        // For vscode.dev tunnels, append workspace/file path
+        if let file = file {
+            switch config.type {
+            case .vscodeDevTunnel:
+                // vscode.dev/tunnel/machine/path/to/file
+                components.path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/" + file
+            case .codeServer:
+                // code-server uses query params
+                components.queryItems = (components.queryItems ?? []) + [
+                    URLQueryItem(name: "folder", value: file)
+                ]
+            case .codespaces, .custom:
+                // Append as path
+                if !file.isEmpty {
+                    components.path += "/" + file
+                }
+            }
+        }
+        
+        return components.url
+    }
+    
+    /// Open a specific file in the connected tunnel WebView
+    func openRemoteFile(_ path: String) {
+        currentRemoteFile = path
+        guard let config = activeConfig,
+              let url = buildTunnelURL(for: config, file: path) else { return }
+        webViewURL = url
+    }
+    
+    /// Open a workspace folder in the tunnel
+    func openRemoteWorkspace(_ path: String) {
+        remoteWorkspacePath = path
+        guard let config = activeConfig,
+              let url = buildTunnelURL(for: config, file: path) else { return }
+        webViewURL = url
+    }
+    
+    /// Execute a VS Code command via the WebView JS bridge
+    func executeVSCodeCommand(_ command: String, args: [String: Any]? = nil, in webView: WKWebView) async -> Any? {
+        let argsJSON: String
+        if let args = args,
+           let data = try? JSONSerialization.data(withJSONObject: args),
+           let str = String(data: data, encoding: .utf8) {
+            argsJSON = str
+        } else {
+            argsJSON = "{}"
+        }
+        
+        let js = """
+        (async () => {
+            try {
+                const vscode = acquireVsCodeApi ? acquireVsCodeApi() : null;
+                if (vscode) {
+                    return await vscode.postMessage({ command: '\(command)', args: \(argsJSON) });
+                }
+                // Fallback: use VS Code's command palette API if available
+                if (typeof require !== 'undefined') {
+                    const commands = require('vs/platform/commands/common/commands');
+                    return await commands.CommandsRegistry.executeCommand('\(command)');
+                }
+                return null;
+            } catch(e) {
+                return { error: e.message };
+            }
+        })()
+        """
+        
+        return try? await webView.evaluateJavaScript(js)
+    }
+    
+    /// Get the current file content from VS Code WebView
+    func getActiveEditorContent(from webView: WKWebView) async -> String? {
+        let js = """
+        (function() {
+            try {
+                const editor = document.querySelector('.monaco-editor');
+                if (editor) {
+                    const model = editor.__proto__?.getModel?.() || null;
+                    if (model) return model.getValue();
+                }
+                // Fallback: try to get from textarea
+                const textarea = document.querySelector('.inputarea');
+                return textarea?.value || null;
+            } catch(e) {
+                return null;
+            }
+        })()
+        """
+        
+        return try? await webView.evaluateJavaScript(js) as? String
+    }
+}
+
+// MARK: - WKWebView Extension for Tunnel Bridge
+
+extension WKWebView {
+    /// Inject the native bridge script for communication between native app and VS Code WebView
+    func injectTunnelBridge() {
+        let bridgeScript = WKUserScript(
+            source: """
+            (function() {
+                // Native bridge object
+                window.CodePadBridge = {
+                    isNative: true,
+                    platform: 'iPadOS',
+                    
+                    // Send message to native app
+                    postMessage: function(type, data) {
+                        window.webkit.messageHandlers.tunnelBridge.postMessage({
+                            type: type,
+                            data: data || {}
+                        });
+                    },
+                    
+                    // Request file open in native editor
+                    openInNativeEditor: function(path, content) {
+                        this.postMessage('openNative', { path: path, content: content });
+                    },
+                    
+                    // Notify native app of file changes
+                    notifyFileChanged: function(path) {
+                        this.postMessage('fileChanged', { path: path });
+                    },
+                    
+                    // Request native file picker
+                    requestFilePicker: function() {
+                        this.postMessage('filePicker', {});
+                    },
+                    
+                    // Sync theme with native app
+                    syncTheme: function(theme) {
+                        this.postMessage('themeSync', theme);
+                    }
+                };
+                
+                // Listen for messages from native app
+                window.addEventListener('nativeBridge', function(event) {
+                    const msg = event.detail;
+                    if (msg.type === 'themeUpdate') {
+                        document.documentElement.style.setProperty('--vscode-editor-background', msg.data.background);
+                        document.documentElement.style.setProperty('--vscode-editor-foreground', msg.data.foreground);
+                    }
+                });
+                
+                console.log('[CodePad] Native bridge initialized');
+            })();
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
+        configuration.userContentController.addUserScript(bridgeScript)
     }
 }

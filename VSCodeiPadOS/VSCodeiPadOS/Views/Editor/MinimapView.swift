@@ -32,6 +32,8 @@ struct MinimapView: View {
     // MARK: - Internal state
 
     @State private var isInteracting: Bool = false
+    @State private var cachedLines: [Substring] = []
+    @State private var cachedVisibleIndices: [Int] = []
     @ObservedObject private var themeManager = ThemeManager.shared
     @ObservedObject private var foldingManager = CodeFoldingManager.shared
 
@@ -57,34 +59,35 @@ struct MinimapView: View {
 
     // MARK: - View
 
-    /// Pre-split lines, recomputed only when `content` changes (not on every scroll).
-    /// NOTE: body computes this once and passes to helpers to avoid redundant splits.
-    private var allLines: [Substring] {
-        Array(content.split(separator: "\n", omittingEmptySubsequences: false))
+    /// Recompute cached lines from content
+    private func recomputeLines() {
+        cachedLines = Array(content.split(separator: "\n", omittingEmptySubsequences: false))
+        recomputeVisibleIndices()
     }
-
-    /// Indices of lines that are NOT folded (visible in editor). When no fileId, all lines are visible.
-    /// Takes pre-computed lines to avoid re-splitting content.
-    private func computeVisibleLineIndices(lines: [Substring]) -> [Int] {
+    
+    /// Recompute visible line indices from cached lines + folding state
+    private func recomputeVisibleIndices() {
         guard let fid = fileId else {
-            return Array(0..<lines.count)
+            cachedVisibleIndices = Array(0..<cachedLines.count)
+            return
         }
         var indices: [Int] = []
-        indices.reserveCapacity(lines.count)
-        for i in 0..<lines.count {
+        indices.reserveCapacity(cachedLines.count)
+        for i in 0..<cachedLines.count {
             if !foldingManager.isLineFolded(fileId: fid, line: i) {
                 indices.append(i)
             }
         }
-        return indices
+        cachedVisibleIndices = indices
     }
+
 
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let minimapHeight = max(1, size.height)
-            let lines = allLines
-            let visible = computeVisibleLineIndices(lines: lines)
+            let lines = cachedLines
+            let visible = cachedVisibleIndices
             let visibleCount = max(visible.count, 1)
 
             ZStack(alignment: .topLeading) {
@@ -132,6 +135,9 @@ struct MinimapView: View {
             )
         }
         .frame(width: minimapWidth)
+        .onAppear { recomputeLines() }
+        .onChange(of: content) { _, _ in recomputeLines() }
+        .onChange(of: foldingManager.collapsedLines) { _, _ in recomputeVisibleIndices() }
     }
 
     // MARK: - Layers
@@ -463,7 +469,9 @@ struct MinimapView: View {
     ]
 
     private func isKeyword(_ word: Substring) -> Bool {
-        Self.keywordSet.contains(String(word))
+        // PERF: Compare Substring directly via String init avoided — use contains with String
+        // Swift's Set.contains uses hash, so String(word) is needed, but word is typically short
+        word.count < 20 && Self.keywordSet.contains(String(word))
     }
 
     private func looksLikeTypeName(_ word: Substring) -> Bool {

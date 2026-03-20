@@ -12,6 +12,7 @@ struct AddTunnelSheet: View {
     @State private var name = ""
     @State private var url = ""
     @State private var selectedType: TunnelConfig.TunnelType = .vscodeDevTunnel
+    @State private var selectedMode: TunnelMode = .webview
     
     var body: some View {
         NavigationView {
@@ -35,12 +36,25 @@ struct AddTunnelSheet: View {
                         .accessibilityHint("Enter the server URL to connect to")
                 }
                 
+                Section(header: Text("Connection Mode")) {
+                    Picker("Mode", selection: $selectedMode) {
+                        ForEach(TunnelMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(selectedMode.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
                 Section {
                     Button("Add Server") {
                         let config = TunnelConfig(
                             name: name.isEmpty ? selectedType.rawValue : name,
                             url: url,
-                            type: selectedType
+                            type: selectedType,
+                            tunnelMode: selectedMode
                         )
                         tunnelManager.addConfig(config)
                         dismiss()

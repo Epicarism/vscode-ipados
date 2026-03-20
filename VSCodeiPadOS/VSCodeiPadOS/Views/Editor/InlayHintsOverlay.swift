@@ -27,6 +27,7 @@ struct InlayHintsOverlay: View {
     var tabSize: Int = 4
 
     @State private var hints: [InlayHintsManager.InlayHint] = []
+    @State private var recomputeTask: Task<Void, Never>?
 
     // PERF: Cache charWidth per fontSize to avoid recomputing on every layout
     private static var _charWidthCache: [CGFloat: CGFloat] = [:]
@@ -43,9 +44,19 @@ struct InlayHintsOverlay: View {
             let visibleHints = hints.filter { $0.line >= scrollPosition && $0.line <= (scrollPosition + maxVisibleLines) }
 
             ZStack(alignment: .topLeading) {
+                // PERF: Pre-compute line texts to avoid O(H×L) extractLine calls inside ForEach
+                let lineTexts: [Int: String] = {
+                    var dict = [Int: String]()
+                    for hint in visibleHints {
+                        if dict[hint.line] == nil {
+                            dict[hint.line] = extractLine(from: code, at: hint.line)
+                        }
+                    }
+                    return dict
+                }()
+
                 ForEach(visibleHints) { hint in
-                    // PERF: Extract only the single line we need instead of splitting entire document
-                    let lineText = extractLine(from: code, at: hint.line)
+                    let lineText = lineTexts[hint.line] ?? ""
                     let visualCol = visualColumn(in: lineText, utf16Column: hint.column, tabSize: tabSize)
 
                     let x = gutterWidth + textInsets.left + (CGFloat(visualCol) * charWidth)
@@ -69,7 +80,14 @@ struct InlayHintsOverlay: View {
         }
         .allowsHitTesting(false)
         .onAppear { recompute() }
-        .onChange(of: code) { _, _ in recompute() }
+        .onChange(of: code) { _, _ in
+            recomputeTask?.cancel()
+            recomputeTask = Task {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run { recompute() }
+            }
+        }
         .onChange(of: language) { _, _ in recompute() }
     }
 

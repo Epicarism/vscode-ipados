@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import UIKit
 import os
 
 // MARK: - Performance Tier
@@ -112,6 +113,26 @@ final class LargeFileHandler: ObservableObject {
     private var lineOffsets: [Int] = []
     private var lineOffsetsFileId: String?
     
+    // Persistent memory mapping
+    private var persistentMapping: Data?
+    private var persistentMappingURL: URL?
+    
+    // Cancellable loading task
+    private var loadingTask: Task<Void, Never>?
+    
+    private init() {
+        // Wire memory pressure notifications
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleMemoryPressure()
+            }
+        }
+    }
+    
     // MARK: - Analyze File
     
     /// Analyze a file and determine the performance tier
@@ -188,6 +209,33 @@ final class LargeFileHandler: ObservableObject {
     
     /// Get text for a specific line range (for viewport-based rendering)
     func getLines(from startLine: Int, count: Int, in text: String) -> String {
+        // PERF: Use line offset index when available for O(1) start position
+        if !lineOffsets.isEmpty {
+            let nsText = text as NSString
+            let startOffset: Int
+            if startLine == 0 {
+                startOffset = 0
+            } else if startLine - 1 < lineOffsets.count {
+                startOffset = lineOffsets[startLine - 1]
+            } else {
+                return "" // Beyond indexed lines
+            }
+            
+            let endLine = startLine + count
+            let endOffset: Int
+            if endLine - 1 < lineOffsets.count {
+                endOffset = lineOffsets[endLine - 1]
+            } else {
+                endOffset = nsText.length
+            }
+            
+            let safeStart = min(startOffset, nsText.length)
+            let safeEnd = min(endOffset, nsText.length)
+            let range = NSRange(location: safeStart, length: safeEnd - safeStart)
+            return nsText.substring(with: range)
+        }
+        
+        // Fallback: O(n) iteration
         let nsText = text as NSString
         var currentLine = 0
         var lineStart = 0
@@ -228,9 +276,17 @@ final class LargeFileHandler: ObservableObject {
         return try Data(contentsOf: url, options: .mappedIfSafe)
     }
     
-    /// Read a specific byte range from a memory-mapped file
+    /// Read a specific byte range, reusing persistent memory mapping
     func readRange(url: URL, offset: Int, length: Int) throws -> Data {
-        let data = try memoryMappedRead(url: url)
+        // Reuse persistent mapping if same URL
+        let data: Data
+        if persistentMappingURL == url, let existing = persistentMapping {
+            data = existing
+        } else {
+            data = try memoryMappedRead(url: url)
+            persistentMapping = data
+            persistentMappingURL = url
+        }
         let safeOffset = min(offset, data.count)
         let safeLength = min(length, data.count - safeOffset)
         return data[safeOffset..<(safeOffset + safeLength)]
@@ -248,7 +304,10 @@ final class LargeFileHandler: ObservableObject {
         isLoadingLargeFile = true
         loadProgress = 0
         
-        Task.detached(priority: .userInitiated) { [weak self] in
+        // Cancel any previous loading task
+        loadingTask?.cancel()
+        
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
                 let fileSize = attrs[.size] as? Int ?? 0
@@ -288,6 +347,7 @@ final class LargeFileHandler: ObservableObject {
                 }
             }
         }
+        loadingTask = task
     }
     
     // MARK: - Line Offset Index
@@ -298,7 +358,7 @@ final class LargeFileHandler: ObservableObject {
             let startTime = CFAbsoluteTimeGetCurrent()
             
             var offsets: [Int] = []
-            offsets.reserveCapacity(content.count / 40)  // Estimate ~40 chars per line
+            offsets.reserveCapacity(content.utf8.count / 40)  // Estimate ~40 bytes per line
             
             var offset = 0
             for byte in content.utf8 {
@@ -346,6 +406,10 @@ final class LargeFileHandler: ObservableObject {
         lineOffsets = []
         lineOffsetsFileId = nil
         currentFileInfo = nil
+        persistentMapping = nil
+        persistentMappingURL = nil
+        loadingTask?.cancel()
+        loadingTask = nil
         Self.logger.info("Released large file handler caches due to memory pressure")
     }
 }
