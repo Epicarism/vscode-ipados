@@ -77,6 +77,8 @@ final class CodeFoldingManager: ObservableObject {
     
     /// Callback invoked when a fold/unfold mutates the text. ContentView/SplitEditorView set this.
     @MainActor var onTextMutation: ((_ newText: String) -> Void)? = nil
+    /// Callback invoked when fold state changes (non-text-mutating). Views observe this.
+    @MainActor var onFoldStateChanged: (() -> Void)? = nil
     /// Current full text for text-replacement folding. Set by the editor view.
     @MainActor var currentText: String = ""
     /// Storage for original folded text keyed by "fileId:startLine"
@@ -84,6 +86,8 @@ final class CodeFoldingManager: ObservableObject {
     
     // Dictionary to manage fold regions per file (protected by foldRegionsLock for thread safety)
     nonisolated(unsafe) private var foldRegionsByFile: [String: [FoldRegion]] = [:]
+    /// Tracks which fold-start lines are collapsed per file (line-mapping model, no text mutation)
+    nonisolated(unsafe) private var collapsedStartLines: [String: Set<Int>] = [:]
     private let foldRegionsLock = NSLock()
     
     private var currentFilePath: String?
@@ -1007,6 +1011,202 @@ final class CodeFoldingManager: ObservableObject {
         
         // Notify observers (FoldingLayoutManager) to invalidate layout
         NotificationCenter.default.post(name: .codeFoldingDidChange, object: self)
+    }
+    
+    // MARK: - Line-Mapping Model (no text mutation)
+    
+    /// Check if a line is hidden (inside a collapsed fold region) for a specific file.
+    /// Thread-safe — acquires foldRegionsLock.
+    nonisolated func isLineHidden(fileId: String, line: Int) -> Bool {
+        foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
+        guard let startLines = collapsedStartLines[fileId],
+              let regions = foldRegionsByFile[fileId] else { return false }
+        for region in regions {
+            if startLines.contains(region.startLine) &&
+               line > region.startLine && line <= region.endLine {
+                return true
+            }
+        }
+        return false
+    }
+    
+    /// Count visible lines for a file given the total real line count.
+    nonisolated func visibleLineCount(fileId: String, totalLines: Int) -> Int {
+        foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
+        guard let startLines = collapsedStartLines[fileId],
+              let regions = foldRegionsByFile[fileId] else { return totalLines }
+        var hidden = 0
+        for region in regions where startLines.contains(region.startLine) {
+            hidden += (region.endLine - region.startLine) // lines startLine+1..endLine are hidden
+        }
+        return max(1, totalLines - hidden)
+    }
+    
+    /// Convert a display (visible) line number to the real source line number.
+    nonisolated func displayLineToSourceLine(fileId: String, displayLine: Int) -> Int {
+        foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
+        guard let startLines = collapsedStartLines[fileId],
+              let regions = foldRegionsByFile[fileId], !startLines.isEmpty else { return displayLine }
+        
+        // Build sorted list of collapsed ranges
+        let collapsed = regions
+            .filter { startLines.contains($0.startLine) }
+            .sorted { $0.startLine < $1.startLine }
+        
+        var sourceLine = 0
+        var displayCount = 0
+        for region in collapsed {
+            // Count visible lines before this fold
+            let visibleBefore = region.startLine - sourceLine
+            if displayCount + visibleBefore > displayLine {
+                return sourceLine + (displayLine - displayCount)
+            }
+            displayCount += visibleBefore + 1 // +1 for the fold start line (visible)
+            sourceLine = region.endLine + 1
+        }
+        // Remaining lines after last fold
+        return sourceLine + (displayLine - displayCount)
+    }
+    
+    /// Convert a real source line to display line number. Returns nil if the line is hidden.
+    nonisolated func sourceLineToDisplayLine(fileId: String, sourceLine: Int) -> Int? {
+        foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
+        guard let startLines = collapsedStartLines[fileId],
+              let regions = foldRegionsByFile[fileId], !startLines.isEmpty else { return sourceLine }
+        
+        let collapsed = regions
+            .filter { startLines.contains($0.startLine) }
+            .sorted { $0.startLine < $1.startLine }
+        
+        var displayLine = 0
+        var currentSource = 0
+        for region in collapsed {
+            if sourceLine > region.startLine && sourceLine <= region.endLine {
+                return nil // This line is hidden
+            }
+            if sourceLine <= region.startLine {
+                return displayLine + (sourceLine - currentSource)
+            }
+            // Lines from currentSource to startLine are visible (+1 for the fold start itself)
+            displayLine += (region.startLine - currentSource) + 1
+            currentSource = region.endLine + 1
+        }
+        return displayLine + (sourceLine - currentSource)
+    }
+    
+    /// If a line is the start of a collapsed fold, return a summary string.
+    nonisolated func foldSummaryForLine(fileId: String, line: Int) -> String? {
+        foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
+        guard let startLines = collapsedStartLines[fileId],
+              startLines.contains(line),
+              let regions = foldRegionsByFile[fileId] else { return nil }
+        if let region = regions.first(where: { $0.startLine == line }) {
+            let hiddenCount = region.endLine - region.startLine
+            return "⋯ \(hiddenCount) lines"
+        }
+        return nil
+    }
+    
+    /// Get all currently collapsed regions for a file.
+    nonisolated func collapsedRegions(for fileId: String) -> [FoldRegion] {
+        foldRegionsLock.lock()
+        defer { foldRegionsLock.unlock() }
+        guard let startLines = collapsedStartLines[fileId],
+              let regions = foldRegionsByFile[fileId] else { return [] }
+        return regions.filter { startLines.contains($0.startLine) }
+    }
+    
+    /// Toggle fold using the line-mapping model (no text mutation).
+    func toggleFoldMapped(fileId: String, line: Int) {
+        foldRegionsLock.lock()
+        guard var regions = foldRegionsByFile[fileId] else {
+            foldRegionsLock.unlock()
+            return
+        }
+        var startLines = collapsedStartLines[fileId] ?? Set<Int>()
+        
+        if let idx = regions.firstIndex(where: { $0.startLine == line }) {
+            if startLines.contains(line) {
+                startLines.remove(line)
+                regions[idx].isFolded = false
+            } else {
+                startLines.insert(line)
+                regions[idx].isFolded = true
+            }
+            collapsedStartLines[fileId] = startLines
+            foldRegionsByFile[fileId] = regions
+            foldRegionsLock.unlock()
+            
+            // Update active file state if this is the current file
+            if fileId == currentFileId {
+                self.foldRegions = regions
+                updateCollapsedLines()
+            } else {
+                NotificationCenter.default.post(name: .codeFoldingDidChange, object: self)
+                objectWillChange.send()
+            }
+            onFoldStateChanged?()
+            saveFoldState(for: fileId)
+        } else {
+            foldRegionsLock.unlock()
+        }
+    }
+    
+    /// Collapse all regions using line-mapping model (no text mutation).
+    func collapseAllMapped(fileId: String) {
+        foldRegionsLock.lock()
+        guard var regions = foldRegionsByFile[fileId] else {
+            foldRegionsLock.unlock()
+            return
+        }
+        var startLines = Set<Int>()
+        for idx in regions.indices {
+            regions[idx].isFolded = true
+            startLines.insert(regions[idx].startLine)
+        }
+        collapsedStartLines[fileId] = startLines
+        foldRegionsByFile[fileId] = regions
+        foldRegionsLock.unlock()
+        
+        if fileId == currentFileId {
+            self.foldRegions = regions
+            updateCollapsedLines()
+        } else {
+            NotificationCenter.default.post(name: .codeFoldingDidChange, object: self)
+            objectWillChange.send()
+        }
+        onFoldStateChanged?()
+        saveFoldState(for: fileId)
+    }
+    
+    /// Expand all regions using line-mapping model (no text mutation).
+    func expandAllMapped(fileId: String) {
+        foldRegionsLock.lock()
+        guard var regions = foldRegionsByFile[fileId] else {
+            foldRegionsLock.unlock()
+            return
+        }
+        for idx in regions.indices {
+            regions[idx].isFolded = false
+        }
+        collapsedStartLines[fileId] = Set<Int>()
+        foldRegionsByFile[fileId] = regions
+        foldRegionsLock.unlock()
+        
+        if fileId == currentFileId {
+            self.foldRegions = regions
+            updateCollapsedLines()
+        } else {
+            NotificationCenter.default.post(name: .codeFoldingDidChange, object: self)
+            objectWillChange.send()
+        }
+        onFoldStateChanged?()
+        saveFoldState(for: fileId)
     }
 }
 

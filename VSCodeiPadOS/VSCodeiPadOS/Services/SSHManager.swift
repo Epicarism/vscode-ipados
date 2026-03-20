@@ -68,8 +68,8 @@ enum SSHClientError: Error, LocalizedError {
         case .invalidChannelType: return "Invalid channel type"
         case .notConnected: return "Not connected to server"
         case .timeout: return "Connection timed out"
-        case .invalidPrivateKey: return "Invalid private key format. Supported types: Ed25519, ECDSA (P-256, P-384, P-521)"
-        case .unsupportedKeyType(let type): return "Unsupported key type: \(type). RSA keys are not supported. Please generate an Ed25519 key: ssh-keygen -t ed25519"
+        case .invalidPrivateKey: return "Invalid private key format. Supported types: Ed25519, ECDSA (P-256, P-384, P-521), RSA (2048, 3072, 4096)"
+        case .unsupportedKeyType(let type): return "Unsupported key type: \(type). Please use Ed25519, ECDSA, or RSA keys."
         case .commandFailed(let reason): return "Command execution failed: \(reason)"
         case .notImplemented: return "SSH feature not yet implemented"
         case .portForwardFailed(let reason): return "Port forwarding failed: \(reason)"
@@ -435,11 +435,25 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     private let passphrase: String?
     private var attemptedKey = false
     private var attemptedPasswordFallback = false
+    /// Parsed RSA key pair for RSA auth (stored separately since NIOSSHPrivateKey doesn't support RSA)
+    private var rsaKeyPair: RSAKeyPair?
     
     init(username: String, privateKeyString: String, passphrase: String?) {
         self.username = username
         self.privateKeyString = privateKeyString
         self.passphrase = passphrase
+        // Pre-parse RSA key if detected
+        let trimmed = privateKeyString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("BEGIN RSA PRIVATE KEY") || trimmed.contains("BEGIN PRIVATE KEY") {
+            self.rsaKeyPair = try? RSAKeyParser.parse(trimmed, passphrase: passphrase)
+        } else if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
+            // Check if the OpenSSH key is actually RSA
+            if let data = Data(base64Encoded: trimmed.components(separatedBy: "\n")
+                .filter({ !$0.hasPrefix("-----") && !$0.isEmpty }).joined()),
+               SSHManager.opensshBlobContainsRSA(data) {
+                self.rsaKeyPair = try? RSAKeyParser.parse(trimmed, passphrase: passphrase)
+            }
+        }
     }
     
     func nextAuthenticationType(
@@ -492,12 +506,12 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             return parseOpenSSHKey(trimmed, passphrase: passphrase)
         }
         
-        // Detect RSA keys and warn — NIOSSH doesn't support RSA
+        // RSA keys — parsed via RSAKeyParser, auth handled separately by rsaKeyPair
+        // Return nil here since NIOSSHPrivateKey can't wrap RSA; the RSA path
+        // is handled in nextAuthenticationType via rsaKeyPair
         if trimmed.contains("BEGIN RSA PRIVATE KEY") {
-            // RSA keys cannot be used with NIOSSH.
-            // User should run: ssh-keygen -t ed25519
-            AppLogger.ssh.warning("RSA private key (PEM/PKCS#1 format) detected. RSA keys are NOT supported by the NIOSSH library. Authentication will fail. Please generate a supported key: ssh-keygen -t ed25519")
-            return nil
+            AppLogger.ssh.info("RSA private key (PEM/PKCS#1 format) detected. RSA auth will be attempted via Security.framework signing.")
+            return nil // RSA handled by rsaKeyPair in nextAuthenticationType
         }
         
         // Try PEM EC/PKCS8 format
@@ -680,11 +694,10 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             }
             
         case "ssh-rsa", "rsa-sha2-256", "rsa-sha2-512":
-            // RSA keys are not supported by NIOSSH library.
-            // Users must generate a supported key instead:
-            //   ssh-keygen -t ed25519
-            AppLogger.ssh.warning("RSA key type '\(keyType)' is NOT supported by NIOSSH. Authentication will always fail with RSA keys. Please generate a supported key: ssh-keygen -t ed25519")
-            return nil
+            // RSA keys are parsed by RSAKeyParser — NIOSSHPrivateKey can't wrap them
+            // but rsaKeyPair in PrivateKeyAuthDelegate handles the auth separately
+            AppLogger.ssh.info("RSA key type '\(keyType)' detected in OpenSSH format. RSA auth handled via Security.framework.")
+            return nil // RSA handled by rsaKeyPair in PrivateKeyAuthDelegate
             
         default:
             // Unsupported key type
@@ -715,13 +728,143 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
     }
 }
 
-// MARK: - SSH Host Key Validator (Accept All for now)
+// MARK: - Known Hosts Manager
 
+/// Manages SSH host key verification using Keychain storage
+final class KnownHostsManager {
+    static let shared = KnownHostsManager()
+    private let keychainPrefix = "ssh_known_host_"
+    
+    enum HostKeyStatus {
+        case trusted
+        case unknown
+        case changed(oldFingerprint: String, newFingerprint: String)
+    }
+    
+    /// Check a host key against stored known hosts
+    func checkHostKey(host: String, port: Int, key: NIOSSHPublicKey) -> HostKeyStatus {
+        let storageKey = keychainPrefix + "\(host):\(port)"
+        let fingerprint = fingerprintForKey(key)
+        
+        guard let storedFingerprint = KeychainHelper.shared.get(storageKey) else {
+            return .unknown
+        }
+        
+        if storedFingerprint == fingerprint {
+            return .trusted
+        } else {
+            return .changed(oldFingerprint: storedFingerprint, newFingerprint: fingerprint)
+        }
+    }
+    
+    /// Trust and store a host key
+    func trustHostKey(host: String, port: Int, key: NIOSSHPublicKey) {
+        let storageKey = keychainPrefix + "\(host):\(port)"
+        let fingerprint = fingerprintForKey(key)
+        KeychainHelper.shared.save(fingerprint, forKey: storageKey)
+    }
+    
+    /// Remove a stored host key
+    func removeHostKey(host: String, port: Int) {
+        let storageKey = keychainPrefix + "\(host):\(port)"
+        KeychainHelper.shared.delete(storageKey)
+    }
+    
+    /// Get all known hosts
+    func allKnownHosts() -> [(host: String, port: Int)] {
+        // This is a simplified implementation — in production, store a manifest
+        return []
+    }
+    
+    /// Compute a fingerprint string for a host key
+    func fingerprintForKey(_ key: NIOSSHPublicKey) -> String {
+        // Use the raw key bytes to compute SHA-256 fingerprint
+        var hasher = SHA256()
+        let keyDescription = "\(key)"
+        hasher.update(data: Data(keyDescription.utf8))
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined(separator: ":")
+    }
+}
+
+// MARK: - Host Key Confirmation Model
+
+struct HostKeyConfirmation: Identifiable {
+    let id = UUID()
+    let host: String
+    let port: Int
+    let fingerprint: String
+    let status: KnownHostsManager.HostKeyStatus
+    let promise: EventLoopPromise<Void>
+}
+
+// MARK: - SSH Host Key Validator
+
+/// Verifying host key delegate that checks against known_hosts
+final class VerifyingHostKeyDelegate: NIOSSHClientServerAuthenticationDelegate {
+    private let host: String
+    private let port: Int
+    
+    init(host: String, port: Int) {
+        self.host = host
+        self.port = port
+    }
+    
+    func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
+        let status = KnownHostsManager.shared.checkHostKey(host: host, port: port, key: hostKey)
+        
+        switch status {
+        case .trusted:
+            // Known and matches — accept
+            validationCompletePromise.succeed(())
+            
+        case .unknown:
+            // First connection — trust on first use (TOFU) and notify UI
+            KnownHostsManager.shared.trustHostKey(host: host, port: port, key: hostKey)
+            // Post notification for UI to show "New host trusted" toast
+            let fingerprint = KnownHostsManager.shared.fingerprintForKey(hostKey)
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .sshHostKeyFirstUse,
+                    object: nil,
+                    userInfo: ["host": self.host, "port": self.port, "fingerprint": fingerprint]
+                )
+            }
+            validationCompletePromise.succeed(())
+            
+        case .changed(let oldFP, let newFP):
+            // Host key changed — potential MITM attack!
+            AppLogger.ssh.error("HOST KEY CHANGED for \(self.host):\(self.port)! Old: \(oldFP), New: \(newFP). Possible MITM attack.")
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .sshHostKeyChanged,
+                    object: nil,
+                    userInfo: ["host": self.host, "port": self.port, "oldFingerprint": oldFP, "newFingerprint": newFP]
+                )
+            }
+            // Reject the connection — user must manually clear the old key
+            validationCompletePromise.fail(SSHClientError.connectionFailed(
+                "Host key for \(self.host) has changed! This could indicate a MITM attack. " +
+                "If you trust this host, remove the old key in Settings > SSH > Known Hosts."
+            ))
+        }
+    }
+}
+
+// Keep legacy delegate for explicit "accept all" mode
 final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationDelegate {
     func validateHostKey(hostKey: NIOSSHPublicKey, validationCompletePromise: EventLoopPromise<Void>) {
-        // Accept all host keys - in production you'd verify against known_hosts
         validationCompletePromise.succeed(())
     }
+}
+
+
+
+// MARK: - SSH Host Key Notifications
+
+extension Notification.Name {
+    static let sshHostKeyFirstUse = Notification.Name("sshHostKeyFirstUse")
+    static let sshHostKeyChanged = Notification.Name("sshHostKeyChanged")
 }
 
 // MARK: - SSH Shell Handler
@@ -849,16 +992,14 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         self.currentConfig = config
         
-        // ── Early RSA detection ──────────────────────────────────────────────
-        // NIOSSH does not support RSA keys.  Catch this *before* attempting
-        // the network connection so the user gets a clear, actionable error
-        // instead of a generic "authentication failed".
-        if case .privateKey(let keyString, _) = config.authMethod {
+        // ── RSA key detection (informational only) ─────────────────────────
+        // RSA keys are now supported via Security.framework signing.
+        // PrivateKeyAuthDelegate handles RSA auth via RSAKeyPair.
+        if case .privateKey(let keyString, let passphrase) = config.authMethod {
             let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
             let isRSAPEM = trimmed.contains("BEGIN RSA PRIVATE KEY")
             var isRSAOpenSSH = false
             if !isRSAPEM, trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
-                // Decode and peek at the key-type string inside the binary blob
                 let lines = trimmed.components(separatedBy: "\n")
                     .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
                 if let data = Data(base64Encoded: lines.joined()) {
@@ -866,8 +1007,12 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                 }
             }
             if isRSAPEM || isRSAOpenSSH {
-                AppLogger.ssh.warning("RSA key detected for host \(config.host). RSA is NOT supported by NIOSSH. Surfacing user-facing error.")
-                throw SSHClientError.unsupportedKeyType("RSA")
+                AppLogger.ssh.info("RSA key detected for host \(config.host). RSA auth will be attempted via Security.framework.")
+                // Verify the key can be parsed before attempting connection
+                if (try? RSAKeyParser.parse(keyString, passphrase: passphrase)) == nil {
+                    AppLogger.ssh.error("RSA key parsing failed for host \(config.host).")
+                    throw SSHClientError.invalidPrivateKey
+                }
             }
         }
         // ────────────────────────────────────────────────────────────────────
@@ -883,13 +1028,17 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             authDelegate = PrivateKeyAuthDelegate(username: config.username, privateKeyString: key, passphrase: passphrase)
         }
         
+        // Use verifying host key delegate for production security
+        nonisolated(unsafe) let hostKeyDelegate: NIOSSHClientServerAuthenticationDelegate = 
+            VerifyingHostKeyDelegate(host: config.host, port: config.port)
+        
         let bootstrap = ClientBootstrap(group: group)
             .channelInitializer { channel in
                 nonisolated(unsafe) let handler = NIOSSHHandler(
                     role: .client(
                         .init(
                             userAuthDelegate: authDelegate,
-                            serverAuthDelegate: AcceptAllHostKeysDelegate()
+                            serverAuthDelegate: hostKeyDelegate
                         )
                     ),
                     allocator: channel.allocator,

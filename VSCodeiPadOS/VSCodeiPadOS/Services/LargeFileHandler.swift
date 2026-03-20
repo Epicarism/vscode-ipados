@@ -1,0 +1,351 @@
+//
+//  LargeFileHandler.swift
+//  VSCodeiPadOS
+//
+//  Handles large files efficiently with viewport-based loading, memory-mapped I/O,
+//  and automatic feature degradation for files with millions of lines.
+//
+
+import Foundation
+import Combine
+import os
+
+// MARK: - Performance Tier
+
+enum EditorPerformanceTier: Int, Comparable {
+    case full = 0           // < 10K lines — all features enabled
+    case large = 1          // 10K–100K lines — reduced minimap, fold detection
+    case veryLarge = 2      // 100K–500K lines — no minimap, no indent guides
+    case massive = 3        // 500K–1M lines — viewport-only syntax, no overlays
+    case extreme = 4        // > 1M lines — viewport-only everything, minimal features
+    
+    static func < (lhs: EditorPerformanceTier, rhs: EditorPerformanceTier) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+    
+    var description: String {
+        switch self {
+        case .full: return "Full (all features)"
+        case .large: return "Large file mode"
+        case .veryLarge: return "Very large file mode"
+        case .massive: return "Massive file mode"
+        case .extreme: return "Extreme size mode"
+        }
+    }
+    
+    // Feature flags per tier
+    var enableMinimap: Bool { self <= .large }
+    var enableIndentGuides: Bool { self <= .large }
+    var enableFoldDetection: Bool { self <= .veryLarge }
+    var enableFullSyntaxHighlight: Bool { self <= .large }
+    var enableGitGutter: Bool { self <= .veryLarge }
+    var enableInlayHints: Bool { self <= .full }
+    var enableBracketGuides: Bool { self <= .veryLarge }
+    var enableStickyHeaders: Bool { self <= .large }
+    
+    /// How many lines above/below viewport to syntax-highlight
+    var syntaxHighlightBuffer: Int {
+        switch self {
+        case .full: return 2000
+        case .large: return 500
+        case .veryLarge: return 200
+        case .massive: return 100
+        case .extreme: return 50
+        }
+    }
+    
+    /// How many lines above/below viewport to detect folds
+    var foldDetectionBuffer: Int {
+        switch self {
+        case .full: return Int.max  // entire file
+        case .large: return 5000
+        case .veryLarge: return 1000
+        case .massive, .extreme: return 0  // disabled
+        }
+    }
+}
+
+// MARK: - File Size Info
+
+struct FileSizeInfo {
+    let byteCount: Int
+    let lineCount: Int
+    let tier: EditorPerformanceTier
+    let warningMessage: String?
+    
+    var humanReadableSize: String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(byteCount))
+    }
+}
+
+// MARK: - Large File Handler
+
+@MainActor
+final class LargeFileHandler: ObservableObject {
+    static let shared = LargeFileHandler()
+    
+    private static let logger = Logger(subsystem: "com.codepad.app", category: "LargeFileHandler")
+    
+    @Published var currentTier: EditorPerformanceTier = .full
+    @Published var currentFileInfo: FileSizeInfo?
+    @Published var isLoadingLargeFile = false
+    @Published var loadProgress: Double = 0
+    
+    // Thresholds
+    private let byteSizeThresholds: [(Int, EditorPerformanceTier)] = [
+        (50_000_000, .extreme),    // > 50MB
+        (10_000_000, .massive),    // > 10MB
+        (1_000_000, .veryLarge),   // > 1MB
+        (100_000, .large),         // > 100KB
+    ]
+    
+    private let lineCountThresholds: [(Int, EditorPerformanceTier)] = [
+        (1_000_000, .extreme),     // > 1M lines
+        (500_000, .massive),       // > 500K lines
+        (100_000, .veryLarge),     // > 100K lines
+        (10_000, .large),          // > 10K lines
+    ]
+    
+    // Line offset index for O(1) random access
+    private var lineOffsets: [Int] = []
+    private var lineOffsetsFileId: String?
+    
+    // MARK: - Analyze File
+    
+    /// Analyze a file and determine the performance tier
+    func analyzeFile(content: String, fileId: String) -> FileSizeInfo {
+        let byteCount = content.utf8.count
+        let lineCount = countLinesFast(content)
+        
+        // Determine tier from worst (highest) match
+        var tier: EditorPerformanceTier = .full
+        
+        for (threshold, tierValue) in byteSizeThresholds {
+            if byteCount > threshold {
+                tier = max(tier, tierValue)
+                break
+            }
+        }
+        
+        for (threshold, tierValue) in lineCountThresholds {
+            if lineCount > threshold {
+                tier = max(tier, tierValue)
+                break
+            }
+        }
+        
+        let warning: String?
+        switch tier {
+        case .full:
+            warning = nil
+        case .large:
+            warning = "Large file (\(formatCount(lineCount)) lines). Some features may be reduced."
+        case .veryLarge:
+            warning = "Very large file (\(formatCount(lineCount)) lines). Minimap and some overlays disabled."
+        case .massive:
+            warning = "⚠️ Massive file (\(formatCount(lineCount)) lines). Operating in viewport-only mode."
+        case .extreme:
+            warning = "⚠️ Extremely large file (\(formatCount(lineCount)) lines). Minimal features active."
+        }
+        
+        let info = FileSizeInfo(byteCount: byteCount, lineCount: lineCount, tier: tier, warningMessage: warning)
+        
+        self.currentTier = tier
+        self.currentFileInfo = info
+        
+        if tier >= .large {
+            Self.logger.info("File \(fileId): \(byteCount) bytes, \(lineCount) lines → tier \(tier.description)")
+        }
+        
+        // Build line offset index for large files (in background)
+        if tier >= .large {
+            buildLineOffsetIndex(content: content, fileId: fileId)
+        }
+        
+        return info
+    }
+    
+    /// Analyze a file URL without loading full content
+    func analyzeFileURL(_ url: URL) -> EditorPerformanceTier {
+        do {
+            let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+            let fileSize = attrs[.size] as? Int ?? 0
+            
+            for (threshold, tier) in byteSizeThresholds {
+                if fileSize > threshold {
+                    return tier
+                }
+            }
+        } catch {
+            Self.logger.error("Failed to get file attributes: \(error.localizedDescription)")
+        }
+        return .full
+    }
+    
+    // MARK: - Viewport-Based Content Loading
+    
+    /// Get text for a specific line range (for viewport-based rendering)
+    func getLines(from startLine: Int, count: Int, in text: String) -> String {
+        let nsText = text as NSString
+        var currentLine = 0
+        var lineStart = 0
+        var resultStart = -1
+        var resultEnd = nsText.length
+        
+        while lineStart < nsText.length && currentLine < startLine + count {
+            let lineRange = nsText.lineRange(for: NSRange(location: lineStart, length: 0))
+            
+            if currentLine == startLine {
+                resultStart = lineRange.location
+            }
+            if currentLine == startLine + count - 1 {
+                resultEnd = lineRange.location + lineRange.length
+                break
+            }
+            
+            lineStart = lineRange.location + lineRange.length
+            currentLine += 1
+        }
+        
+        if resultStart < 0 { resultStart = 0 }
+        let range = NSRange(location: resultStart, length: min(resultEnd - resultStart, nsText.length - resultStart))
+        return nsText.substring(with: range)
+    }
+    
+    /// Get line offset for a specific line number using cached index
+    func lineOffset(for lineNumber: Int) -> Int? {
+        guard lineNumber > 0 else { return 0 }
+        guard lineNumber - 1 < lineOffsets.count else { return nil }
+        return lineOffsets[lineNumber - 1]
+    }
+    
+    // MARK: - Memory-Mapped File Reading
+    
+    /// Read a file using memory mapping for efficient access to very large files
+    func memoryMappedRead(url: URL) throws -> Data {
+        return try Data(contentsOf: url, options: .mappedIfSafe)
+    }
+    
+    /// Read a specific byte range from a memory-mapped file
+    func readRange(url: URL, offset: Int, length: Int) throws -> Data {
+        let data = try memoryMappedRead(url: url)
+        let safeOffset = min(offset, data.count)
+        let safeLength = min(length, data.count - safeOffset)
+        return data[safeOffset..<(safeOffset + safeLength)]
+    }
+    
+    // MARK: - Incremental Loading
+    
+    /// Load a large file incrementally, calling progress callbacks
+    func loadFileIncrementally(
+        url: URL,
+        chunkSize: Int = 65536,
+        progress: @escaping (Double) -> Void,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        isLoadingLargeFile = true
+        loadProgress = 0
+        
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+                let fileSize = attrs[.size] as? Int ?? 0
+                
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { handle.closeFile() }
+                
+                var result = Data()
+                result.reserveCapacity(fileSize)
+                var bytesRead = 0
+                
+                while true {
+                    let chunk = handle.readData(ofLength: chunkSize)
+                    if chunk.isEmpty { break }
+                    
+                    result.append(chunk)
+                    bytesRead += chunk.count
+                    
+                    let pct = Double(bytesRead) / Double(max(1, fileSize))
+                    await MainActor.run {
+                        self?.loadProgress = pct
+                        progress(pct)
+                    }
+                }
+                
+                let text = String(data: result, encoding: .utf8) ?? String(data: result, encoding: .ascii) ?? ""
+                
+                await MainActor.run {
+                    self?.isLoadingLargeFile = false
+                    self?.loadProgress = 1.0
+                    completion(.success(text))
+                }
+            } catch {
+                await MainActor.run {
+                    self?.isLoadingLargeFile = false
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+    
+    // MARK: - Line Offset Index
+    
+    /// Build a line offset index for fast random access
+    private func buildLineOffsetIndex(content: String, fileId: String) {
+        Task.detached(priority: .utility) { [weak self] in
+            let startTime = CFAbsoluteTimeGetCurrent()
+            
+            var offsets: [Int] = []
+            offsets.reserveCapacity(content.count / 40)  // Estimate ~40 chars per line
+            
+            var offset = 0
+            for byte in content.utf8 {
+                if byte == UInt8(ascii: "\n") {
+                    offsets.append(offset + 1)  // Start of next line
+                }
+                offset += 1
+            }
+            
+            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+            
+            await MainActor.run { [weak self] in
+                self?.lineOffsets = offsets
+                self?.lineOffsetsFileId = fileId
+                LargeFileHandler.logger.info("Built line offset index: \(offsets.count) lines in \(String(format: "%.2f", elapsed * 1000))ms")
+            }
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    /// Fast line counting using UTF-8 byte scan
+    private func countLinesFast(_ text: String) -> Int {
+        guard !text.isEmpty else { return 1 }
+        var count = 1
+        for byte in text.utf8 {
+            if byte == UInt8(ascii: "\n") { count += 1 }
+        }
+        return count
+    }
+    
+    private func formatCount(_ count: Int) -> String {
+        if count >= 1_000_000 {
+            return String(format: "%.1fM", Double(count) / 1_000_000)
+        } else if count >= 1_000 {
+            return String(format: "%.1fK", Double(count) / 1_000)
+        }
+        return "\(count)"
+    }
+    
+    // MARK: - Memory Pressure
+    
+    /// Called when system is under memory pressure - release caches
+    func handleMemoryPressure() {
+        lineOffsets = []
+        lineOffsetsFileId = nil
+        currentFileInfo = nil
+        Self.logger.info("Released large file handler caches due to memory pressure")
+    }
+}

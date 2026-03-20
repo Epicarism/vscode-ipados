@@ -58,7 +58,9 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let full = (self.textStorage?.string ?? "") as NSString
         let lineIndex = FoldingLayoutManager.lineIndex(atUTF16Location: loc, in: full)
 
-        if foldingManager.isLineFolded(fileId: fileId, line: lineIndex) {
+        // Check both the legacy isLineFolded and new isLineHidden
+        if foldingManager.isLineFolded(fileId: fileId, line: lineIndex) ||
+           foldingManager.isLineHidden(fileId: fileId, line: lineIndex) {
             // Collapse this visual line fragment.
             lineFragmentRect.pointee.size.height = 0
             lineFragmentUsedRect.pointee.size.height = 0
