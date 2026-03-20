@@ -80,6 +80,7 @@ struct ContentView: View {
 
     
     @StateObject private var trustManager = WorkspaceTrustManager.shared
+    @StateObject private var splitManager = SplitEditorManager()
     
     private var theme: Theme { themeManager.currentTheme }
     
@@ -592,7 +593,9 @@ struct ContentView: View {
                 VStack(spacing: 0) {
                     TabBarView(tabs: $editorCore.tabs, activeTabId: $editorCore.activeTabId, editorCore: editorCore, themeManager: ThemeManager.shared)
                     
-                    if let tab = editorCore.activeTab {
+                    if editorCore.isSplitMode {
+                        SplitEditorView(splitManager: splitManager, editorCore: editorCore)
+                    } else if let tab = editorCore.activeTab {
                         IDEEditorView(editorCore: editorCore, tab: tab, theme: theme, isTerminalFocused: Binding(get: { isTerminalFocused }, set: { isTerminalFocused = $0 }))
                             .allowsHitTesting(!isTerminalFocused)
                     } else {
@@ -600,6 +603,11 @@ struct ContentView: View {
                     }
                     
                     StatusBarView(editorCore: editorCore)
+                }
+                .onChange(of: editorCore.isSplitMode) { _, isSplit in
+                    if isSplit {
+                        splitManager.initializeWithTabs(editorCore.tabs, activeTabId: editorCore.activeTabId)
+                    }
                 }
                 .onDrop(of: [.fileURL, .url, .text, .data], isTargeted: nil) { providers in
                     for provider in providers {

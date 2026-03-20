@@ -201,6 +201,7 @@ class EditorCore: ObservableObject {
     private nonisolated(unsafe) var fontSizeObserver: NSObjectProtocol?
     @Published var isZenMode = false
     @Published var isFocusMode = false
+    @Published var isSplitMode: Bool = false
 
     // MARK: - Large File Performance
 
