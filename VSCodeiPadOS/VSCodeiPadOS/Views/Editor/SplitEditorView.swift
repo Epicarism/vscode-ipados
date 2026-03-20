@@ -565,7 +565,6 @@ struct PaneEditorView: View {
                             lineHeight: $lineHeight,
                             isActive: splitManager.activePaneId == pane.id
                         )
-                        .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
                         .environmentObject(editorCore)
                     } else {
                         SyntaxHighlightingTextView(

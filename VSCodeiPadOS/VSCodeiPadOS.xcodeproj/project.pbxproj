@@ -427,7 +427,6 @@
 				CF1A2B3C4D5E6F7A8B9C0D04 /* RSAKeySupport.swift */,
 				CF1A2B3C4D5E6F7A8B9C0D05 /* EditorPerformanceMonitor.swift */,
 				CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */,
-				CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */,
 				CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */,
 			);
 			path = VSCodeiPadOS;
@@ -477,7 +476,7 @@
 				2018 /* Theme.swift */,
 				2020 /* ThemeManager.swift */,
 				BB11CC22DD33EE44FF550003 /* SnippetManager.swift */,
-				CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */,
+
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -939,17 +938,8 @@
 			CF1A2B3C4D5E6F7A8B9C0E10 /* SyntaxHighlightCache.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E08 /* BreakpointGutterView.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E09 /* FileDragModifier.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E0A /* FoldingLayoutManager.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E0C /* RSAAuthDelegate.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E0D /* RemoteRunner.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E0E /* SSHGitClient.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E11 /* TunnelFileSystemBridge.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E12 /* TunnelLSPProxy.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E13 /* TunnelWebSocketClient.swift in Sources */,
-			CF1A2B3C4D5E6F7A8B9C0E14 /* WorkspaceSettings.swift in Sources */,
+
 		);
 		runOnlyForDeploymentPostprocessing = 0;
 	};
