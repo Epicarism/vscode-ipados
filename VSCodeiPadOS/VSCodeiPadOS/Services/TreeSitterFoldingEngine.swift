@@ -9,6 +9,7 @@
 
 import Foundation
 import os
+import QuartzCore
 
 /// Typealias so TreeSitter engine can reference FoldType without qualifying as FoldRegion.FoldType
 typealias FoldType = FoldRegion.FoldType

@@ -400,7 +400,7 @@ struct BreakpointGutterView: View {
         let foldingManager = CodeFoldingManager.shared
         let displayLine = foldingManager.sourceLineToDisplayLine(fileId: filePath, sourceLine: line - 1)
         let displayStart = foldingManager.sourceLineToDisplayLine(fileId: filePath, sourceLine: visibleLineRange.lowerBound - 1)
-        let lineIndex = CGFloat(displayLine - displayStart)
+        let lineIndex = CGFloat((displayLine ?? 0) - (displayStart ?? 0))
         return contentTopInset + (lineIndex + 0.5) * lineHeight
     }
     

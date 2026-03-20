@@ -730,7 +730,7 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
 // MARK: - Known Hosts Manager
 
 /// Manages SSH host key verification using Keychain storage
-final class KnownHostsManager {
+final class KnownHostsManager: @unchecked Sendable {
     static let shared = KnownHostsManager()
     private let keychainPrefix = "ssh_known_host_"
     
@@ -760,7 +760,7 @@ final class KnownHostsManager {
     func trustHostKey(host: String, port: Int, key: NIOSSHPublicKey) {
         let storageKey = keychainPrefix + "\(host):\(port)"
         let fingerprint = fingerprintForKey(key)
-        KeychainHelper.shared.save(fingerprint, forKey: storageKey)
+        KeychainHelper.shared.set(fingerprint, forKey: storageKey)
     }
     
     /// Remove a stored host key
@@ -822,11 +822,13 @@ final class VerifyingHostKeyDelegate: NIOSSHClientServerAuthenticationDelegate {
             KnownHostsManager.shared.trustHostKey(host: host, port: port, key: hostKey)
             // Post notification for UI to show "New host trusted" toast
             let fingerprint = KnownHostsManager.shared.fingerprintForKey(hostKey)
+            let hostValue = self.host
+            let portValue = self.port
             DispatchQueue.main.async {
                 NotificationCenter.default.post(
                     name: .sshHostKeyFirstUse,
                     object: nil,
-                    userInfo: ["host": self.host, "port": self.port, "fingerprint": fingerprint]
+                    userInfo: ["host": hostValue, "port": portValue, "fingerprint": fingerprint]
                 )
             }
             validationCompletePromise.succeed(())
@@ -834,11 +836,13 @@ final class VerifyingHostKeyDelegate: NIOSSHClientServerAuthenticationDelegate {
         case .changed(let oldFP, let newFP):
             // Host key changed — potential MITM attack!
             AppLogger.ssh.error("HOST KEY CHANGED for \(self.host):\(self.port)! Old: \(oldFP), New: \(newFP). Possible MITM attack.")
+            let hostValue2 = self.host
+            let portValue2 = self.port
             DispatchQueue.main.async {
                 NotificationCenter.default.post(
                     name: .sshHostKeyChanged,
                     object: nil,
-                    userInfo: ["host": self.host, "port": self.port, "oldFingerprint": oldFP, "newFingerprint": newFP]
+                    userInfo: ["host": hostValue2, "port": portValue2, "oldFingerprint": oldFP, "newFingerprint": newFP]
                 )
             }
             // Reject the connection — user must manually clear the old key
@@ -946,7 +950,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
     /// This lets us surface a clear user-facing error *before* attempting the
     /// network connection, instead of silently falling back and failing with a
     /// generic "authentication failed".
-    private static func opensshBlobContainsRSA(_ data: Data) -> Bool {
+    static func opensshBlobContainsRSA(_ data: Data) -> Bool {
         let magic = "openssh-key-v1\0"
         let magicBytes = Data(magic.utf8)
         guard data.count > magicBytes.count,

@@ -350,6 +350,7 @@ final class LargeFileHandler: ObservableObject {
         if resultStart < 0 { resultStart = 0 }
         let range = NSRange(location: resultStart, length: min(resultEnd - resultStart, nsText.length - resultStart))
         return nsText.substring(with: range)
+    }
     
     /// Get line offset for a specific line number using cached index
     func lineOffset(for lineNumber: Int) -> Int? {
@@ -387,8 +388,8 @@ final class LargeFileHandler: ObservableObject {
     func loadFileIncrementally(
         url: URL,
         chunkSize: Int = 65536,
-        progress: @escaping (Double) -> Void,
-        completion: @escaping (Result<String, Error>) -> Void
+        progress: @Sendable @escaping (Double) -> Void,
+        completion: @Sendable @escaping (Result<String, Error>) -> Void
     ) {
         isLoadingLargeFile = true
         loadProgress = 0
@@ -396,7 +397,7 @@ final class LargeFileHandler: ObservableObject {
         // Cancel any previous loading task
         loadingTask?.cancel()
         
-        let task = Task.detached(priority: .userInitiated) { [weak self] in
+        let task = Task.detached(priority: .userInitiated) {
             do {
                 let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
                 let fileSize = attrs[.size] as? Int ?? 0
@@ -417,7 +418,6 @@ final class LargeFileHandler: ObservableObject {
                     
                     let pct = Double(bytesRead) / Double(max(1, fileSize))
                     await MainActor.run {
-                        self?.loadProgress = pct
                         progress(pct)
                     }
                 }
@@ -425,13 +425,10 @@ final class LargeFileHandler: ObservableObject {
                 let text = String(data: result, encoding: .utf8) ?? String(data: result, encoding: .ascii) ?? ""
                 
                 await MainActor.run {
-                    self?.isLoadingLargeFile = false
-                    self?.loadProgress = 1.0
                     completion(.success(text))
                 }
             } catch {
                 await MainActor.run {
-                    self?.isLoadingLargeFile = false
                     completion(.failure(error))
                 }
             }

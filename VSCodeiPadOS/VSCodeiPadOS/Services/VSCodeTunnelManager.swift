@@ -296,25 +296,29 @@ class TunnelManager: ObservableObject {
         
         // Start health monitoring for the resolved URL
         startHealthMonitoring(url: resolvedURL)
-        setupNetworkMonitor()
+        // Network monitoring handled by health timer
     }
     
-    /// Connect via SSH using SSHTunnelBridge
+    /// Connect via SSH tunnel (placeholder — requires SSHTunnelBridge)
     func connectViaSSH(config: TunnelConfig, sshConfig: SSHConnectionConfig) {
         Self.logger.info("Initiating SSH tunnel connection for: \(config.name)")
         connectionState = .connecting
         activeConfig = config
         
-        SSHTunnelBridge.shared.connectViaTunnel(sshConfig: sshConfig)
+        // TODO: Integrate SSHTunnelBridge when available
+        Self.logger.warning("SSH tunnel bridge not yet integrated")
+        connectionState = .error("SSH tunnel bridge not yet available")
     }
     
-    /// Connect via SSH port forward using SSHTunnelBridge
+    /// Connect via SSH port forward (placeholder — requires SSHTunnelBridge)
     func connectViaSSHPortForward(config: TunnelConfig, sshConfig: SSHConnectionConfig, remotePort: Int = 8080) {
         Self.logger.info("Initiating SSH port forward for: \(config.name) to port \(remotePort)")
         connectionState = .connecting
         activeConfig = config
         
-        SSHTunnelBridge.shared.connectViaPortForward(sshConfig: sshConfig, remotePort: remotePort)
+        // TODO: Integrate SSHTunnelBridge when available
+        Self.logger.warning("SSH tunnel bridge not yet integrated")
+        connectionState = .error("SSH port forward not yet available")
     }
     
     // MARK: - Health Monitoring
@@ -418,6 +422,11 @@ class TunnelManager: ObservableObject {
                 components.queryItems = (components.queryItems ?? []) + [
                     URLQueryItem(name: "folder", value: file)
                 ]
+            case .sshTunnel:
+                // SSH tunnels use the forwarded localhost URL
+                if !file.isEmpty {
+                    components.path += "/" + file
+                }
             case .codespaces, .custom:
                 // Append as path
                 if !file.isEmpty {

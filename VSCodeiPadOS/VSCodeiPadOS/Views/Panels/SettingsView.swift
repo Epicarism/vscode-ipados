@@ -74,6 +74,9 @@ struct AddTunnelSheet: View {
                     case .codespaces:
                         Text("Open your Codespace on github.com, then copy the URL.")
                             .font(.caption)
+                    case .sshTunnel:
+                        Text("Configure SSH tunnel forwarding to access a remote VS Code instance.")
+                            .font(.caption)
                     case .custom:
                         Text("Enter any URL that serves VS Code or Monaco editor.")
                             .font(.caption)

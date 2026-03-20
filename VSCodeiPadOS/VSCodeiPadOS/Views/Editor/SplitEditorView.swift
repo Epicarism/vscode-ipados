@@ -548,78 +548,7 @@ struct PaneEditorView: View {
                 // Line numbers + breakpoints + code folding (gutter)
                 // VIRTUALIZED: Only renders visible lines for O(viewport) performance
                 if lineNumbersStyle != "off" {
-                    Canvas { context, size in
-                        // Empty canvas just to reserve space; actual content is in the overlay
-                    }
-                    .frame(width: 70)
-                    .overlay {
-                        GeometryReader { gutterGeometry in
-                            let gutterHeight = gutterGeometry.size.height
-                            let visibleLineCount = max(1, Int(gutterHeight / lineHeight) + 2)
-                            // Calculate the first visible source line from scroll offset
-                            let rawFirstVisible = max(0, Int(scrollOffset / lineHeight) - 1)
-                            
-                            // Build visible line indices accounting for folds
-                            let visibleRange = computeVisibleGutterLines(
-                                from: rawFirstVisible,
-                                count: visibleLineCount,
-                                totalLines: totalLines,
-                                fileId: fileId
-                            )
-                            
-                            VStack(alignment: .trailing, spacing: 0) {
-                                ForEach(visibleRange, id: \.self) { lineIndex in
-                                    HStack(spacing: 2) {
-                                        // Fold chevron icon
-                                        if foldingManager.isFoldable(fileId: fileId, line: lineIndex) {
-                                            Button(action: {
-                                                foldingManager.toggleFold(fileId: fileId, line: lineIndex)
-                                            }) {
-                                                Image(systemName: foldingManager.isFolded(fileId: fileId, line: lineIndex) ? "chevron.right" : "chevron.down")
-                                                    .font(.system(size: 10, weight: .regular))
-                                                    .foregroundColor(.secondary.opacity(0.8))
-                                                    .frame(width: 20, height: lineHeight)
-                                                    .contentShape(Rectangle())
-                                            }
-                                            .buttonStyle(.plain)
-                                        } else {
-                                            Spacer()
-                                                .frame(width: 20)
-                                        }
-                                        
-                                        // Breakpoint indicator
-                                        Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
-                                            Circle()
-                                                .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color(UIColor.systemRed) : Color.clear)
-                                                .overlay(
-                                                    Circle()
-                                                        .stroke(Color.red.opacity(0.6), lineWidth: 1)
-                                                        .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
-                                                )
-                                                .frame(width: 10, height: 10)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .frame(width: 14, height: lineHeight)
-                                        
-                                        Text(displayText(for: lineIndex))
-                                            .font(.system(size: 12, design: .monospaced))
-                                            .foregroundColor(lineIndex + 1 == currentLineNumber ? .primary : .secondary.opacity(0.6))
-                                            .frame(height: lineHeight)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture {
-                                                requestedLineSelection = lineIndex
-                                            }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .trailing)
-                                }
-                            }
-                            .padding(.trailing, 4)
-                            .padding(.top, 8)
-                            .offset(y: -scrollOffset + CGFloat(rawFirstVisible) * lineHeight)
-                        }
-                    }
-                    .clipped()
-                    .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+                    gutterView
                 }
 
                 // Editor
@@ -749,22 +678,7 @@ struct PaneEditorView: View {
                 .clipped()
             }
             // Breakpoint gutter
-            if let fileURL = tab.url, lineNumbersStyle != "off" {
-                let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
-                let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
-                let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
-                BreakpointGutterView(
-                    filePath: fileURL.path,
-                    visibleLineRange: firstVisible..<lastVisible,
-                    lineHeight: lineHeight,
-                    contentTopInset: 8,
-                    scrollOffset: scrollOffset
-                )
-                .frame(width: 28)
-                .frame(maxHeight: .infinity, alignment: .top)
-                .padding(.leading, 24)
-                .clipped()
-            }
+            breakpointGutterOverlay(geometry: geometry)
 
             // Peek Definition Overlay
             if let peekState = editorCore.peekState, editorCore.activeTabId == tab.id {
@@ -826,6 +740,106 @@ struct PaneEditorView: View {
         }
     }
 
+    // MARK: - Extracted Gutter View
+    
+    private var gutterView: some View {
+        Canvas { context, size in
+            // Empty canvas just to reserve space; actual content is in the overlay
+        }
+        .frame(width: 70)
+        .overlay {
+            GeometryReader { gutterGeometry in
+                let gutterHeight = gutterGeometry.size.height
+                let visibleLineCount = max(1, Int(gutterHeight / lineHeight) + 2)
+                let rawFirstVisible = max(0, Int(scrollOffset / lineHeight) - 1)
+                
+                let visibleRange = computeVisibleGutterLines(
+                    from: rawFirstVisible,
+                    count: visibleLineCount,
+                    totalLines: totalLines,
+                    fileId: fileId
+                )
+                
+                VStack(alignment: .trailing, spacing: 0) {
+                    ForEach(visibleRange, id: \.self) { lineIndex in
+                        gutterLineRow(lineIndex: lineIndex)
+                    }
+                }
+                .padding(.trailing, 4)
+                .padding(.top, 8)
+                .offset(y: -scrollOffset + CGFloat(rawFirstVisible) * lineHeight)
+            }
+        }
+        .clipped()
+        .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
+    }
+    
+    @ViewBuilder
+    private func gutterLineRow(lineIndex: Int) -> some View {
+        HStack(spacing: 2) {
+            // Fold chevron icon
+            if foldingManager.isFoldable(fileId: fileId, line: lineIndex) {
+                Button(action: {
+                    foldingManager.toggleFold(fileId: fileId, line: lineIndex)
+                }) {
+                    Image(systemName: foldingManager.isFolded(fileId: fileId, line: lineIndex) ? "chevron.right" : "chevron.down")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.secondary.opacity(0.8))
+                        .frame(width: 20, height: lineHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Spacer()
+                    .frame(width: 20)
+            }
+            
+            // Breakpoint indicator
+            Button(action: { debugManager.toggleBreakpoint(file: fileId, line: lineIndex) }) {
+                Circle()
+                    .fill(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? Color(UIColor.systemRed) : Color.clear)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.red.opacity(0.6), lineWidth: 1)
+                            .opacity(debugManager.hasBreakpoint(file: fileId, line: lineIndex) ? 0 : 0.25)
+                    )
+                    .frame(width: 10, height: 10)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 14, height: lineHeight)
+            
+            Text(displayText(for: lineIndex))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(lineIndex + 1 == currentLineNumber ? .primary : .secondary.opacity(0.6))
+                .frame(height: lineHeight)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    requestedLineSelection = lineIndex
+                }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+    
+    @ViewBuilder
+    private func breakpointGutterOverlay(geometry: GeometryProxy) -> some View {
+        if let fileURL = tab.url, lineNumbersStyle != "off" {
+            let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+            let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+            let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+            BreakpointGutterView(
+                filePath: fileURL.path,
+                visibleLineRange: firstVisible..<lastVisible,
+                lineHeight: lineHeight,
+                contentTopInset: 8,
+                scrollOffset: scrollOffset
+            )
+            .frame(width: 28)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.leading, 24)
+            .clipped()
+        }
+    }
+    
     /// Computes visible gutter line indices, skipping folded lines. O(viewport) not O(N).
     private func computeVisibleGutterLines(from rawFirstVisible: Int, count: Int, totalLines: Int, fileId: String) -> [Int] {
         var result: [Int] = []

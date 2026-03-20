@@ -427,7 +427,7 @@ final class FileSystemNavigator: ObservableObject {
     }
 }
 
-struct FileTreeNode: Identifiable {
+struct FileTreeNode: Identifiable, Sendable {
     let id = UUID()
     let url: URL
     let name: String

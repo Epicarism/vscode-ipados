@@ -47,12 +47,12 @@ final class EditorPerformanceMonitor: ObservableObject {
     private let slowOperationThresholdMs: Double = 16.67
     
     // Tracking state
-    private var displayLink: CADisplayLink?
+    nonisolated(unsafe) private var displayLink: CADisplayLink?
     private var frameTimestamps: [CFTimeInterval] = []
     private var syntaxHighlightTimes: [Double] = []
     private var textLayoutTimes: [Double] = []
     private var isMonitoring = false
-    private var degradeTimer: Timer?
+    nonisolated(unsafe) private var degradeTimer: Timer?
     
     // Rolling window sizes
     private let fpsWindowSize = 60      // ~1 second of frames
@@ -61,7 +61,8 @@ final class EditorPerformanceMonitor: ObservableObject {
     private init() {}
 
     deinit {
-        stopMonitoring()
+        displayLink?.invalidate()
+        degradeTimer?.invalidate()
     }
     
     // MARK: - Start/Stop Monitoring

@@ -163,6 +163,26 @@
 		D64E4C396BF3A9A8B33E51C9 /* VSCodeTunnelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301258073261580A471BF74C /* VSCodeTunnelView.swift */; };
 		D6AEBCB53A1011C0FECEC186 /* RemoteDebugger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBE91AB571E62605847001D /* RemoteDebugger.swift */; };
 		E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA35FC9065D549599858CE86 /* CommandPaletteView.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E01 /* LargeFileHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D01 /* LargeFileHandler.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E02 /* TreeSitterFoldingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D02 /* TreeSitterFoldingEngine.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E03 /* ViewportHighlightManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D03 /* ViewportHighlightManager.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E04 /* RSAKeySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D04 /* RSAKeySupport.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E05 /* EditorPerformanceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D05 /* EditorPerformanceMonitor.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E06 /* TunnelWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D06 /* TunnelWebView.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D07 /* AboutView.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E08 /* BreakpointGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D08 /* BreakpointGutterView.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E09 /* FileDragModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E0A /* FoldingLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0A /* FoldingLayoutManager.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E0C /* RSAAuthDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E0D /* RemoteRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E0E /* SSHGitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E10 /* SyntaxHighlightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E11 /* TunnelFileSystemBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E12 /* TunnelLSPProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E13 /* TunnelWebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */; };
+		CF1A2B3C4D5E6F7A8B9C0E14 /* WorkspaceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -323,6 +343,26 @@
 		FA35FC9065D549599858CE86 /* CommandPaletteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CommandPaletteView.swift; path = Views/CommandPaletteView.swift; sourceTree = "<group>"; };
 		FA5517D452851148CA4AD04F /* SwiftTermView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftTermView.swift; sourceTree = "<group>"; };
 		FE15C63C875548573754E1A7 /* RunConfigView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RunConfigView.swift; path = Views/RunConfigView.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D01 /* LargeFileHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LargeFileHandler.swift; path = Services/LargeFileHandler.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D02 /* TreeSitterFoldingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TreeSitterFoldingEngine.swift; path = Services/TreeSitterFoldingEngine.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D03 /* ViewportHighlightManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ViewportHighlightManager.swift; path = Services/ViewportHighlightManager.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D04 /* RSAKeySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RSAKeySupport.swift; path = Services/RSAKeySupport.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D05 /* EditorPerformanceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EditorPerformanceMonitor.swift; path = Services/EditorPerformanceMonitor.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D06 /* TunnelWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelWebView.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D07 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D08 /* BreakpointGutterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakpointGutterView.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FileDragModifier.swift; path = Utils/FileDragModifier.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0A /* FoldingLayoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoldingLayoutManager.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticFeedback.swift; path = Utils/HapticFeedback.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSAAuthDelegate.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteRunner.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHGitClient.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHTunnelBridge.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightCache.swift; path = Services/SyntaxHighlightCache.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelFileSystemBridge.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelLSPProxy.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelWebSocketClient.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -381,6 +421,14 @@
 				301258073261580A471BF74C /* VSCodeTunnelView.swift */,
 				4D7BAF2BC1A89D06F4615B17 /* WelcomeView.swift */,
 				76695AA95638C9192E12E05E /* WindowStateManager.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D01 /* LargeFileHandler.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D02 /* TreeSitterFoldingEngine.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D03 /* ViewportHighlightManager.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D04 /* RSAKeySupport.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D05 /* EditorPerformanceMonitor.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */,
 			);
 			path = VSCodeiPadOS;
 			sourceTree = "<group>";
@@ -429,6 +477,7 @@
 				2018 /* Theme.swift */,
 				2020 /* ThemeManager.swift */,
 				BB11CC22DD33EE44FF550003 /* SnippetManager.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -477,10 +526,11 @@
 				2160 /* CodeExecutionService.swift */,
 				2161 /* OutputPanelManager.swift */,
 				2162 /* WordOccurrenceHighlighter.swift */,
-				2163 /* GitHubAuthManager.swift */,
-				2165 /* KeychainManager.swift */,
-			);
-			path = Services;
+			2163 /* GitHubAuthManager.swift */,
+			2165 /* KeychainManager.swift */,
+
+		);
+		path = Services;
 			sourceTree = "<group>";
 		};
 		4007 /* Views */ = {
@@ -510,6 +560,7 @@
 				4010 /* Panels */,
 				4011 /* Sidebar */,
 				4012 /* StatusBar */,
+				CF1A2B3C4D5E6F7A8B9C0D07 /* AboutView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -532,6 +583,8 @@
 				2147 /* RunestoneEditorView.swift */,
 				2166 /* RunestoneMultiCursorManager.swift */,
 				335856227DA8D31DBD7AA45A /* IndentGuidesOverlay.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D08 /* BreakpointGutterView.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D0A /* FoldingLayoutManager.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -569,6 +622,7 @@
 				8012 /* ExtensionsView.swift */,
 				8016 /* NotificationToastView.swift */,
 				8018 /* KeyboardShortcutsView.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D06 /* TunnelWebView.swift */,
 			);
 			path = Panels;
 			sourceTree = "<group>";
@@ -592,6 +646,7 @@
 			children = (
 				2145 /* NativeGitReader.swift */,
 				2146 /* NativeGitWriter.swift */,
+				CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */,
 			);
 			path = NativeGit;
 			sourceTree = "<group>";
@@ -874,10 +929,19 @@
 				43F2E4F61E592EC699E3ECE1 /* WelcomeView.swift in Sources */,
 				BB6C8E7E8517B0A766343099 /* WindowStateManager.swift in Sources */,
 				1D991EE41B48E67BE7F0460D /* IndentGuidesOverlay.swift in Sources */,
-				1166 /* RunestoneMultiCursorManager.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+			1166 /* RunestoneMultiCursorManager.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E01 /* LargeFileHandler.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E02 /* TreeSitterFoldingEngine.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E03 /* ViewportHighlightManager.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E04 /* RSAKeySupport.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E05 /* EditorPerformanceMonitor.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E06 /* TunnelWebView.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E10 /* SyntaxHighlightCache.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E08 /* BreakpointGutterView.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */,
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+	};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

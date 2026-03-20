@@ -612,7 +612,6 @@ enum RSAKeyParser {
         while result.count > 1 && result.first == 0 { result.removeFirst() }
         return result
     }
-    }
     
     private static func derInteger(_ data: Data) -> Data {
         var intData = data
@@ -718,6 +717,7 @@ enum RSAKeyParser {
     private static func decryptAES256CBC(data: Data, key: Data, iv: Data) throws -> Data {
         var decrypted = Data(count: data.count + kCCBlockSizeAES128)
         var numBytes: size_t = 0
+        let decryptedCount = decrypted.count
         
         let status = decrypted.withUnsafeMutableBytes { decBuf in
             data.withUnsafeBytes { dataBuf in
@@ -730,7 +730,7 @@ enum RSAKeyParser {
                             keyBuf.baseAddress, key.count,
                             ivBuf.baseAddress,
                             dataBuf.baseAddress, data.count,
-                            decBuf.baseAddress, decrypted.count,
+                            decBuf.baseAddress, decryptedCount,
                             &numBytes
                         )
                     }
@@ -746,6 +746,7 @@ enum RSAKeyParser {
     private static func decrypt3DESCBC(data: Data, key: Data, iv: Data) throws -> Data {
         var decrypted = Data(count: data.count + kCCBlockSize3DES)
         var numBytes: size_t = 0
+        let decryptedCount = decrypted.count
         
         let status = decrypted.withUnsafeMutableBytes { decBuf in
             data.withUnsafeBytes { dataBuf in
@@ -758,7 +759,7 @@ enum RSAKeyParser {
                             keyBuf.baseAddress, key.count,
                             ivBuf.baseAddress,
                             dataBuf.baseAddress, data.count,
-                            decBuf.baseAddress, decrypted.count,
+                            decBuf.baseAddress, decryptedCount,
                             &numBytes
                         )
                     }
@@ -807,8 +808,8 @@ enum RSAKeyParser {
         let keyAttrs = SecKeyCopyAttributes(privKey) as? [String: Any] ?? [:]
         let keySizeBits = keyAttrs[kSecAttrKeySizeInBits as String] as? Int ?? 0
         
-        let pubData = try RSAKeyPair.extractPublicKeyData(pubKey)
-        let privData = try RSAKeyPair.extractPrivateKeyData(privKey)
+        let pubData = try extractPublicKeyData(pubKey)
+        let privData = try extractPrivateKeyData(privKey)
         
         return RSAKeyPair(
             privateKey: privKey,
@@ -837,8 +838,8 @@ enum RSAKeyParser {
         let keyAttrs = SecKeyCopyAttributes(privKey) as? [String: Any] ?? [:]
         let keySizeBits = keyAttrs[kSecAttrKeySizeInBits as String] as? Int ?? 0
         
-        let pubData = try RSAKeyPair.extractPublicKeyData(pubKey)
-        let privData = try RSAKeyPair.extractPrivateKeyData(privKey)
+        let pubData = try extractPublicKeyData(pubKey)
+        let privData = try extractPrivateKeyData(privKey)
         
         return RSAKeyPair(
             privateKey: privKey,
@@ -849,7 +850,7 @@ enum RSAKeyParser {
         )
     }
     
-    private static func extractPublicKeyData(_ key: SecKey) throws -> Data {
+    static func extractPublicKeyData(_ key: SecKey) throws -> Data {
         var error: Unmanaged<CFError>?
         guard let data = SecKeyCopyExternalRepresentation(key, &error) else {
             throw RSAKeyError.securityFrameworkError(-1)
@@ -857,7 +858,7 @@ enum RSAKeyParser {
         return data as Data
     }
     
-    private static func extractPrivateKeyData(_ key: SecKey) throws -> Data {
+    static func extractPrivateKeyData(_ key: SecKey) throws -> Data {
         var error: Unmanaged<CFError>?
         guard let data = SecKeyCopyExternalRepresentation(key, &error) else {
             throw RSAKeyError.securityFrameworkError(-1)
@@ -899,8 +900,4 @@ extension Data {
 
 private extension Data.SubSequence {
     func asData() -> Data { Data(self) }
-}
-
-private extension Data {
-    func asData() -> Data { self }
 }

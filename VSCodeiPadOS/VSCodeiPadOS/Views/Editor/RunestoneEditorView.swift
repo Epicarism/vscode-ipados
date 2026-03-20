@@ -486,7 +486,7 @@ struct RunestoneEditorView: UIViewRepresentable {
     }
     
     // MARK: - Coordinator
-    class Coordinator: NSObject, TextViewDelegate, @unchecked Sendable {
+    @MainActor class Coordinator: NSObject, @preconcurrency TextViewDelegate, @unchecked Sendable {
         var parent: RunestoneEditorView
         weak var textView: TextView?
         var isUpdatingFromTextView = false
@@ -503,10 +503,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         var lastHandledSelection: NSRange? = nil
         
         // Debounced text sync to avoid SwiftUI re-renders on every keystroke
-        private var textSyncWorkItem: DispatchWorkItem?
+        nonisolated(unsafe) private var textSyncWorkItem: DispatchWorkItem?
         private let debounceInterval: TimeInterval = 0.5 // 500ms
-        private var forceSyncObserver: NSObjectProtocol?
-        private var editorActionObservers: [NSObjectProtocol] = []
+        nonisolated(unsafe) private var forceSyncObserver: NSObjectProtocol?
+        nonisolated(unsafe) private var editorActionObservers: [NSObjectProtocol] = []
 
         // MARK: - Multi-Cursor
         let multiCursorManager = RunestoneMultiCursorManager()
@@ -1196,28 +1196,19 @@ struct RunestoneEditorView: UIViewRepresentable {
             // When isExternalScroll is true we triggered setContentOffset ourselves
             // (e.g. from a minimap tap) and must not write back to avoid a loop.
             guard !isExternalScroll else { return }
-            MainActor.assumeIsolated {
-                parent.scrollOffset = scrollView.contentOffset.y
-            }
+            parent.scrollOffset = scrollView.contentOffset.y
             // Refresh multi-cursor overlay positions on scroll
             if multiCursorManager.isActive {
                 multiCursorManager.updateDisplay()
             }
             // Viewport-aware highlighting optimization
-            let estimatedLineHeight: CGFloat = {
-                if let tv = scrollView as? TextView, let font = tv.font {
-                    return font.lineHeight
-                }
-                return max(1, CGFloat(parent.fontSize) * 1.4)
-            }()
-            MainActor.assumeIsolated {
-                ViewportHighlightManager.shared.updateScrollPosition(
-                    offset: scrollView.contentOffset.y,
-                    viewportHeight: scrollView.bounds.height,
-                    lineHeight: estimatedLineHeight,
-                    totalLines: max(1, Int(scrollView.contentSize.height / estimatedLineHeight))
-                )
-            }
+            let estimatedLineHeight: CGFloat = max(1, CGFloat(parent.fontSize) * 1.4)
+            ViewportHighlightManager.shared.updateScrollPosition(
+                offset: scrollView.contentOffset.y,
+                viewportHeight: scrollView.bounds.height,
+                lineHeight: estimatedLineHeight,
+                totalLines: max(1, Int(scrollView.contentSize.height / estimatedLineHeight))
+            )
         }
         
         // MARK: - Bracket Matching Highlight

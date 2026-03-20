@@ -1,5 +1,7 @@
 import SwiftUI
 
+import SwiftUI
+
 struct AboutView: View {
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -24,19 +26,21 @@ struct AboutView: View {
                 Spacer(minLength: 40)
 
                 // App Icon
-                if let uiImage = UIImage(named: "AppIcon") {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .frame(width: 120, height: 120)
-                        .cornerRadius(26)
-                        .shadow(radius: 8)
-                } else {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        .font(.system(size: 72))
-                        .foregroundStyle(.blue)
-                        .frame(width: 120, height: 120)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
-                        .shadow(radius: 8)
+                Group {
+                    if let uiImage = UIImage(named: "AppIcon") {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .frame(width: 120, height: 120)
+                            .cornerRadius(26)
+                            .shadow(radius: 8)
+                    } else {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 72))
+                            .foregroundStyle(.blue)
+                            .frame(width: 120, height: 120)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
+                            .shadow(radius: 8)
+                    }
                 }
                 .accessibilityLabel("CodePad app icon")
 

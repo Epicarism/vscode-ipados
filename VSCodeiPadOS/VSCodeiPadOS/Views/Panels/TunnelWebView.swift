@@ -456,10 +456,14 @@ struct TunnelWebView: UIViewRepresentable {
                         Self.logger.error("Failed to encode file content as UTF-8: \(path)")
                         return
                     }
-                    try await TunnelFileSystemBridge.shared.writeFile(at: path, content: data)
-                    Self.logger.info("File saved via tunnel bridge: \(path)")
+                    // Write file locally via Documents directory
+                    let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    let fileURL = docsURL.appendingPathComponent(path)
+                    try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try data.write(to: fileURL)
+                    Self.logger.info("File saved locally: \(path)")
                 } catch {
-                    Self.logger.error("Failed to save file via tunnel: \(path) — \(error.localizedDescription)")
+                    Self.logger.error("Failed to save file: \(path) — \(error.localizedDescription)")
                 }
             }
         }

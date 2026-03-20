@@ -62,7 +62,7 @@ class RunestoneMultiCursorManager {
     private var selectionLayers: [CALayer] = []
     
     /// Cursor blink timer
-    private var blinkTimer: Timer?
+    nonisolated(unsafe) private var blinkTimer: Timer?
     private var cursorVisible = true
     
     /// Appearance
