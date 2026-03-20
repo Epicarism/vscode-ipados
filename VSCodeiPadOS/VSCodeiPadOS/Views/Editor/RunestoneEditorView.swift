@@ -33,6 +33,22 @@ import TreeSitterTOMLRunestone
 import TreeSitterMarkdownRunestone
 import TreeSitterSQLRunestone
 import TreeSitterLuaRunestone
+import TreeSitterAstroRunestone
+import TreeSitterElixirRunestone
+import TreeSitterElmRunestone
+import TreeSitterHaskellRunestone
+import TreeSitterJSON5Runestone
+import TreeSitterJuliaRunestone
+import TreeSitterLaTeXRunestone
+import TreeSitterOCamlRunestone
+import TreeSitterPerlRunestone
+import TreeSitterRRunestone
+import TreeSitterSvelteRunestone
+import TreeSitterMarkdownInlineRunestone
+// Injection grammars (auto-used by parent languages, no standalone case needed)
+import TreeSitterCommentRunestone
+import TreeSitterJSDocRunestone
+import TreeSitterRegexRunestone
 
 // Feature flag now uses centralized FeatureFlags.useRunestoneEditor
 
@@ -452,9 +468,13 @@ struct RunestoneEditorView: UIViewRepresentable {
         case "rs":
             return TreeSitterLanguage.rust
         
-        // JSON / JSON-like config formats
-        case "json", "jsonc", "json5":
+        // JSON
+        case "json", "jsonc":
             return TreeSitterLanguage.json
+        
+        // JSON5 - dedicated grammar with relaxed syntax
+        case "json5":
+            return TreeSitterLanguage.json5
         
         // HTML / HTML-like templates
         case "html", "htm", "xhtml":
@@ -526,6 +546,46 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Lua
         case "lua":
             return TreeSitterLanguage.lua
+        
+        // Elixir
+        case "ex", "exs":
+            return TreeSitterLanguage.elixir
+        
+        // Elm
+        case "elm":
+            return TreeSitterLanguage.elm
+        
+        // Haskell
+        case "hs", "lhs":
+            return TreeSitterLanguage.haskell
+        
+        // Julia
+        case "jl":
+            return TreeSitterLanguage.julia
+        
+        // LaTeX
+        case "tex", "latex", "sty", "cls", "bib":
+            return TreeSitterLanguage.latex
+        
+        // OCaml
+        case "ml", "mli":
+            return TreeSitterLanguage.ocaml
+        
+        // Perl
+        case "pl", "pm", "t":
+            return TreeSitterLanguage.perl
+        
+        // R
+        case "r", "rmd", "rprofile":
+            return TreeSitterLanguage.r
+        
+        // Astro
+        case "astro":
+            return TreeSitterLanguage.astro
+        
+        // Svelte
+        case "svelte":
+            return TreeSitterLanguage.svelte
         
         // GraphQL - no dedicated grammar, use plain text
         case "graphql", "gql":

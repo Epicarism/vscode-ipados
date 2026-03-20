@@ -561,31 +561,74 @@ final class ViewportHighlightManager: ObservableObject {
         
         let textStorage = textView.textStorage
         let text = textStorage.string
-        let lines = text.components(separatedBy: "\n")
         
-        // Pre-compute line start offsets O(n) once, then O(1) per token
-        var lineStartOffsets = [0]
-        lineStartOffsets.reserveCapacity(lines.count)
-        var runningOffset = 0
-        for line in lines {
-            runningOffset += line.count + 1  // +1 for newline
-            lineStartOffsets.append(runningOffset)
+        // Find the range of lines we actually need offsets for
+        var minLine = Int.max
+        var maxLine = 0
+        for token in visibleSemanticTokens {
+            minLine = min(minLine, token.line)
+            maxLine = max(maxLine, token.line)
         }
+        guard minLine <= maxLine else { return }
+        
+        // Walk text counting newlines only up to maxLine+1 — O(viewport) not O(file)
+        // Use UTF-16 view since NSAttributedString/NSRange use UTF-16 offsets
+        let utf16 = text.utf16
+        var lineStartOffsets: [Int: Int] = [:] // line number -> UTF-16 offset
+        lineStartOffsets.reserveCapacity(maxLine - minLine + 2)
+        var currentLine = 0
+        var utf16Offset = 0
+        
+        if minLine == 0 {
+            lineStartOffsets[0] = 0
+        }
+        
+        for ch in utf16 {
+            if currentLine > maxLine { break } // Stop early — don't scan rest of file
+            utf16Offset += 1
+            if ch == 0x0A { // newline
+                currentLine += 1
+                if currentLine >= minLine && currentLine <= maxLine {
+                    lineStartOffsets[currentLine] = utf16Offset
+                }
+            }
+        }
+        
+        // Build a quick line-length lookup for bounds checking
+        // We need the length of each line in the token range
+        var lineLengths: [Int: Int] = [:]
+        lineLengths.reserveCapacity(maxLine - minLine + 1)
+        for line in minLine...maxLine {
+            guard let start = lineStartOffsets[line] else { continue }
+            // Find end of this line
+            var endOffset = start
+            let startIdx = utf16.index(utf16.startIndex, offsetBy: start)
+            var idx = startIdx
+            while idx < utf16.endIndex && utf16[idx] != 0x0A {
+                endOffset += 1
+                idx = utf16.index(after: idx)
+            }
+            lineLengths[line] = endOffset - start
+        }
+        
+        let totalUTF16 = text.utf16.count
         
         textStorage.beginEditing()
         
         for token in visibleSemanticTokens {
-            guard token.line < lines.count else { continue }
+            guard let lineStart = lineStartOffsets[token.line],
+                  let lineLen = lineLengths[token.line] else { continue }
             
-            // O(1) character offset lookup
-            let charOffset = lineStartOffsets[token.line]
+            let tokenEnd = token.startColumn + token.length
+            guard token.startColumn < lineLen else { continue }
+            let clampedLength = min(token.length, lineLen - token.startColumn)
             
             let nsRange = NSRange(
-                location: charOffset + token.startColumn,
-                length: min(token.length, lines[token.line].count - token.startColumn)
+                location: lineStart + token.startColumn,
+                length: clampedLength
             )
             
-            guard nsRange.location + nsRange.length <= text.count else { continue }
+            guard nsRange.location + nsRange.length <= totalUTF16 else { continue }
             
             // Apply color
             textStorage.addAttribute(.foregroundColor, value: token.tokenType.defaultColor, range: nsRange)
