@@ -561,6 +561,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                         }
                     }
                 }
+            }
             
             updateLineCount(textView)
             updateCursorPosition(textView)

@@ -351,11 +351,14 @@ class EditorCore: ObservableObject {
     private func updateLargeFileStatus() {
         if let tab = activeTab {
             let wasLarge = isLargeFile
-            isLargeFile = tab.content.count > Self.largeFileThreshold
+            // Use utf16.count (O(1) for NSString-backed) instead of .count (O(n) Unicode scalar walk)
+            let charCount = tab.content.utf16.count
+            isLargeFile = charCount > Self.largeFileThreshold
             if isLargeFile, !wasLarge {
-                AppLogger.editor.warning("Large file detected: \(tab.fileName) (\(tab.content.count) chars, threshold: \(Self.largeFileThreshold)). Syntax highlighting and other expensive features may be limited.")
+                AppLogger.editor.warning("Large file detected: \(tab.fileName) (\(charCount) chars, threshold: \(Self.largeFileThreshold)). Syntax highlighting and other expensive features may be limited.")
             }
             // Wire into LargeFileHandler for tiered performance degradation
+            // Only re-analyze if file size tier might have changed (skip if already analyzed at same size)
             let fileId = tab.url?.absoluteString ?? tab.id.uuidString
             let info = LargeFileHandler.shared.analyzeFile(content: tab.content, fileId: fileId)
             if info.tier >= .large {
@@ -1304,17 +1307,28 @@ mod tests {
 
     // MARK: - Content Management
 
+    private var largeFileStatusWork: DispatchWorkItem?
+    
     func updateActiveTabContent(_ content: String) {
         guard let index = activeTabIndex else { return }
 
-        // Avoid marking a tab dirty when we're just syncing state (e.g., initial onAppear assignment).
-        guard tabs[index].content != content else { return }
+        // Fast-path: skip if content object identity is same (COW optimization)
+        // Use utf16 count comparison first (O(1) for NSString-backed strings) before O(n) equality
+        let existing = tabs[index].content
+        if existing.utf16.count == content.utf16.count && existing == content { return }
 
         tabs[index].content = content
 
         // Mark dirty for both saved and unsaved-new files.
         tabs[index].isUnsaved = true
-        updateLargeFileStatus()
+        
+        // Debounce large file status check (O(n) operation) — 1s after last edit
+        largeFileStatusWork?.cancel()
+        let lfWork = DispatchWorkItem { [weak self] in
+            self?.updateLargeFileStatus()
+        }
+        largeFileStatusWork = lfWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: lfWork)
         
         // Trigger auto-save if enabled
         let tabId = tabs[index].id

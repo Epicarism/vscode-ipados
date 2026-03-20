@@ -73,6 +73,7 @@ struct FileSizeInfo {
     let lineCount: Int
     let tier: EditorPerformanceTier
     let warningMessage: String?
+    let fileId: String?
     
     var humanReadableSize: String {
         let formatter = ByteCountFormatter()
@@ -120,6 +121,10 @@ final class LargeFileHandler: ObservableObject {
     // Cancellable loading task
     private var loadingTask: Task<Void, Never>?
     
+    // Cache to skip redundant O(n) analysis
+    private var lastAnalyzedFileId: String?
+    private var lastAnalyzedSize: Int = -1
+
     private init() {
         // Wire memory pressure notifications
         NotificationCenter.default.addObserver(
@@ -137,6 +142,14 @@ final class LargeFileHandler: ObservableObject {
     
     /// Analyze a file and determine the performance tier
     func analyzeFile(content: String, fileId: String) -> FileSizeInfo {
+        // Fast skip: if we already analyzed this file at same size, return cached
+        let utf16Len = content.utf16.count  // O(1) for NSString-backed strings
+        if fileId == lastAnalyzedFileId, utf16Len == lastAnalyzedSize, let cached = currentFileInfo {
+            return cached
+        }
+        lastAnalyzedFileId = fileId
+        lastAnalyzedSize = utf16Len
+        
         let byteCount = content.utf8.count
         let lineCount = countLinesFast(content)
         
@@ -171,7 +184,7 @@ final class LargeFileHandler: ObservableObject {
             warning = "⚠️ Extremely large file (\(formatCount(lineCount)) lines). Minimal features active."
         }
         
-        let info = FileSizeInfo(byteCount: byteCount, lineCount: lineCount, tier: tier, warningMessage: warning)
+        let info = FileSizeInfo(byteCount: byteCount, lineCount: lineCount, tier: tier, warningMessage: warning, fileId: fileId)
         
         self.currentTier = tier
         self.currentFileInfo = info
