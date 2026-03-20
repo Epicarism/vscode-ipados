@@ -92,6 +92,7 @@ final class CodeFoldingManager: ObservableObject {
     
     private var currentFilePath: String?
     private var currentFileId: String?
+    private let treeSitterEngine = TreeSitterFoldingEngine()
     
     // MARK: - Cached Regex Patterns (compiled once)
     private static let modifierPrefix = #"^(?:\s*@\w+(?:\([^\)]*\))?\s+)*(?:\s*(?:public|private|internal|fileprivate|open|final|indirect|lazy|static|override|mutating|nonmutating)\s+)*"#
@@ -111,6 +112,23 @@ final class CodeFoldingManager: ObservableObject {
         // Use filePath if available; fall back to "__in_memory__" so currentFileId is never nil
         self.currentFileId = filePath ?? "__in_memory__"
         
+        // Try TreeSitter-based detection first (more accurate for supported languages)
+        let fileExtension = (currentFilePath as NSString?)?.pathExtension ?? ""
+        let treeSitterRegions = treeSitterEngine.detectFoldRegions(source: code, language: fileExtension)
+        if !treeSitterRegions.isEmpty {
+            // Preserve collapsed state from previous regions
+            let previousCollapsed = Set(self.foldRegions.filter { $0.isFolded }.map { $0.startLine })
+            self.foldRegions = treeSitterRegions.map { region in
+                var r = region
+                if previousCollapsed.contains(r.startLine) {
+                    r.isFolded = true
+                }
+                return r
+            }
+            return
+        }
+        
+        // Fallback to regex-based detection
         let lines = code.components(separatedBy: .newlines)
         var regions: [FoldRegion] = []
         

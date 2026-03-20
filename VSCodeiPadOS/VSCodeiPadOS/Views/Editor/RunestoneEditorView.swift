@@ -1205,6 +1205,15 @@ struct RunestoneEditorView: UIViewRepresentable {
             if multiCursorManager.isActive {
                 multiCursorManager.updateDisplay()
             }
+            // Viewport-aware highlighting optimization
+            MainActor.assumeIsolated {
+                ViewportHighlightManager.shared.updateScrollPosition(
+                    offset: scrollView.contentOffset.y,
+                    viewportHeight: scrollView.bounds.height,
+                    lineHeight: 20.0,
+                    totalLines: max(1, Int(scrollView.contentSize.height / 20.0))
+                )
+            }
         }
         
         // MARK: - Bracket Matching Highlight
