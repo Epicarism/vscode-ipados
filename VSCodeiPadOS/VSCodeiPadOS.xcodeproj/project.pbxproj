@@ -171,12 +171,8 @@
 		CF1A2B3C4D5E6F7A8B9C0E06 /* TunnelWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D06 /* TunnelWebView.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D07 /* AboutView.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E08 /* BreakpointGutterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D08 /* BreakpointGutterView.swift */; };
-		CF1A2B3C4D5E6F7A8B9C0E09 /* FileDragModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */; };
-		CF1A2B3C4D5E6F7A8B9C0E0A /* FoldingLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0A /* FoldingLayoutManager.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E0C /* RSAAuthDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */; };
-		CF1A2B3C4D5E6F7A8B9C0E0D /* RemoteRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */; };
-		CF1A2B3C4D5E6F7A8B9C0E0E /* SSHGitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E10 /* SyntaxHighlightCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E11 /* TunnelFileSystemBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */; };
@@ -351,12 +347,12 @@
 		CF1A2B3C4D5E6F7A8B9C0D06 /* TunnelWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelWebView.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D07 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D08 /* BreakpointGutterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakpointGutterView.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FileDragModifier.swift; path = Utils/FileDragModifier.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D09 /* FileDragModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FileDragModifier.swift; path = VSCodeiPadOS/Utils/FileDragModifier.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0A /* FoldingLayoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoldingLayoutManager.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0B /* HapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticFeedback.swift; path = Utils/HapticFeedback.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RSAAuthDelegate.swift; path = Services/RSAAuthDelegate.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteRunner.swift; path = Services/RemoteRunner.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHGitClient.swift; path = Services/NativeGit/SSHGitClient.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0C /* RSAAuthDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RSAAuthDelegate.swift; path = VSCodeiPadOS/Services/RSAAuthDelegate.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0D /* RemoteRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteRunner.swift; path = VSCodeiPadOS/Services/RemoteRunner.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D0E /* SSHGitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHGitClient.swift; path = SSHGitClient.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHTunnelBridge.swift; path = VSCodeiPadOS/Services/SSHTunnelBridge.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightCache.swift; path = Services/SyntaxHighlightCache.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelFileSystemBridge.swift; path = Services/TunnelFileSystemBridge.swift; sourceTree = "<group>"; };
@@ -940,6 +936,7 @@
 			CF1A2B3C4D5E6F7A8B9C0E07 /* AboutView.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */,
+			CF1A2B3C4D5E6F7A8B9C0E0C /* RSAAuthDelegate.swift in Sources */,
 
 		);
 		runOnlyForDeploymentPostprocessing = 0;
