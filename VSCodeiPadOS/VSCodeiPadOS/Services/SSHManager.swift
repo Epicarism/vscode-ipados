@@ -1023,9 +1023,11 @@ class SSHManager: ObservableObject, @unchecked Sendable {
         
         self.currentConfig = config
         
-        // ── RSA key detection (informational only) ─────────────────────────
-        // RSA keys are now supported via Security.framework signing.
-        // PrivateKeyAuthDelegate handles RSA auth via RSAKeyPair.
+        // ── RSA key detection & handler setup ──────────────────────────
+        // RSA keys are supported via Security.framework signing.
+        // When detected, we create an RSAAuthChannelHandler for the NIO pipeline.
+        var rsaAuthHandler: RSAAuthChannelHandler?
+        var useRSAAuth = false
         if case .privateKey(let keyString, let passphrase) = config.authMethod {
             let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
             let isRSAPEM = trimmed.contains("BEGIN RSA PRIVATE KEY")
@@ -1040,10 +1042,14 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             if isRSAPEM || isRSAOpenSSH {
                 AppLogger.ssh.info("RSA key detected for host \(config.host). RSA auth will be attempted via Security.framework.")
                 // Verify the key can be parsed before attempting connection
-                if (try? RSAKeyParser.parse(keyString, passphrase: passphrase)) == nil {
+                guard let rsaKeyPair = try? RSAKeyParser.parse(keyString, passphrase: passphrase) else {
                     AppLogger.ssh.error("RSA key parsing failed for host \(config.host).")
                     throw SSHClientError.invalidPrivateKey
                 }
+                // Create RSA signer for the channel handler
+                let rsaSigner = try RSASSHSigner(rsaKeyPair: rsaKeyPair)
+                rsaAuthHandler = RSAAuthChannelHandler(signer: rsaSigner, username: config.username)
+                useRSAAuth = true
             }
         }
         // ────────────────────────────────────────────────────────────────────
@@ -1064,7 +1070,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             VerifyingHostKeyDelegate(host: config.host, port: config.port)
         
         let bootstrap = ClientBootstrap(group: group)
-            .channelInitializer { channel in
+            .channelInitializer { [rsaAuthHandler] channel in
                 nonisolated(unsafe) let handler = NIOSSHHandler(
                     role: .client(
                         .init(
@@ -1075,7 +1081,15 @@ class SSHManager: ObservableObject, @unchecked Sendable {
                     allocator: channel.allocator,
                     inboundChildChannelInitializer: nil
                 )
-                return channel.pipeline.addHandlers([handler])
+                // When RSA auth is active, add the RSA channel handler BEFORE the SSH handler
+                // so it can intercept SSH_MSG_USERAUTH_PK_OK and perform RSA signing
+                if let rsaHandler = rsaAuthHandler {
+                    return channel.pipeline.addHandler(rsaHandler).flatMap {
+                        channel.pipeline.addHandler(handler)
+                    }
+                } else {
+                    return channel.pipeline.addHandlers([handler])
+                }
             }
             .connectTimeout(.seconds(15))
         
