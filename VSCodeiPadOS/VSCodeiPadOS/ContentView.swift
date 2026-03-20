@@ -1186,7 +1186,7 @@ struct IDEEditorView: View {
                             inlineSuggestionManager.clearSuggestion()
                         }
                     
-                    if minimapEnabled {
+                    if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap {
                         MinimapView(
                             content: text,
                             fileId: tab.url?.path ?? tab.fileName,
@@ -1207,6 +1207,7 @@ struct IDEEditorView: View {
                 .background(theme.editorBackground)
 
                 // Sticky Header Overlay (FEAT-040)
+                if LargeFileHandler.shared.currentTier.enableStickyHeaders {
                 StickyHeaderView(
                     text: text,
                     currentLine: scrollPosition,
@@ -1217,9 +1218,11 @@ struct IDEEditorView: View {
                     }
                 )
                 .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
-                .padding(.trailing, minimapEnabled ? 80 : 0)
+                .padding(.trailing, minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap ? 80 : 0)
+                }
 
                 // Inlay Hints Overlay (type hints, parameter names)
+                if LargeFileHandler.shared.currentTier.enableInlayHints {
                 InlayHintsOverlay(
                     code: text,
                     language: tab.language,
@@ -1231,9 +1234,10 @@ struct IDEEditorView: View {
                 )
                 .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+                }
 
                 // Indentation guide lines (FEAT-indent-guides)
-                if indentGuides {
+                if indentGuides && LargeFileHandler.shared.currentTier.enableIndentGuides {
                 IndentGuidesOverlay(
                     code: text,
                     scrollPosition: scrollPosition,

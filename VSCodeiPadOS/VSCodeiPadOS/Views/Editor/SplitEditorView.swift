@@ -677,7 +677,7 @@ struct PaneEditorView: View {
                 }
                 
                 // Mini minimap
-                if minimapEnabled {
+                if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap {
                 MinimapView(
                     content: text,
                     fileId: fileId,
@@ -694,7 +694,7 @@ struct PaneEditorView: View {
             }
             // Sticky Header Overlay (FEAT-040)
             // Shown only when the user has "Sticky Scroll" enabled in Settings.
-            if stickyScroll {
+            if stickyScroll && LargeFileHandler.shared.currentTier.enableStickyHeaders {
                 StickyHeaderView(
                     text: text,
                     currentLine: scrollPosition,
@@ -705,13 +705,14 @@ struct PaneEditorView: View {
                     }
                 )
                 .padding(.leading, lineNumbersStyle != "off" ? 70 : 0) // Offset for gutter
-                .padding(.trailing, minimapEnabled ? 60 : 0) // Offset for minimap
+                .padding(.trailing, minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap ? 60 : 0) // Offset for minimap
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(true)
                 .zIndex(50)
             }
             
             // Inlay Hints Overlay (type hints, parameter names)
+            if LargeFileHandler.shared.currentTier.enableInlayHints {
             InlayHintsOverlay(
                 code: text,
                 language: tab.language,
@@ -723,6 +724,7 @@ struct PaneEditorView: View {
             )
             .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
             .padding(.trailing, minimapEnabled ? 60 : 0)
+            }
 
 
 

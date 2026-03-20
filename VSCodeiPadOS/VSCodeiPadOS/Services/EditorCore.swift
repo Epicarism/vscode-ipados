@@ -347,13 +347,19 @@ class EditorCore: ObservableObject {
     var shouldLimitExpensiveFeatures: Bool { isLargeFile }
 
     /// Updates `isLargeFile` based on the active tab's content length.
-    /// Call whenever the active tab changes or its content is replaced.
+    /// Also notifies LargeFileHandler for tier-based feature degradation.
     private func updateLargeFileStatus() {
         if let tab = activeTab {
             let wasLarge = isLargeFile
             isLargeFile = tab.content.count > Self.largeFileThreshold
             if isLargeFile, !wasLarge {
                 AppLogger.editor.warning("Large file detected: \(tab.fileName) (\(tab.content.count) chars, threshold: \(Self.largeFileThreshold)). Syntax highlighting and other expensive features may be limited.")
+            }
+            // Wire into LargeFileHandler for tiered performance degradation
+            let fileId = tab.url?.absoluteString ?? tab.id.uuidString
+            let info = LargeFileHandler.shared.analyzeFile(content: tab.content, fileId: fileId)
+            if info.tier >= .large {
+                AppLogger.editor.info("LargeFileHandler tier: \(info.tier.description) for \(tab.fileName)")
             }
         } else {
             isLargeFile = false
