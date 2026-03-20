@@ -436,7 +436,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         // PERFORMANCE: Large file highlighting optimization
         // Files larger than this threshold get deferred full highlighting
-        private let largeFileThreshold = 10000  // 10k characters
+        private let largeFileThreshold = 100_000  // 100k characters — matches EditorCore.largeFileThreshold
         private var largeFileHighlightDebouncer: Timer?
         // Track if we have pending full highlight (for large files)
         private var hasPendingFullHighlight = false
@@ -549,9 +549,10 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let textLength = (textView.text as NSString).length  // O(1) vs String.count O(N)
             
             // Large file threshold - above this, skip highlighting during active typing entirely
-            let largeFileThreshold = 10000
-            // Very large file threshold - above this, use extended delay
-            let veryLargeFileThreshold = 50000
+            // Matches EditorCore.largeFileThreshold (100K) so both subsystems agree on "large"
+            let largeFileThreshold = 100_000
+            // Very large file threshold - above this, use extended delay (1.5× the large threshold)
+            let veryLargeFileThreshold = 150_000
             
             highlightDebouncer?.invalidate()
             
@@ -561,29 +562,43 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                 // PERF: Use LargeFileHandler tier for debounce strategy
                 let tier = LargeFileHandler.shared.currentTier
                 if !tier.enableFullSyntaxHighlight {
-                    // VERY LARGE+ FILES: Minimal viewport-only highlighting with long debounce
+                    // VERY LARGE+ FILES (tier disables full highlighting): Minimal viewport-only with long debounce
                     highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
                         DispatchQueue.main.async {
                             self?.applyVisibleRangeHighlighting(to: textView)
                         }
                     }
-                } else if textLength > 50000 {
-                    // HUGE FILES (>50k): Wait 1.5 seconds, visible range only
+                } else if textLength > 150_000 {
+                    // HUGE FILES (>150k): Wait 1.5 seconds, visible range only
                     highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
                         DispatchQueue.main.async {
                             self?.applyVisibleRangeHighlighting(to: textView)
                         }
                     }
                 } else if textLength > largeFileThreshold {
-                    // LARGE FILES (10k-50k): Wait 1 second, visible range only
+                    // LARGE FILES (100k-150k): Wait 1 second, visible range only
                     highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
                         DispatchQueue.main.async {
                             self?.applyVisibleRangeHighlighting(to: textView)
                         }
                     }
-                } else if textLength > 5000 {
-                    // MEDIUM FILES (5k-10k): 300ms debounce, full highlighting on background thread
+                } else if textLength > 50_000 {
+                    // MEDIUM-LARGE FILES (50k-100k): 500ms debounce, async full highlighting
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applyHighlightingAsync(to: textView)
+                        }
+                    }
+                } else if textLength > 10_000 {
+                    // MEDIUM FILES (10k-50k): 300ms debounce, full highlighting on background thread
                     highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applyHighlightingAsync(to: textView)
+                        }
+                    }
+                } else if textLength > 5_000 {
+                    // SMALL-MEDIUM FILES (5k-10k): 150ms debounce, async highlighting
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
                         DispatchQueue.main.async {
                             self?.applyHighlightingAsync(to: textView)
                         }

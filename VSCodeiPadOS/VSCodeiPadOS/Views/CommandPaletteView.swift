@@ -305,6 +305,22 @@ struct CommandPaletteView: View {
                 editorCore.expandAllFolds()
                 dismiss()
             },
+            Command(name: "Fold", shortcut: "⌘⌥[", icon: "chevron.down", category: .view) {
+                NotificationCenter.default.post(name: .foldCurrentLine, object: nil)
+                dismiss()
+            },
+            Command(name: "Unfold", shortcut: "⌘⌥]", icon: "chevron.up", category: .view) {
+                NotificationCenter.default.post(name: .unfoldCurrentLine, object: nil)
+                dismiss()
+            },
+            Command(name: "Fold All (⌘K ⌘0)", shortcut: "⌘K ⌘0", icon: "chevron.down.square.fill", category: .view) {
+                editorCore.collapseAllFolds()
+                dismiss()
+            },
+            Command(name: "Unfold All (⌘K ⌘J)", shortcut: "⌘K ⌘J", icon: "chevron.up.square.fill", category: .view) {
+                editorCore.expandAllFolds()
+                dismiss()
+            },
             Command(name: "Toggle Word Wrap", shortcut: nil, icon: "text.word.spacing", category: .view) {
                 let current = UserDefaults.standard.bool(forKey: "wordWrap")
                 UserDefaults.standard.set(!current, forKey: "wordWrap")

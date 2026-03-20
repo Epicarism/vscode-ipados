@@ -5,7 +5,13 @@ import SwiftUI
 /// These shortcuts post centralized Notification.Name constants (from Notification+Names.swift)
 /// so that ContentView and other subscribers can respond.
 class KeyCommandController: UIViewController {
-    
+
+    // MARK: - Chord State
+    // Tracks whether the user just pressed ⌘K, waiting for the second key
+    // of a two-key chord shortcut (e.g. ⌘K ⌘0 = Fold All, ⌘K ⌘J = Unfold All).
+    private var pendingChord: Bool = false
+    private var chordResetTask: DispatchWorkItem?
+
     override var canBecomeFirstResponder: Bool { true }
     
     // When no child (e.g. editor text view) is first responder, this controller
@@ -153,9 +159,14 @@ class KeyCommandController: UIViewController {
             ("Outdent Line", "[", [.command], #selector(cmdOutdentLines)),
             // Join Lines
             ("Join Lines", "j", [.control], #selector(cmdJoinLines)),
+            // Fold/Unfold at Cursor (VS Code: ⌘⌥[ / ⌘⌥])
+            ("Fold",   "[", [.command, .alternate], #selector(cmdFold)),
+            ("Unfold", "]", [.command, .alternate], #selector(cmdUnfold)),
             // Fold/Unfold All
-            ("Fold All", "0", [.command, .shift], #selector(cmdFoldAll)),
+            ("Fold All",   "0", [.command, .shift], #selector(cmdFoldAll)),
             ("Unfold All", "9", [.command, .shift], #selector(cmdUnfoldAll)),
+            // ⌘K chord leader — ⌘K ⌘0 = Fold All, ⌘K ⌘J = Unfold All
+            ("⌘K Chord", "k", [.command], #selector(cmdChordLeader)),
             // Insert Line Below/Above
             ("Insert Line Below", "\r", [.command], #selector(cmdInsertLineBelow)),
             ("Insert Line Above", "\r", [.command, .shift], #selector(cmdInsertLineAbove)),
@@ -293,8 +304,64 @@ class KeyCommandController: UIViewController {
     @objc func cmdIndentLines() { NotificationCenter.default.post(name: .indentLines, object: nil) }
     @objc func cmdOutdentLines() { NotificationCenter.default.post(name: .outdentLines, object: nil) }
     @objc func cmdJoinLines() { NotificationCenter.default.post(name: .joinLines, object: nil) }
-    @objc func cmdFoldAll() { NotificationCenter.default.post(name: .collapseAllFolds, object: nil) }
-    @objc func cmdUnfoldAll() { NotificationCenter.default.post(name: .expandAllFolds, object: nil) }
+    @objc func cmdFold()      { NotificationCenter.default.post(name: .foldCurrentLine,  object: nil) }
+    @objc func cmdUnfold()    { NotificationCenter.default.post(name: .unfoldCurrentLine, object: nil) }
+    @objc func cmdFoldAll()   { NotificationCenter.default.post(name: .collapseAllFolds,  object: nil) }
+    @objc func cmdUnfoldAll() { NotificationCenter.default.post(name: .expandAllFolds,    object: nil) }
+
+    // MARK: - ⌘K Chord Leader
+
+    /// Called when ⌘K is pressed. Arms the chord state, then waits for the
+    /// second key (⌘0 → Fold All, ⌘J → Unfold All). The chord auto-cancels
+    /// after 1.5 s if no matching second key arrives.
+    @objc func cmdChordLeader() {
+        chordResetTask?.cancel()
+        pendingChord = true
+
+        let task = DispatchWorkItem { [weak self] in
+            self?.pendingChord = false
+        }
+        chordResetTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: task)
+    }
+
+    /// Intercepts the second key of a ⌘K chord.
+    /// UIKit has no native multi-key-chord support, so we arm `pendingChord`
+    /// in `cmdChordLeader` and consume the follow-up press here.
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        guard pendingChord else {
+            super.pressesBegan(presses, with: event)
+            return
+        }
+
+        var handled = false
+        for press in presses {
+            guard let key = press.key else { continue }
+            let isCmd = key.modifierFlags.contains(.command)
+
+            if isCmd && key.characters == "0" {
+                // ⌘K ⌘0 → Fold All
+                pendingChord = false
+                chordResetTask?.cancel()
+                NotificationCenter.default.post(name: .collapseAllFolds, object: nil)
+                handled = true
+            } else if isCmd && key.charactersIgnoringModifiers.lowercased() == "j" {
+                // ⌘K ⌘J → Unfold All
+                pendingChord = false
+                chordResetTask?.cancel()
+                NotificationCenter.default.post(name: .expandAllFolds, object: nil)
+                handled = true
+            } else {
+                // Unknown second key — cancel chord, fall through normally.
+                pendingChord = false
+                chordResetTask?.cancel()
+            }
+        }
+
+        if !handled {
+            super.pressesBegan(presses, with: event)
+        }
+    }
     @objc func cmdInsertLineBelow() { NotificationCenter.default.post(name: .insertLineBelow, object: nil) }
     @objc func cmdInsertLineAbove() { NotificationCenter.default.post(name: .insertLineAbove, object: nil) }
     @objc func cmdTriggerSuggestion() { NotificationCenter.default.post(name: .triggerSuggestion, object: nil) }

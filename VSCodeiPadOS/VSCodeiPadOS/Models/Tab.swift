@@ -20,7 +20,9 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     var fileName: String
     
     /// Current content of the file
-    var content: String
+    var content: String {
+        didSet { _updateCaches() }
+    }
     
     /// Programming language/file type
     var language: CodeLanguage
@@ -60,6 +62,14 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     /// Saved cursor character index — restored when switching back to this tab.
     /// Excluded from Codable via CodingKeys.
     var savedCursorIndex: Int = 0
+
+    // MARK: - Cached Derived State (not persisted, excluded from CodingKeys)
+
+    /// Cached line count — O(1) read; O(n) scan runs only when `content` changes.
+    private var _cachedLineCount: Int = 1
+
+    /// Cached UTF-8 byte count — O(1) read; updated only when `content` changes.
+    private var _cachedContentSize: Int = 0
 
     // FIX: Exclude transient UI state from Codable encoding/decoding
     enum CodingKeys: String, CodingKey {
@@ -124,6 +134,9 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
             let fileExtension = (fileName as NSString).pathExtension
             self.language = CodeLanguage(from: fileExtension)
         }
+        // Seed caches manually — `didSet` does not fire during `init`
+        _cachedLineCount   = Tab.computeLineCount(for: content)
+        _cachedContentSize = content.utf8.count
     }
     
     /// Convenience initializer that accepts language as String
@@ -156,7 +169,31 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
             remoteHost: remoteHost
         )
     }
-    
+
+    /// Custom Codable decoder that re-seeds derived caches after decoding,
+    /// since `didSet` observers do not fire during `init`.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                 = try c.decode(UUID.self,            forKey: .id)
+        fileName           = try c.decode(String.self,          forKey: .fileName)
+        content            = try c.decode(String.self,          forKey: .content)
+        language           = try c.decode(CodeLanguage.self,    forKey: .language)
+        url                = try c.decodeIfPresent(URL.self,    forKey: .url)
+        remotePath         = try c.decodeIfPresent(String.self, forKey: .remotePath)
+        remoteHost         = try c.decodeIfPresent(String.self, forKey: .remoteHost)
+        isUnsaved          = try c.decode(Bool.self,            forKey: .isUnsaved)
+        isActive           = try c.decode(Bool.self,            forKey: .isActive)
+        isPinned           = try c.decode(Bool.self,            forKey: .isPinned)
+        isPreview          = try c.decode(Bool.self,            forKey: .isPreview)
+        fileEncoding       = try c.decode(UInt.self,            forKey: .fileEncoding)
+        // Transient UI state — always starts fresh after a decode
+        savedScrollOffset  = 0
+        savedCursorIndex   = 0
+        // Seed caches — `didSet` does not fire during `init`
+        _cachedLineCount   = Tab.computeLineCount(for: content)
+        _cachedContentSize = content.utf8.count
+    }
+
     // MARK: - Computed Properties
     
     /// File extension (e.g., "swift", "js")
@@ -169,15 +206,13 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
         isUnsaved ? "● \(fileName)" : fileName
     }
     
-    /// Number of lines in the content
-    var lineCount: Int {
-        content.isEmpty ? 0 : content.components(separatedBy: .newlines).count
-    }
+    /// Number of lines in the content.
+    /// O(1) — the cache is refreshed via `_updateCaches()` on every `content` mutation.
+    var lineCount: Int { _cachedLineCount }
     
-    /// File size in bytes
-    var contentSize: Int {
-        content.utf8.count
-    }
+    /// File size in bytes.
+    /// O(1) — the cache is refreshed via `_updateCaches()` on every `content` mutation.
+    var contentSize: Int { _cachedContentSize }
     
     // MARK: - Equatable & Hashable
     
@@ -189,6 +224,26 @@ struct Tab: Identifiable, Equatable, Hashable, Codable {
     /// Hash based on ID only
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+
+    // MARK: - Private Cache Helpers
+
+    /// Recomputes all O(n) derived values whenever `content` is mutated.
+    /// Called automatically via the `content` property's `didSet` observer.
+    private mutating func _updateCaches() {
+        _cachedLineCount   = Tab.computeLineCount(for: content)
+        _cachedContentSize = content.utf8.count
+    }
+
+    /// Counts '\n' (0x0A) bytes via a single, allocation-free UTF-8 scan.
+    /// O(n) in content length — but called only on mutation, never on read.
+    private static func computeLineCount(for text: String) -> Int {
+        if text.isEmpty { return 0 }
+        var count = 1
+        for byte in text.utf8 where byte == 0x0A {
+            count += 1
+        }
+        return count
     }
 }
 

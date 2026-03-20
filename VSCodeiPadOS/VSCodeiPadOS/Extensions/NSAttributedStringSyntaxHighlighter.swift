@@ -1078,6 +1078,24 @@ final class NSAttributedStringSyntaxHighlighter {
 
     // MARK: - Regex application helpers
 
+    // Cache compiled NSRegularExpression objects keyed by "<rawOptionsValue>|<pattern>".
+    // Compiling regexes is expensive; caching eliminates the cost on repeated calls.
+    private static var regexCache: [String: NSRegularExpression] = [:]
+
+    /// Returns a cached (or newly compiled+cached) NSRegularExpression for the given pattern/options.
+    private static func cachedRegex(_ pattern: String, options: NSRegularExpression.Options) -> NSRegularExpression? {
+        let key = "\(options.rawValue)|\(pattern)"
+        if let cached = regexCache[key] { return cached }
+        do {
+            let regex = try NSRegularExpression(pattern: pattern, options: options)
+            regexCache[key] = regex
+            return regex
+        } catch {
+            AppLogger.editor.error("Regex compile error for pattern \(pattern): \(error)")
+            return nil
+        }
+    }
+
     @discardableResult
     private static func applyHighlighting(
         pattern: String,
@@ -1088,38 +1106,49 @@ final class NSAttributedStringSyntaxHighlighter {
         captureGroup: Int?,
         excluding excludedRanges: [NSRange]
     ) -> [NSRange] {
-        do {
-            let regex = try NSRegularExpression(pattern: pattern, options: options)
-            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+        guard let regex = cachedRegex(pattern, options: options) else { return [] }
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
 
-            var applied: [NSRange] = []
-            applied.reserveCapacity(matches.count)
+        var applied: [NSRange] = []
+        applied.reserveCapacity(matches.count)
 
-            for match in matches {
-                let range: NSRange = {
-                    if let captureGroup, captureGroup <= match.numberOfRanges - 1 {
-                        return match.range(at: captureGroup)
-                    }
-                    return match.range
-                }()
+        // Sort excluded ranges once by location so intersectsAny can binary-search.
+        let sortedExcluded = excludedRanges.sorted { $0.location < $1.location }
 
-                guard range.location != NSNotFound, range.length > 0 else { continue }
-                if intersectsAny(range, excludedRanges) { continue }
+        for match in matches {
+            let range: NSRange = {
+                if let captureGroup, captureGroup <= match.numberOfRanges - 1 {
+                    return match.range(at: captureGroup)
+                }
+                return match.range
+            }()
 
-                attributedString.addAttribute(.foregroundColor, value: color, range: range)
-                applied.append(range)
-            }
+            guard range.location != NSNotFound, range.length > 0 else { continue }
+            if intersectsAny(range, sortedExcluded) { continue }
 
-            return applied
-        } catch {
-            AppLogger.editor.error("Regex error for pattern \(pattern): \(error)")
-            return []
+            attributedString.addAttribute(.foregroundColor, value: color, range: range)
+            applied.append(range)
         }
+
+        return applied
     }
 
+    /// O(log n) intersection check against a *sorted* (by location) array of excluded ranges.
     private static func intersectsAny(_ range: NSRange, _ excludedRanges: [NSRange]) -> Bool {
-        for ex in excludedRanges where NSIntersectionRange(range, ex).length > 0 {
-            return true
+        guard !excludedRanges.isEmpty else { return false }
+        let rangeEnd = range.location + range.length
+        // Binary search for the first excluded range whose location >= rangeEnd.
+        // Any excluded range entirely at or after rangeEnd cannot overlap.
+        var lo = 0, hi = excludedRanges.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if excludedRanges[mid].location < rangeEnd { lo = mid + 1 } else { hi = mid }
+        }
+        // The last candidate that starts before rangeEnd is at index lo-1.
+        // If its end is after range.location it overlaps.
+        if lo > 0 {
+            let candidate = excludedRanges[lo - 1]
+            if candidate.location + candidate.length > range.location { return true }
         }
         return false
     }

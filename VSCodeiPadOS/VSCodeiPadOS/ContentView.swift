@@ -1216,7 +1216,7 @@ struct IDEEditorView: View {
                 .background(theme.editorBackground)
 
                 // Sticky Header Overlay (FEAT-040)
-                if LargeFileHandler.shared.currentTier.enableStickyHeaders {
+                if LargeFileHandler.shared.currentTier.enableStickyHeaders && !perfMonitor.shouldDegradeFeatures {
                 StickyHeaderView(
                     text: text,
                     currentLine: scrollPosition,
@@ -1231,7 +1231,7 @@ struct IDEEditorView: View {
                 }
 
                 // Inlay Hints Overlay (type hints, parameter names)
-                if LargeFileHandler.shared.currentTier.enableInlayHints {
+                if LargeFileHandler.shared.currentTier.enableInlayHints && !perfMonitor.shouldDegradeFeatures {
                 InlayHintsOverlay(
                     code: text,
                     language: tab.language,
@@ -1281,22 +1281,24 @@ struct IDEEditorView: View {
                     .allowsHitTesting(false)
                     .clipped()
                 }
-                // Breakpoint gutter
-                if let fileURL = tab.url, lineNumbersStyle != "off" {
-                    let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
-                    let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
-                    let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
-                    BreakpointGutterView(
-                        filePath: fileURL.path,
-                        visibleLineRange: firstVisible..<lastVisible,
-                        lineHeight: lineHeight,
-                        contentTopInset: 8,
-                        scrollOffset: scrollOffset
-                    )
-                    .frame(width: 28)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.leading, 24)
-                    .clipped()
+                // Breakpoint gutter (skip when performance degraded — matches SplitEditorView behaviour)
+                if !perfMonitor.shouldDegradeFeatures {
+                    if let fileURL = tab.url, lineNumbersStyle != "off" {
+                        let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+                        let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+                        let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+                        BreakpointGutterView(
+                            filePath: fileURL.path,
+                            visibleLineRange: firstVisible..<lastVisible,
+                            lineHeight: lineHeight,
+                            contentTopInset: 8,
+                            scrollOffset: scrollOffset
+                        )
+                        .frame(width: 28)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.leading, 24)
+                        .clipped()
+                    }
                 }
                 // Inline suggestion ghost text
                 if inlineSuggestionManager.currentSuggestion != nil && !showAutocomplete && inlineSuggestions {
