@@ -10,6 +10,9 @@
 import Foundation
 import os
 
+/// Typealias so TreeSitter engine can reference FoldType without qualifying as FoldRegion.FoldType
+typealias FoldType = FoldRegion.FoldType
+
 // MARK: - TreeSitter Node Abstraction
 
 /// Protocol for accessing syntax tree nodes.

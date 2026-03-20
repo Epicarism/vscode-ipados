@@ -273,13 +273,20 @@ struct VSCodeTunnelView: View {
     private func connectedView(config: TunnelConfig) -> some View {
         ZStack {
             if let url = URL(string: config.url) {
-                VSCodeWebView(
-                    url: url,
-                    isLoading: $isLoading,
-                    errorMessage: $errorMessage,
-                    needsReload: $webViewNeedsReload
-                )
-                .ignoresSafeArea()
+                if config.tunnelMode == .webview {
+                    // Enhanced tunnel WebView with iPad bridge
+                    TunnelWebView(url: url)
+                        .ignoresSafeArea()
+                } else {
+                    // Legacy WebView
+                    VSCodeWebView(
+                        url: url,
+                        isLoading: $isLoading,
+                        errorMessage: $errorMessage,
+                        needsReload: $webViewNeedsReload
+                    )
+                    .ignoresSafeArea()
+                }
             }
             
             // Loading overlay

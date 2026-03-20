@@ -394,6 +394,8 @@ class EditorCore: ObservableObject {
         // Connect AutoSaveManager
         Task { @MainActor in AutoSaveManager.shared.connect(to: self) }
 
+        // Start performance monitoring for editor frame rate tracking
+        EditorPerformanceMonitor.shared.startMonitoring()
         // Observe UserDefaults changes from Settings slider
         fontSizeObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
@@ -428,6 +430,10 @@ class EditorCore: ObservableObject {
                        self.tabs[index].content.count > 10_000 {
                         self.tabs[index].content = ""
                     }
+                }
+                // Also purge syntax highlight cache
+                Task {
+                    await SyntaxHighlightCache.shared.handleMemoryPressure()
                 }
             }
         }

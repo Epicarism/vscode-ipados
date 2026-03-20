@@ -748,6 +748,23 @@ struct PaneEditorView: View {
                 .allowsHitTesting(false)
                 .clipped()
             }
+            // Breakpoint gutter
+            if let fileURL = tab.url, lineNumbersStyle != "off" {
+                let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+                let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+                let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+                BreakpointGutterView(
+                    filePath: fileURL.path,
+                    visibleLineRange: firstVisible..<lastVisible,
+                    lineHeight: lineHeight,
+                    contentTopInset: 8,
+                    scrollOffset: scrollOffset
+                )
+                .frame(width: 28)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.leading, 24)
+                .clipped()
+            }
 
             // Peek Definition Overlay
             if let peekState = editorCore.peekState, editorCore.activeTabId == tab.id {
