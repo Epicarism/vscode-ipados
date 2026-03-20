@@ -273,7 +273,10 @@ struct VSCodeTunnelView: View {
     @ViewBuilder
     private func connectedView(config: TunnelConfig) -> some View {
         ZStack {
-            if let url = URL(string: config.url) {
+            // FIX: Prefer tunnelManager.webViewURL (resolved URL after SSH/port-forward)
+            // Fall back to config.url if webViewURL not yet set
+            let resolvedURL = tunnelManager.webViewURL ?? URL(string: config.url)
+            if let url = resolvedURL {
                 if config.tunnelMode == .webview {
                     // Enhanced tunnel WebView with iPad bridge
                     TunnelWebView(url: url)
@@ -291,8 +294,10 @@ struct VSCodeTunnelView: View {
                 }
             }
             
-            // Loading overlay
-            if isLoading {
+            // Loading overlay — show for legacy WebView (isLoading) or
+            // for .webview mode when tunnel state is still .connecting
+            let showLoading = isLoading || (config.tunnelMode == .webview && tunnelManager.connectionState == .connecting)
+            if showLoading {
                 VStack(spacing: 16) {
                     ProgressView()
                         .scaleEffect(1.5)
@@ -304,8 +309,9 @@ struct VSCodeTunnelView: View {
                 .background(themeManager.currentTheme.editorBackground.opacity(0.9))
             }
             
-            // Error overlay
-            if let error = errorMessage {
+            // Error overlay — show for legacy WebView or tunnel-level errors
+            let displayError = errorMessage ?? tunnelManager.lastError
+            if let error = displayError {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 48))
