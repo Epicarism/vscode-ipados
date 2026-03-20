@@ -204,6 +204,8 @@ final class ViewportHighlightManager: ObservableObject {
     var fastScrollDebounceMs: Int = 100
     var maxHighlightLinesPerFrame: Int = 200
     var enableSemanticTokens: Bool = true
+    var currentFileId: String = "current"
+    var currentLanguage: String = ""
     
     // MARK: - Private State
     
@@ -249,11 +251,14 @@ final class ViewportHighlightManager: ObservableObject {
         let visibleLineCount = Int(ceil(viewportHeight / lineHeight))
         let lastLine = min(totalLines - 1, firstLine + visibleLineCount)
         
+        // Adaptive buffer: reduce during fast scroll to minimize wasted work
+        let effectiveBuffer = isFastScrolling ? 20 : bufferLines
+        
         let viewport = ViewportRegion(
             firstVisibleLine: firstLine,
             lastVisibleLine: lastLine,
-            bufferLinesBefore: bufferLines,
-            bufferLinesAfter: bufferLines,
+            bufferLinesBefore: effectiveBuffer,
+            bufferLinesAfter: effectiveBuffer,
             totalLines: totalLines
         )
         
@@ -288,32 +293,44 @@ final class ViewportHighlightManager: ObservableObject {
         
         lastViewportUpdate = Date()
         
+        // Detect scroll direction for directional pre-fetch
+        let scrollingDown = viewport.firstVisibleLine >= (previousViewport?.firstVisibleLine ?? 0)
+        
         if isFastScrolling {
             // During fast scroll: only highlight visible lines, skip buffer
             enqueueHighlightRequest(
                 lineRange: viewport.visibleRange,
                 priority: .visible,
-                fileId: "current",
-                language: "unknown"
+                fileId: currentFileId,
+                language: currentLanguage
             )
         } else {
-            // Normal scroll: highlight visible + buffer zones
+            // Normal scroll: highlight visible + directionally-biased buffer zones
             enqueueHighlightRequest(
                 lineRange: viewport.visibleRange,
                 priority: .visible,
-                fileId: "current",
-                language: "unknown"
+                fileId: currentFileId,
+                language: currentLanguage
             )
             
-            // Near buffer (±bufferLines/2)
-            let nearStart = max(0, viewport.firstVisibleLine - bufferLines / 2)
-            let nearEnd = min(viewport.totalLines - 1, viewport.lastVisibleLine + bufferLines / 2)
+            // Directional near buffer: bias 2/3 in scroll direction, 1/3 behind
+            let bufferAhead = bufferLines * 2 / 3
+            let bufferBehind = bufferLines / 3
+            let nearStart: Int
+            let nearEnd: Int
+            if scrollingDown {
+                nearStart = max(0, viewport.firstVisibleLine - bufferBehind)
+                nearEnd = min(viewport.totalLines - 1, viewport.lastVisibleLine + bufferAhead)
+            } else {
+                nearStart = max(0, viewport.firstVisibleLine - bufferAhead)
+                nearEnd = min(viewport.totalLines - 1, viewport.lastVisibleLine + bufferBehind)
+            }
             if nearStart < viewport.firstVisibleLine || nearEnd > viewport.lastVisibleLine {
                 enqueueHighlightRequest(
                     lineRange: nearStart...nearEnd,
                     priority: .nearBuffer,
-                    fileId: "current",
-                    language: "unknown"
+                    fileId: currentFileId,
+                    language: currentLanguage
                 )
             }
             
@@ -323,8 +340,8 @@ final class ViewportHighlightManager: ObservableObject {
                 enqueueHighlightRequest(
                     lineRange: farRange,
                     priority: .farBuffer,
-                    fileId: "current",
-                    language: "unknown"
+                    fileId: currentFileId,
+                    language: currentLanguage
                 )
             }
         }
@@ -380,21 +397,26 @@ final class ViewportHighlightManager: ObservableObject {
         processingTask = Task { [weak self] in
             guard let self = self else { return }
             
+            var totalLinesProcessed = 0
+            
             while !Task.isCancelled, let request = self.highlightQueue.first {
                 self.highlightQueue.removeFirst()
                 self.isHighlightingActive = true
                 
                 let startTime = CACurrentMediaTime()
+                let requestLineCount = request.lineRange.count
                 
                 // Process highlighting for this range
                 await self.processHighlightRequest(request)
                 
                 let elapsed = (CACurrentMediaTime() - startTime) * 1000
                 self.recordHighlightTiming(elapsed)
+                totalLinesProcessed += requestLineCount
                 
-                // Yield to UI if we've been processing too long
-                if elapsed > 8 {  // Half a frame at 60fps
+                // Yield to UI if we've been processing too long OR exceeded per-frame line limit
+                if elapsed > 8 || totalLinesProcessed >= self.maxHighlightLinesPerFrame {
                     try? await Task.sleep(nanoseconds: 1_000_000)  // 1ms yield
+                    totalLinesProcessed = 0  // Reset for next batch
                 }
             }
             
