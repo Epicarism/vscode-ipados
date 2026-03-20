@@ -475,22 +475,21 @@ enum RSAKeyParser {
         guard let n = readString(),
               let e = readString(),
               let d = readString(),
-              let _iqmp = readString(),
+              let iqmp = readString(),
               let p = readString(),
               let q = readString() else {
             throw RSAKeyError.invalidKeyFormat
         }
-        _ = _iqmp // silence unused warning
         
-        // Build PKCS#1 DER from components
-        let pkcs1Data = buildPKCS1DER(n: n, e: e, d: d, p: p, q: q)
+        // Build PKCS#1 DER from components (including CRT parameters)
+        let pkcs1Data = buildPKCS1DER(n: n, e: e, d: d, p: p, q: q, iqmp: iqmp)
         return try createKeyPairFromPKCS1Data(pkcs1Data)
     }
     
     // MARK: - DER Construction
     
     /// Build PKCS#1 RSAPrivateKey DER from raw components
-    private static func buildPKCS1DER(n: Data, e: Data, d: Data, p: Data, q: Data) -> Data {
+    private static func buildPKCS1DER(n: Data, e: Data, d: Data, p: Data, q: Data, iqmp: Data? = nil) -> Data {
         // RSAPrivateKey ::= SEQUENCE {
         //   version           INTEGER,  -- 0
         //   modulus           INTEGER,  -- n
@@ -498,13 +497,15 @@ enum RSAKeyParser {
         //   privateExponent   INTEGER,  -- d
         //   prime1            INTEGER,  -- p
         //   prime2            INTEGER,  -- q
-        //   exponent1         INTEGER,  -- d mod (p-1)  (computed)
-        //   exponent2         INTEGER,  -- d mod (q-1)  (computed)
-        //   coefficient       INTEGER   -- (inverse of q) mod p  (computed)
+        //   exponent1         INTEGER,  -- d mod (p-1)  (dp)
+        //   exponent2         INTEGER,  -- d mod (q-1)  (dq)
+        //   coefficient       INTEGER   -- (inverse of q) mod p  (qinv)
         // }
         
-        // For simplicity, compute dp, dq, qinv as zero-length placeholders
-        // Security.framework can import keys without these if we use the simpler approach
+        // Compute CRT parameters: dp = d mod (p-1), dq = d mod (q-1)
+        let dp = bigIntMod(d, bigIntSubtractOne(p))
+        let dq = bigIntMod(d, bigIntSubtractOne(q))
+        let qinv = iqmp ?? Data([0])  // Use parsed iqmp if available
         
         var content = Data()
         content.append(derInteger(Data([0])))  // version = 0
@@ -513,14 +514,104 @@ enum RSAKeyParser {
         content.append(derInteger(d))
         content.append(derInteger(p))
         content.append(derInteger(q))
-        
-        // dp = d mod (p-1), dq = d mod (q-1), qinv = q^-1 mod p
-        // These are optional for Security.framework import, but we compute empty placeholders
-        content.append(derInteger(Data([0])))  // dp placeholder
-        content.append(derInteger(Data([0])))  // dq placeholder
-        content.append(derInteger(Data([0])))  // qinv placeholder
+        content.append(derInteger(dp))
+        content.append(derInteger(dq))
+        content.append(derInteger(qinv))
         
         return derSequence(content)
+    }
+    
+    // MARK: - Big Integer Helpers for CRT
+    
+    /// Subtract 1 from a big-endian unsigned integer Data
+    private static func bigIntSubtractOne(_ data: Data) -> Data {
+        var bytes = Array(data)
+        // Strip leading zero used for sign in DER
+        if bytes.first == 0 && bytes.count > 1 { bytes.removeFirst() }
+        var i = bytes.count - 1
+        while i >= 0 {
+            if bytes[i] > 0 {
+                bytes[i] -= 1
+                break
+            }
+            bytes[i] = 0xFF
+            i -= 1
+        }
+        return Data(bytes)
+    }
+    
+    /// Compute a mod m for big-endian unsigned integer Data values
+    /// Uses schoolbook division — adequate for RSA key sizes (2048-4096 bit)
+    private static func bigIntMod(_ a: Data, _ m: Data) -> Data {
+        // Convert to arrays, strip leading zeros
+        var aBytes = Array(a)
+        if aBytes.first == 0 && aBytes.count > 1 { aBytes = Array(aBytes.drop(while: { $0 == 0 })) }
+        if aBytes.isEmpty { aBytes = [0] }
+        var mBytes = Array(m)
+        if mBytes.first == 0 && mBytes.count > 1 { mBytes = Array(mBytes.drop(while: { $0 == 0 })) }
+        if mBytes.isEmpty { return Data([0]) }
+        
+        // Use repeated subtraction with shifting for modular reduction
+        // This is O(n^2) in the number of bytes but only runs once per key import
+        var remainder = aBytes
+        
+        // Quick path: if a < m, result is a
+        if compareUnsigned(remainder, mBytes) < 0 {
+            return Data(remainder)
+        }
+        
+        // Long division approach: process byte by byte
+        var result: [UInt8] = [0]
+        for byte in aBytes {
+            // Shift result left by 8 bits and add new byte
+            result.append(byte)
+            // Strip leading zeros
+            while result.count > 1 && result.first == 0 { result.removeFirst() }
+            // Subtract m while result >= m
+            while compareUnsigned(result, mBytes) >= 0 {
+                result = subtractUnsigned(result, mBytes)
+            }
+        }
+        
+        if result.isEmpty { result = [0] }
+        return Data(result)
+    }
+    
+    /// Compare two unsigned big-endian byte arrays. Returns -1, 0, or 1
+    private static func compareUnsigned(_ a: [UInt8], _ b: [UInt8]) -> Int {
+        let aStripped = Array(a.drop(while: { $0 == 0 }))
+        let bStripped = Array(b.drop(while: { $0 == 0 }))
+        if aStripped.count != bStripped.count {
+            return aStripped.count < bStripped.count ? -1 : 1
+        }
+        for i in 0..<aStripped.count {
+            if aStripped[i] < bStripped[i] { return -1 }
+            if aStripped[i] > bStripped[i] { return 1 }
+        }
+        return 0
+    }
+    
+    /// Subtract b from a (unsigned, assumes a >= b)
+    private static func subtractUnsigned(_ a: [UInt8], _ b: [UInt8]) -> [UInt8] {
+        var result = a
+        var borrow: Int = 0
+        let diff = a.count - b.count
+        for i in stride(from: a.count - 1, through: 0, by: -1) {
+            let bIdx = i - diff
+            let bVal = bIdx >= 0 ? Int(b[bIdx]) : 0
+            var sub = Int(result[i]) - bVal - borrow
+            if sub < 0 {
+                sub += 256
+                borrow = 1
+            } else {
+                borrow = 0
+            }
+            result[i] = UInt8(sub)
+        }
+        // Strip leading zeros
+        while result.count > 1 && result.first == 0 { result.removeFirst() }
+        return result
+    }
     }
     
     private static func derInteger(_ data: Data) -> Data {
