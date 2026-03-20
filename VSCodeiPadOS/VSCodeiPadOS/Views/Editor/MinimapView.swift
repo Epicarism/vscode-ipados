@@ -61,13 +61,27 @@ struct MinimapView: View {
 
     /// Recompute cached lines from content
     private func recomputeLines() {
-        cachedLines = Array(content.split(separator: "\n", omittingEmptySubsequences: false))
+        var lines = Array(content.split(separator: "\n", omittingEmptySubsequences: false))
+        // For very large files, sample every Nth line to keep minimap responsive
+        if lines.count > 100_000 {
+            let step = max(2, lines.count / 50_000)
+            var sampled: [Substring] = []
+            sampled.reserveCapacity(lines.count / step + 1)
+            var i = 0
+            while i < lines.count {
+                sampled.append(lines[i])
+                i += step
+            }
+            lines = sampled
+        }
+        cachedLines = lines
         recomputeVisibleIndices()
     }
     
     /// Recompute visible line indices from cached lines + folding state
     private func recomputeVisibleIndices() {
-        guard let fid = fileId else {
+        // Skip fold filtering for very large files — O(n) isLineFolded too expensive
+        guard cachedLines.count <= 50_000, let fid = fileId else {
             cachedVisibleIndices = Array(0..<cachedLines.count)
             return
         }
@@ -82,7 +96,9 @@ struct MinimapView: View {
     }
 
 
+    @ViewBuilder
     var body: some View {
+        if LargeFileHandler.shared.currentTier.enableMinimap {
         GeometryReader { geometry in
             let size = geometry.size
             let minimapHeight = max(1, size.height)
@@ -138,6 +154,7 @@ struct MinimapView: View {
         .onAppear { recomputeLines() }
         .onChange(of: content) { _, _ in recomputeLines() }
         .onChange(of: foldingManager.collapsedLines) { _, _ in recomputeVisibleIndices() }
+    } // if enableMinimap
     }
 
     // MARK: - Layers

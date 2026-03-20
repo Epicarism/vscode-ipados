@@ -4,6 +4,7 @@
 //
 //  LRU cache for syntax highlighting tokens with incremental invalidation,
 //  memory pressure handling, and background pre-highlighting.
+//  Performance: O(1) get/put/evict via doubly-linked list + hash map.
 //
 
 import Foundation
@@ -33,6 +34,18 @@ struct HighlightToken: Sendable {
     let line: Int              // Line number (0-based)
 }
 
+// MARK: - LRU Doubly-Linked List Node
+
+private final class LRUNode {
+    let key: String
+    var prev: LRUNode?
+    var next: LRUNode?
+    
+    init(key: String) {
+        self.key = key
+    }
+}
+
 // MARK: - Syntax Highlight Cache
 
 actor SyntaxHighlightCache {
@@ -42,7 +55,11 @@ actor SyntaxHighlightCache {
     
     // Cache storage
     private var cache: [String: HighlightCacheEntry] = [:]  // key -> entry
-    private var accessOrder: [String] = []  // LRU order (most recent last)
+    
+    // O(1) LRU tracking via doubly-linked list + hash map
+    private var nodeMap: [String: LRUNode] = [:]  // key -> node for O(1) lookup
+    private var lruHead: LRUNode?  // Least recently used (evict from here)
+    private var lruTail: LRUNode?  // Most recently used (insert here)
     
     // Configuration
     private let maxCacheSizeBytes: Int = 50 * 1024 * 1024  // 50MB
@@ -61,9 +78,46 @@ actor SyntaxHighlightCache {
         "\(fileId):\(startLine)-\(endLine):\(language)"
     }
     
+    // MARK: - LRU List Operations (all O(1))
+    
+    /// Remove a node from the doubly-linked list
+    private func removeNode(_ node: LRUNode) {
+        let prev = node.prev
+        let next = node.next
+        prev?.next = next
+        next?.prev = prev
+        if lruHead === node { lruHead = next }
+        if lruTail === node { lruTail = prev }
+        node.prev = nil
+        node.next = nil
+    }
+    
+    /// Append a node to the tail (most recently used)
+    private func appendToTail(_ node: LRUNode) {
+        node.prev = lruTail
+        node.next = nil
+        lruTail?.next = node
+        lruTail = node
+        if lruHead == nil { lruHead = node }
+    }
+    
+    /// Move an existing node to tail (mark as most recently used)
+    private func moveToTail(_ node: LRUNode) {
+        guard lruTail !== node else { return }  // Already at tail
+        removeNode(node)
+        appendToTail(node)
+    }
+    
+    /// Remove and return the head node (least recently used)
+    private func removeHead() -> LRUNode? {
+        guard let head = lruHead else { return nil }
+        removeNode(head)
+        return head
+    }
+    
     // MARK: - Get/Put
     
-    /// Look up cached highlight tokens for a line range
+    /// Look up cached highlight tokens for a line range - O(1)
     func get(fileId: String, startLine: Int, endLine: Int, language: String) -> [HighlightToken]? {
         let key = cacheKey(fileId: fileId, startLine: startLine, endLine: endLine, language: language)
         
@@ -75,8 +129,10 @@ actor SyntaxHighlightCache {
         // Check TTL
         if Date().timeIntervalSince(entry.createdAt) > entryTTLSeconds {
             cache.removeValue(forKey: key)
-            accessOrder.removeAll { $0 == key }
-            currentSizeBytes -= entry.approximateSizeBytes
+            if let node = nodeMap.removeValue(forKey: key) {
+                removeNode(node)
+            }
+            currentSizeBytes = max(0, currentSizeBytes - entry.approximateSizeBytes)
             missCount += 1
             return nil
         }
@@ -86,15 +142,16 @@ actor SyntaxHighlightCache {
         entry.accessCount += 1
         cache[key] = entry
         
-        // Move to end of LRU list
-        accessOrder.removeAll { $0 == key }
-        accessOrder.append(key)
+        // Move to end of LRU list - O(1)
+        if let node = nodeMap[key] {
+            moveToTail(node)
+        }
         
         hitCount += 1
         return entry.tokens
     }
     
-    /// Store highlight tokens in cache
+    /// Store highlight tokens in cache - O(1)
     func put(fileId: String, startLine: Int, endLine: Int, language: String, tokens: [HighlightToken]) {
         let key = cacheKey(fileId: fileId, startLine: startLine, endLine: endLine, language: language)
         
@@ -108,14 +165,18 @@ actor SyntaxHighlightCache {
             accessCount: 1
         )
         
-        // Remove old entry if exists
+        // Remove old entry if exists - O(1)
         if let old = cache[key] {
-            currentSizeBytes -= old.approximateSizeBytes
-            accessOrder.removeAll { $0 == key }
+            currentSizeBytes = max(0, currentSizeBytes - old.approximateSizeBytes)
+            if let node = nodeMap[key] {
+                removeNode(node)
+            }
         }
         
         cache[key] = entry
-        accessOrder.append(key)
+        let node = LRUNode(key: key)
+        nodeMap[key] = node
+        appendToTail(node)
         currentSizeBytes += entry.approximateSizeBytes
         
         // Evict if over limits
@@ -124,14 +185,17 @@ actor SyntaxHighlightCache {
     
     // MARK: - Invalidation
     
-    /// Invalidate cache entries for a specific file
+    /// Invalidate cache entries for a specific file - O(k) where k = entries for file
     func invalidateFile(_ fileId: String) {
-        let keysToRemove = cache.keys.filter { $0.hasPrefix(fileId + ":") }
+        let prefix = fileId + ":"
+        let keysToRemove = cache.keys.filter { $0.hasPrefix(prefix) }
         for key in keysToRemove {
             if let entry = cache.removeValue(forKey: key) {
-                currentSizeBytes -= entry.approximateSizeBytes
+                currentSizeBytes = max(0, currentSizeBytes - entry.approximateSizeBytes)
             }
-            accessOrder.removeAll { $0 == key }
+            if let node = nodeMap.removeValue(forKey: key) {
+                removeNode(node)
+            }
         }
     }
     
@@ -139,26 +203,30 @@ actor SyntaxHighlightCache {
     func invalidateLines(fileId: String, changedRange: Range<Int>, contextLines: Int = 5) {
         let invalidStart = max(0, changedRange.lowerBound - contextLines)
         let invalidEnd = changedRange.upperBound + contextLines
+        let prefix = fileId + ":"
         
         let keysToRemove = cache.keys.filter { key in
-            guard key.hasPrefix(fileId + ":") else { return false }
+            guard key.hasPrefix(prefix) else { return false }
             guard let entry = cache[key] else { return false }
-            // Remove if the entry's line range overlaps with the invalidation range
             return entry.lineRange.overlaps(invalidStart..<invalidEnd)
         }
         
         for key in keysToRemove {
             if let entry = cache.removeValue(forKey: key) {
-                currentSizeBytes -= entry.approximateSizeBytes
+                currentSizeBytes = max(0, currentSizeBytes - entry.approximateSizeBytes)
             }
-            accessOrder.removeAll { $0 == key }
+            if let node = nodeMap.removeValue(forKey: key) {
+                removeNode(node)
+            }
         }
     }
     
     /// Clear entire cache
     func clear() {
         cache.removeAll()
-        accessOrder.removeAll()
+        nodeMap.removeAll()
+        lruHead = nil
+        lruTail = nil
         currentSizeBytes = 0
         Self.logger.info("Cache cleared")
     }
@@ -191,8 +259,9 @@ actor SyntaxHighlightCache {
     
     private func evictIfNeeded() {
         // Evict if over max entries
-        while cache.count > maxEntries, let key = accessOrder.first {
-            evictEntry(key: key)
+        while cache.count > maxEntries {
+            guard let evicted = evictLRUEntry() else { break }
+            _ = evicted
         }
         
         // Evict if over max size
@@ -200,16 +269,21 @@ actor SyntaxHighlightCache {
     }
     
     private func evictUntilSize(_ targetSize: Int) {
-        while currentSizeBytes > targetSize, let key = accessOrder.first {
-            evictEntry(key: key)
+        while currentSizeBytes > targetSize {
+            guard let _ = evictLRUEntry() else { break }
         }
     }
     
-    private func evictEntry(key: String) {
+    /// Evict the least recently used entry - O(1)
+    @discardableResult
+    private func evictLRUEntry() -> String? {
+        guard let head = removeHead() else { return nil }
+        let key = head.key
         if let entry = cache.removeValue(forKey: key) {
-            currentSizeBytes -= entry.approximateSizeBytes
+            currentSizeBytes = max(0, currentSizeBytes - entry.approximateSizeBytes)
             evictionCount += 1
         }
-        accessOrder.removeAll { $0 == key }
+        nodeMap.removeValue(forKey: key)
+        return key
     }
 }

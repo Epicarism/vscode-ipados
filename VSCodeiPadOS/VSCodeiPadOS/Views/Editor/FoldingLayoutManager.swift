@@ -93,14 +93,21 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         return max(0, lo - 1)
     }
     
-    /// Rebuild newline offset cache from text storage
+    /// Rebuild newline offset cache from text storage using fast NSString.range(of:) scanning
+    /// PERF: Uses NSString range search instead of character-by-character iteration
     private func rebuildLineOffsets(for text: NSString) {
         var offsets: [Int] = [0]
         offsets.reserveCapacity(text.length / 40)
-        for i in 0..<text.length {
-            if text.character(at: i) == 0x0A { // '\n'
-                offsets.append(i + 1)
-            }
+        var searchStart = 0
+        while searchStart < text.length {
+            let r = text.range(
+                of: "\n",
+                options: [],
+                range: NSRange(location: searchStart, length: text.length - searchStart)
+            )
+            if r.location == NSNotFound { break }
+            offsets.append(r.location + 1)
+            searchStart = r.location + 1
         }
         cachedLineStartOffsets = offsets
         cachedTextLength = text.length

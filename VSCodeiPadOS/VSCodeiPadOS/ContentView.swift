@@ -1042,6 +1042,7 @@ struct IDEEditorView: View {
     @State private var requestedCursorIndex: Int? = nil
     @State private var requestedLineSelection: Int? = nil
     @State private var gitGutterRefreshToken: Int = 0
+    @State private var foldDetectionWork: DispatchWorkItem?
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
@@ -1166,17 +1167,21 @@ struct IDEEditorView: View {
                             editorCore.updateCursorPosition(CursorPosition(line: currentLineNumber, column: currentColumn))
                             autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
                             showAutocomplete = autocomplete.showSuggestions
-                            foldingManager.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
+                            // Debounce fold detection — 1.5s after last edit
+                            foldDetectionWork?.cancel()
+                            let foldWork = DispatchWorkItem {
+                                CodeFoldingManager.shared.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
+                            }
+                            foldDetectionWork = foldWork
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: foldWork)
                             foldingManager.currentText = newValue
                             gitGutterRefreshToken &+= 1
                             
                             // Inline suggestion — manager handles debounce (300ms) + throttle (2s) internally
                             inlineSuggestionManager.clearSuggestion()
                             if newValue.count > 10 && !showAutocomplete {
-                                let lines = newValue.prefix(cursorIndex).split(separator: "\n", omittingEmptySubsequences: false)
-                                let line = lines.count
-                                let col = (lines.last?.count ?? 0) + 1
-                                inlineSuggestionManager.requestSuggestion(for: newValue, at: .init(line: line, column: col), fileName: tab.url?.lastPathComponent)
+                                // Use already-computed line/column instead of O(n) prefix scan
+                                inlineSuggestionManager.requestSuggestion(for: newValue, at: .init(line: currentLineNumber, column: currentColumn), fileName: tab.url?.lastPathComponent)
                             }
                         }
                         .onChange(of: cursorIndex) { _, newCursor in

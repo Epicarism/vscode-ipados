@@ -256,6 +256,93 @@ extension LanguageFoldConfig {
         minimumFoldLines: 2
     )
     
+    static let php = LanguageFoldConfig(
+        language: "php",
+        mappings: [
+            FoldTypeMapping(nodeType: "function_definition", foldType: .function, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "method_declaration", foldType: .function, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "class_declaration", foldType: .classOrStruct, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "interface_declaration", foldType: .protocolDeclaration, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "trait_declaration", foldType: .protocolDeclaration, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "namespace_definition", foldType: .extension, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "if_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "foreach_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "for_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "while_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "switch_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 3),
+            FoldTypeMapping(nodeType: "try_statement", foldType: .controlFlow, labelExtractor: .custom("try"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "enum_declaration", foldType: .enumDeclaration, labelExtractor: .namedChild("name"), minimumLines: 2),
+        ],
+        commentNodeTypes: ["comment"],
+        importNodeTypes: ["use_declaration", "namespace_use_declaration"],
+        minimumFoldLines: 2
+    )
+    
+    static let ruby = LanguageFoldConfig(
+        language: "ruby",
+        mappings: [
+            FoldTypeMapping(nodeType: "method", foldType: .function, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "singleton_method", foldType: .function, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "class", foldType: .classOrStruct, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "module", foldType: .extension, labelExtractor: .namedChild("name"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "if", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "unless", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "while", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "for", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "case", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 3),
+            FoldTypeMapping(nodeType: "begin", foldType: .controlFlow, labelExtractor: .custom("begin"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "do_block", foldType: .genericBlock, labelExtractor: .custom("do"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "block", foldType: .genericBlock, labelExtractor: .custom("block"), minimumLines: 3),
+        ],
+        commentNodeTypes: ["comment"],
+        importNodeTypes: ["call"],  // require/require_relative are method calls in Ruby
+        minimumFoldLines: 2
+    )
+    
+    static let kotlin = LanguageFoldConfig(
+        language: "kotlin",
+        mappings: [
+            FoldTypeMapping(nodeType: "function_declaration", foldType: .function, labelExtractor: .namedChild("simple_identifier"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "class_declaration", foldType: .classOrStruct, labelExtractor: .namedChild("type_identifier"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "object_declaration", foldType: .classOrStruct, labelExtractor: .namedChild("type_identifier"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "companion_object", foldType: .classOrStruct, labelExtractor: .custom("companion"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "if_expression", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "when_expression", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 3),
+            FoldTypeMapping(nodeType: "for_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "while_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "try_expression", foldType: .controlFlow, labelExtractor: .custom("try"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "lambda_literal", foldType: .genericBlock, labelExtractor: .custom("lambda"), minimumLines: 3),
+        ],
+        commentNodeTypes: ["line_comment", "multiline_comment"],
+        importNodeTypes: ["import_header"],
+        minimumFoldLines: 2
+    )
+    
+    static let html = LanguageFoldConfig(
+        language: "html",
+        mappings: [
+            FoldTypeMapping(nodeType: "element", foldType: .genericBlock, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "style_element", foldType: .genericBlock, labelExtractor: .custom("<style>"), minimumLines: 2),
+            FoldTypeMapping(nodeType: "script_element", foldType: .genericBlock, labelExtractor: .custom("<script>"), minimumLines: 2),
+        ],
+        commentNodeTypes: ["comment"],
+        importNodeTypes: [],
+        minimumFoldLines: 2
+    )
+    
+    static let css = LanguageFoldConfig(
+        language: "css",
+        mappings: [
+            FoldTypeMapping(nodeType: "rule_set", foldType: .genericBlock, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "media_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "keyframes_statement", foldType: .genericBlock, labelExtractor: .firstLine, minimumLines: 2),
+            FoldTypeMapping(nodeType: "supports_statement", foldType: .controlFlow, labelExtractor: .firstLine, minimumLines: 2),
+        ],
+        commentNodeTypes: ["comment"],
+        importNodeTypes: ["import_statement"],
+        minimumFoldLines: 2
+    )
+    
     static let allConfigs: [String: LanguageFoldConfig] = [
         "swift": .swift,
         "javascript": .javascript,
@@ -269,6 +356,18 @@ extension LanguageFoldConfig {
         "cpp": .cpp,
         "c++": .cpp,
         "java": .java,
+        "php": .php,
+        "ruby": .ruby,
+        "rb": .ruby,
+        "kotlin": .kotlin,
+        "kt": .kotlin,
+        "html": .html,
+        "htm": .html,
+        "vue": .html,
+        "svelte": .html,
+        "css": .css,
+        "scss": .css,
+        "less": .css,
     ]
     
     static func forLanguage(_ language: String) -> LanguageFoldConfig? {
@@ -347,14 +446,215 @@ final class TreeSitterFoldingEngine {
         return regions
     }
     
+    /// Detect fold regions from source text using language-aware fallback.
+    /// Uses brace matching enhanced with language-specific comment/import detection.
     func detectFoldRegions(
         source: String,
         language: String
     ) -> [FoldRegion] {
         let startTime = CACurrentMediaTime()
-        let regions = detectFallbackRegions(source: source)
+        let regions: [FoldRegion]
+        
+        if let config = LanguageFoldConfig.forLanguage(language) {
+            // Use language-aware fallback that applies config's comment/import patterns
+            regions = detectLanguageAwareFallbackRegions(source: source, config: config)
+        } else {
+            // No config for this language - pure brace matching
+            regions = detectFallbackRegions(source: source)
+        }
+        
         lastDetectionTimeMs = (CACurrentMediaTime() - startTime) * 1000
         return regions
+    }
+    
+    /// Language-aware fallback: brace matching + config-based comment/import grouping + MARK regions
+    private func detectLanguageAwareFallbackRegions(
+        source: String,
+        config: LanguageFoldConfig
+    ) -> [FoldRegion] {
+        let lines = source.components(separatedBy: "\n")
+        var regions: [FoldRegion] = []
+        var braceStack: [(line: Int, indent: Int)] = []
+        
+        // Brace matching for block detection
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let indent = line.count - line.drop(while: { $0 == " " || $0 == "\t" }).count
+            
+            if trimmed.hasSuffix("{") {
+                braceStack.append((i, indent))
+            }
+            
+            if trimmed.hasPrefix("}") {
+                if let start = braceStack.popLast() {
+                    if i - start.line >= minimumFoldLines {
+                        // Try to classify the block using the opening line
+                        let startLine = lines[start.line].trimmingCharacters(in: .whitespaces)
+                        let foldType = classifyBlock(openingLine: startLine, config: config)
+                        let label = extractBlockLabel(openingLine: startLine, foldType: foldType)
+                        regions.append(FoldRegion(
+                            startLine: start.line,
+                            endLine: i,
+                            isFolded: false,
+                            type: foldType,
+                            label: label
+                        ))
+                    }
+                }
+            }
+        }
+        
+        // Python/Ruby-style indent-based block detection for languages without braces
+        if config.language == "python" || config.language == "ruby" {
+            let indentRegions = detectIndentBasedRegions(lines: lines, config: config)
+            regions.append(contentsOf: indentRegions)
+        }
+        
+        // Detect consecutive single-line comments as foldable groups
+        if enableCommentGrouping {
+            let commentRegions = detectCommentGroupsFallback(lines: lines, config: config)
+            regions.append(contentsOf: commentRegions)
+        }
+        
+        // Detect consecutive import lines as foldable groups
+        if enableImportGrouping {
+            let importRegions = detectImportGroupsFallback(lines: lines, config: config)
+            regions.append(contentsOf: importRegions)
+        }
+        
+        // MARK/region detection
+        regions.append(contentsOf: detectMarkRegions(lines: lines))
+        
+        regions.sort { $0.startLine < $1.startLine }
+        return deduplicateRegions(regions)
+    }
+    
+    /// Classify a block by examining its opening line against known patterns
+    private func classifyBlock(openingLine: String, config: LanguageFoldConfig) -> FoldType {
+        let lower = openingLine.lowercased()
+        
+        // Function patterns
+        if lower.hasPrefix("func ") || lower.hasPrefix("function ") || lower.contains("fun ") ||
+           lower.hasPrefix("def ") || lower.hasPrefix("fn ") || lower.contains("-> {") {
+            return .function
+        }
+        // Class/struct patterns
+        if lower.hasPrefix("class ") || lower.hasPrefix("struct ") || lower.hasPrefix("actor ") {
+            return .classOrStruct
+        }
+        // Enum
+        if lower.hasPrefix("enum ") {
+            return .enumDeclaration
+        }
+        // Protocol/interface
+        if lower.hasPrefix("protocol ") || lower.hasPrefix("interface ") || lower.hasPrefix("trait ") {
+            return .protocolDeclaration
+        }
+        // Extension/impl
+        if lower.hasPrefix("extension ") || lower.hasPrefix("impl ") || lower.hasPrefix("module ") || lower.hasPrefix("namespace ") {
+            return .extension
+        }
+        // Control flow
+        if lower.hasPrefix("if ") || lower.hasPrefix("else ") || lower.hasPrefix("else{") ||
+           lower.hasPrefix("for ") || lower.hasPrefix("while ") || lower.hasPrefix("switch ") ||
+           lower.hasPrefix("do ") || lower.hasPrefix("do{") || lower.hasPrefix("guard ") ||
+           lower.hasPrefix("try ") || lower.hasPrefix("catch ") || lower.hasPrefix("case ") ||
+           lower.hasPrefix("foreach ") || lower.hasPrefix("unless ") || lower.hasPrefix("when ") {
+            return .controlFlow
+        }
+        // Comment block
+        if lower.hasPrefix("/*") || lower.hasPrefix("/**") {
+            return .comment
+        }
+        return .genericBlock
+    }
+    
+    /// Extract a human-readable label from the opening line of a block
+    private func extractBlockLabel(openingLine: String, foldType: FoldType) -> String? {
+        let trimmed = openingLine.trimmingCharacters(in: .whitespaces)
+        // Extract name after keyword
+        let keywords = ["func ", "function ", "class ", "struct ", "enum ", "protocol ",
+                        "interface ", "extension ", "impl ", "trait ", "module ", "namespace ",
+                        "def ", "fn ", "fun ", "actor ", "object "]
+        for kw in keywords {
+            if trimmed.lowercased().hasPrefix(kw) {
+                let rest = String(trimmed.dropFirst(kw.count))
+                let name = rest.prefix(while: { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "<" })
+                if !name.isEmpty { return String(name) }
+            }
+        }
+        return nil
+    }
+    
+    /// Detect indent-based fold regions for Python/Ruby
+    private func detectIndentBasedRegions(lines: [String], config: LanguageFoldConfig) -> [FoldRegion] {
+        var regions: [FoldRegion] = []
+        let blockStarters = ["def ", "class ", "if ", "elif ", "else:", "for ", "while ",
+                             "try:", "except ", "except:", "finally:", "with ", "async def ",
+                             "async for ", "async with ", "match ", "case "]
+        
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            
+            let isStarter = blockStarters.contains(where: { trimmed.hasPrefix($0) }) && trimmed.hasSuffix(":")
+            guard isStarter else { continue }
+            
+            let baseIndent = line.prefix(while: { $0 == " " || $0 == "\t" }).count
+            var endLine = i
+            
+            for j in (i + 1)..<lines.count {
+                let nextLine = lines[j]
+                let nextTrimmed = nextLine.trimmingCharacters(in: .whitespaces)
+                if nextTrimmed.isEmpty { continue }  // Skip blank lines
+                let nextIndent = nextLine.prefix(while: { $0 == " " || $0 == "\t" }).count
+                if nextIndent > baseIndent {
+                    endLine = j
+                } else {
+                    break
+                }
+            }
+            
+            if endLine - i >= config.minimumFoldLines {
+                let foldType = classifyBlock(openingLine: trimmed, config: config)
+                regions.append(FoldRegion(
+                    startLine: i,
+                    endLine: endLine,
+                    isFolded: false,
+                    type: foldType,
+                    label: extractBlockLabel(openingLine: trimmed, foldType: foldType)
+                ))
+            }
+        }
+        return regions
+    }
+    
+    /// Detect comment groups using line-by-line patterns
+    private func detectCommentGroupsFallback(lines: [String], config: LanguageFoldConfig) -> [FoldRegion] {
+        var commentLines: [Int] = []
+        let commentPrefixes = ["//", "#", "--", "/*", "*", "*/"]
+        
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if commentPrefixes.contains(where: { trimmed.hasPrefix($0) }) {
+                commentLines.append(i)
+            }
+        }
+        return groupConsecutiveLines(commentLines, type: .comment, label: "comments", minGroup: 3)
+    }
+    
+    /// Detect import groups using line-by-line patterns
+    private func detectImportGroupsFallback(lines: [String], config: LanguageFoldConfig) -> [FoldRegion] {
+        var importLines: [Int] = []
+        let importKeywords = ["import ", "from ", "use ", "require(", "#include", "using ", "@import"]
+        
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if importKeywords.contains(where: { trimmed.hasPrefix($0) }) {
+                importLines.append(i)
+            }
+        }
+        return groupConsecutiveLines(importLines, type: .importStatement, label: "imports", minGroup: 3)
     }
     
     func updateFoldRegions(

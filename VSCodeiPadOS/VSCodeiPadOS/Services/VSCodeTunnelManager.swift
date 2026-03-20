@@ -26,6 +26,7 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
         case vscodeDevTunnel = "VS Code Tunnel"
         case codeServer = "code-server"
         case codespaces = "GitHub Codespaces"
+        case sshTunnel = "SSH Tunnel"
         case custom = "Custom URL"
         
         var icon: String {
@@ -33,6 +34,7 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
             case .vscodeDevTunnel: return "bolt.fill"
             case .codeServer: return "server.rack"
             case .codespaces: return "cloud.fill"
+            case .sshTunnel: return "terminal.fill"
             case .custom: return "link"
             }
         }
@@ -42,6 +44,7 @@ struct TunnelConfig: Codable, Identifiable, Equatable {
             case .vscodeDevTunnel: return "https://vscode.dev/tunnel/machine-name"
             case .codeServer: return "https://your-server.com:8080"
             case .codespaces: return "https://codespace-name.github.dev"
+            case .sshTunnel: return "Configured via SSH connection"
             case .custom: return "https://..."
             }
         }

@@ -943,9 +943,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                     cursorLocation: range.location,
                     filename: parent.filename
                 ) {
-                    let ms = NSMutableString(string: textView.text)
-                    ms.replaceCharacters(in: abbrevRange, with: expansion)
-                    textView.text = ms as String
+                    textView.text = (textView.text as NSString).replacingCharacters(in: abbrevRange, with: expansion)
                     let cursorPos = abbrevRange.location + (expansion as NSString).length
                     textView.selectedRange = NSRange(location: cursorPos, length: 0)
                     textViewDidChange(textView)
@@ -956,9 +954,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let tabSz = max(1, parent.tabSize)
                 let spaces = parent.insertSpaces
                 let indentStr = spaces ? String(repeating: " ", count: tabSz) : "\t"
-                let ms = NSMutableString(string: textView.text)
-                ms.replaceCharacters(in: range, with: indentStr)
-                textView.text = ms as String
+                textView.text = (textView.text as NSString).replacingCharacters(in: range, with: indentStr)
                 textView.selectedRange = NSRange(location: range.location + indentStr.count, length: 0)
                 textViewDidChange(textView)
                 return false
@@ -991,7 +987,6 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let spaces = parent.insertSpaces
                 let oneLevel = spaces ? String(repeating: " ", count: tabSz) : "\t"
 
-                let ms = NSMutableString(string: nsText)
                 let insertion: String
                 var newCursor: Int
 
@@ -1004,19 +999,16 @@ struct RunestoneEditorView: UIViewRepresentable {
                     if isCloser {
                         // Split: <newline><indent+1>  <cursor>  <newline><indent>
                         insertion = "\n" + indent + oneLevel + "\n" + indent
-                        ms.replaceCharacters(in: range, with: insertion)
-                        textView.text = ms as String
+                        textView.text = nsText.replacingCharacters(in: range, with: insertion)
                         newCursor = range.location + 1 + indent.count + oneLevel.count
                     } else {
                         insertion = "\n" + indent + oneLevel
-                        ms.replaceCharacters(in: range, with: insertion)
-                        textView.text = ms as String
+                        textView.text = nsText.replacingCharacters(in: range, with: insertion)
                         newCursor = range.location + insertion.count
                     }
                 } else {
                     insertion = "\n" + indent
-                    ms.replaceCharacters(in: range, with: insertion)
-                    textView.text = ms as String
+                    textView.text = nsText.replacingCharacters(in: range, with: insertion)
                     newCursor = range.location + insertion.count
                 }
 
@@ -1054,13 +1046,16 @@ struct RunestoneEditorView: UIViewRepresentable {
                 // Heuristic: count unescaped occurrences of the same quote before cursor.
                 // Odd count → inside a string → don't double-close.
                 if text == "\"" || text == "'" || text == "`" {
-                    let before = nsText.substring(to: range.location)
+                    // Bounded backward scan — only check last 2000 chars for quote parity
+                    // Avoids O(n) full-file copy that kills performance on large files
+                    let scanStart = max(0, range.location - 2000)
+                    let scanLen = range.location - scanStart
+                    let before = nsText.substring(with: NSRange(location: scanStart, length: scanLen))
                     var count = 0
                     var i = before.startIndex
                     while i < before.endIndex {
                         let c = String(before[i])
                         if c == "\\" {
-                            // skip the escaped character
                             let ni = before.index(after: i)
                             if ni < before.endIndex { i = before.index(after: ni) } else { break }
                             continue
@@ -1075,9 +1070,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                 }
 
                 let insertion = text + pair.close
-                let ms = NSMutableString(string: nsText)
-                ms.replaceCharacters(in: range, with: insertion)
-                textView.text = ms as String
+                let result = nsText.replacingCharacters(in: range, with: insertion)
+                textView.text = result
                 textView.selectedRange = NSRange(location: range.location + text.count, length: 0)
                 textViewDidChange(textView)
                 return false
@@ -1181,9 +1175,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let reindentedText = reindentedLines.joined(separator: "\n")
 
                 // --- 7. Insert re-indented text and position cursor at its end ---
-                let ms = NSMutableString(string: nsText)
-                ms.replaceCharacters(in: range, with: reindentedText)
-                textView.text = ms as String
+                textView.text = nsText.replacingCharacters(in: range, with: reindentedText)
                 let newCursorPos = range.location + (reindentedText as NSString).length
                 textView.selectedRange = NSRange(location: newCursorPos, length: 0)
                 textViewDidChange(textView)
