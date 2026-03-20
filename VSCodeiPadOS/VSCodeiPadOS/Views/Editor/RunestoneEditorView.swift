@@ -718,7 +718,9 @@ struct RunestoneEditorView: UIViewRepresentable {
 
             // Mark that user has edited - blocks setState() calls until file switch
             hasBeenEdited = true
-            
+
+            // Record text layout timing for performance monitoring
+            let layoutStart = CACurrentMediaTime()
             // Cancel any pending debounced update
             textSyncWorkItem?.cancel()
             
@@ -733,7 +735,13 @@ struct RunestoneEditorView: UIViewRepresentable {
                     self.parent.text = textView.text
                     // Keep CodeFoldingManager's shadow text in sync with user edits
                     CodeFoldingManager.shared.currentText = textView.text
-                    
+
+                    // Invalidate syntax highlight cache for this file
+                    let filename = self.parent.filename
+                    Task {
+                        await SyntaxHighlightCache.shared.invalidateFile(filename)
+                    }
+
                     // PERF: Use cached newline offsets instead of re-scanning
                     self.parent.totalLines = self.newlineOffsets.count + 1
                 }
@@ -742,6 +750,10 @@ struct RunestoneEditorView: UIViewRepresentable {
             // Schedule the update after debounce interval
             textSyncWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+
+            // Record layout time for perf monitor degradation decisions
+            let layoutMs = (CACurrentMediaTime() - layoutStart) * 1000
+            EditorPerformanceMonitor.shared.recordTextLayoutTime(layoutMs)
         }
         
         /// Immediately sync text to SwiftUI binding (call on save/tab-switch)

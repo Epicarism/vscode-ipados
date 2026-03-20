@@ -605,7 +605,7 @@ struct PaneEditorView: View {
                 }
                 
                 // Mini minimap
-                if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap {
+                if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap && !EditorPerformanceMonitor.shared.shouldDegradeFeatures {
                 MinimapView(
                     content: text,
                     fileId: fileId,
@@ -622,7 +622,7 @@ struct PaneEditorView: View {
             }
             // Sticky Header Overlay (FEAT-040)
             // Shown only when the user has "Sticky Scroll" enabled in Settings.
-            if stickyScroll && LargeFileHandler.shared.currentTier.enableStickyHeaders {
+            if stickyScroll && LargeFileHandler.shared.currentTier.enableStickyHeaders && !EditorPerformanceMonitor.shared.shouldDegradeFeatures {
                 StickyHeaderView(
                     text: text,
                     currentLine: scrollPosition,
@@ -640,7 +640,7 @@ struct PaneEditorView: View {
             }
             
             // Inlay Hints Overlay (type hints, parameter names)
-            if LargeFileHandler.shared.currentTier.enableInlayHints {
+            if LargeFileHandler.shared.currentTier.enableInlayHints && !EditorPerformanceMonitor.shared.shouldDegradeFeatures {
             InlayHintsOverlay(
                 code: text,
                 language: tab.language,
@@ -676,8 +676,10 @@ struct PaneEditorView: View {
                 .allowsHitTesting(false)
                 .clipped()
             }
-            // Breakpoint gutter
-            breakpointGutterOverlay(geometry: geometry)
+            // Breakpoint gutter (skip when performance degraded)
+            if !EditorPerformanceMonitor.shared.shouldDegradeFeatures {
+                breakpointGutterOverlay(geometry: geometry)
+            }
 
             // Peek Definition Overlay
             if let peekState = editorCore.peekState, editorCore.activeTabId == tab.id {

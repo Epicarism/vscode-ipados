@@ -438,6 +438,8 @@ class EditorCore: ObservableObject {
                 Task {
                     await SyntaxHighlightCache.shared.handleMemoryPressure()
                 }
+                // Purge viewport highlight tokens for non-visible regions
+                ViewportHighlightManager.shared.handleMemoryPressure()
             }
         }
 
@@ -1576,7 +1578,36 @@ mod tests {
                 if retained { releaseSecurityScopedAccess(to: url) }
                 return
             }
-            
+
+            // Use incremental loading for files > 1MB to avoid blocking the main thread
+            if fileSize > 1_000_000 {
+                LargeFileHandler.shared.loadFileIncrementally(
+                    url: url,
+                    chunkSize: 65536,
+                    progress: { _ in
+                        // Progress tracked automatically via LargeFileHandler.loadProgress
+                    },
+                    completion: { [weak self] result in
+                        MainActor.assumeIsolated {
+                            guard let self = self else { return }
+                            switch result {
+                            case .success(let content):
+                                let newTab = Tab(fileName: url.lastPathComponent, content: content, url: url, fileEncoding: String.Encoding.utf8.rawValue)
+                                self.tabs.append(newTab)
+                                self.activeTabId = newTab.id
+                                self.updateLargeFileStatus()
+                                Task { @MainActor in RecentFileManager.shared.addRecentFile(url) }
+                                SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
+                            case .failure(let error):
+                                AppLogger.editor.error("Error loading large file incrementally: \(error)")
+                                if retained { self.releaseSecurityScopedAccess(to: url) }
+                            }
+                        }
+                    }
+                )
+                return
+            }
+
             let data = try Data(contentsOf: url)
             guard let result = detectEncodedContent(from: data) else {
                 AppLogger.editor.error("Error opening file: unable to decode contents of \(url.lastPathComponent)")
