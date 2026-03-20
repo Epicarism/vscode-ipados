@@ -110,6 +110,9 @@ final class CodeFoldingManager: ObservableObject {
     /// line range and merges with existing regions. Much cheaper than a full re-parse.
     /// Call this from text-change handlers instead of detectFoldableRegions when possible.
     func incrementalUpdateFoldRegions(in code: String, editedLineRange: ClosedRange<Int>, filePath: String? = nil) {
+        // Skip for large files where fold detection is disabled
+        guard LargeFileHandler.shared.currentTier.enableFoldDetection else { return }
+
         // Ensure currentFilePath / currentFileId are set
         if let filePath = filePath {
             self.currentFilePath = filePath
@@ -147,10 +150,16 @@ final class CodeFoldingManager: ObservableObject {
 
     /// Detects all foldable regions in the given code
     func detectFoldableRegions(in code: String, filePath: String? = nil) {
+        // Skip fold detection for very large files to avoid jank
+        let tier = LargeFileHandler.shared.currentTier
+        guard tier.enableFoldDetection else {
+            AppLogger.editor.info("Fold detection skipped — file tier \(String(describing: tier)) disables it")
+            return
+        }
+
         self.currentFilePath = filePath
         // Use filePath if available; fall back to "__in_memory__" so currentFileId is never nil
         self.currentFileId = filePath ?? "__in_memory__"
-        
         // Try TreeSitter-based detection first (more accurate for supported languages)
         let fileExtension = (currentFilePath as NSString?)?.pathExtension ?? ""
         let treeSitterRegions = treeSitterEngine.detectFoldRegions(source: code, language: fileExtension)

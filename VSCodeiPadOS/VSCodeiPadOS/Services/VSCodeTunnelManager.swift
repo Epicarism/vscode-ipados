@@ -247,6 +247,7 @@ class TunnelManager: ObservableObject {
                     Self.logger.info("Tunnel reachable (status: \(httpResponse.statusCode))")
                     connectionState = .connected
                     isConnected = true
+                    self.webViewURL = url  // FIX: Set webViewURL so TunnelWebView navigates
                     startHealthMonitoring(url: url)
                 } else {
                     let msg = "Server returned status \(httpResponse.statusCode)"
@@ -267,6 +268,7 @@ class TunnelManager: ObservableObject {
                 Self.logger.info("Timed out but allowing WebView connection attempt")
                 connectionState = .connected
                 isConnected = true
+                self.webViewURL = url  // FIX: Set webViewURL even on timeout — WebView may still work
                 connectionWarning = "Server took too long to respond. The page may not load correctly."
                 startHealthMonitoring(url: url)
             } else {

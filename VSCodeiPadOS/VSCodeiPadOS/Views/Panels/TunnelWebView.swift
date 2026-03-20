@@ -18,10 +18,26 @@ import os
 private final class KeyCommandWebView: WKWebView {
 
     private static let shortcuts: [(input: String, modifiers: UIKeyModifierFlags, jsKey: String, label: String)] = [
+        // File operations
         ("s", [.command],         "s", "Save (Cmd+S)"),
+        ("n", [.command],         "n", "New File (Cmd+N)"),
+        ("w", [.command],         "w", "Close Tab (Cmd+W)"),
+        // Edit operations
         ("z", [.command],         "z", "Undo (Cmd+Z)"),
         ("z", [.command, .shift], "Z", "Redo (Cmd+Shift+Z)"),
+        ("c", [.command],         "c", "Copy (Cmd+C)"),
+        ("v", [.command],         "v", "Paste (Cmd+V)"),
+        ("x", [.command],         "x", "Cut (Cmd+X)"),
+        ("a", [.command],         "a", "Select All (Cmd+A)"),
+        // Navigation
         ("p", [.command],         "p", "Go to File (Cmd+P)"),
+        ("p", [.command, .shift], "P", "Command Palette (Cmd+Shift+P)"),
+        ("f", [.command],         "f", "Find (Cmd+F)"),
+        ("f", [.command, .shift], "F", "Find in Files (Cmd+Shift+F)"),
+        ("g", [.command],         "g", "Go to Line (Cmd+G)"),
+        // Panels
+        ("b", [.command],         "b", "Toggle Sidebar (Cmd+B)"),
+        ("`", [.command],         "`", "Toggle Terminal (Cmd+`)"),
     ]
 
     override var keyCommands: [UIKeyCommand]? {
@@ -154,7 +170,7 @@ struct TunnelWebView: UIViewRepresentable {
         context.coordinator.webView = webView
         
         // Load the tunnel URL
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
+        let request = URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData)
         webView.load(request)
         
         Self.logger.info("Loading tunnel URL: \(url.absoluteString)")
@@ -164,7 +180,8 @@ struct TunnelWebView: UIViewRepresentable {
     
     func updateUIView(_ webView: WKWebView, context: Context) {
         // Only reload if URL actually changed
-        if webView.url?.host != url.host || webView.url?.path != url.path {
+        // FIX: Compare full URL (including query/fragment) so token refreshes trigger reload
+        if webView.url?.absoluteString != url.absoluteString {
             webView.load(URLRequest(url: url))
         }
     }
@@ -180,7 +197,7 @@ struct TunnelWebView: UIViewRepresentable {
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(tunnelManager: tunnelManager)
+        Coordinator(tunnelManager: tunnelManager, url: url)
     }
     
     // MARK: - Bridge JavaScript
@@ -347,11 +364,13 @@ struct TunnelWebView: UIViewRepresentable {
         private static let logger = Logger(subsystem: "com.codepad.app", category: "TunnelWebViewCoordinator")
         
         var tunnelManager: TunnelManager
+        var tunnelURL: URL
         weak var webView: WKWebView?
         private var loadStartTime: CFAbsoluteTime = 0
         
-        init(tunnelManager: TunnelManager) {
+        init(tunnelManager: TunnelManager, url: URL) {
             self.tunnelManager = tunnelManager
+            self.tunnelURL = url
             super.init()
         }
         
@@ -465,10 +484,17 @@ struct TunnelWebView: UIViewRepresentable {
             _ webView: WKWebView,
             respondTo challenge: URLAuthenticationChallenge
         ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
-            // Accept self-signed certificates for local tunnel servers
+            // Accept self-signed certificates ONLY for the configured tunnel host
+            // to prevent MITM attacks on arbitrary HTTPS connections
             if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
                let trust = challenge.protectionSpace.serverTrust {
-                return (.useCredential, URLCredential(trust: trust))
+                let challengeHost = challenge.protectionSpace.host
+                let tunnelHost = self.tunnelURL.host ?? ""
+                // Allow self-signed certs for: tunnel host, localhost, 127.0.0.1, any .local address
+                let trustedHosts: Set<String> = [tunnelHost, "localhost", "127.0.0.1", "::1"]
+                if trustedHosts.contains(challengeHost) || challengeHost.hasSuffix(".local") {
+                    return (.useCredential, URLCredential(trust: trust))
+                }
             }
             return (.performDefaultHandling, nil)
         }

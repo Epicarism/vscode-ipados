@@ -327,7 +327,8 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             context.coordinator.lastHighlightedScrollY = textView.contentOffset.y
             textView.selectedRange = selectedRange
         } else if context.coordinator.lastThemeId != ThemeManager.shared.currentTheme.id {
-            // Re-apply highlighting if theme changed
+            // Re-apply highlighting if theme changed — also invalidate viewport cache
+            context.coordinator.invalidateViewportCache()
             if text.count > 50000 {
                 context.coordinator.applyVisibleRangeHighlighting(to: textView)
             } else {
@@ -447,6 +448,38 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         /// highlight pass was already in-flight.  Checked after the pass completes
         /// so the newly-visible range is highlighted without a second user gesture.
         private var pendingScrollHighlight = false
+
+        // PERF: Viewport highlight cache — avoids re-running regex when scrolling
+        // back to a previously-highlighted range. Keyed by (charRange, themeId, filename).
+        private struct ViewportCacheKey: Hashable {
+            let location: Int
+            let length: Int
+            let themeId: String
+            let filename: String
+        }
+        private var viewportHighlightCache: [ViewportCacheKey: NSAttributedString] = [:]
+        private let maxViewportCacheEntries = 20
+        private var viewportCacheOrder: [ViewportCacheKey] = []  // LRU order (oldest first)
+
+        /// Invalidate all viewport highlight cache entries (call on text change / theme change)
+        /// Invalidate all viewport highlight cache entries (call on text change / theme change)
+        func invalidateViewportCache() {
+            viewportHighlightCache.removeAll()
+            viewportCacheOrder.removeAll()
+        }
+
+        /// Store a viewport highlight result in the cache with LRU eviction
+        private func cacheViewportHighlight(_ result: NSAttributedString, forKey key: ViewportCacheKey) {
+            if viewportHighlightCache[key] == nil {
+                viewportCacheOrder.append(key)
+            }
+            viewportHighlightCache[key] = result
+            // Evict oldest entries if over limit
+            while viewportCacheOrder.count > maxViewportCacheEntries {
+                let evicted = viewportCacheOrder.removeFirst()
+                viewportHighlightCache.removeValue(forKey: evicted)
+            }
+        }
         
         // PERF: Track whether text changed since last highlight to skip redundant
         // re-highlighting on keyboard appear (textViewDidBeginEditing)
@@ -488,6 +521,8 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         }
         
         func textViewDidChange(_ textView: UITextView) {
+            // PERF: Invalidate viewport highlight cache — text changed, cached highlights are stale
+            invalidateViewportCache()
             textChangedSinceLastHighlight = true
             // PERF: Debounce SwiftUI binding update — cancel previous, schedule new with 300ms delay.
             // Immediate propagation is handled by textViewDidEndEditing and syncTextImmediately().
@@ -663,7 +698,47 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             let rangeStart = max(0, visibleCharRange.location - bufferChars)
             let rangeEnd = min(text.utf16.count, visibleCharRange.location + visibleCharRange.length + bufferChars)
             visibleCharRange = NSRange(location: rangeStart, length: rangeEnd - rangeStart)
-            
+
+            // PERF: Check viewport highlight cache before spawning background work
+            let cacheKey = ViewportCacheKey(
+                location: visibleCharRange.location,
+                length: visibleCharRange.length,
+                themeId: theme.id,
+                filename: filename
+            )
+            if let cachedHighlight = viewportHighlightCache[cacheKey] {
+                // Cache hit — apply directly on main thread, skip background regex
+                let textStorage = textView.textStorage
+                let baseFont = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+                let baseColor = UIColor(theme.editorForeground)
+                let safeApplyRange = NSRange(location: visibleCharRange.location, length: min(visibleCharRange.length, textStorage.length - visibleCharRange.location))
+                guard safeApplyRange.length > 0 else {
+                    isApplyingHighlighting = false
+                    return
+                }
+                textStorage.beginEditing()
+                textStorage.addAttribute(.font, value: baseFont, range: safeApplyRange)
+                textStorage.addAttribute(.foregroundColor, value: baseColor, range: safeApplyRange)
+                cachedHighlight.enumerateAttributes(in: NSRange(location: 0, length: cachedHighlight.length), options: []) { attrs, range, _ in
+                    let targetRange = NSRange(location: safeApplyRange.location + range.location, length: range.length)
+                    if targetRange.location + targetRange.length <= textStorage.length {
+                        for (key, value) in attrs {
+                            textStorage.addAttribute(key, value: value, range: targetRange)
+                        }
+                    }
+                }
+                textStorage.endEditing()
+                textView.selectedRange = selectedRange
+                textView.typingAttributes = [.font: baseFont, .foregroundColor: baseColor]
+                self.lastThemeId = theme.id
+                isApplyingHighlighting = false
+                if pendingScrollHighlight {
+                    pendingScrollHighlight = false
+                    applyVisibleRangeHighlighting(to: textView)
+                }
+                return
+            }
+
             // Process highlighting on background thread
             let capturedCharRange = visibleCharRange
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -723,7 +798,15 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     ]
                     
                     self.lastThemeId = theme.id
-                    
+
+                    // PERF: Cache this viewport highlight result for scroll-back reuse
+                    let resultCacheKey = ViewportCacheKey(
+                        location: safeRange.location,
+                        length: safeRange.length,
+                        themeId: theme.id,
+                        filename: filename
+                    )
+                    self.cacheViewportHighlight(highlightedVisible, forKey: resultCacheKey)
                     // If a scroll-triggered highlight was requested while we were busy,
                     // re-highlight now for the current visible range.
                     if self.pendingScrollHighlight {
