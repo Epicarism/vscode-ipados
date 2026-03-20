@@ -177,6 +177,13 @@ struct RunestoneEditorView: UIViewRepresentable {
             self.totalLines = self.countLines(in: text)
         }
         
+        // Initial fold region detection — detect foldable regions for the loaded file
+        let capturedFilename = filename
+        let capturedText = text
+        DispatchQueue.main.async {
+            CodeFoldingManager.shared.detectFoldableRegions(in: capturedText, filePath: capturedFilename)
+        }
+        
         return textView
     }
     
@@ -759,6 +766,16 @@ struct RunestoneEditorView: UIViewRepresentable {
 
                     // PERF: Use cached newline offsets instead of re-scanning
                     self.parent.totalLines = self.newlineOffsets.count + 1
+
+                    // Incremental fold region detection after text change
+                    let editedLine = self.parent.currentLineNumber
+                    let totalLineCount = self.newlineOffsets.count + 1
+                    let foldEditRange = max(0, editedLine - 3)...min(editedLine + 3, max(0, totalLineCount - 1))
+                    CodeFoldingManager.shared.incrementalUpdateFoldRegions(
+                        in: textView.text,
+                        editedLineRange: foldEditRange,
+                        filePath: filename
+                    )
                 }
             }
             

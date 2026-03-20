@@ -354,11 +354,29 @@ struct BreakpointGutterView: View {
     @State private var editingLine: Int = 0
     @State private var conditionText: String = ""
     @State private var selectedBreakpointType: BreakpointType = .conditional
-    
+    @ObservedObject private var debugManager = DebugManager.shared
+
     private let gutterWidth: CGFloat = 28
     
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // Debug current-line highlight
+            if let debugLine = currentDebugLine, visibleLineRange.contains(debugLine) {
+                let yPos = yPosition(for: debugLine)
+                // Yellow semi-transparent background spanning full gutter width
+                Color.yellow.opacity(0.3)
+                    .frame(width: gutterWidth, height: lineHeight)
+                    .position(x: gutterWidth / 2, y: yPos)
+                    .allowsHitTesting(false)
+                // Green play arrow overlaid on top
+                Image(systemName: "play.fill")
+                    .font(.system(size: min(lineHeight - 6, 10)))
+                    .foregroundColor(.green)
+                    .shadow(color: Color.green.opacity(0.6), radius: 2)
+                    .frame(width: gutterWidth, height: lineHeight)
+                    .position(x: gutterWidth / 2, y: yPos)
+                    .allowsHitTesting(false)
+            }
             // Breakpoint indicators
             ForEach(visibleBreakpoints, id: \.line) { bp in
                 breakpointIndicator(for: bp)
@@ -418,7 +436,15 @@ struct BreakpointGutterView: View {
         let lineIndex = CGFloat((displayLine ?? 0) - (displayStart ?? 0))
         return contentTopInset + (lineIndex + 0.5) * lineHeight
     }
-    
+
+    /// Returns the 1-based current execution line if this file is the active debug file.
+    var currentDebugLine: Int? {
+        guard let file = debugManager.currentFile,
+              file == filePath,
+              let line = debugManager.currentLine else { return nil }
+        return line + 1  // convert 0-based to 1-based
+    }
+
     // MARK: - Breakpoint Indicator
     
     @ViewBuilder
