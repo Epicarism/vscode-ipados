@@ -591,7 +591,22 @@ struct ContentView: View {
                 }
                 
                 VStack(spacing: 0) {
-                    TabBarView(tabs: $editorCore.tabs, activeTabId: $editorCore.activeTabId, editorCore: editorCore, themeManager: ThemeManager.shared)
+                    HStack(spacing: 0) {
+                        TabBarView(tabs: $editorCore.tabs, activeTabId: $editorCore.activeTabId, editorCore: editorCore, themeManager: ThemeManager.shared)
+                        Button {
+                            editorCore.isSplitMode.toggle()
+                        } label: {
+                            Image(systemName: editorCore.isSplitMode ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundColor(editorCore.isSplitMode ? .accentColor : .secondary)
+                                .frame(width: 32, height: 32)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(editorCore.isSplitMode ? "Close Split Editor (⌘\\)" : "Split Editor Right (⌘\\)")
+                        .keyboardShortcut("\\", modifiers: .command)
+                        .padding(.trailing, 4)
+                    }
                     
                     if editorCore.isSplitMode {
                         SplitEditorView(splitManager: splitManager, editorCore: editorCore)
