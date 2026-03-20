@@ -504,12 +504,23 @@ final class ViewportHighlightManager: ObservableObject {
     }
 
     /// Set semantic tokens for a file (from LSP or TreeSitter)
-    func setTokens(_ tokens: [SemanticToken], fileId: String) {
+    /// Uses incremental merge: only replaces lines present in the new token set,
+    /// preserving tokens for lines not included in this update.
+    func setTokens(_ tokens: [SemanticToken], fileId: String, fullReplacement: Bool = false) {
         var lineMap: [Int: [SemanticToken]] = [:]
         for token in tokens {
             lineMap[token.line, default: []].append(token)
         }
-        tokensByFile[fileId] = lineMap
+        
+        if fullReplacement || tokensByFile[fileId] == nil {
+            // Full replacement: first load or explicit full refresh
+            tokensByFile[fileId] = lineMap
+        } else {
+            // Incremental merge: only update lines that have new tokens
+            for (line, lineTokens) in lineMap {
+                tokensByFile[fileId]?[line] = lineTokens
+            }
+        }
         
         // Refresh visible tokens if this is the current file
         if let viewport = currentViewport {
