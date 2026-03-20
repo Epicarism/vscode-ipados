@@ -6,6 +6,9 @@ import UIKit
 final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     weak var ownerTextView: EditorTextView?
     private var foldingObserver: NSObjectProtocol?
+    /// PERF: Cached newline offsets for O(log n) line index lookup instead of O(n) scanning
+    private var cachedLineStartOffsets: [Int] = [0]
+    private var cachedTextLength: Int = -1
 
     override init() {
         super.init()
@@ -56,7 +59,11 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let loc = max(0, charRange.location)
 
         let full = (self.textStorage?.string ?? "") as NSString
-        let lineIndex = FoldingLayoutManager.lineIndex(atUTF16Location: loc, in: full)
+        // Rebuild line offset cache if text changed
+        if full.length != cachedTextLength {
+            rebuildLineOffsets(for: full)
+        }
+        let lineIndex = binarySearchLineIndex(for: loc)
 
         // Check both the legacy isLineFolded and new isLineHidden
         if foldingManager.isLineFolded(fileId: fileId, line: lineIndex) ||
@@ -71,13 +78,40 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         return false
     }
 
+    // PERF: O(log n) binary search for line index using cached offsets
+    private func binarySearchLineIndex(for utf16Offset: Int) -> Int {
+        var lo = 0
+        var hi = cachedLineStartOffsets.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if cachedLineStartOffsets[mid] <= utf16Offset {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+        return max(0, lo - 1)
+    }
+    
+    /// Rebuild newline offset cache from text storage
+    private func rebuildLineOffsets(for text: NSString) {
+        var offsets: [Int] = [0]
+        offsets.reserveCapacity(text.length / 40)
+        for i in 0..<text.length {
+            if text.character(at: i) == 0x0A { // '\n'
+                offsets.append(i + 1)
+            }
+        }
+        cachedLineStartOffsets = offsets
+        cachedTextLength = text.length
+    }
+    
+    /// Legacy O(n) fallback (kept for reference)
     private static func lineIndex(atUTF16Location loc: Int, in text: NSString) -> Int {
         if loc <= 0 { return 0 }
-
         let capped = min(loc, text.length)
         var line = 0
         var searchStart = 0
-
         while searchStart < capped {
             let r = text.range(of: "\n", options: [], range: NSRange(location: searchStart, length: capped - searchStart))
             if r.location == NSNotFound { break }
@@ -86,7 +120,6 @@ final class FoldingLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             if next >= capped { break }
             searchStart = next
         }
-
         return line
     }
 
