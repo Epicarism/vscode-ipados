@@ -292,25 +292,33 @@ final class AutocompleteManager: ObservableObject {
         // FEAT-046: current file symbols
         let symbols = extractSymbols(from: text)
         candidates.append(contentsOf: symbols
-            .filter { $0.lowercased().hasPrefix(prefixLower) }
-            .map { Suggestion(kind: .symbol, displayText: $0, score: 900) })
+            .compactMap { sym -> Suggestion? in
+                guard let fuzzyScore = FuzzyMatcher.score(query: context.prefix, target: sym) else { return nil }
+                return Suggestion(kind: .symbol, displayText: sym, score: 900 + fuzzyScore / 10)
+            })
 
         // Keywords
         candidates.append(contentsOf: keywords
-            .filter { $0.lowercased().hasPrefix(prefixLower) }
-            .map { Suggestion(kind: .keyword, displayText: $0, score: 800) })
+            .compactMap { kw -> Suggestion? in
+                guard let fuzzyScore = FuzzyMatcher.score(query: context.prefix, target: kw) else { return nil }
+                return Suggestion(kind: .keyword, displayText: kw, score: 800 + fuzzyScore / 10)
+            })
 
         // FEAT-047: Swift stdlib (top level)
         candidates.append(contentsOf: stdlibTopLevel
-            .filter { $0.lowercased().hasPrefix(prefixLower) }
-            .map { Suggestion(kind: .stdlib, displayText: $0, score: 700) })
+            .compactMap { item -> Suggestion? in
+                guard let fuzzyScore = FuzzyMatcher.score(query: context.prefix, target: item) else { return nil }
+                return Suggestion(kind: .stdlib, displayText: item, score: 700 + fuzzyScore / 10)
+            })
 
         // Member completions (very small heuristic-based set)
         if context.isMemberCompletion, let base = context.memberBase {
             let members = memberCandidates(forBase: base)
             candidates.append(contentsOf: members
-                .filter { $0.lowercased().hasPrefix(prefixLower) }
-                .map { Suggestion(kind: .member, displayText: $0, score: 1000) })
+                .compactMap { m -> Suggestion? in
+                    guard let fuzzyScore = FuzzyMatcher.score(query: context.prefix, target: m) else { return nil }
+                    return Suggestion(kind: .member, displayText: m, score: 1000 + fuzzyScore / 10)
+                })
         }
 
         // De-dupe + rank
