@@ -1219,6 +1219,24 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
 
             // ---------------------------------------------------------------
+            // MARK: Surround Selection with Brackets/Quotes
+            // ---------------------------------------------------------------
+            let surroundPairs: [(open: String, close: String)] = [
+                ("{", "}"), ("(", ")"), ("[", "]"),
+                ("\"", "\""), ("'", "'"), ("`", "`")
+            ]
+            if range.length > 0, let pair = surroundPairs.first(where: { $0.open == text }) {
+                let nsText = textView.text as NSString
+                let selected = nsText.substring(with: range)
+                let wrapped = pair.open + selected + pair.close
+                textView.text = nsText.replacingCharacters(in: range, with: wrapped)
+                // Select the wrapped content (excluding the brackets)
+                textView.selectedRange = NSRange(location: range.location + 1, length: selected.count)
+                textViewDidChange(textView)
+                return false
+            }
+
+            // ---------------------------------------------------------------
             // MARK: Bracket / Quote Auto-Close
             // ---------------------------------------------------------------
             let pairs: [(open: String, close: String)] = [
