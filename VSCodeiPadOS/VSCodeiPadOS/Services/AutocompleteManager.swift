@@ -11,6 +11,9 @@ typealias AutocompleteSuggestionKind = AutocompleteManager.SuggestionKind
 /// - Swift stdlib completions (top-level + a small set of member completions)
 final class AutocompleteManager: ObservableObject {
 
+    /// Current filename for language detection (set by editor)
+    var currentFilename: String = ""
+
     // MARK: - UI-facing legacy API (kept for existing views)
 
     /// A simple list used by existing UI.
@@ -25,6 +28,7 @@ final class AutocompleteManager: ObservableObject {
         case stdlib
         case symbol
         case member
+        case snippet
     }
 
     struct Suggestion: Identifiable, Hashable {
@@ -321,6 +325,17 @@ final class AutocompleteManager: ObservableObject {
                 })
         }
 
+        // Snippet completions — language detection done inline to avoid @MainActor crossing
+        let snippetLang = Self.snippetLanguage(forFilename: currentFilename)
+        if let lang = snippetLang {
+            let snippetMatches = Self.builtinSnippetTriggers[lang, default: []]
+            candidates.append(contentsOf: snippetMatches.compactMap { (trigger, name, desc) -> Suggestion? in
+                guard let fuzzyScore = FuzzyMatcher.score(query: context.prefix, target: trigger) else { return nil }
+                return Suggestion(kind: .snippet, displayText: "\(trigger) — \(desc)",
+                                  insertText: trigger, score: 950 + fuzzyScore / 10)
+            })
+        }
+
         // De-dupe + rank
         let merged = mergeAndSort(candidates)
         apply(items: merged)
@@ -492,6 +507,107 @@ final class AutocompleteManager: ObservableObject {
         showSuggestions = !items.isEmpty
         selectedIndex = 0
     }
+}
+
+// MARK: - Snippet Support (nonisolated)
+
+extension AutocompleteManager {
+    /// Language detection for snippets (nonisolated — no @MainActor dependency)
+    static func snippetLanguage(forFilename filename: String) -> String? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "swift":                    return "swift"
+        case "js", "jsx", "mjs", "cjs": return "javascript"
+        case "ts", "tsx":               return "typescript"
+        case "py", "pyw":               return "python"
+        case "html", "htm":             return "html"
+        case "css", "scss":             return "css"
+        default:                        return nil
+        }
+    }
+
+    /// Static lookup of built-in snippet triggers per language.
+    /// Avoids accessing @MainActor SnippetManager during autocomplete.
+    static let builtinSnippetTriggers: [String: [(trigger: String, name: String, desc: String)]] = {
+        // Mirror SnippetManager's built-in snippets as lightweight tuples
+        return [
+            "swift": [
+                ("func", "Function", "Define a function"),
+                ("functhrows", "Throwing Function", "Throwing function"),
+                ("funcasync", "Async Function", "Async function"),
+                ("guardlet", "Guard Let", "guard let binding"),
+                ("iflet", "If Let", "if let binding"),
+                ("switch", "Switch", "switch statement"),
+                ("struct", "Struct", "Define a struct"),
+                ("class", "Class", "Define a class"),
+                ("enum", "Enum", "Define an enum"),
+                ("protocol", "Protocol", "Define a protocol"),
+                ("extension", "Extension", "Define an extension"),
+                ("init", "Init", "Initializer"),
+                ("do", "do-catch", "do-catch error handling"),
+                ("task", "Task", "Concurrency Task"),
+                ("actor", "Actor", "Define an actor"),
+                ("mark", "MARK", "MARK comment"),
+                ("todo", "TODO", "TODO comment"),
+                ("print", "print", "print to console"),
+            ],
+            "javascript": [
+                ("function", "Function", "Named function"),
+                ("arrow", "Arrow Function", "Arrow function"),
+                ("const", "const", "const declaration"),
+                ("let", "let", "let declaration"),
+                ("if", "if", "if statement"),
+                ("ifelse", "if-else", "if-else statement"),
+                ("for", "for", "for loop"),
+                ("forof", "for-of", "for-of loop"),
+                ("forEach", "forEach", "Array forEach"),
+                ("class", "Class", "Class declaration"),
+                ("import", "import", "Named import"),
+                ("async", "Async Function", "Async function"),
+                ("try", "try-catch", "try-catch block"),
+                ("log", "console.log", "console.log"),
+                ("promise", "Promise", "new Promise"),
+                ("switch", "switch", "switch statement"),
+            ],
+            "typescript": [
+                ("function", "Function", "Named function"),
+                ("arrow", "Arrow Function", "Arrow function"),
+                ("const", "const", "const declaration"),
+                ("interface", "Interface", "Interface declaration"),
+                ("type", "Type Alias", "Type alias"),
+                ("class", "Class", "Class declaration"),
+                ("import", "import", "Named import"),
+                ("async", "Async Function", "Async function"),
+                ("try", "try-catch", "try-catch block"),
+                ("log", "console.log", "console.log"),
+            ],
+            "python": [
+                ("def", "Function", "Define a function"),
+                ("class", "Class", "Define a class"),
+                ("if", "if", "if statement"),
+                ("for", "for", "for loop"),
+                ("while", "while", "while loop"),
+                ("try", "try-except", "try-except block"),
+                ("with", "with", "with statement"),
+                ("import", "import", "import module"),
+                ("main", "main", "if __name__ == __main__"),
+                ("print", "print", "print to console"),
+            ],
+            "html": [
+                ("html", "HTML5", "HTML5 boilerplate"),
+                ("div", "div", "div element"),
+                ("link", "link", "link stylesheet"),
+                ("script", "script", "script tag"),
+                ("img", "img", "image element"),
+                ("a", "anchor", "anchor link"),
+            ],
+            "css": [
+                ("flex", "Flexbox", "Flexbox container"),
+                ("grid", "Grid", "Grid container"),
+                ("media", "Media Query", "Media query"),
+            ],
+        ]
+    }()
 }
 
 // MARK: - Safe Array Access

@@ -1129,6 +1129,14 @@ struct RunestoneEditorView: UIViewRepresentable {
                 }
                 if accepted == true { return false }
 
+                // Snippet tab-stop navigation
+                if SnippetManager.shared.hasActiveSession {
+                    if let stopRange = SnippetManager.shared.advanceTabStop() {
+                        textView.selectedRange = stopRange
+                        return false
+                    }
+                }
+
                 // Emmet abbreviation expansion (HTML/CSS files only)
                 if let (expansion, abbrevRange) = EmmetEngine.shared.tryExpand(
                     in: textView.text,

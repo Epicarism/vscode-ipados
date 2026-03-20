@@ -1704,6 +1704,7 @@ struct AutocompletePopup: View {
         case .symbol: return "cube.fill"
         case .stdlib: return "curlybraces"
         case .member: return "arrow.right.circle.fill"
+        case .snippet: return "curlybraces.square.fill"
         }
     }
     
@@ -1713,6 +1714,7 @@ struct AutocompletePopup: View {
         case .symbol: return .blue
         case .stdlib: return .orange
         case .member: return .green
+        case .snippet: return .cyan
         }
     }
 }
