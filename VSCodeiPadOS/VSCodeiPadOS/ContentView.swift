@@ -13,6 +13,7 @@ enum SidebarTab: Int, CaseIterable {
     case remoteExplorer = 4
     case extensions = 5
     case testing = 6
+    case outline = 7
     
     /// Accessibility label for VoiceOver
     var accessibilityLabel: String {
@@ -24,6 +25,7 @@ enum SidebarTab: Int, CaseIterable {
         case .remoteExplorer: return "Remote Explorer - SSH"
         case .extensions: return "Extensions"
         case .testing: return "Test Explorer"
+        case .outline: return "Outline - Document Symbols"
         }
     }
     
@@ -37,6 +39,7 @@ enum SidebarTab: Int, CaseIterable {
         case .remoteExplorer: return "network"
         case .extensions: return "puzzlepiece"
         case .testing: return "testtube.2"
+        case .outline: return "list.bullet.indent"
         }
     }
     
@@ -50,6 +53,7 @@ enum SidebarTab: Int, CaseIterable {
         case .remoteExplorer: return "Remote"
         case .extensions: return "Extensions"
         case .testing: return "Testing"
+        case .outline: return "Outline"
         }
     }
 }
@@ -833,6 +837,10 @@ struct ContentView: View {
                 ExtensionsPanel()
             case .testing:
                 TestView()
+            case .outline:
+                OutlineView(editorCore: editorCore, onJumpToLine: { line in
+                    editorCore.requestedGoToLine = line
+                })
             }
         }
         .accessibilityElement(children: .contain)
