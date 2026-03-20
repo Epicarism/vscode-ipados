@@ -35,8 +35,7 @@ struct FileSearchResult: Identifiable, Comparable {
     
     // Computed property for directory grouping
     var directory: String {
-        let components = path.components(separatedBy: "/")
-        return components.dropLast().joined(separator: "/")
+        (path as NSString).deletingLastPathComponent
     }
     
     // Comparable implementation for sorting

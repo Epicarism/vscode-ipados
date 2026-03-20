@@ -415,10 +415,10 @@ struct GitView: View {
                 
                 Menu {
                     Button("Stash Changes") {
-                        Task { try? await gitManager.stashPush(message: nil); await gitManager.refresh() }
+                        Task { await performGitOp { try await gitManager.stashPush(message: nil) }; await gitManager.refresh() }
                     }
                     Button("Pop Stash") {
-                        Task { try? await gitManager.stashPop(index: 0); await gitManager.refresh() }
+                        Task { await performGitOp { try await gitManager.stashPop(index: 0) }; await gitManager.refresh() }
                     }
                     Button("Drop Stash", role: .destructive) {
                         showStashDropAlert = true
@@ -458,7 +458,7 @@ struct GitView: View {
             }
             Button("Cancel", role: .cancel) { pendingDiscardPath = nil }
         } message: {
-            Text("This will permanently discard all changes to \(pendingDiscardPath?.components(separatedBy: "/").last ?? "this file"). This cannot be undone.")
+            Text("This will permanently discard all changes to \((pendingDiscardPath as NSString?)?.lastPathComponent ?? "this file"). This cannot be undone.")
         }
         .alert("Commit & Push?", isPresented: $showCommitPushConfirmation) {
             Button("Commit & Push") { executeCommitAndPush() }
@@ -468,7 +468,7 @@ struct GitView: View {
         }
         .alert("Discard All Changes?", isPresented: $showDiscardAllAlert) {
             Button("Discard All", role: .destructive) {
-                Task { try? await gitManager.discardAll(); await gitManager.refresh() }
+                Task { await performGitOp { try await gitManager.discardAll() }; await gitManager.refresh() }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
@@ -477,7 +477,7 @@ struct GitView: View {
         .alert("Drop Stash?", isPresented: $showStashDropAlert) {
             Button("Drop Stash", role: .destructive) {
                 HapticManager.notification(.warning)
-                Task { try? await gitManager.stashDrop(index: 0); await gitManager.refresh() }
+                Task { await performGitOp { try await gitManager.stashDrop(index: 0) }; await gitManager.refresh() }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
@@ -487,7 +487,7 @@ struct GitView: View {
             Button("Delete", role: .destructive) {
                 HapticManager.notification(.warning)
                 if let name = pendingDeleteBranchName {
-                    Task { try? await gitManager.deleteBranch(name: name); await gitManager.refresh() }
+                    Task { await performGitOp { try await gitManager.deleteBranch(name: name) }; await gitManager.refresh() }
                 }
                 pendingDeleteBranchName = nil
             }
@@ -530,7 +530,7 @@ struct GitView: View {
                 .accessibilityHidden(true)
             
             // File name
-            Text(entry.path.components(separatedBy: "/").last ?? entry.path)
+            Text((entry.path as NSString).lastPathComponent)
                 .font(.system(size: 12))
                 .lineLimit(1)
             
@@ -544,7 +544,7 @@ struct GitView: View {
                         .foregroundColor(theme.errorForeground)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Unstage \(entry.path.components(separatedBy: "/").last ?? entry.path)")
+                .accessibilityLabel("Unstage \((entry.path as NSString).lastPathComponent)")
                 .accessibilityHint("Double tap to unstage this file")
             } else {
                 Button(action: { stageFile(entry.path) }) {
@@ -553,7 +553,7 @@ struct GitView: View {
                         .foregroundColor(Color(UIColor.systemGreen))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Stage \(entry.path.components(separatedBy: "/").last ?? entry.path)")
+                .accessibilityLabel("Stage \((entry.path as NSString).lastPathComponent)")
                 .accessibilityHint("Double tap to stage this file")
             }
         }
@@ -562,7 +562,7 @@ struct GitView: View {
         .background(selectedEntry?.id == entry.id ? Color.accentColor.opacity(0.2) : Color.clear)
         .cornerRadius(4)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(entry.kind.rawValue), \(entry.path.components(separatedBy: "/").last ?? entry.path), \(isStaged ? "staged" : "unstaged")")
+        .accessibilityLabel("\(entry.kind.rawValue), \((entry.path as NSString).lastPathComponent), \(isStaged ? "staged" : "unstaged")")
         .accessibilityHint("Double tap to view diff")
         .onTapGesture {
             selectedEntry = entry
@@ -632,7 +632,7 @@ struct GitView: View {
                 .frame(width: 16)
                 .accessibilityHidden(true)
             
-            Text(path.components(separatedBy: "/").last ?? path)
+            Text((path as NSString).lastPathComponent)
                 .font(.system(size: 12))
                 .lineLimit(1)
             
@@ -661,14 +661,14 @@ struct GitView: View {
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Resolve conflict options for \(path.components(separatedBy: "/").last ?? path)")
+            .accessibilityLabel("Resolve conflict options for \((path as NSString).lastPathComponent)")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .background(Color(UIColor.systemYellow).opacity(0.08))
         .cornerRadius(4)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Merge conflict in \(path.components(separatedBy: "/").last ?? path)")
+        .accessibilityLabel("Merge conflict in \((path as NSString).lastPathComponent)")
         .accessibilityHint("Double tap for resolve options")
         .contextMenu {
             Button(action: {
@@ -838,6 +838,8 @@ struct GitView: View {
     
     /// Performs a git operation with proper error handling and user feedback
     private func performGitOp(_ operation: @escaping () async throws -> Void) async {
+        showError = false
+        errorMessage = nil
         isOperationInProgress = true
         defer { isOperationInProgress = false }
         do {
@@ -978,7 +980,13 @@ struct BranchPickerSheet: View {
                     HapticManager.notification(.warning)
                     if let name = pendingDeleteName {
                         Task {
-                            try? await gitManager.deleteBranch(name: name)
+                            do {
+                                try await gitManager.deleteBranch(name: name)
+                            } catch {
+                                branchError = error.localizedDescription
+                                showBranchError = true
+                                HapticManager.notification(.error)
+                            }
                             await gitManager.refresh()
                         }
                     }

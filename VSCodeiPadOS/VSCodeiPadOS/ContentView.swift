@@ -387,13 +387,19 @@ struct ContentView: View {
         @Binding var showingDocumentPicker: Bool
         let finishOpeningWorkspace: (URL) -> Void
 
+        /// Combined key for title updates — avoids 4 separate onChange handlers
+        private var titleKey: String {
+            let name = editorCore.activeTab?.fileName ?? ""
+            let count = editorCore.tabs.count
+            let id = editorCore.activeTabId?.uuidString ?? ""
+            let unsaved = editorCore.activeTab?.isUnsaved == true
+            return "\(name)|\(count)|\(id)|\(unsaved)"
+        }
+
         func body(content: Content) -> some View {
             content
                 .onChange(of: editorCore.showFilePicker) { _, show in showingDocumentPicker = show }
-                .onChange(of: editorCore.activeTab?.fileName) { _, _ in updateTitle() }
-                .onChange(of: editorCore.tabs.count) { _, _ in updateTitle() }
-                .onChange(of: editorCore.activeTabId) { _, _ in updateTitle() }
-                .onChange(of: editorCore.activeTab?.isUnsaved) { _, _ in updateTitle() }
+                .onChange(of: titleKey) { _, _ in updateTitle() }
                 .onAppear {
                     editorCore.fileNavigator = fileNavigator
                     updateTitle()
@@ -411,7 +417,10 @@ struct ContentView: View {
                         if accessing { url.stopAccessingSecurityScopedResource() }
                     }
                 }
-                .onChange(of: editorCore.tabs.map { $0.id }) { _, _ in
+                .onChange(of: editorCore.tabs.count) { _, _ in
+                    editorCore.saveOpenTabPaths()
+                }
+                .onChange(of: editorCore.activeTabId) { _, _ in
                     editorCore.saveOpenTabPaths()
                 }
         }
@@ -1250,7 +1259,7 @@ struct IDEEditorView: View {
                     }
                 )
                 .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
-                .padding(.trailing, minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap ? 80 : 0)
+                .padding(.trailing, minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap ? 60 : 0)
                 }
 
                 // Inlay Hints Overlay (type hints, parameter names)
@@ -1262,10 +1271,10 @@ struct IDEEditorView: View {
                     lineHeight: lineHeight,
                     fontSize: editorCore.editorFontSize,
                     gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
-                    rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80
+                    rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 60
                 )
                 .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
-                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 60)
                 }
 
                 // Indentation guide lines (FEAT-indent-guides)

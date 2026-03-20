@@ -498,15 +498,19 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         // private key bytes to the server as a plaintext password, which is
         // both a security hazard and will always fail authentication.
         if rsaKeyPair == nil && !attemptedPasswordFallback && availableMethods.contains(.password) {
-            attemptedPasswordFallback = true
-            nextChallengePromise.succeed(
-                NIOSSHUserAuthenticationOffer(
-                    username: username,
-                    serviceName: "ssh-connection",
-                    offer: .password(.init(password: privateKeyString))
+            // SAFETY: Never submit a PEM key as a password — that leaks private key material
+            let looksLikePEM = privateKeyString.contains("-----BEGIN") || privateKeyString.contains("-----END")
+            if !looksLikePEM {
+                attemptedPasswordFallback = true
+                nextChallengePromise.succeed(
+                    NIOSSHUserAuthenticationOffer(
+                        username: username,
+                        serviceName: "ssh-connection",
+                        offer: .password(.init(password: privateKeyString))
+                    )
                 )
-            )
-            return
+                return
+            }
         }
         
         nextChallengePromise.succeed(nil)
@@ -1054,7 +1058,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             disconnect()
         }
         
-        self.currentConfig = config
+        DispatchQueue.main.async { self.currentConfig = config }
         
         // ── RSA key detection & handler setup ──────────────────────────
         // RSA keys are supported via Security.framework signing.
@@ -1137,7 +1141,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             ).get()
             
             self.channel = connection
-            self.isConnected = true
+            DispatchQueue.main.async { self.isConnected = true }
             
             // Notify delegate and post notification (already on MainActor)
             delegate?.sshManagerDidConnect(self)
@@ -1147,7 +1151,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             try await startInteractiveShell()
             
         } catch let sshError as SSHClientError {
-            self.isConnected = false
+            DispatchQueue.main.async { self.isConnected = false }
             // Clean up leaked EventLoopGroup on failure — must not block main thread
             let failedGroup = group
             self.group = nil
@@ -1156,7 +1160,7 @@ class SSHManager: ObservableObject, @unchecked Sendable {
             // (e.g. .unsupportedKeyType for RSA keys) rather than a generic message.
             throw sshError
         } catch {
-            self.isConnected = false
+            DispatchQueue.main.async { self.isConnected = false }
             // Clean up leaked EventLoopGroup on failure — must not block main thread
             let failedGroup = group
             self.group = nil

@@ -713,7 +713,7 @@ struct TunnelWebView: UIViewRepresentable {
                         return
                     }
 
-                    let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    guard let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
                     // Resolve the docs directory to its canonical real path so that
                     // the containment check below handles symlinks and ../ components.
                     let docsCanonical = docsURL.resolvingSymlinksInPath().path

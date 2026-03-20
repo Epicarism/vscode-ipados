@@ -221,13 +221,14 @@ struct FileTreeRowView: View {
             
             // Children
             if node.isDirectory && isExpanded {
-                ForEach(node.children.sorted(by: { lhs, rhs in
+                let sortedChildren = node.children.sorted { lhs, rhs in
                     // Directories first, then alphabetical
                     if lhs.isDirectory != rhs.isDirectory {
                         return lhs.isDirectory
                     }
                     return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                })) { child in
+                }
+                ForEach(sortedChildren) { child in
                     FileTreeRowView(
                         node: child,
                         level: level + 1,

@@ -245,10 +245,11 @@ struct SearchResult: Identifiable {
             guard let idx = core.activeTabIndex,
                   idx < core.tabs.count else { return }
             let content = core.tabs[idx].content
+            let template = useRegex ? replaceQuery : NSRegularExpression.escapedTemplate(for: replaceQuery)
             let replaced = regex.stringByReplacingMatches(
                 in: content,
                 range: NSRange(location: 0, length: (content as NSString).length),
-                withTemplate: replaceQuery
+                withTemplate: template
             )
             core.updateActiveTabContent(replaced)
 
@@ -257,10 +258,11 @@ struct SearchResult: Identifiable {
                 guard i < core.tabs.count,
                       let tab = core.tabs[safe: i] else { continue }
                 let content = tab.content
+                let template = useRegex ? replaceQuery : NSRegularExpression.escapedTemplate(for: replaceQuery)
                 let replaced = regex.stringByReplacingMatches(
                     in: content,
                     range: NSRange(location: 0, length: (content as NSString).length),
-                    withTemplate: replaceQuery
+                    withTemplate: template
                 )
                 if replaced != content {
                     core.tabs[i].content = replaced
@@ -283,10 +285,11 @@ struct SearchResult: Identifiable {
                    tabIndex < core.tabs.count,
                    let existingTab = core.tabs[safe: tabIndex] {
                     let content = existingTab.content
+                    let template = useRegex ? replaceQuery : NSRegularExpression.escapedTemplate(for: replaceQuery)
                     let replaced = regex.stringByReplacingMatches(
                         in: content,
                         range: NSRange(location: 0, length: (content as NSString).length),
-                        withTemplate: replaceQuery
+                        withTemplate: template
                     )
                     if replaced != content {
                         core.tabs[tabIndex].content = replaced
@@ -300,10 +303,11 @@ struct SearchResult: Identifiable {
                     failedFiles.append(url.lastPathComponent)
                     continue
                 }
+                let template = useRegex ? replaceQuery : NSRegularExpression.escapedTemplate(for: replaceQuery)
                 let replaced = regex.stringByReplacingMatches(
                     in: content,
                     range: NSRange(location: 0, length: (content as NSString).length),
-                    withTemplate: replaceQuery
+                    withTemplate: template
                 )
                 if replaced != content {
                     do {
@@ -380,9 +384,25 @@ struct SearchResult: Identifiable {
             if searchInSelection,
                searchScope == .currentFile,
                let selection = core.currentSelectionRange {
-                searchRange = selection
+                // Clamp selection to text bounds to prevent out-of-range crash
+                let textLength = nsText.length
+                let clampedLocation = min(selection.location, textLength)
+                let clampedLength = min(selection.length, textLength - clampedLocation)
+                searchRange = NSRange(location: clampedLocation, length: clampedLength)
             } else {
                 searchRange = NSRange(location: 0, length: nsText.length)
+            }
+
+            // Pre-compute newline offsets for O(log n) line lookup
+            var newlineOffsets: [Int] = []
+            do {
+                var scanStart = 0
+                while scanStart < nsText.length {
+                    let found = nsText.range(of: "\n", options: [], range: NSRange(location: scanStart, length: nsText.length - scanStart))
+                    if found.location == NSNotFound { break }
+                    newlineOffsets.append(found.location)
+                    scanStart = found.location + 1
+                }
             }
 
             let matches = regex.matches(in: text, options: [], range: searchRange)
@@ -390,9 +410,14 @@ struct SearchResult: Identifiable {
                 let r = match.range
                 guard let swiftRange = Range(r, in: text) else { continue }
 
-                // 1-based line number
-                let prefix = nsText.substring(to: min(r.location, nsText.length))
-                let lineNumber = prefix.components(separatedBy: "\n").count
+                // 1-based line number via binary search on newline offsets
+                let matchLoc = r.location
+                var lo = 0, hi = newlineOffsets.count
+                while lo < hi {
+                    let mid = (lo + hi) / 2
+                    if newlineOffsets[mid] < matchLoc { lo = mid + 1 } else { hi = mid }
+                }
+                let lineNumber = lo + 1
 
                 // Full line content
                 let lineRange = nsText.lineRange(for: r)
@@ -481,10 +506,26 @@ struct SearchResult: Identifiable {
         }
     }
 
+    /// Known text file extensions for workspace search (avoids reading binary files)
+    private static let textFileExtensions: Set<String> = [
+        "swift", "ts", "tsx", "js", "jsx", "json", "md", "txt", "html", "css", "scss",
+        "xml", "yaml", "yml", "toml", "py", "rb", "rs", "go", "c", "cpp", "h", "hpp",
+        "m", "mm", "java", "kt", "sh", "bash", "zsh", "fish", "env", "gitignore",
+        "dockerfile", "makefile", "cmake", "gradle", "plist", "pbxproj", "storyboard",
+        "xib", "entitlements", "xcscheme", "xcconfig", "strings", "stringsdict",
+        "svg", "graphql", "proto", "sql", "r", "dart", "lua", "vim", "conf", "ini",
+        "cfg", "csv", "tsv", "log", "tex", "rst", "org", "ps1", "bat", "cmd"
+    ]
+
     private func collectFileURLs(from node: FileTreeNode) -> [URL] {
         if node.isDirectory {
+            // Skip hidden directories (e.g. .git, .build)
+            if node.name.hasPrefix(".") { return [] }
             return node.children.flatMap { collectFileURLs(from: $0) }
         }
+        // Filter out binary files
+        let ext = node.url.pathExtension.lowercased()
+        guard Self.textFileExtensions.contains(ext) || ext.isEmpty else { return [] }
         return [node.url]
     }
 }

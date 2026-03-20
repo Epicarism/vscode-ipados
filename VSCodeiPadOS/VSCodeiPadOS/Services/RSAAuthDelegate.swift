@@ -351,7 +351,6 @@ final class RSAUserAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
         // the actual signing in our custom handler.
         //
         // NOTE: In production, this should be replaced with a proper
-        // NOTE: In production, this should be replaced with a proper
         // NIOSSH RSA extension or a forked NIOSSH with RSA support.
         // We offer .none here because the actual RSA auth is handled by
         // RSAAuthChannelHandler which sends the probe and signature directly.

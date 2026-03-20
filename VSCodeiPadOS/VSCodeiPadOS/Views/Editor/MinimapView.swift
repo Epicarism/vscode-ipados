@@ -57,6 +57,68 @@ struct MinimapView: View {
         }
     }
 
+    // MARK: - Layout computation
+    
+    /// Shared layout values so canvas, indicator, and tap handler all use the same coordinate system.
+    private struct MinimapLayout {
+        let pixelsPerLine: CGFloat
+        let totalRenderedHeight: CGFloat
+        let fitsInMinimap: Bool
+        let startIdx: Int
+        let endIdx: Int
+        let linesRendered: Int
+        let visibleLineCount: Int
+        let viewportStartLine: CGFloat
+        let viewportLineCount: CGFloat
+    }
+    
+    private func computeLayout(minimapHeight: CGFloat, visibleCount: Int) -> MinimapLayout {
+        let pixelsPerLine: CGFloat = 2.5
+        let totalRenderedHeight = CGFloat(visibleCount) * pixelsPerLine
+        let fitsInMinimap = totalRenderedHeight <= minimapHeight
+        
+        // How many source lines are visible in the editor viewport
+        let lineHeightEstimate = visibleCount > 0 ? totalContentHeight / CGFloat(visibleCount) : 20.0
+        let viewportLineCount = max(1, scrollViewHeight / max(lineHeightEstimate, 1))
+        
+        // Current scroll ratio
+        let scrollable = max(0, totalContentHeight - scrollViewHeight)
+        let scrollRatio = scrollable > 0 ? min(max(scrollOffset / scrollable, 0), 1.0) : 0
+        
+        // Which line is at the top of the viewport
+        let viewportStartLine = scrollRatio * CGFloat(max(0, visibleCount - Int(viewportLineCount)))
+        let viewportCenterLine = viewportStartLine + viewportLineCount / 2
+        
+        let startIdx: Int
+        let endIdx: Int
+        let linesInView = Int(minimapHeight / pixelsPerLine)
+        
+        if fitsInMinimap {
+            // Entire file fits — render all lines
+            startIdx = 0
+            endIdx = visibleCount
+        } else {
+            // File too large — center minimap window around viewport center
+            let halfView = linesInView / 2
+            var start = Int(viewportCenterLine) - halfView
+            start = max(0, min(start, visibleCount - linesInView))
+            startIdx = start
+            endIdx = min(start + linesInView, visibleCount)
+        }
+        
+        return MinimapLayout(
+            pixelsPerLine: pixelsPerLine,
+            totalRenderedHeight: totalRenderedHeight,
+            fitsInMinimap: fitsInMinimap,
+            startIdx: startIdx,
+            endIdx: endIdx,
+            linesRendered: endIdx - startIdx,
+            visibleLineCount: visibleCount,
+            viewportStartLine: viewportStartLine,
+            viewportLineCount: viewportLineCount
+        )
+    }
+
     // MARK: - View
 
     /// Recompute cached lines from content
@@ -105,6 +167,7 @@ struct MinimapView: View {
             let lines = cachedLines
             let visible = cachedVisibleIndices
             let visibleCount = max(visible.count, 1)
+            let layout = computeLayout(minimapHeight: minimapHeight, visibleCount: visibleCount)
 
             ZStack(alignment: .topLeading) {
                 // Background
@@ -117,7 +180,8 @@ struct MinimapView: View {
                         in: &context,
                         size: canvasSize,
                         lines: lines,
-                        visibleIndices: visible
+                        visibleIndices: visible,
+                        layout: layout
                     )
                 }
                 .allowsHitTesting(false)
@@ -125,12 +189,13 @@ struct MinimapView: View {
                 // Git diff indicators (thin left bars)
                 diffIndicatorsLayer(
                     minimapHeight: minimapHeight,
-                    lineCount: visibleCount
+                    lineCount: visibleCount,
+                    layout: layout
                 )
                 .allowsHitTesting(false)
 
                 // Visible region highlight
-                visibleRegionLayer(minimapHeight: minimapHeight)
+                visibleRegionLayer(minimapHeight: minimapHeight, layout: layout)
                     .allowsHitTesting(false)
             }
             .frame(width: minimapWidth, height: minimapHeight)
@@ -143,7 +208,7 @@ struct MinimapView: View {
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)
                     .onChanged { value in
                         isInteracting = true
-                        updateScroll(forMinimapY: value.location.y, minimapHeight: minimapHeight)
+                        updateScroll(forMinimapY: value.location.y, minimapHeight: minimapHeight, layout: layout)
                     }
                     .onEnded { _ in
                         isInteracting = false
@@ -160,9 +225,9 @@ struct MinimapView: View {
     // MARK: - Layers
 
     @ViewBuilder
-    private func visibleRegionLayer(minimapHeight: CGFloat) -> some View {
-        let height = visibleRegionHeight(minimapHeight: minimapHeight)
-        let offset = visibleRegionOffset(minimapHeight: minimapHeight, visibleHeight: height)
+    private func visibleRegionLayer(minimapHeight: CGFloat, layout: MinimapLayout) -> some View {
+        let height = visibleRegionHeight(minimapHeight: minimapHeight, layout: layout)
+        let offset = visibleRegionOffset(minimapHeight: minimapHeight, visibleHeight: height, layout: layout)
 
         Rectangle()
             .fill(Color.accentColor.opacity(isInteracting ? 0.08 : 0.04))
@@ -170,63 +235,96 @@ struct MinimapView: View {
                 Rectangle()
                     .stroke(Color.accentColor.opacity(isInteracting ? 0.5 : 0.35), lineWidth: 1.5)
             )
-            .frame(width: minimapWidth, height: height)
+            .frame(width: minimapWidth, height: max(8, height))
             .offset(y: offset)
     }
 
     @ViewBuilder
-    private func diffIndicatorsLayer(minimapHeight: CGFloat, lineCount: Int) -> some View {
+    private func diffIndicatorsLayer(minimapHeight: CGFloat, lineCount: Int, layout: MinimapLayout) -> some View {
         // VS Code minimap diff markers are thin and pinned to the left.
         let barWidth: CGFloat = 2
 
         // Guard against division by zero
         if lineCount > 0 {
-            ForEach(diffIndicators) { indicator in
+            ForEach(Array(diffIndicators.enumerated()), id: \.element.id) { _, indicator in
                 let startLine = max(0, min(indicator.lineRange.lowerBound, lineCount - 1))
                 let endLineExclusive = max(startLine + 1, min(indicator.lineRange.upperBound, lineCount))
-
-                let startY = (CGFloat(startLine) / CGFloat(max(lineCount, 1))) * minimapHeight
-                let endY = (CGFloat(endLineExclusive) / CGFloat(max(lineCount, 1))) * minimapHeight
+                let startY = diffIndicatorY(line: startLine, layout: layout)
+                let endY = diffIndicatorY(line: endLineExclusive, layout: layout)
                 let height = max(2, endY - startY)
 
-                Rectangle()
-                    .fill(diffColor(for: indicator.kind).opacity(0.95))
-                    .frame(width: barWidth, height: height)
-                    .offset(x: 0, y: startY)
+                if startY >= 0 && startY < minimapHeight {
+                    Rectangle()
+                        .fill(diffColor(for: indicator.kind).opacity(0.95))
+                        .frame(width: barWidth, height: height)
+                        .offset(x: 0, y: startY)
+                }
             }
         }
     }
 
-    // MARK: - Visible region math
-
-    private func visibleRegionHeight(minimapHeight: CGFloat) -> CGFloat {
-        guard totalContentHeight > 0 else { return 0 }
-        let ratio = scrollViewHeight / totalContentHeight
-        // Cap at 80% so the overlay never covers the entire minimap
-        return minimapHeight * min(max(ratio, 0), 0.8)
+    private func diffIndicatorY(line: Int, layout: MinimapLayout) -> CGFloat {
+        if layout.fitsInMinimap {
+            return CGFloat(line) * layout.pixelsPerLine + 2
+        } else {
+            return CGFloat(line - layout.startIdx) * layout.pixelsPerLine + 2
+        }
     }
 
-    private func visibleRegionOffset(minimapHeight: CGFloat, visibleHeight: CGFloat) -> CGFloat {
-        let scrollable = max(0, totalContentHeight - scrollViewHeight)
-        guard scrollable > 0 else { return 0 }
+    // MARK: - Visible region math (unified with canvas coordinate system)
 
-        let scrollRatio = min(max(scrollOffset / scrollable, 0), 1.0)
-        return scrollRatio * max(0, minimapHeight - visibleHeight)
+    private func visibleRegionHeight(minimapHeight: CGFloat, layout: MinimapLayout) -> CGFloat {
+        guard totalContentHeight > 0, layout.visibleLineCount > 0 else { return 0 }
+        
+        // Height in pixels = number of editor-visible lines * pixelsPerLine
+        let height = layout.viewportLineCount * layout.pixelsPerLine
+        
+        if layout.fitsInMinimap {
+            // Entire file rendered — indicator height is proportional
+            return min(height, minimapHeight * 0.8)
+        } else {
+            // Windowed — indicator height still based on viewport lines
+            return min(height, minimapHeight * 0.8)
+        }
+    }
+
+    private func visibleRegionOffset(minimapHeight: CGFloat, visibleHeight: CGFloat, layout: MinimapLayout) -> CGFloat {
+        guard totalContentHeight > 0, layout.visibleLineCount > 0 else { return 0 }
+        
+        if layout.fitsInMinimap {
+            // Entire file fits — offset is simply the viewport start line * pixelsPerLine
+            let offset = layout.viewportStartLine * layout.pixelsPerLine
+            // Clamp so indicator doesn't go past the bottom
+            return min(offset, minimapHeight - visibleHeight)
+        } else {
+            // Windowed mode — viewport start line relative to the rendered window
+            let relativeStartLine = layout.viewportStartLine - CGFloat(layout.startIdx)
+            let offset = relativeStartLine * layout.pixelsPerLine
+            return max(0, min(offset, minimapHeight - visibleHeight))
+        }
     }
 
     // MARK: - Interaction
 
     /// Requests scroll so that the main editor's visible region is centered around the minimap Y position.
     /// Uses callback to parent - minimap never directly controls editor scroll (prevents jitter).
-    private func updateScroll(forMinimapY yPosition: CGFloat, minimapHeight: CGFloat) {
+    private func updateScroll(forMinimapY yPosition: CGFloat, minimapHeight: CGFloat, layout: MinimapLayout) {
         guard totalContentHeight > 0 else { return }
         guard let onScrollRequested = onScrollRequested else { return }
 
         let clampedY = max(0, min(yPosition, minimapHeight))
-        let ratio = (minimapHeight > 0) ? (clampedY / minimapHeight) : 0
-
-        // Target a center position (VS Code behavior).
-        let targetCenter = ratio * totalContentHeight
+        
+        // Convert tap Y to a line number
+        let tappedLine: CGFloat
+        if layout.fitsInMinimap {
+            tappedLine = clampedY / layout.pixelsPerLine
+        } else {
+            tappedLine = CGFloat(layout.startIdx) + clampedY / layout.pixelsPerLine
+        }
+        
+        // Convert line number to document scroll offset
+        let lineRatio = tappedLine / CGFloat(max(layout.visibleLineCount, 1))
+        let targetCenter = lineRatio * totalContentHeight
         let desiredOffset = targetCenter - (scrollViewHeight / 2)
 
         let maxOffset = max(0, totalContentHeight - scrollViewHeight)
@@ -242,7 +340,8 @@ struct MinimapView: View {
         in context: inout GraphicsContext,
         size: CGSize,
         lines: [Substring],
-        visibleIndices: [Int]
+        visibleIndices: [Int],
+        layout: MinimapLayout
     ) {
         let paddingX: CGFloat = 4
         let paddingY: CGFloat = 2
@@ -251,39 +350,20 @@ struct MinimapView: View {
         let contentHeight = max(0, size.height - (paddingY * 2))
 
         guard contentWidth > 0, contentHeight > 0 else { return }
-
-        let visibleCount = max(visibleIndices.count, 1)
-        
-        // FIXED: Use fixed pixels per line (VS Code style) instead of stretching to fill
-        // This ensures the minimap always shows a tiny preview regardless of file size
-        let pixelsPerLine: CGFloat = 2.5
-        
-        // Calculate how many lines we can show in the minimap
-        let linesInView = Int(contentHeight / pixelsPerLine)
-        
-        // Calculate scroll offset to show the right portion of the document
-        // Use scrollOffset and totalContentHeight to calculate current position
-        let scrollRatio = totalContentHeight > 0 ? Double(scrollOffset) / Double(max(totalContentHeight - scrollViewHeight, 1)) : 0
-        let startIdx = max(0, Int(scrollRatio * Double(max(0, visibleCount - linesInView))))
+        guard layout.endIdx >= layout.startIdx else { return }
 
         // Token-block mode (colored rectangles) - VS Code style minimap
         let minBarHeight: CGFloat = 1
-        let barHeight = max(minBarHeight, pixelsPerLine)
+        let barHeight = max(minBarHeight, layout.pixelsPerLine)
 
         // Approximate "characters" across minimap width.
         let maxChars: CGFloat = 120
         let charWidth = contentWidth / maxChars
 
-        // Render lines starting from startIdx (scrolls with document)
-        let endIdx = min(startIdx + linesInView + 1, visibleCount)
-        
-        // Guard against invalid range (endIdx must be >= startIdx)
-        guard endIdx >= startIdx else { return }
-        
-        // PERF: Only tokenize lines in the visible window, not all lines
-        for i in startIdx..<endIdx {
-            let displayIndex = i - startIdx
-            let y = paddingY + (CGFloat(displayIndex) * pixelsPerLine)
+        // PERF: Only tokenize lines in the visible window
+        for i in layout.startIdx..<layout.endIdx {
+            let displayIndex = i - layout.startIdx
+            let y = paddingY + (CGFloat(displayIndex) * layout.pixelsPerLine)
             if y > size.height { break }
 
             // Map from visible index back to original line index

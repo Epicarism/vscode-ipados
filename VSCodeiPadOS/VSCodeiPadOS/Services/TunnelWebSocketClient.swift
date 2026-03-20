@@ -430,9 +430,9 @@ final class TunnelWebSocketClient: ObservableObject {
         webSocketTask?.resume()
         
         // Authenticate if needed
-        if authToken != nil {
+        if let token = authToken {
             state = .authenticating
-            try await authenticate(token: authToken!)
+            try await authenticate(token: token)
         }
         
         state = .connected

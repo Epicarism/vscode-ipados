@@ -1263,10 +1263,11 @@ final class GitManager: ObservableObject {
         
         let compressedSize = data.withUnsafeBytes { sourcePtr -> Int in
             destinationBuffer.withUnsafeMutableBytes { destPtr -> Int in
+                guard let destBase = destPtr.bindMemory(to: UInt8.self).baseAddress, let sourceBase = sourcePtr.bindMemory(to: UInt8.self).baseAddress else { return 0 }
                 let result = compression_encode_buffer(
-                    destPtr.bindMemory(to: UInt8.self).baseAddress!,
+                    destBase,
                     destinationSize,
-                    sourcePtr.bindMemory(to: UInt8.self).baseAddress!,
+                    sourceBase,
                     sourceSize,
                     nil,
                     COMPRESSION_ZLIB

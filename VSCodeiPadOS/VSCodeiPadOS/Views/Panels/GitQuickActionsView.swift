@@ -6,6 +6,8 @@ struct GitQuickActionsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var stashMessage: String = ""
+    @State private var showError: Bool = false
+    @State private var errorMessage: String?
     
     /// Computed property for whether there are uncommitted changes
     private var hasUncommittedChanges: Bool {
@@ -43,6 +45,11 @@ struct GitQuickActionsView: View {
                 }
             }
         }
+        .alert("Git Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred")
+        }
         .onAppear {
             Task { await git.refresh() }
         }
@@ -54,7 +61,7 @@ struct GitQuickActionsView: View {
     private var pullPushSection: some View {
         HStack(spacing: 12) {
             Button {
-                Task { try? await git.pull() }
+                Task { await safeGitOp { try await git.pull() } }
             } label: {
                 Label("Pull", systemImage: "arrow.down.to.line")
                     .frame(maxWidth: .infinity)
@@ -63,7 +70,7 @@ struct GitQuickActionsView: View {
             .disabled(git.isLoading)
 
             Button {
-                Task { try? await git.push() }
+                Task { await safeGitOp { try await git.push() } }
             } label: {
                 Label("Push", systemImage: "arrow.up.to.line")
                     .frame(maxWidth: .infinity)
@@ -215,7 +222,7 @@ struct GitQuickActionsView: View {
 
             Button("Save") {
                 Task {
-                    try? await git.stashPush(message: stashMessage.isEmpty ? nil : stashMessage)
+                    await safeGitOp { try await git.stashPush(message: stashMessage.isEmpty ? nil : stashMessage) }
                     await MainActor.run { stashMessage = "" }
                 }
             }
@@ -254,6 +261,21 @@ struct GitQuickActionsView: View {
         .listStyle(.plain)
         .frame(maxHeight: 220)
     }
+
+    // MARK: - Error handling
+    
+    private func safeGitOp(_ operation: @escaping () async throws -> Void) async {
+        showError = false
+        errorMessage = nil
+        do {
+            try await operation()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+            HapticManager.notification(.error)
+        }
+        await git.refresh()
+    }
 }
 
 // MARK: - Stash Row View
@@ -261,6 +283,8 @@ struct GitQuickActionsView: View {
 struct StashRowView: View {
     let stash: GitStashEntry
     @ObservedObject var git: GitManager
+    @State private var showError: Bool = false
+    @State private var errorMessage: String?
     
     var body: some View {
         HStack(spacing: 10) {
@@ -276,19 +300,37 @@ struct StashRowView: View {
             Spacer()
 
             Button("Pop") {
-                Task { try? await git.stashPop(index: stash.index) }
+                Task { await safeGitOp { try await git.stashPop(index: stash.index) } }
             }
             .buttonStyle(.bordered)
             .disabled(git.isLoading)
 
             Button("Drop") {
-                Task { try? await git.stashDrop(index: stash.index) }
+                Task { await safeGitOp { try await git.stashDrop(index: stash.index) } }
             }
             .buttonStyle(.bordered)
             .tint(.red)
             .disabled(git.isLoading)
         }
         .padding(.vertical, 4)
+        .alert("Stash Error", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred")
+        }
+    }
+    
+    private func safeGitOp(_ operation: @escaping () async throws -> Void) async {
+        showError = false
+        errorMessage = nil
+        do {
+            try await operation()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+            HapticManager.notification(.error)
+        }
+        await git.refresh()
     }
 }
 

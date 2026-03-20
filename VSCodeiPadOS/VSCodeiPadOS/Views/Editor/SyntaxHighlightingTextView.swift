@@ -828,7 +828,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
                     // Feed highlight timing and viewport info to ViewportHighlightManager
                     // so it can track scroll state for the legacy highlighting path.
                     let legacyFont = textView.font
-                    let legacyLineH: CGFloat = legacyFont != nil ? max(1, legacyFont!.lineHeight) : max(1, CGFloat(self.parent.fontSize) * 1.3)
+                    let legacyLineH: CGFloat = max(1, legacyFont?.lineHeight ?? CGFloat(self.parent.fontSize) * 1.3)
                     let legacyTotalLines = max(1, Int(textView.contentSize.height / legacyLineH))
                     ViewportHighlightManager.shared.updateScrollPosition(
                         offset: textView.contentOffset.y,
@@ -983,7 +983,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
 
             // Wire ViewportHighlightManager for the legacy SyntaxHighlightingTextView scroll path
             let font = textView.font
-            let lineH: CGFloat = font != nil ? max(1, font!.lineHeight) : max(1, CGFloat(parent.fontSize) * 1.3)
+            let lineH: CGFloat = max(1, font?.lineHeight ?? CGFloat(parent.fontSize) * 1.3)
             let totalLinesVP = max(1, Int(textView.contentSize.height / lineH))
             ViewportHighlightManager.shared.updateScrollPosition(
                 offset: scrollView.contentOffset.y,

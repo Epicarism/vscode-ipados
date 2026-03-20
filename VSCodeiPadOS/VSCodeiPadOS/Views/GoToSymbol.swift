@@ -101,7 +101,7 @@ class SymbolParser {
     
     private static func parseSwiftSymbols(from content: String) -> [CodeSymbol] {
         var symbols: [CodeSymbol] = []
-        let lines = content.components(separatedBy: .newlines)
+        let lines = content.components(separatedBy: "\n")
         
         let patterns: [(pattern: String, type: SymbolType)] = [
             // Functions
@@ -120,10 +120,15 @@ class SymbolParser {
             (#"^\s*(public |private |internal |fileprivate |open )?(required |convenience )?init"#, .constructor),
         ]
         
+        // Pre-compile regexes once before the loop (avoids ~35K compilations for large files)
+        let compiledPatterns: [(regex: NSRegularExpression, type: SymbolType)] = patterns.compactMap { (pattern, type) in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+            return (regex, type)
+        }
+        
         for (lineIndex, line) in lines.enumerated() {
-            for (pattern, type) in patterns {
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-                   let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) {
+            for (regex, type) in compiledPatterns {
+                if let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) {
                     
                     var name: String
                     
@@ -171,7 +176,7 @@ class SymbolParser {
     
     private static func parseJSSymbols(from content: String) -> [CodeSymbol] {
         var symbols: [CodeSymbol] = []
-        let lines = content.components(separatedBy: .newlines)
+        let lines = content.components(separatedBy: "\n")
         
         let patterns: [(pattern: String, type: SymbolType)] = [
             // Functions
@@ -192,10 +197,15 @@ class SymbolParser {
             (#"^\s*(static )?(async )?(\w+)\s*\(.*\)\s*\{"#, .method),
         ]
         
+        // Pre-compile regexes once before the loop
+        let compiledPatterns: [(regex: NSRegularExpression, type: SymbolType)] = patterns.compactMap { (pattern, type) in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+            return (regex, type)
+        }
+        
         for (lineIndex, line) in lines.enumerated() {
-            for (pattern, type) in patterns {
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-                   let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) {
+            for (regex, type) in compiledPatterns {
+                if let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) {
                     
                     let lastGroupIndex = match.numberOfRanges - 1
                     guard lastGroupIndex > 0,
@@ -226,7 +236,7 @@ class SymbolParser {
     
     private static func parsePythonSymbols(from content: String) -> [CodeSymbol] {
         var symbols: [CodeSymbol] = []
-        let lines = content.components(separatedBy: .newlines)
+        let lines = content.components(separatedBy: "\n")
         
         let patterns: [(pattern: String, type: SymbolType)] = [
             // Classes
@@ -237,10 +247,15 @@ class SymbolParser {
             (#"^\s*async\s+def\s+(\w+)"#, .function),
         ]
         
+        // Pre-compile regexes once before the loop
+        let compiledPatterns: [(regex: NSRegularExpression, type: SymbolType)] = patterns.compactMap { (pattern, type) in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+            return (regex, type)
+        }
+        
         for (lineIndex, line) in lines.enumerated() {
-            for (pattern, type) in patterns {
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-                   let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) {
+            for (regex, type) in compiledPatterns {
+                if let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)) {
                     
                     guard match.numberOfRanges > 1,
                           let range = Range(match.range(at: 1), in: line) else { continue }
@@ -268,7 +283,7 @@ class SymbolParser {
     
     private static func parseGenericSymbols(from content: String) -> [CodeSymbol] {
         var symbols: [CodeSymbol] = []
-        let lines = content.components(separatedBy: .newlines)
+        let lines = content.components(separatedBy: "\n")
         
         // Generic patterns for common constructs
         let patterns: [(pattern: String, type: SymbolType)] = [
@@ -277,10 +292,15 @@ class SymbolParser {
             (#"def\s+(\w+)"#, .function),
         ]
         
+        // Pre-compile regexes once before the loop
+        let compiledPatterns: [(regex: NSRegularExpression, type: SymbolType)] = patterns.compactMap { (pattern, type) in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+            return (regex, type)
+        }
+        
         for (lineIndex, line) in lines.enumerated() {
-            for (pattern, type) in patterns {
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-                   let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
+            for (regex, type) in compiledPatterns {
+                if let match = regex.firstMatch(in: line, options: [], range: NSRange(line.startIndex..., in: line)),
                    match.numberOfRanges > 1,
                    let range = Range(match.range(at: 1), in: line) {
                     
