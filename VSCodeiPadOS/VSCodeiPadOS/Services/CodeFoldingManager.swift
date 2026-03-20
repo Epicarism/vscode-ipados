@@ -106,6 +106,45 @@ final class CodeFoldingManager: ObservableObject {
 
     // MARK: - Enhanced Fold Detection
 
+    /// Incremental fold region update: only re-detects the neighbourhood of the edited
+    /// line range and merges with existing regions. Much cheaper than a full re-parse.
+    /// Call this from text-change handlers instead of detectFoldableRegions when possible.
+    func incrementalUpdateFoldRegions(in code: String, editedLineRange: ClosedRange<Int>, filePath: String? = nil) {
+        // Ensure currentFilePath / currentFileId are set
+        if let filePath = filePath {
+            self.currentFilePath = filePath
+            self.currentFileId = filePath
+        } else if currentFileId == nil {
+            self.currentFileId = "__in_memory__"
+        }
+
+        let fileExtension = (currentFilePath as NSString?)?.pathExtension ?? ""
+        let previous = self.foldRegions
+        // Preserve current collapsed state so toggled folds survive the update
+        let previousCollapsed = Set(previous.filter { $0.isFolded }.map { $0.startLine })
+
+        let updated = treeSitterEngine.updateFoldRegions(
+            source: code,
+            language: fileExtension,
+            editedLineRange: editedLineRange,
+            existingRegions: previous
+        )
+
+        self.foldRegions = updated.map { region in
+            var r = region
+            if previousCollapsed.contains(r.startLine) { r.isFolded = true }
+            return r
+        }
+
+        if let fileId = currentFileId {
+            foldRegionsLock.lock()
+            defer { foldRegionsLock.unlock() }
+            foldRegionsByFile[fileId] = self.foldRegions
+        }
+
+        updateCollapsedLines()
+    }
+
     /// Detects all foldable regions in the given code
     func detectFoldableRegions(in code: String, filePath: String? = nil) {
         self.currentFilePath = filePath

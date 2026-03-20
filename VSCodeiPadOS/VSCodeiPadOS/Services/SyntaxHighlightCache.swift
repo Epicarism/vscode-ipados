@@ -115,8 +115,28 @@ actor SyntaxHighlightCache {
         return head
     }
     
+    // MARK: - Convenience: cache-aside highlighting
+
+    /// Cache-aside wrapper: returns cached tokens if available, otherwise calls `compute`,
+    /// stores the result, and returns it.  Callers (e.g. VSCodeSyntaxHighlighter) use this
+    /// so they never need to call get/put separately.
+    func cachedHighlight(
+        fileId: String,
+        startLine: Int,
+        endLine: Int,
+        language: String,
+        compute: () -> [HighlightToken]
+    ) -> [HighlightToken] {
+        if let cached = get(fileId: fileId, startLine: startLine, endLine: endLine, language: language) {
+            return cached
+        }
+        let tokens = compute()
+        put(fileId: fileId, startLine: startLine, endLine: endLine, language: language, tokens: tokens)
+        return tokens
+    }
+
     // MARK: - Get/Put
-    
+
     /// Look up cached highlight tokens for a line range - O(1)
     func get(fileId: String, startLine: Int, endLine: Int, language: String) -> [HighlightToken]? {
         let key = cacheKey(fileId: fileId, startLine: startLine, endLine: endLine, language: language)

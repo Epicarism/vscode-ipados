@@ -11,6 +11,62 @@ import SwiftUI
 import WebKit
 import os
 
+// MARK: - Keyboard-intercepting WKWebView subclass
+
+/// Subclass that captures hardware-keyboard shortcuts and forwards them
+/// as synthetic KeyboardEvent dispatches into the loaded web page.
+private final class KeyCommandWebView: WKWebView {
+
+    private static let shortcuts: [(input: String, modifiers: UIKeyModifierFlags, jsKey: String, label: String)] = [
+        ("s", [.command],         "s", "Save (Cmd+S)"),
+        ("z", [.command],         "z", "Undo (Cmd+Z)"),
+        ("z", [.command, .shift], "Z", "Redo (Cmd+Shift+Z)"),
+        ("p", [.command],         "p", "Go to File (Cmd+P)"),
+    ]
+
+    override var keyCommands: [UIKeyCommand]? {
+        Self.shortcuts.map { s in
+            let cmd = UIKeyCommand(
+                title: s.label,
+                action: #selector(handleShortcut(_:)),
+                input: s.input,
+                modifierFlags: s.modifiers
+            )
+            cmd.wantsPriorityOverSystemBehavior = true
+            return cmd
+        }
+    }
+
+    @objc private func handleShortcut(_ sender: UIKeyCommand) {
+        guard let input = sender.input else { return }
+        let mods    = sender.modifierFlags
+        let shiftJS = mods.contains(.shift)     ? "true" : "false"
+        let altJS   = mods.contains(.alternate) ? "true" : "false"
+        let metaJS  = mods.contains(.command)   ? "true" : "false"
+        // Uppercase key when Shift is held (e.g. Cmd+Shift+Z → "Z")
+        let key = mods.contains(.shift) ? input.uppercased() : input
+        let codeKey = input.uppercased()
+        let js = """
+        (function() {
+            var t = document.activeElement || document.body;
+            ['keydown','keypress','keyup'].forEach(function(evtType) {
+                t.dispatchEvent(new KeyboardEvent(evtType, {
+                    key: '\(key)',
+                    code: 'Key\(codeKey)',
+                    ctrlKey: false,
+                    shiftKey: \(shiftJS),
+                    altKey: \(altJS),
+                    metaKey: \(metaJS),
+                    bubbles: true,
+                    cancelable: true
+                }));
+            });
+        })();
+        """
+        evaluateJavaScript(js, completionHandler: nil)
+    }
+}
+
 // MARK: - Weak Script Message Proxy
 
 /// Prevents WKUserContentController → Coordinator retain cycle.
@@ -76,13 +132,15 @@ struct TunnelWebView: UIViewRepresentable {
         )
         contentController.addUserScript(cssScript)
         
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = KeyCommandWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsLinkPreview = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = false
         webView.isOpaque = false
         webView.backgroundColor = .clear
+        // Identify as desktop Chrome so VS Code web enables all desktop features
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         
@@ -416,34 +474,93 @@ struct TunnelWebView: UIViewRepresentable {
         }
         
         // MARK: - WKUIDelegate
-        
+
         func webView(
             _ webView: WKWebView,
             runJavaScriptAlertPanelWithMessage message: String,
-            initiatedByFrame frame: WKFrameInfo,
-            completionHandler: @escaping () -> Void
-        ) {
+            initiatedByFrame frame: WKFrameInfo
+        ) async {
             Self.logger.info("JS Alert: \(message)")
-            completionHandler()
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: nil,
+                        message: message,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        continuation.resume()
+                    })
+                    Self.topmostViewController(from: webView).present(alert, animated: true)
+                }
+            }
         }
-        
+
         func webView(
             _ webView: WKWebView,
             runJavaScriptConfirmPanelWithMessage message: String,
-            initiatedByFrame frame: WKFrameInfo,
-            completionHandler: @escaping (Bool) -> Void
-        ) {
-            completionHandler(true)
+            initiatedByFrame frame: WKFrameInfo
+        ) async -> Bool {
+            Self.logger.info("JS Confirm: \(message)")
+            return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: nil,
+                        message: message,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                        continuation.resume(returning: false)
+                    })
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        continuation.resume(returning: true)
+                    })
+                    Self.topmostViewController(from: webView).present(alert, animated: true)
+                }
+            }
         }
-        
+
         func webView(
             _ webView: WKWebView,
             runJavaScriptTextInputPanelWithPrompt prompt: String,
             defaultText: String?,
-            initiatedByFrame frame: WKFrameInfo,
-            completionHandler: @escaping (String?) -> Void
-        ) {
-            completionHandler(defaultText)
+            initiatedByFrame frame: WKFrameInfo
+        ) async -> String? {
+            Self.logger.info("JS Prompt: \(prompt)")
+            return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+                DispatchQueue.main.async {
+                    let alert = UIAlertController(
+                        title: nil,
+                        message: prompt,
+                        preferredStyle: .alert
+                    )
+                    alert.addTextField { tf in tf.text = defaultText }
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                        continuation.resume(returning: nil)
+                    })
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                        continuation.resume(returning: alert.textFields?.first?.text)
+                    })
+                    Self.topmostViewController(from: webView).present(alert, animated: true)
+                }
+            }
+        }
+
+        /// Walk up the presenter chain to find the topmost visible view controller.
+        private static func topmostViewController(from webView: WKWebView) -> UIViewController {
+            let root: UIViewController?
+            if let windowRoot = webView.window?.rootViewController {
+                root = windowRoot
+            } else {
+                root = UIApplication.shared.connectedScenes
+                    .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }
+                    .first
+            }
+            var presenter = root ?? UIViewController()
+            while let presented = presenter.presentedViewController {
+                presenter = presented
+            }
+            return presenter
         }
         
         // MARK: - Bridge Helpers
@@ -460,12 +577,30 @@ struct TunnelWebView: UIViewRepresentable {
                         Self.logger.error("Failed to encode file content as UTF-8: \(path)")
                         return
                     }
-                    // Write file locally via Documents directory
+
                     let docsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                    let fileURL = docsURL.appendingPathComponent(path)
-                    try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try data.write(to: fileURL)
-                    Self.logger.info("File saved locally: \(path)")
+                    // Resolve the docs directory to its canonical real path so that
+                    // the containment check below handles symlinks and ../ components.
+                    let docsCanonical = docsURL.resolvingSymlinksInPath().path
+
+                    // Build the candidate URL, remove any redundant path components
+                    // (./ and the safe subset of ..), then resolve symlinks.
+                    let rawURL       = docsURL.appendingPathComponent(path).standardized
+                    let candidatePath = rawURL.resolvingSymlinksInPath().path
+
+                    // Reject any path that escapes the Documents sandbox.
+                    guard candidatePath.hasPrefix(docsCanonical + "/") ||
+                          candidatePath == docsCanonical else {
+                        Self.logger.error("Path traversal blocked: \(path)")
+                        return
+                    }
+
+                    try FileManager.default.createDirectory(
+                        at: rawURL.deletingLastPathComponent(),
+                        withIntermediateDirectories: true
+                    )
+                    try data.write(to: rawURL)
+                    Self.logger.info("File saved locally: \(rawURL.path)")
                 } catch {
                     Self.logger.error("Failed to save file: \(path) — \(error.localizedDescription)")
                 }

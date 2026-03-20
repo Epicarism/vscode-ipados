@@ -144,6 +144,28 @@ struct RunestoneEditorView: UIViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.multiCursorManager.textView = textView
 
+        // Wire code-folding text mutation for Runestone path.
+        // CodeFoldingManager.shared.currentText must stay in sync with what is displayed.
+        // onTextMutation is called by applyTextFold/revertTextFold after mutating text;
+        // we push the new text into Runestone's textView and immediately sync the binding.
+        CodeFoldingManager.shared.currentText = text
+        let coordinator = context.coordinator
+        CodeFoldingManager.shared.onTextMutation = { [weak coordinator] newText in
+            guard let coordinator = coordinator,
+                  let tv = coordinator.textView else { return }
+            coordinator.isFoldMutation = true
+            tv.text = newText
+            coordinator.isFoldMutation = false
+            // Sync binding and line count immediately (fold is a discrete user action)
+            coordinator.isUpdatingFromTextView = true
+            coordinator.parent.text = newText
+            coordinator.parent.totalLines = coordinator.lineCount
+            coordinator.isUpdatingFromTextView = false
+            // Rebuild newline cache so cursor positions stay correct
+            coordinator.rebuildNewlineOffsets(for: newText as NSString)
+            NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)
+        }
+
         // Accessibility
         textView.accessibilityLabel = "Code editor"
         textView.accessibilityHint = "Edit code here. Use rotor to navigate by line."
@@ -218,6 +240,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             // User switched to a different file - safe to call setState()
             context.coordinator.lastFilename = filename
             context.coordinator.hasBeenEdited = false
+            // Keep CodeFoldingManager's shadow text in sync for the new file
+            CodeFoldingManager.shared.currentText = text
             
             // PERF: Skip TreeSitter for very large files
             let tier = LargeFileHandler.shared.currentTier
@@ -244,6 +268,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         } else if textChanged && !context.coordinator.hasBeenEdited && !isActivelyEditing && !context.coordinator.isUpdatingFromTextView {
             // Text changed externally (e.g., initial load, external modification)
             // Safe to update since user hasn't started editing yet
+            // Keep CodeFoldingManager's shadow text in sync
+            CodeFoldingManager.shared.currentText = text
             // PERF: Skip TreeSitter for very large files
             let tier2 = LargeFileHandler.shared.currentTier
             if tier2.enableFullSyntaxHighlight, let language = getTreeSitterLanguage(for: filename) {
@@ -498,6 +524,11 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Track file identity to know when to call setState()
         var lastFilename: String = ""
         var hasBeenEdited: Bool = false
+        /// Set to true while CodeFoldingManager is mutating text for a fold/unfold.
+        /// Prevents textViewDidChange from marking the document as user-edited or
+        /// debounce-syncing stale content back to the SwiftUI binding.
+        var isFoldMutation = false
+
 
         // Find/Replace: track last handled selection to avoid re-applying
         var lastHandledSelection: NSRange? = nil
@@ -617,10 +648,12 @@ struct RunestoneEditorView: UIViewRepresentable {
             editorActionObservers.append(
                 NotificationCenter.default.addObserver(forName: .foldCurrentLine, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
-                        guard let self, self.textView != nil else { return }
+                        guard let self, let tv = self.textView else { return }
                         let line = max(0, self.parent.currentLineNumber - 1)
+                        // Sync shadow text before mutation
+                        CodeFoldingManager.shared.currentText = tv.text
                         CodeFoldingManager.shared.foldAtLine(line)
-                        // View-level folding: don't mutate text, just notify gutter/overlays
+                        // onTextMutation handles textView update; notify overlays
                         self.notifyFoldingChanged()
                     }
                 }
@@ -628,10 +661,12 @@ struct RunestoneEditorView: UIViewRepresentable {
             editorActionObservers.append(
                 NotificationCenter.default.addObserver(forName: .unfoldCurrentLine, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
-                        guard let self, self.textView != nil else { return }
+                        guard let self, let tv = self.textView else { return }
                         let line = max(0, self.parent.currentLineNumber - 1)
+                        // Sync shadow text before mutation
+                        CodeFoldingManager.shared.currentText = tv.text
                         CodeFoldingManager.shared.unfoldAtLine(line)
-                        // View-level folding: don't mutate text, just notify gutter/overlays
+                        // onTextMutation handles textView update; notify overlays
                         self.notifyFoldingChanged()
                     }
                 }
@@ -678,6 +713,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         // MARK: - TextViewDelegate
         
         func textViewDidChange(_ textView: TextView) {
+            // Fold mutations must not mark the document dirty or trigger debounced sync
+            guard !isFoldMutation else { return }
+
             // Mark that user has edited - blocks setState() calls until file switch
             hasBeenEdited = true
             
@@ -693,6 +731,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                     
                     // Update text binding (debounced - only after typing stops)
                     self.parent.text = textView.text
+                    // Keep CodeFoldingManager's shadow text in sync with user edits
+                    CodeFoldingManager.shared.currentText = textView.text
                     
                     // PERF: Use cached newline offsets instead of re-scanning
                     self.parent.totalLines = self.newlineOffsets.count + 1
@@ -814,23 +854,26 @@ struct RunestoneEditorView: UIViewRepresentable {
 
         /// Handles the collapseAllFolds notification from EditorCore.
         @MainActor private func handleCollapseAllFolds() {
+            // Ensure shadow text is current before fold mutation
+            if let tv = textView { CodeFoldingManager.shared.currentText = tv.text }
             CodeFoldingManager.shared.collapseAll()
-            // View-level folding: notify gutter and overlays to update visibility
+            // onTextMutation callback handles text/binding update; just notify overlays
             notifyFoldingChanged()
         }
 
         /// Handles the expandAllFolds notification from EditorCore.
         @MainActor private func handleExpandAllFolds() {
+            // Ensure shadow text is current before unfold mutation
+            if let tv = textView { CodeFoldingManager.shared.currentText = tv.text }
             CodeFoldingManager.shared.expandAll()
-            // View-level folding: notify gutter and overlays to update visibility
+            // onTextMutation callback handles text/binding update; just notify overlays
             notifyFoldingChanged()
         }
 
         /// Notify the gutter, minimap, and other overlays that fold state changed.
-        /// This is a view-level approach: the underlying text in Runestone is NOT mutated.
-        /// Instead, the gutter (in SplitEditorView) uses CodeFoldingManager.shared.isLineHidden()
-        /// to skip rendering folded lines, and the minimap does the same.
-        /// This preserves undo history, cursor positions, and Runestone's lineManager integrity.
+        /// CodeFoldingManager.applyTextFold/revertTextFold already mutated the text and called
+        /// onTextMutation to push the change into Runestone's textView and the SwiftUI binding.
+        /// This method just signals visual consumers (gutter, minimap, breakpoints) to re-render.
         @MainActor private func notifyFoldingChanged() {
             // Post notification so gutter, minimap, breakpoints, etc. re-render
             NotificationCenter.default.post(name: .codeFoldingDidChange, object: nil)

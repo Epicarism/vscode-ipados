@@ -423,7 +423,64 @@ final class ViewportHighlightManager: ObservableObject {
     }
     
     // MARK: - Token Management
-    
+
+    /// Convert HighlightTokens (from SyntaxHighlightCache) into SemanticTokens and
+    /// populate tokensByFile.  Call this after a highlighting pass completes so that
+    /// updateScrollPosition / processHighlightRequest have data to work with.
+    func ingestHighlightTokens(_ tokens: [HighlightToken], fileId: String) {
+        guard !tokens.isEmpty else { return }
+        let semanticTokens: [SemanticToken] = tokens.map { tok in
+            SemanticToken(
+                line: tok.line,
+                startColumn: tok.range.location,
+                length: tok.range.length,
+                tokenType: Self.semanticType(for: tok.tokenType),
+                modifiers: []
+            )
+        }
+        setTokens(semanticTokens, fileId: fileId)
+    }
+
+    /// Map a TreeSitter highlight name to a SemanticTokenType.
+    private static func semanticType(for treeSitterName: String) -> SemanticTokenType {
+        switch treeSitterName {
+        case "keyword", "keyword.control", "keyword.operator",
+             "keyword.other", "storage.type", "storage.modifier":
+            return .keyword
+        case "entity.name.function", "support.function", "meta.function":
+            return .function
+        case "entity.name.type", "entity.name.class",
+             "support.class", "meta.class":
+            return .type
+        case "entity.name.type.struct":
+            return .struct
+        case "entity.name.type.enum":
+            return .enum
+        case "entity.name.type.protocol":
+            return .interface
+        case "variable", "variable.other", "meta.definition.variable":
+            return .variable
+        case "variable.parameter", "meta.parameter":
+            return .parameter
+        case "variable.other.property", "support.variable.property":
+            return .property
+        case "string", "string.quoted", "string.template":
+            return .string
+        case "constant.numeric", "constant.language.number":
+            return .number
+        case "comment", "comment.line", "comment.block":
+            return .comment
+        case "keyword.operator", "punctuation.operator":
+            return .operator
+        case "entity.name.namespace", "meta.namespace":
+            return .namespace
+        case "meta.decorator", "punctuation.decorator":
+            return .decorator
+        default:
+            return .variable
+        }
+    }
+
     /// Set semantic tokens for a file (from LSP or TreeSitter)
     func setTokens(_ tokens: [SemanticToken], fileId: String) {
         var lineMap: [Int: [SemanticToken]] = [:]

@@ -688,7 +688,45 @@ final class TreeSitterFoldingEngine {
         lastDetectionTimeMs = (CACurrentMediaTime() - startTime) * 1000
         return kept
     }
-    
+
+    // MARK: - Incremental Update (source-only, no tree provider)
+
+    /// Incremental fold-region update that works purely from source text (no SyntaxTreeProvider).
+    /// Re-detects only the ±5 line neighbourhood of the edited range and merges with the
+    /// existing regions that fall completely outside that neighbourhood.
+    func updateFoldRegions(
+        source: String,
+        language: String,
+        editedLineRange: ClosedRange<Int>,
+        existingRegions: [FoldRegion]
+    ) -> [FoldRegion] {
+        let startTime = CACurrentMediaTime()
+
+        let expandedStart = max(0, editedLineRange.lowerBound - 5)
+        let lineCount = source.utf8.lazy.filter { $0 == UInt8(ascii: "\n") }.count + 1
+        let expandedEnd = min(lineCount - 1, editedLineRange.upperBound + 5)
+
+        // Keep regions that lie completely outside the changed neighbourhood
+        var kept = existingRegions.filter { region in
+            region.endLine < expandedStart || region.startLine > expandedEnd
+        }
+
+        // Re-detect only the affected zone by running full detection on the source
+        // then keeping only the regions that touch the neighbourhood
+        let fullRegions = detectFoldRegions(source: source, language: language)
+        let newInRange = fullRegions.filter { region in
+            (region.startLine >= expandedStart && region.startLine <= expandedEnd) ||
+            (region.endLine >= expandedStart && region.endLine <= expandedEnd)
+        }
+
+        kept.append(contentsOf: newInRange)
+        kept.sort { $0.startLine < $1.startLine }
+        kept = deduplicateRegions(kept)
+
+        lastDetectionTimeMs = (CACurrentMediaTime() - startTime) * 1000
+        return kept
+    }
+
     // MARK: - Tree Walking
     
     private func walkTree(

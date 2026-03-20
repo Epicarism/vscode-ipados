@@ -472,6 +472,21 @@ final class PrivateKeyAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
                     )
                 )
                 return
+            } else if rsaKeyPair != nil {
+                // RSA key: NIOSSHPrivateKey cannot wrap RSA natively, so we offer .none
+                // to signal a public-key attempt without providing an NIOSSHPrivateKey.
+                // The actual RSA signing is performed by RSAAuthChannelHandler in the
+                // channel pipeline (see RSAAuthDelegate.swift). We must NOT fall through
+                // to the password block or the raw PEM would be submitted as a password.
+                AppLogger.ssh.info("RSA key detected: offering .none auth token (RSA signing via RSAAuthChannelHandler)")
+                nextChallengePromise.succeed(
+                    NIOSSHUserAuthenticationOffer(
+                        username: username,
+                        serviceName: "ssh-connection",
+                        offer: .none
+                    )
+                )
+                return
             }
         }
         
