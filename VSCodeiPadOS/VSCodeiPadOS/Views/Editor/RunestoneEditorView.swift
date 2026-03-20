@@ -125,11 +125,13 @@ struct RunestoneEditorView: UIViewRepresentable {
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         
         // Set text with TreeSitter language support FIRST
-        if let language = getTreeSitterLanguage(for: filename) {
+        // PERF: Disable TreeSitter for very large files (100K+ lines) to prevent parser OOM
+        let tier = LargeFileHandler.shared.currentTier
+        if tier.enableFullSyntaxHighlight, let language = getTreeSitterLanguage(for: filename) {
             let state = TextViewState(text: text, language: language)
             textView.setState(state)
         } else {
-            // No language support - fallback to plain text
+            // No language support or file too large - fallback to plain text
             textView.text = text
         }
         
@@ -217,7 +219,9 @@ struct RunestoneEditorView: UIViewRepresentable {
             context.coordinator.lastFilename = filename
             context.coordinator.hasBeenEdited = false
             
-            if let language = getTreeSitterLanguage(for: filename) {
+            // PERF: Skip TreeSitter for very large files
+            let tier = LargeFileHandler.shared.currentTier
+            if tier.enableFullSyntaxHighlight, let language = getTreeSitterLanguage(for: filename) {
                 let state = TextViewState(text: text, language: language)
                 textView.setState(state)
             } else {
@@ -240,7 +244,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         } else if textChanged && !context.coordinator.hasBeenEdited && !isActivelyEditing && !context.coordinator.isUpdatingFromTextView {
             // Text changed externally (e.g., initial load, external modification)
             // Safe to update since user hasn't started editing yet
-            if let language = getTreeSitterLanguage(for: filename) {
+            // PERF: Skip TreeSitter for very large files
+            let tier2 = LargeFileHandler.shared.currentTier
+            if tier2.enableFullSyntaxHighlight, let language = getTreeSitterLanguage(for: filename) {
                 let state = TextViewState(text: text, language: language)
                 textView.setState(state)
             } else {

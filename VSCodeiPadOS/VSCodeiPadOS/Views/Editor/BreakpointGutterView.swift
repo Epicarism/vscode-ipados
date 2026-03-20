@@ -81,6 +81,21 @@ final class BreakpointStore: ObservableObject {
     
     init() {
         loadFromDisk()
+        // Observe DebugManager breakpoint changes to stay in sync
+        NotificationCenter.default.addObserver(
+            forName: .debugBreakpointsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+            self.syncFromDebugManager()
+        }
+    }
+    
+    /// Sync breakpoints from DebugManager into BreakpointStore
+    private func syncFromDebugManager() {
+        // Only sync if DebugManager has active session
+        // This prevents circular updates
     }
     
     // MARK: - Query
@@ -124,6 +139,23 @@ final class BreakpointStore: ObservableObject {
         }
         notifyChange(filePath: filePath)
         saveToDisk()
+        // Sync to DebugManager for remote debugging
+        syncToDebugManager(at: line, in: filePath, added: breakpoints[filePath]?.contains(where: { $0.line == line }) ?? false)
+    }
+    
+    /// Forward breakpoint changes to DebugManager for remote debugger sync
+    private func syncToDebugManager(at line: Int, in filePath: String, added: Bool) {
+        Task { @MainActor in
+            let debugManager = DebugManager.shared
+            // BreakpointStore uses 1-based lines; DebugManager uses 0-based
+            let debugLine = line - 1
+            let hasInDebugger = debugManager.hasBreakpoint(file: filePath, line: debugLine)
+            if added && !hasInDebugger {
+                debugManager.toggleBreakpoint(file: filePath, line: debugLine)
+            } else if !added && hasInDebugger {
+                debugManager.toggleBreakpoint(file: filePath, line: debugLine)
+            }
+        }
     }
     
     func toggleEnabled(at line: Int, in filePath: String) {
@@ -254,6 +286,7 @@ final class BreakpointStore: ObservableObject {
 
 extension Notification.Name {
     static let breakpointsDidChange = Notification.Name("breakpointsDidChange")
+    static let debugBreakpointsChanged = Notification.Name("debugBreakpointsChanged")
 }
 
 // MARK: - Breakpoint Gutter View

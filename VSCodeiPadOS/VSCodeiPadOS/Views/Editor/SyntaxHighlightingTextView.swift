@@ -523,33 +523,44 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             if textLength > veryLargeFileThreshold {
                 // VERY LARGE FILES (50k+): Wait 1.5 seconds of idle before highlighting
                 // This prevents UI blocking entirely during active typing
-                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
-                    DispatchQueue.main.async {
-                        self?.applyVisibleRangeHighlighting(to: textView)
+                // PERF: Use LargeFileHandler tier for debounce strategy
+                let tier = LargeFileHandler.shared.currentTier
+                if !tier.enableFullSyntaxHighlight {
+                    // VERY LARGE+ FILES: Minimal viewport-only highlighting with long debounce
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applyVisibleRangeHighlighting(to: textView)
+                        }
+                    }
+                } else if textLength > 50000 {
+                    // HUGE FILES (>50k): Wait 1.5 seconds, visible range only
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applyVisibleRangeHighlighting(to: textView)
+                        }
+                    }
+                } else if textLength > largeFileThreshold {
+                    // LARGE FILES (10k-50k): Wait 1 second, visible range only
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applyVisibleRangeHighlighting(to: textView)
+                        }
+                    }
+                } else if textLength > 5000 {
+                    // MEDIUM FILES (5k-10k): 300ms debounce, full highlighting on background thread
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applyHighlightingAsync(to: textView)
+                        }
+                    }
+                } else {
+                    // SMALL FILES (<5k): 80ms debounce, direct highlighting (fast enough)
+                    highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
+                        DispatchQueue.main.async {
+                            self?.applySyntaxHighlighting(to: textView)
+                        }
                     }
                 }
-            } else if textLength > largeFileThreshold {
-                // LARGE FILES (10k-50k): Wait 1 second of idle, then highlight visible range only
-                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
-                    DispatchQueue.main.async {
-                        self?.applyVisibleRangeHighlighting(to: textView)
-                    }
-                }
-            } else if textLength > 5000 {
-                // MEDIUM FILES (5k-10k): 300ms debounce, full highlighting on background thread
-                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-                    DispatchQueue.main.async {
-                        self?.applyHighlightingAsync(to: textView)
-                    }
-                }
-            } else {
-                // SMALL FILES (<5k): 80ms debounce, direct highlighting (fast enough)
-                highlightDebouncer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
-                    DispatchQueue.main.async {
-                        self?.applySyntaxHighlighting(to: textView)
-                    }
-                }
-            }
             
             updateLineCount(textView)
             updateCursorPosition(textView)
@@ -644,8 +655,10 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
             // Convert glyph range to character range
             var visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
             
-            // Add buffer of ~50 lines before and after for smooth scrolling
-            let bufferChars = 5000
+            // PERF: Use LargeFileHandler tier to determine viewport buffer size
+            // Higher tiers = smaller buffers to reduce memory pressure on massive files
+            let tierBuffer = LargeFileHandler.shared.currentTier.syntaxHighlightBuffer
+            let bufferChars = min(tierBuffer * 80, 5000) // ~80 chars per line estimate, cap at 5000
             let rangeStart = max(0, visibleCharRange.location - bufferChars)
             let rangeEnd = min(text.utf16.count, visibleCharRange.location + visibleCharRange.length + bufferChars)
             visibleCharRange = NSRange(location: rangeStart, length: rangeEnd - rangeStart)
