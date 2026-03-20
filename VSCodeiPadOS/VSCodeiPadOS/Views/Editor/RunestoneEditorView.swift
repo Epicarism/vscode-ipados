@@ -276,6 +276,13 @@ struct RunestoneEditorView: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.totalLines = context.coordinator.lineCount
             }
+            
+            // Detect foldable regions for the newly loaded file
+            let switchedFilename = filename
+            let switchedText = text
+            DispatchQueue.main.async {
+                CodeFoldingManager.shared.detectFoldableRegions(in: switchedText, filePath: switchedFilename)
+            }
         } else if textChanged && !context.coordinator.hasBeenEdited && !isActivelyEditing && !context.coordinator.isUpdatingFromTextView {
             // Text changed externally (e.g., initial load, external modification)
             // Safe to update since user hasn't started editing yet
