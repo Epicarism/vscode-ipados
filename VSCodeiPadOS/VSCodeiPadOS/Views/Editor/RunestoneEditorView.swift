@@ -850,6 +850,24 @@ struct RunestoneEditorView: UIViewRepresentable {
             return lowerBound(for: offset) + 1
         }
 
+        /// Adjust BreakpointStore when a text replacement may change line numbers.
+        /// Pass the pre-edit NSString, the replaced range, and the replacement string.
+        private func adjustBreakpointsForEdit(range: NSRange, replacementText: String, in preEditText: NSString) {
+            let deletedNewlines = (preEditText.substring(with: range) as NSString)
+                .components(separatedBy: "\n").count - 1
+            let insertedNewlines = (replacementText as NSString)
+                .components(separatedBy: "\n").count - 1
+            let delta = insertedNewlines - deletedNewlines
+            if delta != 0 || deletedNewlines > 0 {
+                let editedLine = lineNumber(forOffset: range.location)
+                BreakpointStore.shared.adjustForEdit(
+                    in: parent.filename,
+                    editedLine: editedLine,
+                    linesDelta: delta
+                )
+            }
+        }
+
         // MARK: - Code Folding
 
         /// Handles the collapseAllFolds notification from EditorCore.
@@ -1055,6 +1073,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 }
 
                 textView.selectedRange = NSRange(location: newCursor, length: 0)
+                adjustBreakpointsForEdit(range: range, replacementText: insertion, in: nsText)
                 textViewDidChange(textView)
                 return false
             }
@@ -1220,6 +1239,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 textView.text = nsText.replacingCharacters(in: range, with: reindentedText)
                 let newCursorPos = range.location + (reindentedText as NSString).length
                 textView.selectedRange = NSRange(location: newCursorPos, length: 0)
+                adjustBreakpointsForEdit(range: range, replacementText: reindentedText, in: nsText)
                 textViewDidChange(textView)
                 return false
             }
@@ -1230,6 +1250,10 @@ struct RunestoneEditorView: UIViewRepresentable {
                 replacementText: text as NSString,
                 in: (textView.text as NSString)  // pre-edit text; updateNewlineOffsets accounts for delta
             )
+
+            // Adjust breakpoints for line insertions/deletions
+            adjustBreakpointsForEdit(range: range, replacementText: text, in: textView.text as NSString)
+
             return true
         }
         
