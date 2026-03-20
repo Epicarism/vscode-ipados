@@ -449,10 +449,18 @@ struct TunnelWebView: UIViewRepresentable {
         // MARK: - Bridge Helpers
         
         private func handleFileSave(path: String, content: String) {
-            Self.logger.info("Save file via bridge: \(path)")
+            Self.logger.info("Save file via bridge: \(path) (\(content.count) bytes)")
             Task {
-                // TODO: Route through TunnelFileSystemBridge for remote saves
-                Self.logger.info("[TunnelWebView] Save file: \(path) (\(content.count) bytes)")
+                do {
+                    guard let data = content.data(using: .utf8) else {
+                        Self.logger.error("Failed to encode file content as UTF-8: \(path)")
+                        return
+                    }
+                    try await TunnelFileSystemBridge.shared.writeFile(at: path, content: data)
+                    Self.logger.info("File saved via tunnel bridge: \(path)")
+                } catch {
+                    Self.logger.error("Failed to save file via tunnel: \(path) — \(error.localizedDescription)")
+                }
             }
         }
         
