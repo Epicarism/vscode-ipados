@@ -227,6 +227,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         // Calling setState() during editing corrupts Runestone's lineManager
         // and causes crash at TextEditHelper.swift:27 (force unwrap on linePosition)
         
+        // Guard: skip setState during SwiftUI teardown (view removed from hierarchy)
+        guard textView.window != nil else { return }
+        
         let isFileSwitching = context.coordinator.lastFilename != filename
         let currentText = textView.text
         let textChanged = currentText != text
@@ -535,6 +538,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         var lastHandledSelection: NSRange? = nil
         
         // Debounced text sync to avoid SwiftUI re-renders on every keystroke
+        // SAFETY: These are marked nonisolated(unsafe) because Coordinator is not @MainActor,
+        // but they are ONLY accessed from the main thread (textViewDidChange, cancelPendingTextSync,
+        // deinit, and DispatchQueue.main.asyncAfter callbacks). This is safe but fragile —
+        // any future access from a background thread would be a data race.
         nonisolated(unsafe) private var textSyncWorkItem: DispatchWorkItem?
         private let debounceInterval: TimeInterval = 0.5 // 500ms
         nonisolated(unsafe) private var forceSyncObserver: NSObjectProtocol?
@@ -726,9 +733,16 @@ struct RunestoneEditorView: UIViewRepresentable {
             textSyncWorkItem?.cancel()
             
             // Create new debounced work item
+            // Capture filename at creation time to detect stale updates after tab switch
+            let capturedFilename = self.parent.filename
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
                 MainActor.assumeIsolated {
+                    // Guard: skip if file changed since this work item was created
+                    guard self.parent.filename == capturedFilename else { return }
+                    // Guard: skip if textView was removed from hierarchy
+                    guard self.textView?.window != nil else { return }
+                    
                     self.isUpdatingFromTextView = true
                     defer { self.isUpdatingFromTextView = false }
                     
