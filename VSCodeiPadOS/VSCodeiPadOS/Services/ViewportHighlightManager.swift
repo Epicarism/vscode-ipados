@@ -50,7 +50,7 @@ struct ViewportRegion: Equatable {
 
 // MARK: - Semantic Token Types
 
-enum SemanticTokenType: String, CaseIterable, Codable {
+enum SemanticTokenType: String, CaseIterable, Codable, Sendable {
     case namespace
     case type
     case `class`
@@ -93,7 +93,7 @@ enum SemanticTokenType: String, CaseIterable, Codable {
     }
 }
 
-enum SemanticTokenModifier: String, CaseIterable, Codable {
+enum SemanticTokenModifier: String, CaseIterable, Codable, Sendable {
     case declaration
     case definition
     case readonly
@@ -106,7 +106,7 @@ enum SemanticTokenModifier: String, CaseIterable, Codable {
     case defaultLibrary
 }
 
-struct SemanticToken: Equatable {
+struct SemanticToken: Equatable, Sendable {
     let line: Int
     let startColumn: Int
     let length: Int
@@ -141,6 +141,105 @@ struct HighlightRequest: Comparable {
             return lhs.priority > rhs.priority  // Higher priority first
         }
         return lhs.requestedAt < rhs.requestedAt  // Earlier request first
+    }
+}
+
+// MARK: - Thread-Safe Token Cache Actor
+
+/// Actor providing thread-safe access to per-file semantic token storage.
+/// All heavy token processing (indexing, merging, filtering) happens inside
+/// this actor, running off the MainActor.
+private actor TokenCache {
+    // fileId -> (line -> tokens)
+    private var tokensByFile: [String: [Int: [SemanticToken]]] = [:]
+    // fileId -> dirty line numbers
+    private var dirtyLines: [String: Set<Int>] = [:]
+    
+    /// Build a line→tokens map from a flat token array.
+    /// This is the pure computational step that should run off MainActor.
+    func buildLineMap(from tokens: [SemanticToken]) -> [Int: [SemanticToken]] {
+        var lineMap: [Int: [SemanticToken]] = [:]
+        lineMap.reserveCapacity(tokens.count)
+        for token in tokens {
+            lineMap[token.line, default: []].append(token)
+        }
+        return lineMap
+    }
+    
+    /// Set tokens for a file. If `fullReplacement` is true the old map is
+    /// discarded entirely; otherwise new lines are merged incrementally.
+    func setTokens(_ lineMap: [Int: [SemanticToken]], fileId: String, fullReplacement: Bool) {
+        if fullReplacement || tokensByFile[fileId] == nil {
+            tokensByFile[fileId] = lineMap
+        } else {
+            for (line, lineTokens) in lineMap {
+                tokensByFile[fileId]?[line] = lineTokens
+            }
+        }
+    }
+    
+    /// Update tokens for specific lines (incremental).
+    func updateTokens(_ tokens: [SemanticToken], forLines lines: ClosedRange<Int>, fileId: String) {
+        // Build a quick line lookup from the flat token array
+        var byLine: [Int: [SemanticToken]] = [:]
+        for token in tokens {
+            byLine[token.line, default: []].append(token)
+        }
+        for line in lines {
+            tokensByFile[fileId]?[line] = byLine[line] ?? []
+        }
+        dirtyLines[fileId, default: []].formUnion(Set(lines))
+    }
+    
+    /// Mark a range of lines as invalid (remove cached tokens).
+    func invalidateLines(_ lines: ClosedRange<Int>, fileId: String) {
+        for line in lines {
+            tokensByFile[fileId]?.removeValue(forKey: line)
+        }
+        dirtyLines[fileId, default: []].formUnion(Set(lines))
+    }
+    
+    /// Remove all cached data for a file.
+    func clearTokens(fileId: String) {
+        tokensByFile.removeValue(forKey: fileId)
+    }
+    
+    /// Collect tokens for the visible range of a given viewport/file.
+    func visibleTokens(for viewport: ViewportRegion, fileId: String) -> [SemanticToken] {
+        guard let fileTokens = tokensByFile[fileId] else { return [] }
+        var tokens: [SemanticToken] = []
+        tokens.reserveCapacity(viewport.visibleLineCount * 4) // rough estimate
+        for line in viewport.visibleRange {
+            if let lineTokens = fileTokens[line] {
+                tokens.append(contentsOf: lineTokens)
+            }
+        }
+        return tokens
+    }
+    
+    /// Pop dirty line numbers that are currently visible. The caller should
+    /// refresh tokens for those lines and then call `clearDirtyLines`.
+    func dirtyLinesInViewport(viewport: ViewportRegion, fileId: String) -> Set<Int> {
+        let fileDirty = dirtyLines[fileId] ?? []
+        return Set(fileDirty.filter { viewport.contains(line: $0) })
+    }
+    
+    func clearDirtyLines(_ lines: Set<Int>, fileId: String) {
+        dirtyLines[fileId]?.subtract(lines)
+    }
+    
+    /// Handle memory pressure: evict tokens outside the buffered range,
+    /// clear dirty state.
+    func handleMemoryPressure(viewport: ViewportRegion?) {
+        if let viewport = viewport {
+            for (fileId, lineTokens) in tokensByFile {
+                let kept = lineTokens.filter { viewport.bufferedRange.contains($0.key) }
+                tokensByFile[fileId] = kept
+            }
+        } else {
+            tokensByFile.removeAll()
+        }
+        dirtyLines.removeAll()
     }
 }
 
@@ -213,12 +312,12 @@ final class ViewportHighlightManager: ObservableObject {
     private var scrollDebounceTimer: Timer?
     private var highlightQueue: [HighlightRequest] = []
     private var processingTask: Task<Void, Never>?
+    private var ingestTask: Task<Void, Never>?
     private var lastScrollOffset: CGFloat = 0
     private var lastViewportUpdate: Date = .distantPast
     
-    // Token storage per file
-    private var tokensByFile: [String: [Int: [SemanticToken]]] = [:]  // fileId -> (line -> tokens)
-    private var dirtyLines: [String: Set<Int>] = [:]  // fileId -> dirty line numbers
+    /// Thread-safe token storage — all reads/writes go through this actor.
+    private let tokenCache = TokenCache()
     
     // Cancellables
     private var cancellables = Set<AnyCancellable>()
@@ -393,78 +492,118 @@ final class ViewportHighlightManager: ObservableObject {
     }
     
     private func processHighlightQueue() {
+        // Cancel any previous processing task — viewport changed
         processingTask?.cancel()
+        
+        let cache = tokenCache
+        let queueSnapshot = highlightQueue
+        highlightQueue.removeAll()
+        
         processingTask = Task { [weak self] in
-            guard let self = self else { return }
-            
             var totalLinesProcessed = 0
             
-            while !Task.isCancelled, let request = self.highlightQueue.first {
-                self.highlightQueue.removeFirst()
+            for request in queueSnapshot {
+                guard !Task.isCancelled else { break }
+                guard let self = self else { break }
+                
                 self.isHighlightingActive = true
                 
                 let startTime = CACurrentMediaTime()
                 let requestLineCount = request.lineRange.count
                 
-                // Process highlighting for this range
-                await self.processHighlightRequest(request)
+                // Collect tokens on the cache actor (off MainActor)
+                let tokens = await cache.visibleTokens(
+                    for: request,
+                    fileId: request.fileId
+                )
+                
+                // Update published properties back on MainActor
+                await MainActor.run { [weak self] in
+                    guard let self = self, !Task.isCancelled else { return }
+                    if request.priority == .visible {
+                        self.visibleSemanticTokens = tokens
+                        self.highlightedLineRange = request.lineRange
+                    }
+                }
                 
                 let elapsed = (CACurrentMediaTime() - startTime) * 1000
-                self.recordHighlightTiming(elapsed)
+                await MainActor.run { [weak self] in
+                    self?.recordHighlightTiming(elapsed)
+                }
                 totalLinesProcessed += requestLineCount
                 
-                // Yield to UI if we've been processing too long OR exceeded per-frame line limit
-                if elapsed > 8 || totalLinesProcessed >= self.maxHighlightLinesPerFrame {
+                // Yield to UI if we've been processing too long
+                if elapsed > 8 || totalLinesProcessed >= await MainActor.run(body: { [weak self] in
+                    self?.maxHighlightLinesPerFrame ?? 200
+                }) {
                     try? await Task.sleep(nanoseconds: 1_000_000)  // 1ms yield
-                    totalLinesProcessed = 0  // Reset for next batch
+                    totalLinesProcessed = 0
                 }
             }
             
-            self.isHighlightingActive = false
-        }
-    }
-    
-    private func processHighlightRequest(_ request: HighlightRequest) async {
-        let range = request.lineRange
-        
-        // Collect visible tokens from storage
-        let fileTokens = tokensByFile[request.fileId] ?? [:]
-        var visibleTokens: [SemanticToken] = []
-        
-        for line in range {
-            if let lineTokens = fileTokens[line] {
-                visibleTokens.append(contentsOf: lineTokens)
+            await MainActor.run { [weak self] in
+                self?.isHighlightingActive = false
             }
-        }
-        
-        // Update published tokens if these are visible-priority
-        if request.priority == .visible {
-            visibleSemanticTokens = visibleTokens
-            highlightedLineRange = range
         }
     }
     
     // MARK: - Token Management
 
     /// Convert HighlightTokens (from SyntaxHighlightCache) into SemanticTokens and
-    /// populate tokensByFile.  Call this after a highlighting pass completes so that
+    /// populate the token cache.  Call this after a highlighting pass completes so that
     /// updateScrollPosition / processHighlightRequest have data to work with.
+    ///
+    /// The heavy mapping work runs on a detached background task; previous ingest
+    /// tasks are cancelled to avoid stale writes.
     func ingestHighlightTokens(_ tokens: [HighlightToken], fileId: String) {
         guard !tokens.isEmpty else { return }
-        let semanticTokens: [SemanticToken] = tokens.map { tok in
-            SemanticToken(
-                line: tok.line,
-                startColumn: tok.range.location,
-                length: tok.range.length,
-                tokenType: Self.semanticType(for: tok.tokenType),
-                modifiers: []
-            )
+        
+        // Cancel any previous in-flight ingest
+        ingestTask?.cancel()
+        
+        let cache = tokenCache
+        let currentFileId = self.currentFileId
+        let currentViewport = self.currentViewport
+        
+        ingestTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard !Task.isCancelled else { return }
+            
+            // Pure computation — map raw tokens into semantic tokens
+            let semanticTokens: [SemanticToken] = tokens.map { tok in
+                SemanticToken(
+                    line: tok.line,
+                    startColumn: tok.range.location,
+                    length: tok.range.length,
+                    tokenType: ViewportHighlightManager.semanticType(for: tok.tokenType),
+                    modifiers: []
+                )
+            }
+            
+            guard !Task.isCancelled else { return }
+            
+            // Build line map inside the actor (thread-safe)
+            let lineMap = await cache.buildLineMap(from: semanticTokens)
+            
+            guard !Task.isCancelled else { return }
+            
+            // Store and refresh visible tokens
+            await cache.setTokens(lineMap, fileId: fileId, fullReplacement: false)
+            
+            guard !Task.isCancelled else { return }
+            
+            // Refresh visible tokens on MainActor
+            if fileId == currentFileId, let viewport = currentViewport {
+                let refreshed = await cache.visibleTokens(for: viewport, fileId: fileId)
+                await MainActor.run { [weak self] in
+                    guard let self = self, !Task.isCancelled else { return }
+                    self.visibleSemanticTokens = refreshed
+                }
+            }
         }
-        setTokens(semanticTokens, fileId: fileId)
     }
 
     /// Map a TreeSitter highlight name to a SemanticTokenType.
-    private static func semanticType(for treeSitterName: String) -> SemanticTokenType {
+    nonisolated private static func semanticType(for treeSitterName: String) -> SemanticTokenType {
         switch treeSitterName {
         case "keyword", "keyword.control", "keyword.operator",
              "keyword.other", "storage.type", "storage.modifier":
@@ -503,66 +642,76 @@ final class ViewportHighlightManager: ObservableObject {
         }
     }
 
-    /// Set semantic tokens for a file (from LSP or TreeSitter)
+    /// Set semantic tokens for a file (from LSP or TreeSitter).
     /// Uses incremental merge: only replaces lines present in the new token set,
     /// preserving tokens for lines not included in this update.
+    ///
+    /// Heavy indexing runs off MainActor via the token cache actor.
     func setTokens(_ tokens: [SemanticToken], fileId: String, fullReplacement: Bool = false) {
-        var lineMap: [Int: [SemanticToken]] = [:]
-        for token in tokens {
-            lineMap[token.line, default: []].append(token)
-        }
+        guard !tokens.isEmpty || fullReplacement else { return }
         
-        if fullReplacement || tokensByFile[fileId] == nil {
-            // Full replacement: first load or explicit full refresh
-            tokensByFile[fileId] = lineMap
-        } else {
-            // Incremental merge: only update lines that have new tokens
-            for (line, lineTokens) in lineMap {
-                tokensByFile[fileId]?[line] = lineTokens
+        let cache = tokenCache
+        let currentFileId = self.currentFileId
+        let currentViewport = self.currentViewport
+        
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let lineMap = await cache.buildLineMap(from: tokens)
+            await cache.setTokens(lineMap, fileId: fileId, fullReplacement: fullReplacement)
+            
+            // Refresh visible tokens if this is the current file
+            if fileId == currentFileId, let viewport = currentViewport {
+                let refreshed = await cache.visibleTokens(for: viewport, fileId: fileId)
+                await MainActor.run { [weak self] in
+                    self?.visibleSemanticTokens = refreshed
+                }
             }
-        }
-        
-        // Refresh visible tokens if this is the current file
-        if let viewport = currentViewport {
-            refreshVisibleTokens(viewport: viewport, fileId: fileId)
         }
     }
     
-    /// Update tokens for specific lines (incremental update)
+    /// Update tokens for specific lines (incremental update).
+    /// The indexing and cache update run off MainActor.
     func updateTokens(_ tokens: [SemanticToken], forLines lines: ClosedRange<Int>, fileId: String) {
-        for line in lines {
-            tokensByFile[fileId]?[line] = tokens.filter { $0.line == line }
-        }
-        dirtyLines[fileId, default: []].formUnion(Set(lines))
+        let cache = tokenCache
+        let currentViewport = self.currentViewport
         
-        // Refresh if dirty lines are visible
-        if let viewport = currentViewport {
-            let fileDirty = dirtyLines[fileId] ?? []
-            let dirtyVisible = fileDirty.filter { viewport.contains(line: $0) }
-            if !dirtyVisible.isEmpty {
-                refreshVisibleTokens(viewport: viewport, fileId: fileId)
-                dirtyLines[fileId]?.subtract(dirtyVisible)
+        Task.detached(priority: .userInitiated) { [weak self] in
+            await cache.updateTokens(tokens, forLines: lines, fileId: fileId)
+            
+            // Refresh if dirty lines are visible
+            if let viewport = currentViewport {
+                let dirtyVisible = await cache.dirtyLinesInViewport(viewport: viewport, fileId: fileId)
+                if !dirtyVisible.isEmpty {
+                    let refreshed = await cache.visibleTokens(for: viewport, fileId: fileId)
+                    await cache.clearDirtyLines(dirtyVisible, fileId: fileId)
+                    await MainActor.run { [weak self] in
+                        self?.visibleSemanticTokens = refreshed
+                    }
+                }
             }
         }
     }
     
-    /// Invalidate tokens for a range of lines
+    /// Invalidate tokens for a range of lines.
     func invalidateLines(_ lines: ClosedRange<Int>, fileId: String) {
-        for line in lines {
-            tokensByFile[fileId]?.removeValue(forKey: line)
+        let cache = tokenCache
+        Task.detached(priority: .userInitiated) {
+            await cache.invalidateLines(lines, fileId: fileId)
         }
-        dirtyLines[fileId, default: []].formUnion(Set(lines))
     }
     
-    /// Clear all tokens for a file
+    /// Clear all tokens for a file.
     func clearTokens(fileId: String) {
-        tokensByFile.removeValue(forKey: fileId)
         visibleSemanticTokens.removeAll()
+        let cache = tokenCache
+        Task.detached(priority: .userInitiated) {
+            await cache.clearTokens(fileId: fileId)
+        }
     }
     
     // MARK: - Overlay Application
     
-    /// Apply semantic token overlays to a text view for the current viewport
+    /// Apply semantic token overlays to a text view for the current viewport.
+    /// This MUST run on MainActor because it touches UITextStorage.
     func applySemanticOverlays(
         to textView: UITextView,
         in viewport: ViewportRegion,
@@ -662,20 +811,19 @@ final class ViewportHighlightManager: ObservableObject {
     func handleMemoryPressure() {
         Self.logger.warning("Memory pressure: clearing viewport highlight caches")
         
-        // Keep only current file tokens
-        if let viewport = currentViewport {
-            // Remove far buffer tokens
-            for (fileId, lineTokens) in tokensByFile {
-                let kept = lineTokens.filter { viewport.bufferedRange.contains($0.key) }
-                tokensByFile[fileId] = kept
-            }
-        } else {
-            tokensByFile.removeAll()
+        // Cancel any in-flight processing
+        processingTask?.cancel()
+        ingestTask?.cancel()
+        
+        let cache = tokenCache
+        let viewport = currentViewport
+        
+        Task.detached(priority: .userInitiated) {
+            await cache.handleMemoryPressure(viewport: viewport)
         }
         
         highlightQueue.removeAll()
         highlightTimings.removeAll()
-        dirtyLines.removeAll()
     }
     
     // MARK: - Performance
@@ -694,15 +842,15 @@ final class ViewportHighlightManager: ObservableObject {
     
     // MARK: - Private Helpers
     
+    /// Refresh visible tokens from the cache for the given viewport.
+    /// Runs the cache read off MainActor, then publishes results back.
     private func refreshVisibleTokens(viewport: ViewportRegion, fileId: String) {
-        guard let fileTokens = tokensByFile[fileId] else { return }
-        
-        var tokens: [SemanticToken] = []
-        for line in viewport.visibleRange {
-            if let lineTokens = fileTokens[line] {
-                tokens.append(contentsOf: lineTokens)
+        let cache = tokenCache
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let tokens = await cache.visibleTokens(for: viewport, fileId: fileId)
+            await MainActor.run { [weak self] in
+                self?.visibleSemanticTokens = tokens
             }
         }
-        visibleSemanticTokens = tokens
     }
 }
