@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// VS Code–style minimap with:
-/// - syntax-colored tiny preview
-/// - visible region overlay
-/// - tap/drag to scroll
+/// - syntax-colored tiny preview (token blocks)
+/// - visible region overlay with gradient shading
+/// - tap/drag to scroll with smooth animation
 /// - fold-aware rendering (hidden folded lines)
 /// - optional git diff indicators (added/modified/deleted)
+/// - search match highlighting (yellow markers)
+/// - diagnostic error/warning markers (red/yellow dots on right edge)
 struct MinimapView: View {
     // MARK: - External inputs
 
@@ -25,6 +27,13 @@ struct MinimapView: View {
     /// Optional indicators to render as thin bars on the left side of the minimap.
     /// Note: call sites can ignore this (default empty) without breaking compilation.
     var diffIndicators: [MinimapDiffIndicator] = []
+
+    /// 1-based line numbers where search matches exist. When empty, no markers are drawn.
+    var searchMatchLines: Set<Int> = []
+
+    /// Mapping from 1-based line number → diagnostic severity.
+    /// Only .error and .warning are rendered as markers.
+    var diagnosticLines: [Int: Int] = [:]
 
     /// Fixed width; height expands to the container.
     var minimapWidth: CGFloat = 60
@@ -174,12 +183,24 @@ struct MinimapView: View {
                 Rectangle()
                     .fill(themeManager.currentTheme.editorBackground)
 
-                // Syntax-colored code preview
+                // Syntax-colored code preview (includes search highlights + diagnostic markers)
                 Canvas { context, canvasSize in
                     drawMinimapPreview(
                         in: &context,
                         size: canvasSize,
                         lines: lines,
+                        visibleIndices: visible,
+                        layout: layout
+                    )
+                    drawSearchHighlights(
+                        in: &context,
+                        size: canvasSize,
+                        visibleIndices: visible,
+                        layout: layout
+                    )
+                    drawDiagnosticMarkers(
+                        in: &context,
+                        size: canvasSize,
                         visibleIndices: visible,
                         layout: layout
                     )
@@ -194,7 +215,7 @@ struct MinimapView: View {
                 )
                 .allowsHitTesting(false)
 
-                // Visible region highlight
+                // Visible region highlight (enhanced with gradient shading)
                 visibleRegionLayer(minimapHeight: minimapHeight, layout: layout)
                     .allowsHitTesting(false)
             }
@@ -229,14 +250,47 @@ struct MinimapView: View {
         let height = visibleRegionHeight(minimapHeight: minimapHeight, layout: layout)
         let offset = visibleRegionOffset(minimapHeight: minimapHeight, visibleHeight: height, layout: layout)
 
-        Rectangle()
-            .fill(Color.accentColor.opacity(isInteracting ? 0.08 : 0.04))
-            .overlay(
-                Rectangle()
-                    .stroke(Color.accentColor.opacity(isInteracting ? 0.5 : 0.35), lineWidth: 1.5)
-            )
-            .frame(width: minimapWidth, height: max(8, height))
-            .offset(y: offset)
+        ZStack(alignment: .topLeading) {
+            // Semi-transparent fill with subtle gradient
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.accentColor.opacity(isInteracting ? 0.10 : 0.06),
+                            Color.accentColor.opacity(isInteracting ? 0.06 : 0.03),
+                            Color.accentColor.opacity(isInteracting ? 0.10 : 0.06)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: minimapWidth, height: max(8, height))
+                .offset(y: offset)
+
+            // Top edge border (brighter, 1pt)
+            Rectangle()
+                .fill(Color.accentColor.opacity(isInteracting ? 0.6 : 0.4))
+                .frame(width: minimapWidth, height: 1)
+                .offset(y: offset)
+
+            // Bottom edge border (brighter, 1pt)
+            Rectangle()
+                .fill(Color.accentColor.opacity(isInteracting ? 0.6 : 0.4))
+                .frame(width: minimapWidth, height: 1)
+                .offset(y: offset + max(8, height) - 1)
+
+            // Left edge border (subtle)
+            Rectangle()
+                .fill(Color.accentColor.opacity(isInteracting ? 0.3 : 0.18))
+                .frame(width: 1, height: max(8, height))
+                .offset(y: offset)
+
+            // Right edge border (subtle)
+            Rectangle()
+                .fill(Color.accentColor.opacity(isInteracting ? 0.3 : 0.18))
+                .frame(width: 1, height: max(8, height))
+                .offset(x: minimapWidth - 1, y: offset)
+        }
     }
 
     @ViewBuilder
@@ -308,6 +362,7 @@ struct MinimapView: View {
 
     /// Requests scroll so that the main editor's visible region is centered around the minimap Y position.
     /// Uses callback to parent - minimap never directly controls editor scroll (prevents jitter).
+    /// Wraps the callback in a smooth animation for fluid scrolling.
     private func updateScroll(forMinimapY yPosition: CGFloat, minimapHeight: CGFloat, layout: MinimapLayout) {
         guard totalContentHeight > 0 else { return }
         guard let onScrollRequested = onScrollRequested else { return }
@@ -330,8 +385,10 @@ struct MinimapView: View {
         let maxOffset = max(0, totalContentHeight - scrollViewHeight)
         let newOffset = min(max(desiredOffset, 0), maxOffset)
         
-        // Request scroll via callback - parent controls the actual scroll
-        onScrollRequested(newOffset)
+        // Request scroll via callback with smooth animation - parent controls the actual scroll
+        withAnimation(.easeOut(duration: 0.12)) {
+            onScrollRequested(newOffset)
+        }
     }
 
     // MARK: - Rendering (Canvas)
@@ -388,6 +445,90 @@ struct MinimapView: View {
                 context.fill(Path(rect), with: .color(tokenColor(for: token).opacity(0.80)))
                 x += w
             }
+        }
+    }
+
+    // MARK: - Search match highlighting
+
+    /// Draws yellow semi-transparent rectangles behind lines that contain search matches.
+    private func drawSearchHighlights(
+        in context: inout GraphicsContext,
+        size: CGSize,
+        visibleIndices: [Int],
+        layout: MinimapLayout
+    ) {
+        guard !searchMatchLines.isEmpty else { return }
+
+        let paddingX: CGFloat = 2
+        let paddingY: CGFloat = 2
+        let barHeight = max(1, layout.pixelsPerLine)
+        let highlightColor = Color(red: 1.0, green: 0.85, blue: 0.0) // Warm yellow, VS Code style
+
+        for i in layout.startIdx..<layout.endIdx {
+            let displayIndex = i - layout.startIdx
+            let y = paddingY + (CGFloat(displayIndex) * layout.pixelsPerLine)
+            if y > size.height { break }
+
+            // Map from visible index back to original line index → 1-based line number
+            let originalLineIndex = visibleIndices.indices.contains(i) ? visibleIndices[i] : 0
+            let oneBasedLine = originalLineIndex + 1
+
+            guard searchMatchLines.contains(oneBasedLine) else { continue }
+
+            let yAligned = y.rounded(FloatingPointRoundingRule.down)
+            let rect = CGRect(
+                x: paddingX,
+                y: yAligned,
+                width: size.width - (paddingX * 2),
+                height: barHeight
+            )
+            context.fill(Path(rect), with: .color(highlightColor.opacity(0.25)))
+        }
+    }
+
+    // MARK: - Diagnostic markers
+
+    /// Draws error/warning indicator dots on the right edge of the minimap.
+    /// Errors are red, warnings are yellow-orange. Other severities are skipped.
+    private func drawDiagnosticMarkers(
+        in context: inout GraphicsContext,
+        size: CGSize,
+        visibleIndices: [Int],
+        layout: MinimapLayout
+    ) {
+        guard !diagnosticLines.isEmpty else { return }
+
+        let paddingY: CGFloat = 2
+        let barHeight = max(1, layout.pixelsPerLine)
+        let dotSize: CGFloat = 3
+        let dotX = size.width - dotSize - 1 // Right edge, 1pt margin
+
+        for i in layout.startIdx..<layout.endIdx {
+            let displayIndex = i - layout.startIdx
+            let y = paddingY + (CGFloat(displayIndex) * layout.pixelsPerLine)
+            if y > size.height { break }
+
+            // Map from visible index back to original line index → 1-based line number
+            let originalLineIndex = visibleIndices.indices.contains(i) ? visibleIndices[i] : 0
+            let oneBasedLine = originalLineIndex + 1
+
+            guard let severityRaw = diagnosticLines[oneBasedLine] else { continue }
+
+            // LSPDiagnosticSeverity: 1=error, 2=warning
+            let dotColor: Color
+            switch severityRaw {
+            case 1: // .error
+                dotColor = Color(red: 1.0, green: 0.3, blue: 0.3)
+            case 2: // .warning
+                dotColor = Color(red: 1.0, green: 0.75, blue: 0.2)
+            default:
+                continue // Skip info/hint
+            }
+
+            let yAligned = y.rounded(FloatingPointRoundingRule.down)
+            let centerY = yAligned + barHeight / 2.0 - dotSize / 2.0
+            let rect = CGRect(x: dotX, y: centerY, width: dotSize, height: dotSize)
+            context.fill(Path(ellipseIn: rect), with: .color(dotColor.opacity(0.9)))
         }
     }
 

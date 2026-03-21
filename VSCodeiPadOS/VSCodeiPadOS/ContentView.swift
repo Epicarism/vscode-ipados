@@ -1258,18 +1258,50 @@ struct IDEEditorView: View {
                         }
                     
                     if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap && !perfMonitor.shouldDegradeFeatures {
+                        // Compute search match lines for current file (1-based)
+                        let currentFilePath = tab.url?.path ?? tab.fileName
+                        let searchMatches: Set<Int> = {
+                            guard editorCore.showSearch else { return Set<Int>() }
+                            return Set(findViewModel.searchResults
+                                .filter { $0.filePath == currentFilePath }
+                                .map { $0.lineNumber })
+                        }()
+
+                        // Compute diagnostic lines from LSP proxy (1-based line → severity)
+                        let diagLines: [Int: Int] = {
+                            let lsp = TunnelLSPProxy.shared
+                            guard let fileURI = tab.url?.absoluteString else { return [:] }
+                            let diags = lsp.diagnostics[fileURI] ?? []
+                            var result: [Int: Int] = [:]
+                            // LSP lines are 0-based, our markers use 1-based
+                            for d in diags {
+                                if let sev = d.severity {
+                                    let oneBasedLine = d.range.start.line + 1
+                                    // Only keep the highest severity per line (error > warning)
+                                    if result[oneBasedLine] == nil || sev.rawValue < result[oneBasedLine]! {
+                                        result[oneBasedLine] = sev.rawValue
+                                    }
+                                }
+                            }
+                            return result
+                        }()
+
                         MinimapView(
                             content: text,
-                            fileId: tab.url?.path ?? tab.fileName,
+                            fileId: currentFilePath,
                             scrollOffset: scrollOffset,
                             scrollViewHeight: geometry.size.height,
                             totalContentHeight: CGFloat(totalLines) * lineHeight,
+                            searchMatchLines: searchMatches,
+                            diagnosticLines: diagLines,
                             onScrollRequested: { newOffset in
-                                // Minimap requested scroll - update editor position
-                                scrollOffset = newOffset
-                                // Convert back from pixels to line number
-                                let newLine = Int(newOffset / max(lineHeight, 1))
-                                scrollPosition = max(0, min(newLine, totalLines - 1))
+                                // Minimap requested scroll - update editor position with smooth animation
+                                withAnimation(.easeOut(duration: 0.15)) {
+                                    scrollOffset = newOffset
+                                    // Convert back from pixels to line number
+                                    let newLine = Int(newOffset / max(lineHeight, 1))
+                                    scrollPosition = max(0, min(newLine, totalLines - 1))
+                                }
                             }
                         )
                         .frame(width: 60)
