@@ -98,6 +98,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillEnterForeground(_ scene: UIScene) {
         // Restore state when entering foreground
         restoreWindowState(session: (scene as? UIWindowScene)?.session)
+        // P3-23: Load persisted syntax highlight cache from disk
+        Task {
+            let loaded = await SyntaxHighlightCache.shared.loadFromDisk()
+            if loaded > 0 {
+                AppLogger.editor.info("Restored \(loaded) highlight cache entries from disk")
+            }
+        }
     }
     
     func sceneDidEnterBackground(_ scene: UIScene) {

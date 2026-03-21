@@ -122,5 +122,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                   let sceneDelegate = windowScene.delegate as? SceneDelegate else { continue }
             sceneDelegate.saveWindowState()
         }
+        // P3-23: Persist syntax highlight cache to disk for fast reload
+        Task {
+            await SyntaxHighlightCache.shared.saveToDisk()
+        }
     }
 }

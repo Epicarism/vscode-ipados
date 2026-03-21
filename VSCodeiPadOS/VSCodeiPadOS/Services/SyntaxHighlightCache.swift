@@ -34,6 +34,69 @@ struct HighlightToken: Sendable {
     let line: Int              // Line number (0-based)
 }
 
+// MARK: - Persistence Helpers (Codable versions for disk storage)
+
+/// Codable representation of NSRange for JSON serialization.
+struct CodableNSRange: Codable {
+    let location: Int
+    let length: Int
+    init(_ range: NSRange) { self.location = range.location; self.length = range.length }
+    var nsRange: NSRange { NSRange(location: location, length: length) }
+}
+
+/// Codable representation of HighlightToken for disk persistence.
+struct PersistedToken: Codable {
+    let range: CodableNSRange
+    let tokenType: String
+    let line: Int
+    init(from token: HighlightToken) {
+        self.range = CodableNSRange(token.range)
+        self.tokenType = token.tokenType
+        self.line = token.line
+    }
+    var highlightToken: HighlightToken {
+        HighlightToken(range: range.nsRange, tokenType: tokenType, line: line)
+    }
+}
+
+/// Codable representation of a cache entry for disk persistence.
+struct PersistedEntry: Codable {
+    let fileId: String
+    let lineStart: Int
+    let lineEnd: Int
+    let language: String
+    let tokens: [PersistedToken]
+    let createdAt: Double  // Unix timestamp
+
+    init(from entry: HighlightCacheEntry) {
+        self.fileId = entry.fileId
+        self.lineStart = entry.lineRange.lowerBound
+        self.lineEnd = entry.lineRange.upperBound
+        self.language = entry.language
+        self.tokens = entry.tokens.map { PersistedToken(from: $0) }
+        self.createdAt = entry.createdAt.timeIntervalSince1970
+    }
+
+    var cacheEntry: HighlightCacheEntry {
+        HighlightCacheEntry(
+            fileId: fileId,
+            lineRange: lineStart..<lineEnd,
+            language: language,
+            tokens: tokens.map { $0.highlightToken },
+            createdAt: Date(timeIntervalSince1970: createdAt),
+            lastAccessedAt: Date(),
+            accessCount: 1
+        )
+    }
+}
+
+/// Tracks file modification dates for cache invalidation on reload.
+struct FileModMetadata: Codable {
+    let path: String
+    let modDate: Date
+    let fileSize: Int64
+}
+
 // MARK: - LRU Doubly-Linked List Node
 
 private final class LRUNode {
@@ -305,5 +368,175 @@ actor SyntaxHighlightCache {
         }
         nodeMap.removeValue(forKey: key)
         return key
+    }
+
+    // MARK: - Disk Persistence
+
+    /// Directory where cached highlight data is stored on disk.
+    private var persistenceDirectory: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return caches.appendingPathComponent("com.codepad.highlightCache", isDirectory: true)
+    }
+
+    /// Path to the file containing persisted cache entries.
+    private var entriesFileURL: URL {
+        persistenceDirectory.appendingPathComponent("entries.json")
+    }
+
+    /// Path to the file containing metadata (mod dates) for cache validation.
+    private var metadataFileURL: URL {
+        persistenceDirectory.appendingPathComponent("fileMetadata.json")
+    }
+
+    /// Ensure the persistence directory exists.
+    private func ensurePersistenceDirectory() {
+        try? FileManager.default.createDirectory(at: persistenceDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Save all current cache entries and file metadata to disk.
+    /// Called when the app backgrounds to persist highlights for fast reload.
+    func saveToDisk() async {
+        guard !cache.isEmpty else {
+            Self.logger.debug("Cache empty, skipping disk save")
+            return
+        }
+
+        ensurePersistenceDirectory()
+
+        // Serialize all entries
+        let entries = cache.values.map { PersistedEntry(from: $0) }
+        do {
+            let data = try JSONEncoder().encode(entries)
+            // Limit disk usage to 20MB max
+            guard data.count < 20 * 1024 * 1024 else {
+                Self.logger.warning("Cache data too large for disk (\(data.count / 1024)KB), skipping")
+                return
+            }
+            try data.write(to: entriesFileURL, options: .atomic)
+            Self.logger.info("Saved \(entries.count) highlight cache entries to disk (\(data.count / 1024)KB)")
+        } catch {
+            Self.logger.error("Failed to save highlight cache to disk: \(error.localizedDescription)")
+        }
+
+        // Save file metadata for staleness checks
+        saveMetadataToDisk()
+    }
+
+    /// Load cached entries from disk. Called on app launch.
+    /// Returns the number of entries loaded (after filtering stale ones).
+    @discardableResult
+    func loadFromDisk() async -> Int {
+        ensurePersistenceDirectory()
+
+        // Load metadata first for staleness validation
+        let metadata = loadMetadataFromDisk()
+        let metadataMap = Dictionary(uniqueKeysWithValues: metadata.map { ($0.path, $0) })
+
+        guard FileManager.default.fileExists(atPath: entriesFileURL.path) else {
+            Self.logger.debug("No persisted cache found on disk")
+            return 0
+        }
+
+        do {
+            let data = try Data(contentsOf: entriesFileURL)
+            let entries = try JSONDecoder().decode([PersistedEntry].self, from: data)
+
+            var loadedCount = 0
+            var skippedStale = 0
+
+            for persisted in entries {
+                // Validate against current file modification date
+                if let meta = metadataMap[persisted.fileId] {
+                    let fm = FileManager.default
+                    if fm.fileExists(atPath: persisted.fileId) {
+                        if let attrs = try? fm.attributesOfItem(atPath: persisted.fileId),
+                           let modDate = attrs[.modificationDate] as? Date {
+                            if modDate > meta.modDate {
+                                // File was modified since cache was saved — skip this entry
+                                skippedStale += 1
+                                continue
+                            }
+                        }
+                    }
+                }
+
+                // Check entry age — skip entries older than 1 hour
+                let entryDate = Date(timeIntervalSince1970: persisted.createdAt)
+                if Date().timeIntervalSince(entryDate) > 3600 {
+                    skippedStale += 1
+                    continue
+                }
+
+                // Restore to in-memory cache
+                let entry = persisted.cacheEntry
+                let key = cacheKey(fileId: entry.fileId, startLine: entry.lineRange.lowerBound,
+                                  endLine: entry.lineRange.upperBound, language: entry.language)
+                cache[key] = entry
+                let node = LRUNode(key: key)
+                nodeMap[key] = node
+                appendToTail(node)
+                currentSizeBytes += entry.approximateSizeBytes
+                loadedCount += 1
+            }
+
+            Self.logger.info("Loaded \(loadedCount) highlight entries from disk (skipped \(skippedStale) stale)")
+            evictIfNeeded()
+            return loadedCount
+        } catch {
+            Self.logger.error("Failed to load highlight cache from disk: \(error.localizedDescription)")
+            // Corrupted file — remove it
+            try? FileManager.default.removeItem(at: entriesFileURL)
+            return 0
+        }
+    }
+
+    /// Record a file's modification date for staleness tracking.
+    func recordFileMetadata(path: String) {
+        var metadata = loadMetadataFromDisk()
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+           let modDate = attrs[.modificationDate] as? Date,
+           let size = attrs[.size] as? Int64 {
+            metadata = metadata.filter { $0.path != path }
+            metadata.append(FileModMetadata(path: path, modDate: modDate, fileSize: size))
+            saveMetadataToDisk(metadata)
+        }
+    }
+
+    // MARK: - Metadata Helpers
+
+    private func loadMetadataFromDisk() -> [FileModMetadata] {
+        guard FileManager.default.fileExists(atPath: metadataFileURL.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: metadataFileURL)
+            return try JSONDecoder().decode([FileModMetadata].self, from: data)
+        } catch {
+            return []
+        }
+    }
+
+    private func saveMetadataToDisk(_ metadata: [FileModMetadata]? = nil) {
+        let meta = metadata ?? buildCurrentMetadata()
+        ensurePersistenceDirectory()
+        do {
+            let data = try JSONEncoder().encode(meta)
+            try data.write(to: metadataFileURL, options: .atomic)
+        } catch {
+            Self.logger.error("Failed to save file metadata: \(error.localizedDescription)")
+        }
+    }
+
+    /// Build metadata for all files currently in the cache.
+    private func buildCurrentMetadata() -> [FileModMetadata] {
+        let uniquePaths = Set(cache.values.map { $0.fileId })
+        var result: [FileModMetadata] = []
+        let fm = FileManager.default
+        for p in uniquePaths {
+            if let attrs = try? fm.attributesOfItem(atPath: p),
+               let modDate = attrs[.modificationDate] as? Date,
+               let size = attrs[.size] as? Int64 {
+                result.append(FileModMetadata(path: p, modDate: modDate, fileSize: size))
+            }
+        }
+        return result
     }
 }
