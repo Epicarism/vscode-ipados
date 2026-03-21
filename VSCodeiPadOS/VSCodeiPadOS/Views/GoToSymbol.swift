@@ -9,7 +9,7 @@ import SwiftUI
 
 // MARK: - Symbol Types
 
-enum SymbolType: String, CaseIterable {
+enum SymbolType: String, CaseIterable, Sendable {
     case function = "function"
     case method = "method"
     case property = "property"

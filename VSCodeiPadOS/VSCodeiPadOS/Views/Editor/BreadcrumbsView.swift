@@ -6,7 +6,7 @@ struct BreadcrumbsView: View {
 
     /// Parsed outline items for the current file (re-parsed on content change).
     @State private var outlineItems: [OutlineItem] = []
-    @State private var parseWorkItem: DispatchWorkItem?
+    @State private var parseTask: Task<Void, Never>?
 
     /// Build the full chain of symbols the cursor is inside.
     /// Walks the outline tree to find the deepest symbol that contains the cursor line.
@@ -143,19 +143,22 @@ struct BreadcrumbsView: View {
     // MARK: - Outline Parsing (reuse OutlineParser from OutlineView)
 
     private func scheduleParse() {
-        parseWorkItem?.cancel()
+        parseTask?.cancel()
 
         let content = tab.content
         let language = tab.language
 
-        let work = DispatchWorkItem {
-            let items = OutlineParser.parseOutlineItems(from: content, language: language)
-            DispatchQueue.main.async {
-                self.outlineItems = items
-            }
-        }
+        parseTask = Task {
+            // Debounce 300ms
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
 
-        parseWorkItem = work
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3, execute: work)
+            let items = await Task.detached(priority: .userInitiated) {
+                OutlineParser.parseOutlineItems(from: content, language: language)
+            }.value
+
+            guard !Task.isCancelled else { return }
+            self.outlineItems = items
+        }
     }
 }

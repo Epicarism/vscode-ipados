@@ -185,7 +185,7 @@ struct OutlineView: View {
 
 // MARK: - Outline Models
 
-struct OutlineItem: Identifiable, Hashable {
+struct OutlineItem: Identifiable, Hashable, Sendable {
     /// Stable key used for list identity + expansion persistence.
     let id: String
 
