@@ -15,6 +15,10 @@
 //  • hit-testing is disabled – the overlay is purely decorative.
 //  • PERF: Only visible lines are processed. charWidth is cached per fontSize.
 //    Indent depths are computed once per visible line and reused.
+//  • The guide at the cursor's indent level is drawn brighter/thicker to
+//    indicate the current scope (mirrors VS Code's active indent guide).
+//  • Folded line ranges are excluded from guide rendering so guides don't
+//    extend through collapsed regions.
 
 import SwiftUI
 import UIKit
@@ -50,8 +54,21 @@ struct IndentGuidesOverlay: View {
     /// Width reserved at the right edge (minimap, etc.) – guides are clipped here.
     var rightReservedWidth: CGFloat = 0
 
-    /// Colour used for guide lines.  Keep opacity very low (≈ 0.10).
+    /// Colour used for inactive guide lines.  Keep opacity very low (≈ 0.10).
     var guideColor: Color = Color.primary.opacity(0.10)
+
+    /// Colour used for the active scope guide (the indent level at the cursor).
+    /// Should be more prominent than `guideColor` (≈ 0.30–0.45 opacity).
+    var activeGuideColor: Color = Color.primary.opacity(0.35)
+
+    /// 1-based line number where the cursor currently sits.
+    /// Used to determine which indent guide to highlight as "active scope".
+    /// Pass `nil` to disable active scope highlighting.
+    var currentLine: Int? = nil
+
+    /// Ranges of folded (collapsed) line numbers (0-based, closed ranges).
+    /// Guides will not render through folded regions.
+    var foldedLineRanges: [Range<Int>] = []
 
     // MARK: - Body
 
@@ -88,18 +105,63 @@ struct IndentGuidesOverlay: View {
                 guard maxDepth > 0 else { return }
 
                 let guideUIColor = UIColor(guideColor)
-                let cgColor = guideUIColor.cgColor
+                let guideCGColor = guideUIColor.cgColor
+
+                let activeUIColor = UIColor(activeGuideColor)
+                let activeCGColor = activeUIColor.cgColor
+
+                // Determine the active indent depth: look at the cursor line's depth.
+                // The cursor line may be within the visible window or just above/below.
+                // We compute it from the actual document text for accuracy.
+                let activeDepth: Int? = {
+                    guard let cursorLine = currentLine else { return nil }
+                    // Convert 1-based to 0-based
+                    let zeroBased = cursorLine - 1
+                    // If the cursor line falls within the visible range, use the
+                    // already-computed depth (fast path).
+                    if zeroBased >= firstLine && zeroBased < firstLine + lineCount {
+                        let localIdx = zeroBased - firstLine
+                        let d = depths[localIdx]
+                        return d > 0 ? d : nil
+                    }
+                    // Slow path: extract just that one line from the document.
+                    let cursorLineText = extractVisibleLines(from: code, startLine: zeroBased, count: 1)
+                    guard let text = cursorLineText.first else { return nil }
+                    let d = indentDepth(of: text, tabSize: tabSize)
+                    return d > 0 ? d : nil
+                }()
+
+                // Build a set of folded line indices (0-based) for O(1) lookup.
+                var foldedSet: Set<Int>?
+                if !foldedLineRanges.isEmpty {
+                    var s = Set<Int>()
+                    s.reserveCapacity(foldedLineRanges.reduce(0) { $0 + $1.count })
+                    for range in foldedLineRanges {
+                        for line in range {
+                            s.insert(line)
+                        }
+                    }
+                    foldedSet = s
+                }
 
                 ctx.withCGContext { cgCtx in
-                    cgCtx.setStrokeColor(cgColor)
-                    cgCtx.setLineWidth(0.5)
-
                     for level in 1...maxDepth {
                         // X position: gutter + textView left inset + column offset
                         let x = gutterWidth + leftInset + CGFloat(level * tabSize) * charWidth
 
                         // Only draw within the clipped content width
                         guard x < size.width - rightReservedWidth else { continue }
+
+                        let isActiveLevel = activeDepth.map { level <= $0 } ?? false
+
+                        // Use active color + slightly thicker line for the active scope guides
+                        if isActiveLevel {
+                            cgCtx.setStrokeColor(activeCGColor)
+                            cgCtx.setLineWidth(1.0)
+                        } else {
+                            cgCtx.setStrokeColor(guideCGColor)
+                            cgCtx.setLineWidth(0.5)
+                        }
 
                         // Draw one continuous vertical line for this level,
                         // but only through rows that actually have this indent depth.
@@ -115,6 +177,17 @@ struct IndentGuidesOverlay: View {
                         }
 
                         for idx in 0..<lineCount {
+                            let absoluteLine = firstLine + idx
+
+                            // Skip lines inside folded regions — don't draw guides
+                            // through collapsed code blocks.
+                            if let folded = foldedSet, folded.contains(absoluteLine) {
+                                // Flush any segment before the fold and start fresh after
+                                let rowY = topInset + CGFloat(idx) * lineHeight
+                                flushSegment(end: rowY)
+                                continue
+                            }
+
                             let rowY = topInset + CGFloat(idx) * lineHeight
                             if depths[idx] >= level {
                                 if segStart == nil { segStart = rowY }
@@ -141,7 +214,7 @@ struct IndentGuidesOverlay: View {
     /// Extract visible lines from the document without splitting the entire string.
     /// Walks to the `startLine`-th newline, then collects `count` lines.
     private func extractVisibleLines(from text: String, startLine: Int, count: Int) -> [Substring] {
-        guard !text.isEmpty, count > 0 else { return [] }
+        guard !text.isEmpty, count > 0, startLine >= 0 else { return [] }
         
         var lines: [Substring] = []
         lines.reserveCapacity(count)
@@ -175,6 +248,8 @@ struct IndentGuidesOverlay: View {
     /// - A leading tab counts as one full indent level.
     /// - Leading spaces are summed and divided by `tabSize`.
     /// - Mixed tabs and spaces: tabs are expanded to the next tab stop first.
+    /// - Empty lines return 0 (guides bridge over blank lines naturally since
+    ///   segments remain open until a shallower line closes them).
     private func indentDepth(of line: Substring, tabSize: Int) -> Int {
         guard !line.isEmpty else { return 0 }
         var spaces = 0

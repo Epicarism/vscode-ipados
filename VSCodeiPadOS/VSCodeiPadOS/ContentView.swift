@@ -1315,7 +1315,9 @@ struct IDEEditorView: View {
                     fontSize: editorCore.editorFontSize,
                     gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
                     rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80,
-                    guideColor: theme.editorForeground.opacity(0.10)
+                    guideColor: theme.editorForeground.opacity(0.10),
+                    activeGuideColor: theme.editorForeground.opacity(0.35),
+                    currentLine: currentLineNumber
                 )
                 .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
                 .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
