@@ -96,9 +96,9 @@ struct BreadcrumbsView: View {
                         let isCurrentSymbol = index == hierarchy.count - 1
 
                         HStack(spacing: 3) {
-                            Image(systemName: symbolIcon(for: symbol.type))
+                            Image(systemName: symbol.type.icon)
                                 .font(.system(size: 9))
-                                .foregroundColor(symbolColor(for: symbol.type))
+                                .foregroundColor(symbol.type.color)
                             Text(symbol.name)
                                 .font(.system(size: 11, weight: isCurrentSymbol ? .bold : .regular))
                                 .foregroundColor(isCurrentSymbol ? .primary : .secondary)
@@ -138,44 +138,6 @@ struct BreadcrumbsView: View {
             .font(.system(size: 8))
             .foregroundColor(.secondary.opacity(0.5))
             .padding(.horizontal, 2)
-    }
-
-    private func symbolIcon(for type: SymbolType) -> String {
-        switch type {
-        case .class:       return "c.circle"
-        case .struct:      return "s.circle"
-        case .enum:        return "e.circle"
-        case .protocol:    return "p.circle"
-        case .interface:   return "i.circle"
-        case .function:    return "f.cursive"
-        case .method:      return "f.cursive"
-        case .property:    return "v.circle"
-        case .variable:    return "v.circle"
-        case .constructor: return "c.circle"
-        case .namespace:   return "n.circle"
-        case .module:      return "m.circle"
-        case .type:        return "t.circle"
-        default:           return "curlybraces"
-        }
-    }
-
-    private func symbolColor(for type: SymbolType) -> Color {
-        switch type {
-        case .class:       return .blue
-        case .struct:      return .green
-        case .enum:        return .orange
-        case .protocol:    return .yellow
-        case .interface:   return .teal
-        case .function:    return .purple
-        case .method:      return .indigo
-        case .property:    return .cyan
-        case .variable:    return .gray
-        case .constructor: return .mint
-        case .namespace:   return .brown
-        case .module:      return .brown
-        case .type:        return .pink
-        default:           return .secondary
-        }
     }
 
     // MARK: - Outline Parsing (reuse OutlineParser from OutlineView)

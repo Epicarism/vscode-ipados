@@ -1187,13 +1187,16 @@ struct RunestoneEditorView: UIViewRepresentable {
             guard flags.contains(.command) else { return }
 
             let location = gesture.location(in: textView)
-            let textOffset = textView.characterOffset(at: location)
+            // Use Runestone's closestPosition API to get character offset
+            guard let textPosition = textView.closestPosition(to: location),
+                  let start = textView.beginningOfDocument else { return }
+            let textOffset = textView.offset(from: start, to: textPosition)
 
             let link = LinkDetectionManager.shared.linkAt(offset: textOffset)
             guard let detected = link else { return }
 
-            // Get workspace root from EditorCore
-            let workspaceRoot = parent.editorCore.workspaceRoot
+            // Resolve workspace root for relative file path navigation
+            let workspaceRoot = parent.editorCore.restoreWorkspaceURL()?.path
             LinkDetectionManager.shared.openLink(detected, workspaceRoot: workspaceRoot)
         }
 
