@@ -362,7 +362,7 @@ private struct OutlineRow: View {
 
 // MARK: - Parsing
 
-private enum OutlineParser {
+enum OutlineParser {
     static func parseOutlineItems(from content: String, language: CodeLanguage) -> [OutlineItem] {
         switch language {
         case .swift:

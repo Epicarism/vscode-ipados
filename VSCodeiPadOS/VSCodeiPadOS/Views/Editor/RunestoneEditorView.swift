@@ -216,6 +216,8 @@ struct RunestoneEditorView: UIViewRepresentable {
         let capturedText = text
         DispatchQueue.main.async {
             CodeFoldingManager.shared.detectFoldableRegions(in: capturedText, filePath: capturedFilename)
+            // Initial link detection
+            LinkDetectionManager.shared.detectLinks(in: capturedText)
         }
         
         return textView
@@ -692,6 +694,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         /// Gesture recognizer for Option+drag column selection activation
         private var columnSelectionPanGesture: UIPanGestureRecognizer?
 
+        /// Tap gesture recognizer for Cmd+Click link detection
+        private var linkTapGesture: UITapGestureRecognizer?
+
         /// Whether a column selection drag is in progress
         private var isColumnDragActive = false
 
@@ -700,6 +705,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             self.lastFontSize = parent.fontSize
             self.lastThemeId = ""  // Will be set on first update from MainActor
             self.lastFilename = parent.filename
+            LinkDetectionManager.shared.clearCache()
             super.init()
 
             // bracketHighlightLayer is installed lazily in textViewDidBeginEditing
@@ -873,6 +879,9 @@ struct RunestoneEditorView: UIViewRepresentable {
                     self.parent.text = textView.text
                     // Keep CodeFoldingManager's shadow text in sync with user edits
                     CodeFoldingManager.shared.currentText = textView.text
+
+                    // Re-detect links in updated text
+                    LinkDetectionManager.shared.detectLinks(in: textView.text)
 
                     // Invalidate syntax highlight cache for this file
                     let filename = self.parent.filename
@@ -1153,7 +1162,41 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
             // Install Option+drag gesture for column selection
             installColumnSelectionGesture(on: textView)
+            // Install Cmd+Click link detection
+            setupLinkDetection(for: textView)
         }
+
+        // MARK: - Link Detection (Cmd+Click)
+
+        /// Set up Cmd+Click link detection tap gesture
+        private func setupLinkDetection(for textView: TextView) {
+            // Remove old gesture if any
+            if let old = linkTapGesture {
+                textView.removeGestureRecognizer(old)
+            }
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleLinkTap(_:)))
+            tap.require(toFail: textView.gestureRecognizers?.first(where: { $0 is UITapGestureRecognizer }) ?? tap)
+            textView.addGestureRecognizer(tap)
+            linkTapGesture = tap
+        }
+
+        @objc private func handleLinkTap(_ gesture: UITapGestureRecognizer) {
+            guard let textView = textView,
+                  let modifierFlags = gesture.value(forKey: "modifierFlags") as? UInt else { return }
+            let flags = UIKeyModifierFlags(rawValue: modifierFlags)
+            guard flags.contains(.command) else { return }
+
+            let location = gesture.location(in: textView)
+            let textOffset = textView.characterOffset(at: location)
+
+            let link = LinkDetectionManager.shared.linkAt(offset: textOffset)
+            guard let detected = link else { return }
+
+            // Get workspace root from EditorCore
+            let workspaceRoot = parent.editorCore.workspaceRoot
+            LinkDetectionManager.shared.openLink(detected, workspaceRoot: workspaceRoot)
+        }
+
         
         func textViewDidEndEditing(_ textView: TextView) {
             // Could be used for focus handling
@@ -1576,14 +1619,49 @@ struct RunestoneEditorView: UIViewRepresentable {
                 UInt16(UnicodeScalar("]").value)
             ]
             let ch = str.character(at: pos)
+            // Skip brackets inside strings or comments
+            let swiftStr = str as String
+            if BracketMatchingManager.isInsideStringOrComment(in: swiftStr, at: pos) { return nil }
             // Bound bracket scan to ±10K chars (~300 lines) to avoid O(N) on large files
             let maxScanDistance = 10_000
+            let quote: unichar = UInt16(UnicodeScalar("\"").value)
+            let singleQuote: unichar = UInt16(UnicodeScalar("'").value)
+            let backslash: unichar = UInt16(UnicodeScalar("\\").value)
+            let forwardSlash: unichar = UInt16(UnicodeScalar("/").value)
+            let star: unichar = UInt16(UnicodeScalar("*").value)
+            let backtick: unichar = UInt16(UnicodeScalar("`").value)
+            let newline: unichar = UInt16(UnicodeScalar("\n").value)
             if let idx = opens.firstIndex(of: ch) {
                 let close = closes[idx]
                 var depth = 1; var i = pos + 1
                 let scanLimit = min(str.length, pos + maxScanDistance)
+                // Inline tracking of string/comment state for forward scan
+                var inStr = false
+                var inLineCmt = false
+                var inBlockCmt = false
+                var strChar: unichar = quote
+                var inTemplate = false
                 while i < scanLimit {
                     let c = str.character(at: i)
+                    let next: unichar? = (i + 1 < scanLimit) ? str.character(at: i + 1) : nil
+                    if inBlockCmt {
+                        if c == star && next == forwardSlash { inBlockCmt = false; i += 2; continue }
+                        i += 1; continue
+                    }
+                    if inLineCmt {
+                        if c == newline { inLineCmt = false }
+                        i += 1; continue
+                    }
+                    if inStr || inTemplate {
+                        if c == backslash { i += 2; continue }
+                        if inTemplate && c == backtick { inTemplate = false; i += 1; continue }
+                        if inStr && c == strChar { inStr = false; i += 1; continue }
+                        i += 1; continue
+                    }
+                    if c == forwardSlash && next == forwardSlash { inLineCmt = true; i += 2; continue }
+                    if c == forwardSlash && next == star { inBlockCmt = true; i += 2; continue }
+                    if c == quote || c == singleQuote { inStr = true; strChar = c; i += 1; continue }
+                    if c == backtick { inTemplate = true; i += 1; continue }
                     if c == ch { depth += 1 } else if c == close { depth -= 1; if depth == 0 { return i } }
                     i += 1
                 }
@@ -1591,8 +1669,33 @@ struct RunestoneEditorView: UIViewRepresentable {
                 let open = opens[idx]
                 var depth = 1; var i = pos - 1
                 let scanLimit = max(0, pos - maxScanDistance)
+                // Inline tracking of string/comment state for backward scan
+                var inStr = false
+                var inLineCmt = false
+                var inBlockCmt = false
+                var inTemplate = false
                 while i >= scanLimit {
                     let c = str.character(at: i)
+                    let prev: unichar? = (i - 1 >= scanLimit) ? str.character(at: i - 1) : nil
+                    if inBlockCmt {
+                        if c == forwardSlash && prev == star { inBlockCmt = false; i -= 2; continue }
+                        i -= 1; continue
+                    }
+                    if inLineCmt {
+                        if c == forwardSlash && prev == forwardSlash { inLineCmt = false; i -= 2; continue }
+                        if c == newline { inLineCmt = false }
+                        i -= 1; continue
+                    }
+                    if inStr || inTemplate {
+                        if c == backslash { i -= 2; continue }
+                        if inTemplate && c == backtick { inTemplate = false; i -= 1; continue }
+                        if inStr && (c == quote || c == singleQuote) { inStr = false; i -= 1; continue }
+                        i -= 1; continue
+                    }
+                    if c == forwardSlash && prev == forwardSlash { inLineCmt = true; i -= 2; continue }
+                    if c == star && prev == forwardSlash { inBlockCmt = true; i -= 2; continue }
+                    if c == quote || c == singleQuote { inStr = true; i -= 1; continue }
+                    if c == backtick { inTemplate = true; i -= 1; continue }
                     if c == ch { depth += 1 } else if c == open { depth -= 1; if depth == 0 { return i } }
                     i -= 1
                 }
@@ -1620,9 +1723,13 @@ struct RunestoneEditorView: UIViewRepresentable {
             ]
 
             // Check character to the left of cursor, then to the right
+            // Skip brackets inside strings, comments, or template literals
+            let swiftText = nsText as String
             var sourcePos: Int? = nil
             for candidate in [cursor - 1, cursor] where candidate >= 0 && candidate < nsText.length {
                 if bracketChars.contains(nsText.character(at: candidate)) {
+                    // Skip brackets inside strings, comments, or template literals
+                    if BracketMatchingManager.isInsideStringOrComment(in: swiftText, at: candidate) { continue }
                     sourcePos = candidate
                     break
                 }

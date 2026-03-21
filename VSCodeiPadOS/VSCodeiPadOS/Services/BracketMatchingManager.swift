@@ -95,38 +95,12 @@ final class BracketMatchingManager: @unchecked Sendable {
         }
         
         let chars = Array(text)
-        var inString = false
-        var stringChar: Character = "\""
-        var escapeNext = false
         
         for (index, char) in chars.enumerated() {
-            // Handle escape sequences
-            if escapeNext {
-                escapeNext = false
-                continue
-            }
-            
-            if char == "\\" {
-                escapeNext = true
-                continue
-            }
-            
-            // Handle string literals
-            if char == "\"" || char == "'" {
-                if !inString {
-                    inString = true
-                    stringChar = char
-                } else if char == stringChar {
-                    inString = false
-                }
-                continue
-            }
-            
             // Skip brackets inside strings, comments, or template strings
             if Self.isInsideStringOrComment(in: text, at: index) { continue }
             
             // Check for brackets
-            if let (bracketType, isOpen) = BracketType.from(char: char) {
             if let (bracketType, isOpen) = BracketType.from(char: char) {
                 if isOpen {
                     stacks[bracketType]?.append(index)

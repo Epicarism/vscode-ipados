@@ -4,93 +4,54 @@ struct BreadcrumbsView: View {
     @ObservedObject var editorCore: EditorCore
     let tab: Tab
 
-    // PERF: Static regex — compiled once instead of on every render
-    private static let symbolRegex: NSRegularExpression? = {
-        let symbolPatterns = [
-            // Swift
-            "(class|struct|enum|protocol|extension|func|var|let)\\s+(\\w+)",
-            // JS/TS
-            "(function|class|const|let|var|interface|type)\\s+(\\w+)",
-            // Python
-            "(def|class)\\s+(\\w+)",
-            // Rust
-            "(fn|struct|enum|impl|trait|mod)\\s+(\\w+)",
-        ]
-        return try? NSRegularExpression(pattern: symbolPatterns.joined(separator: "|"))
-    }()
-    
+    /// Parsed outline items for the current file (re-parsed on content change).
+    @State private var outlineItems: [OutlineItem] = []
+    @State private var parseWorkItem: DispatchWorkItem?
+
+    /// Build the full chain of symbols the cursor is inside.
+    /// Walks the outline tree to find the deepest symbol that contains the cursor line.
+    private var symbolHierarchy: [OutlineItem] {
+        let cursorLine = editorCore.cursorPosition.line + 1 // 1-indexed
+        guard !outlineItems.isEmpty else { return [] }
+
+        var chain: [OutlineItem] = []
+
+        func walk(_ items: [OutlineItem]) {
+            for item in items {
+                if item.line <= cursorLine {
+                    // Check if any child also contains the cursor (deeper scope)
+                    let containingChildren = item.children.filter { $0.line <= cursorLine }
+                    if !containingChildren.isEmpty {
+                        chain.append(item)
+                        // Recurse into children that contain cursor — pick the deepest
+                        walk(containingChildren)
+                        return
+                    }
+                    // No children contain cursor; this is the leaf scope
+                    chain.append(item)
+                }
+            }
+        }
+
+        walk(outlineItems)
+        return chain
+    }
+
     var pathComponents: [String] {
         if let url = tab.url {
             return url.pathComponents.filter { $0 != "/" }
         }
-        // For untitled files, use the first path component from the URL or a generic name
         let folderName = tab.url?.deletingLastPathComponent().lastPathComponent ?? "Workspace"
         return [folderName, tab.fileName]
     }
-    
-    /// Attempt to detect the current symbol name from the file content near the cursor.
-    /// PERF: Uses targeted line extraction instead of splitting the entire document.
-    var currentSymbolName: String {
-        let content = tab.content
-        guard !content.isEmpty else { return tab.fileName.components(separatedBy: ".").first ?? tab.fileName }
-        guard let regex = Self.symbolRegex else { return tab.fileName.components(separatedBy: ".").first ?? tab.fileName }
-        
-        let cursorLine = editorCore.cursorPosition.line
-        let searchStart = max(0, cursorLine - 100)
-        
-        // PERF: Extract only lines [searchStart...cursorLine] instead of splitting entire document
-        let lines = extractLinesRange(from: content, start: searchStart, through: cursorLine)
-        
-        // Search backwards from cursor to find the nearest symbol declaration
-        for lineIdx in stride(from: lines.count - 1, through: 0, by: -1) {
-            let line = lines[lineIdx]
-            let nsLine = line as NSString
-            if let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)) {
-                // Find the last non-empty capture group (the name)
-                for groupIdx in stride(from: match.numberOfRanges - 1, through: 1, by: -1) {
-                    let range = match.range(at: groupIdx)
-                    if range.location != NSNotFound {
-                        return nsLine.substring(with: range)
-                    }
-                }
-            }
-        }
-        
-        return tab.fileName.components(separatedBy: ".").first ?? tab.fileName
-    }
 
-    /// PERF: Extract lines in range [start...through] without splitting the entire document.
-    private func extractLinesRange(from text: String, start startLine: Int, through endLine: Int) -> [String] {
-        var lines: [String] = []
-        lines.reserveCapacity(endLine - startLine + 1)
-        var currentLine = 0
-        var lineStart = text.startIndex
-        var i = text.startIndex
-        while i < text.endIndex {
-            if text[i] == "\n" {
-                if currentLine >= startLine && currentLine <= endLine {
-                    lines.append(String(text[lineStart..<i]))
-                }
-                if currentLine >= endLine { return lines }
-                currentLine += 1
-                lineStart = text.index(after: i)
-            }
-            i = text.index(after: i)
-        }
-        // Last line
-        if currentLine >= startLine && currentLine <= endLine {
-            lines.append(String(text[lineStart..<text.endIndex]))
-        }
-        return lines
-    }
-    
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
+                // ── File path segments ──
                 ForEach(Array(pathComponents.enumerated()), id: \.offset) { index, component in
                     let isLast = index == pathComponents.count - 1
-                    
-                    // Breadcrumb item
+
                     HStack(spacing: 4) {
                         if index == 0 {
                             Image(systemName: "folder")
@@ -101,7 +62,7 @@ struct BreadcrumbsView: View {
                                 .font(.caption2)
                                 .foregroundColor(fileColor(for: component))
                         }
-                        
+
                         Text(component)
                             .font(.system(size: 11))
                             .foregroundColor(isLast ? .primary : .secondary)
@@ -112,40 +73,50 @@ struct BreadcrumbsView: View {
                     .accessibilityLabel("Navigate to \(component)")
                     .accessibilityHint("Navigate to folder/file name")
                     .onTapGesture {
-                        if isLast {
-                            return
-                        }
+                        if isLast { return }
                         let dirPath = "/" + pathComponents[...index].joined(separator: "/")
-
                         NotificationCenter.default.post(
                             name: Notification.Name("navigateToDirectory"),
                             object: nil,
                             userInfo: ["path": dirPath]
                         )
                     }
-                    
-                    // Separator
+
                     if !isLast {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8))
-                            .foregroundColor(.secondary.opacity(0.5))
-                            .padding(.horizontal, 2)
+                        chevronSeparator
                     }
                 }
-                
-                // Current symbol
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 8))
-                    .foregroundColor(.secondary.opacity(0.5))
-                    .padding(.horizontal, 2)
-                    
-                HStack(spacing: 2) {
-                    Image(systemName: "curlybraces")
-                        .font(.caption2)
-                        .foregroundColor(.purple)
-                    Text(currentSymbolName)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+
+                // ── Symbol hierarchy segments ──
+                let hierarchy = symbolHierarchy
+                if !hierarchy.isEmpty {
+                    chevronSeparator
+
+                    ForEach(Array(hierarchy.enumerated()), id: \.element.id) { index, symbol in
+                        let isCurrentSymbol = index == hierarchy.count - 1
+
+                        HStack(spacing: 3) {
+                            Image(systemName: symbolIcon(for: symbol.type))
+                                .font(.system(size: 9))
+                                .foregroundColor(symbolColor(for: symbol.type))
+                            Text(symbol.name)
+                                .font(.system(size: 11, weight: isCurrentSymbol ? .bold : .regular))
+                                .foregroundColor(isCurrentSymbol ? .primary : .secondary)
+                                .lineLimit(1)
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 4)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel("\(symbol.type.rawValue) \(symbol.name)")
+                        .accessibilityHint("Jump to line \(symbol.line)")
+                        .onTapGesture {
+                            editorCore.requestedGoToLine = symbol.line
+                        }
+
+                        if !isCurrentSymbol {
+                            chevronSeparator
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -153,5 +124,76 @@ struct BreadcrumbsView: View {
         .frame(height: 26)
         .background(Color(UIColor.secondarySystemBackground).opacity(0.5))
         .overlay(Divider(), alignment: .bottom)
+        .onAppear { scheduleParse() }
+        .onChange(of: tab.content) { _, _ in scheduleParse() }
+        .onChange(of: editorCore.cursorPosition.line) { _, _ in
+            // Force re-render for symbol hierarchy update (derived from cursor position)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var chevronSeparator: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 8))
+            .foregroundColor(.secondary.opacity(0.5))
+            .padding(.horizontal, 2)
+    }
+
+    private func symbolIcon(for type: SymbolType) -> String {
+        switch type {
+        case .class:       return "c.circle"
+        case .struct:      return "s.circle"
+        case .enum:        return "e.circle"
+        case .protocol:    return "p.circle"
+        case .interface:   return "i.circle"
+        case .function:    return "f.cursive"
+        case .method:      return "f.cursive"
+        case .property:    return "v.circle"
+        case .variable:    return "v.circle"
+        case .constructor: return "c.circle"
+        case .namespace:   return "n.circle"
+        case .module:      return "m.circle"
+        case .type:        return "t.circle"
+        default:           return "curlybraces"
+        }
+    }
+
+    private func symbolColor(for type: SymbolType) -> Color {
+        switch type {
+        case .class:       return .blue
+        case .struct:      return .green
+        case .enum:        return .orange
+        case .protocol:    return .yellow
+        case .interface:   return .teal
+        case .function:    return .purple
+        case .method:      return .indigo
+        case .property:    return .cyan
+        case .variable:    return .gray
+        case .constructor: return .mint
+        case .namespace:   return .brown
+        case .module:      return .brown
+        case .type:        return .pink
+        default:           return .secondary
+        }
+    }
+
+    // MARK: - Outline Parsing (reuse OutlineParser from OutlineView)
+
+    private func scheduleParse() {
+        parseWorkItem?.cancel()
+
+        let content = tab.content
+        let language = tab.language
+
+        let work = DispatchWorkItem {
+            let items = OutlineParser.parseOutlineItems(from: content, language: language)
+            DispatchQueue.main.async {
+                self.outlineItems = items
+            }
+        }
+
+        parseWorkItem = work
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 }
