@@ -1038,12 +1038,45 @@ struct RunestoneEditorView: UIViewRepresentable {
             let text = textView.text
             guard !text.isEmpty else { return }
             
-            let formatted = MainActor.assumeIsolated {
-                let formatter = CodeFormatter.shared
-                return formatter.format(code: text, filename: parent.filename)
+            // Resolve document URI and language ID from the active tab
+            let filename = parent.filename
+            let uri: String?
+            let languageId: String
+            if let tabIdx = parent.editorCore.activeTabIndex,
+               tabIdx < parent.editorCore.tabs.count {
+                let tab = parent.editorCore.tabs[tabIdx]
+                uri = tab.url?.absoluteString
+                languageId = tab.language.rawValue
+            } else {
+                uri = nil
+                languageId = CodeFormatter.shared.detectLanguage(from: filename)
             }
             
-            guard formatted != text else {
+            // If we have a URI, try LSP formatting (async) first
+            if let uri = uri {
+                Task { @MainActor in
+                    let formatter = CodeFormatter.shared
+                    let formatted = await formatter.formatWithLSP(
+                        uri: uri,
+                        languageId: languageId,
+                        text: text,
+                        filename: filename
+                    )
+                    self.applyFormattedText(formatted, originalText: text, filename: filename)
+                }
+            } else {
+                // No URI — use local-only formatting
+                let formatted = MainActor.assumeIsolated {
+                    CodeFormatter.shared.format(code: text, filename: filename)
+                }
+                applyFormattedText(formatted, originalText: text, filename: filename)
+            }
+        }
+        
+        /// Apply formatted text to the text view, wrapping the mutation in an undo group.
+        private func applyFormattedText(_ formatted: String, originalText: String, filename: String) {
+            guard let textView = textView else { return }
+            guard formatted != originalText else {
                 AppLogger.editor.info("Format Document: No changes needed")
                 return
             }
@@ -1053,8 +1086,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.undoManager?.beginUndoGrouping()
             textView.undoManager?.registerUndo(withTarget: self) { coordinator in
                 guard let tv = coordinator.textView else { return }
-                tv.text = text
-                coordinator.parent.text = text
+                tv.text = originalText
+                coordinator.parent.text = originalText
                 MainActor.assumeIsolated {
                     coordinator.parent.editorCore.objectWillChange.send()
                 }
@@ -1067,7 +1100,7 @@ struct RunestoneEditorView: UIViewRepresentable {
                 parent.editorCore.objectWillChange.send()
             }
             
-            let ext = (parent.filename as NSString).pathExtension.lowercased()
+            let ext = (filename as NSString).pathExtension.lowercased()
             AppLogger.editor.info("Format Document: Applied formatting for .\(ext) file")
         }
         

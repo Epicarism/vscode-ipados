@@ -410,6 +410,30 @@ final class TunnelLSPProxy: ObservableObject {
     
     private init(webSocket: TunnelWebSocketClient = .shared) {
         self.webSocket = webSocket
+        // Register this proxy as the LSP formatting provider for CodeFormatter
+        CodeFormatter.shared.registerLSPProvider { [weak self] uri, languageId, tabSize, insertSpaces in
+            guard let self = self else {
+                throw NSError(domain: "CodeFormatter", code: -1, userInfo: [NSLocalizedDescriptionKey: "LSP proxy released"])
+            }
+            guard self.isInitialized, self.activeLSPServers.contains(languageId) else {
+                return []  // No active server for this language
+            }
+            let options = LSPFormattingOptions(
+                tabSize: tabSize,
+                insertSpaces: insertSpaces,
+                trimTrailingWhitespace: nil,
+                insertFinalNewline: nil,
+                trimFinalNewlines: nil
+            )
+            let edits = try await self.formatting(uri: uri, languageId: languageId, options: options)
+            return edits.map { FormatterTextEdit(
+                rangeStartLine: $0.range.start.line,
+                rangeStartChar: $0.range.start.character,
+                rangeEndLine: $0.range.end.line,
+                rangeEndChar: $0.range.end.character,
+                newText: $0.newText
+            ) }
+        }
         startListeningForNotifications()
     }
     

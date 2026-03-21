@@ -141,10 +141,22 @@ final class AutoSaveManager: ObservableObject {
               editorCore.tabs[index].isUnsaved else { return false }
         
         do {
+            var contentToSave = editorCore.tabs[index].content
+            
+            // Apply format-on-save if enabled (uses local formatter for fast,
+            // synchronous formatting — auto-save should not wait on LSP round-trips).
+            if UserDefaults.standard.bool(forKey: "formatOnSave") {
+                let formatter = CodeFormatter.shared
+                contentToSave = formatter.format(
+                    code: contentToSave,
+                    filename: editorCore.tabs[index].fileName
+                )
+            }
+            
             if let fileNavigator = editorCore.fileNavigator {
-                try fileNavigator.writeFile(at: url, content: editorCore.tabs[index].content)
+                try fileNavigator.writeFile(at: url, content: contentToSave)
             } else {
-                try editorCore.tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
+                try contentToSave.write(to: url, atomically: true, encoding: .utf8)
             }
             
             editorCore.tabs[index].isUnsaved = false

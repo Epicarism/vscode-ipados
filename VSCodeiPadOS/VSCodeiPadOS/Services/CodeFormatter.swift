@@ -6,6 +6,23 @@
 //
 
 import Foundation
+import os
+
+// MARK: - LSP Format Provider (decoupled from TunnelLSPProxy)
+
+/// Minimal LSP text-edit types used by the formatter.
+/// When TunnelLSPProxy is compiled it registers itself as the provider.
+struct FormatterTextEdit: Sendable {
+    let rangeStartLine: Int
+    let rangeStartChar: Int
+    let rangeEndLine: Int
+    let rangeEndChar: Int
+    let newText: String
+}
+
+/// Signature for the LSP formatting closure injected at runtime.
+/// Parameters: (uri, languageId, tabSize, insertSpaces) -> [FormatterTextEdit]
+typealias LSPFormatProvider = @Sendable @MainActor (String, String, Int, Bool) async throws -> [FormatterTextEdit]
 
 // MARK: - Code Formatter
 
@@ -28,6 +45,14 @@ class CodeFormatter: ObservableObject {
     
     @Published var trimTrailingWhitespace: Bool = true
     @Published var insertFinalNewline: Bool = true
+    
+    /// Optional LSP formatting provider. Set by TunnelLSPProxy when available.
+    private var lspProvider: LSPFormatProvider?
+    
+    /// Register an LSP formatting provider (called by TunnelLSPProxy at init).
+    func registerLSPProvider(_ provider: @escaping LSPFormatProvider) {
+        self.lspProvider = provider
+    }
     
     private var indent: String {
         useTabs ? "\t" : String(repeating: " ", count: tabSize)
@@ -55,6 +80,79 @@ class CodeFormatter: ObservableObject {
             return formatCStyle(code, language: lang)
         }
     }
+    
+    /// Format code using LSP if available, falling back to local formatting.
+    /// - Parameters:
+    ///   - uri: The document URI (e.g. "file:///path/to/file") for the LSP server.
+    ///   - languageId: The LSP language identifier (e.g. "swift", "typescript").
+    ///   - text: The current document text to format.
+    ///   - filename: The filename used for local fallback language detection.
+    /// - Returns: The formatted string.
+    func formatWithLSP(uri: String, languageId: String, text: String, filename: String) async -> String {
+        // Try LSP formatting first if a provider is registered
+        if let provider = lspProvider {
+            do {
+                let edits = try await provider(uri, languageId, tabSize, !useTabs)
+                if !edits.isEmpty {
+                    let formatted = applyFormatterTextEdits(edits, to: text)
+                    AppLogger.editor.info("Format: Applied LSP formatting (\(edits.count) edits)")
+                    return formatted
+                }
+            } catch {
+                AppLogger.editor.warning("LSP formatting failed, falling back to local: \(error)")
+            }
+        }
+        // Fall back to local formatting
+        return format(code: text, filename: filename)
+    }
+    
+    // MARK: - Text Edit Application
+    
+    /// Apply an array of FormatterTextEdit to text, processing from bottom to top
+    /// to preserve character offsets as edits are applied.
+    private func applyFormatterTextEdits(_ edits: [FormatterTextEdit], to text: String) -> String {
+        guard !edits.isEmpty else { return text }
+        
+        // Convert an LSP position (0-based line, 0-based character) to a String.Index
+        func offset(line: Int, character: Int) -> String.Index? {
+            var currentLine = 0
+            var idx = text.startIndex
+            while idx < text.endIndex {
+                if currentLine == line {
+                    let remaining = text.distance(from: idx, to: text.endIndex)
+                    return text.index(idx, offsetBy: min(character, remaining))
+                }
+                if text[idx] == "\n" {
+                    currentLine += 1
+                }
+                idx = text.index(after: idx)
+            }
+            // If we reached the end and are on the target line, return endIndex
+            if currentLine == line { return text.endIndex }
+            return nil
+        }
+        
+        // Sort edits by start position descending so we apply bottom-to-top
+        // (later edits don't shift the offsets of earlier ones)
+        let sortedEdits = edits.sorted { a, b in
+            if a.rangeStartLine != b.rangeStartLine {
+                return a.rangeStartLine > b.rangeStartLine
+            }
+            return a.rangeStartChar > b.rangeStartChar
+        }
+        
+        var result = text
+        for edit in sortedEdits {
+            guard let startIdx = offset(line: edit.rangeStartLine, character: edit.rangeStartChar),
+                  let endIdx = offset(line: edit.rangeEndLine, character: edit.rangeEndChar) else {
+                continue
+            }
+            result.replaceSubrange(startIdx..<endIdx, with: edit.newText)
+        }
+        
+        return result
+    }
+    
     
     /// Detect language from filename extension
     func detectLanguage(from filename: String) -> String {
