@@ -603,7 +603,7 @@ final class LargeFileHandler: ObservableObject {
 
     /// Decode data that may have an incomplete UTF-8 sequence at the end.
     /// Strips the incomplete trailing bytes unless the data is known to be complete.
-    private func decodeProgressiveData(_ data: Data, isComplete: Bool) -> String {
+    nonisolated private func decodeProgressiveData(_ data: Data, isComplete: Bool) -> String {
         if isComplete {
             return String(data: data, encoding: .utf8)
                 ?? String(data: data, encoding: .ascii)

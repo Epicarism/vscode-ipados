@@ -27,7 +27,7 @@ import TreeSitterCRunestone
 import TreeSitterCPPRunestone
 import TreeSitterCSharpRunestone
 import TreeSitterJavaRunestone
-import TreeSitterKotlinRunestone
+// TreeSitterKotlinRunestone not available in TreeSitterLanguages package
 import TreeSitterRubyRunestone
 import TreeSitterPHPRunestone
 import TreeSitterYAMLRunestone
@@ -533,10 +533,10 @@ struct RunestoneEditorView: UIViewRepresentable {
         case "java":
             return TreeSitterLanguage.java
         
-        // Kotlin
-        case "kt", "kts":
-            return TreeSitterLanguage.kotlin
-        
+        // Kotlin — TreeSitterKotlinRunestone not available in current TreeSitterLanguages package
+        // case "kt", "kts":
+        //     return TreeSitterLanguage.kotlin
+
         // C / C++
         case "c", "h":
             return TreeSitterLanguage.c
@@ -1205,14 +1205,14 @@ struct RunestoneEditorView: UIViewRepresentable {
 
         @objc private func handleLinkTap(_ gesture: UITapGestureRecognizer) {
             guard let textView = textView,
-                  let modifierFlags = gesture.value(forKey: "modifierFlags") as? UInt else { return }
+                  let modifierFlags = gesture.value(forKey: "modifierFlags") as? Int else { return }
             let flags = UIKeyModifierFlags(rawValue: modifierFlags)
             guard flags.contains(.command) else { return }
 
             let location = gesture.location(in: textView)
             // Use Runestone's closestPosition API to get character offset
-            guard let textPosition = textView.closestPosition(to: location),
-                  let start = textView.beginningOfDocument else { return }
+            guard let textPosition = textView.closestPosition(to: location) else { return }
+            let start = textView.beginningOfDocument
             let textOffset = textView.offset(from: start, to: textPosition)
 
             let link = LinkDetectionManager.shared.linkAt(offset: textOffset)
@@ -1924,8 +1924,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
 
             // Install the layer if needed
-            if columnSelectionLayer.superlayer == nil, let textViewLayer = textView.layer {
-                textViewLayer.addSublayer(columnSelectionLayer)
+            if columnSelectionLayer.superlayer == nil {
+                textView.layer.addSublayer(columnSelectionLayer)
             }
             columnSelectionLayer.path = path
         }
@@ -2052,8 +2052,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                 // On iOS 17+, verify Option key is held before activating column selection.
                 // On older iOS, always allow (rely on keyboard toggle Cmd+Option+C).
                 if #available(iOS 17, *) {
-                    let optionHeld = UIKeyModifierFlags.option
-                        .contains(UIKeyModifierFlags(rawValue: gesture.modifierFlags.rawValue))
+                    let optionHeld = UIKeyModifierFlags.alternate
+                        .isSubset(of: UIKeyModifierFlags(rawValue: gesture.modifierFlags.rawValue))
                     guard optionHeld else { return }
                 }
                 // Activate column selection mode if not already active
@@ -2845,7 +2845,7 @@ extension RunestoneEditorView.Coordinator: UIGestureRecognizerDelegate {
         guard gestureRecognizer === columnSelectionPanGesture else { return true }
         if #available(iOS 17, *) {
             // Only start column drag when Option key is held
-            return UIKeyModifierFlags.option.contains(UIKeyModifierFlags(rawValue: gestureRecognizer.modifierFlags.rawValue))
+            return UIKeyModifierFlags.alternate.isSubset(of: UIKeyModifierFlags(rawValue: gestureRecognizer.modifierFlags.rawValue))
         }
         // Pre-iOS 17 fallback: always allow; option check happens in handleColumnDrag
         return true

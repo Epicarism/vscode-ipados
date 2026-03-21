@@ -57,14 +57,14 @@ final class LinkDetectionManager {
     private static let urlPattern: NSRegularExpression = {
         // Match URLs starting with http/https/ftp/ftps
         let pattern = #"(https?|ftps?)://[^\s<>\[\]()\"']+"#
-        try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }()
 
     /// Matches relative or absolute file paths.
     /// Matches paths like: ./foo, ../bar, /usr/local, ~/Documents, src/file.swift
     private static let filePathPattern: NSRegularExpression = {
         let pattern = #"(?:\.{1,2}/|\~/|/)(?:[A-Za-z0-9_\-.]+/)*[A-Za-z0-9_\-.]+\.[A-Za-z0-9]{1,10}"#
-        try! NSRegularExpression(pattern: pattern, options: [])
+        return try! NSRegularExpression(pattern: pattern, options: [])
     }()
 
     private init() {}

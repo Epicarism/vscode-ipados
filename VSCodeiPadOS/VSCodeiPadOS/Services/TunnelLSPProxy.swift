@@ -359,7 +359,7 @@ private class LSPServerConnection {
     var capabilities: LSPServerCapabilities?
     var isInitialized: Bool = false
     var openDocuments: Set<String> = []  // Set of open document URIs
-    var documentVersions: [String: Int] = []
+    var documentVersions: [String: Int] = [:]
     
     init(languageId: String) {
         self.languageId = languageId
@@ -435,6 +435,17 @@ final class TunnelLSPProxy: ObservableObject {
             ) }
         }
         startListeningForNotifications()
+
+        // Wire up GoToDefinitionService with the LSP definition provider
+        GoToDefinitionService.shared.setDefinitionProvider { [weak self] uri, line, character, languageId in
+            guard let self = self, self.isInitialized else { return [] }
+            let lspLocations = try await self.definition(
+                uri: uri,
+                position: LSPPosition(line: line, character: character),
+                languageId: languageId
+            )
+            return lspLocations.map { (uri: $0.uri, line: $0.range.start.line, character: $0.range.start.character) }
+        }
     }
     
     // MARK: - Server Lifecycle

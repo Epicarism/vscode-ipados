@@ -1121,7 +1121,292 @@ struct IDEEditorView: View {
         showAutocomplete = false
         return true
     }
-    
+
+    // MARK: - Extracted Overlays (reduces body type-checker complexity)
+    @ViewBuilder
+    private func editorOverlays(geometry: GeometryProxy) -> some View {
+        // Sticky Header Overlay (FEAT-040)
+        if LargeFileHandler.shared.currentTier.enableStickyHeaders && !perfMonitor.shouldDegradeFeatures {
+            StickyHeaderView(
+                text: text,
+                currentLine: scrollPosition,
+                theme: theme,
+                lineHeight: lineHeight,
+                foldRegions: foldingManager.foldRegions,
+                onSelect: { line in
+                    requestedLineSelection = line
+                }
+            )
+            .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
+            .padding(.trailing, minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap ? 60 : 0)
+        }
+
+        // Inlay Hints Overlay (type hints, parameter names)
+        if LargeFileHandler.shared.currentTier.enableInlayHints && !perfMonitor.shouldDegradeFeatures {
+            InlayHintsOverlay(
+                code: text,
+                language: tab.language,
+                scrollPosition: scrollPosition,
+                lineHeight: lineHeight,
+                fontSize: editorCore.editorFontSize,
+                gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
+                rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 60
+            )
+            .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
+            .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 60)
+        }
+
+        // Indentation guide lines (FEAT-indent-guides)
+        if indentGuides && LargeFileHandler.shared.currentTier.enableIndentGuides {
+            IndentGuidesOverlay(
+                code: text,
+                scrollPosition: scrollPosition,
+                lineHeight: lineHeight,
+                fontSize: editorCore.editorFontSize,
+                gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
+                rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80,
+                guideColor: theme.editorForeground.opacity(0.10),
+                activeGuideColor: theme.editorForeground.opacity(0.35),
+                currentLine: currentLineNumber
+            )
+            .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
+            .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
+        }
+
+        // FEAT-071 Git gutter indicators
+        if let fileURL = tab.url, lineNumbersStyle != "off" {
+            let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+            let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+            let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+            GitGutterView(
+                fileURL: fileURL,
+                visibleLineRange: firstVisible..<lastVisible,
+                lineHeight: lineHeight,
+                contentTopInset: 8,
+                selectedLine: currentLineNumber,
+                refreshToken: AnyHashable(gitGutterRefreshToken)
+            )
+            .frame(width: 6)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.leading, 52)
+            .allowsHitTesting(false)
+            .clipped()
+        }
+
+        // Breakpoint gutter
+        if !perfMonitor.shouldDegradeFeatures {
+            if let fileURL = tab.url, lineNumbersStyle != "off" {
+                let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
+                let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
+                let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
+                BreakpointGutterView(
+                    filePath: fileURL.path,
+                    visibleLineRange: firstVisible..<lastVisible,
+                    lineHeight: lineHeight,
+                    contentTopInset: 8,
+                    scrollOffset: scrollOffset
+                )
+                .frame(width: 28)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.leading, 24)
+                .clipped()
+            }
+        }
+
+        // Inline suggestion ghost text
+        if inlineSuggestionManager.currentSuggestion != nil && !showAutocomplete && inlineSuggestions {
+            InlineSuggestionView(
+                code: text,
+                language: CodeLanguage(from: tab.url?.pathExtension ?? "swift"),
+                scrollPosition: max(0, Int(scrollOffset / lineHeight)),
+                lineHeight: lineHeight,
+                fontSize: editorCore.editorFontSize
+            )
+            .environmentObject(inlineSuggestionManager)
+            .allowsHitTesting(false)
+        }
+
+        // Autocomplete popup
+        if showAutocomplete && !autocomplete.suggestionItems.isEmpty {
+            AutocompletePopup(
+                suggestions: autocomplete.suggestionItems,
+                selectedIndex: autocomplete.selectedIndex,
+                theme: theme
+            ) { index in
+                autocomplete.selectedIndex = index
+                var tempText = text
+                var tempCursor = cursorIndex
+                autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
+                if tempText != text {
+                    text = tempText
+                    cursorIndex = tempCursor
+                    requestedCursorIndex = tempCursor
+                }
+                showAutocomplete = false
+            }
+            .offset(x: {
+                let gutterWidth = lineNumbersStyle != "off" ? CGFloat(max(String(totalLines).count, 2)) * 9.0 + 35.0 : 8.0
+                return gutterWidth
+            }(), y: CGFloat(currentLineNumber) * lineHeight - scrollOffset)
+        }
+    }
+
+    // MARK: - Editor Content (extracted to reduce body complexity)
+    @ViewBuilder
+    private func editorContentView(geometry: GeometryProxy) -> some View {
+        Group {
+            if useRunestoneEditor {
+                RunestoneEditorView(
+                    text: $text,
+                    filename: tab.fileName,
+                    scrollOffset: $scrollOffset,
+                    totalLines: $totalLines,
+                    currentLineNumber: $currentLineNumber,
+                    currentColumn: $currentColumn,
+                    cursorIndex: $cursorIndex,
+                    lineHeight: $lineHeight,
+                    isActive: isTerminalFocused?.wrappedValue != true,
+                    fontSize: editorCore.editorFontSize,
+                    onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
+                    onDismissAutocomplete: { self.handleDismissAutocomplete() },
+                    onAcceptInlineSuggestion: {
+                        let textToInsert = inlineSuggestionManager.remainingSuggestionText.isEmpty
+                            ? (inlineSuggestionManager.currentSuggestion ?? "")
+                            : inlineSuggestionManager.remainingSuggestionText
+                        guard !textToInsert.isEmpty else { return false }
+                        let insertAt = text.index(text.startIndex, offsetBy: min(cursorIndex, text.count))
+                        text.insert(contentsOf: textToInsert, at: insertAt)
+                        cursorIndex += textToInsert.count
+                        requestedCursorIndex = cursorIndex
+                        inlineSuggestionManager.clearSuggestion()
+                        return true
+                    }
+                )
+                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
+            } else {
+                SyntaxHighlightingTextView(
+                    text: $text,
+                    filename: tab.fileName,
+                    scrollPosition: $scrollPosition,
+                    scrollOffset: $scrollOffset,
+                    totalLines: $totalLines,
+                    visibleLines: $visibleLines,
+                    currentLineNumber: $currentLineNumber,
+                    currentColumn: $currentColumn,
+                    cursorIndex: $cursorIndex,
+                    lineHeight: $lineHeight,
+                    isActive: isTerminalFocused?.wrappedValue != true,
+                    fontSize: editorCore.editorFontSize,
+                    requestedLineSelection: $requestedLineSelection,
+                    requestedCursorIndex: $requestedCursorIndex,
+                    onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
+                    onDismissAutocomplete: { self.handleDismissAutocomplete() }
+                )
+            }
+        }
+        .onChange(of: text) { _, newValue in
+            handleTextChange(newValue)
+        }
+        .onChange(of: cursorIndex) { _, newCursor in
+            autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
+            showAutocomplete = autocomplete.showSuggestions
+            inlineSuggestionManager.clearSuggestion()
+        }
+    }
+
+    private func handleTextChange(_ newValue: String) {
+        editorCore.updateActiveTabContent(newValue)
+        editorCore.updateCursorPosition(CursorPosition(line: currentLineNumber, column: currentColumn))
+        autocomplete.currentFilename = tab.fileName
+        if let fileURL = tab.url {
+            autocomplete.currentFileURI = fileURL.absoluteString
+        }
+
+        autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
+        showAutocomplete = autocomplete.showSuggestions
+
+        if let lspLang = AutocompleteManager.lspLanguageId(forFilename: tab.fileName),
+           !autocomplete.currentFileURI.isEmpty {
+            lspDocumentVersion += 1
+            autocomplete.notifyLSPDocumentChange(
+                uri: autocomplete.currentFileURI,
+                languageId: lspLang,
+                text: newValue,
+                version: lspDocumentVersion
+            )
+        }
+
+        foldDetectionWork?.cancel()
+        let foldWork = DispatchWorkItem {
+            CodeFoldingManager.shared.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
+        }
+        foldDetectionWork = foldWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: foldWork)
+        foldingManager.currentText = newValue
+        gitGutterRefreshToken &+= 1
+
+        symbolUpdateWork?.cancel()
+        let symbolWork = DispatchWorkItem {
+            if let tab = self.editorCore.activeTab {
+                TreeSitterSymbolProvider.shared.updateSymbols(for: tab.content, filename: tab.fileName)
+            }
+        }
+        symbolUpdateWork = symbolWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: symbolWork)
+
+        inlineSuggestionManager.clearSuggestion()
+        if newValue.count > 10 && !showAutocomplete {
+            inlineSuggestionManager.requestSuggestion(for: newValue, at: .init(line: currentLineNumber, column: currentColumn), fileName: tab.url?.lastPathComponent)
+        }
+    }
+
+    @ViewBuilder
+    private func minimapSection(geometry: GeometryProxy) -> some View {
+        if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap && !perfMonitor.shouldDegradeFeatures {
+            let currentFilePath = tab.url?.path ?? tab.fileName
+            let searchMatches: Set<Int> = {
+                guard editorCore.showSearch else { return Set<Int>() }
+                return Set(findViewModel.searchResults
+                    .filter { $0.filePath == currentFilePath }
+                    .map { $0.lineNumber })
+            }()
+
+            let diagLines: [Int: Int] = {
+                let lsp = TunnelLSPProxy.shared
+                guard let fileURI = tab.url?.absoluteString else { return [:] }
+                let diags = lsp.diagnostics[fileURI] ?? []
+                var result: [Int: Int] = [:]
+                for d in diags {
+                    if let sev = d.severity {
+                        let oneBasedLine = d.range.start.line + 1
+                        if result[oneBasedLine] == nil || sev.rawValue < result[oneBasedLine]! {
+                            result[oneBasedLine] = sev.rawValue
+                        }
+                    }
+                }
+                return result
+            }()
+
+            MinimapView(
+                content: text,
+                fileId: currentFilePath,
+                scrollOffset: scrollOffset,
+                scrollViewHeight: geometry.size.height,
+                totalContentHeight: CGFloat(totalLines) * lineHeight,
+                onScrollRequested: { newOffset in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        scrollOffset = newOffset
+                        let newLine = Int(newOffset / max(lineHeight, 1))
+                        scrollPosition = max(0, min(newLine, totalLines - 1))
+                    }
+                },
+                searchMatchLines: searchMatches,
+                diagnosticLines: diagLines
+            )
+            .frame(width: 60)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Find/Replace bar
@@ -1157,291 +1442,13 @@ struct IDEEditorView: View {
                     
                     // Editor content
                         // Use Runestone for O(log n) performance, or legacy view as fallback
-                        Group {
-                            if useRunestoneEditor {
-                                RunestoneEditorView(
-                                    text: $text,
-                                    filename: tab.fileName,
-                                    scrollOffset: $scrollOffset,
-                                    totalLines: $totalLines,
-                                    currentLineNumber: $currentLineNumber,
-                                    currentColumn: $currentColumn,
-                                    cursorIndex: $cursorIndex,
-                                    lineHeight: $lineHeight,
-                                    isActive: isTerminalFocused?.wrappedValue != true,
-                                    fontSize: editorCore.editorFontSize,
-                                    onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
-                                    onDismissAutocomplete: { self.handleDismissAutocomplete() },
-                                    onAcceptInlineSuggestion: {
-                                        // Use remainingSuggestionText so partial-accept progress is honoured
-                                        let textToInsert = inlineSuggestionManager.remainingSuggestionText.isEmpty
-                                            ? (inlineSuggestionManager.currentSuggestion ?? "")
-                                            : inlineSuggestionManager.remainingSuggestionText
-                                        guard !textToInsert.isEmpty else { return false }
-                                        let insertAt = text.index(text.startIndex, offsetBy: min(cursorIndex, text.count))
-                                        text.insert(contentsOf: textToInsert, at: insertAt)
-                                        cursorIndex += textToInsert.count
-                                        requestedCursorIndex = cursorIndex
-                                        inlineSuggestionManager.clearSuggestion()
-                                        return true
-                                    }
-                                )
-                                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
-                            } else {
-                                // Legacy SyntaxHighlightingTextView (fallback)
-                                SyntaxHighlightingTextView(
-                                    text: $text,
-                                    filename: tab.fileName,
-                                    scrollPosition: $scrollPosition,
-                                    scrollOffset: $scrollOffset,
-                                    totalLines: $totalLines,
-                                    visibleLines: $visibleLines,
-                                    currentLineNumber: $currentLineNumber,
-                                    currentColumn: $currentColumn,
-                                    cursorIndex: $cursorIndex,
-                                    lineHeight: $lineHeight,
-                                    isActive: isTerminalFocused?.wrappedValue != true,
-                                    fontSize: editorCore.editorFontSize,
-                                    requestedLineSelection: $requestedLineSelection,
-                                    requestedCursorIndex: $requestedCursorIndex,
-                                    onAcceptAutocomplete: { self.handleAcceptAutocomplete() },
-                                    onDismissAutocomplete: { self.handleDismissAutocomplete() }
-                                )
-                            }
-                        }
-                        .onChange(of: text) { _, newValue in
-                            editorCore.updateActiveTabContent(newValue)
-                            // Use debounced cursor update to reduce view refreshes
-                            editorCore.updateCursorPosition(CursorPosition(line: currentLineNumber, column: currentColumn))
-                            // Keep autocomplete manager's filename/URI in sync for LSP
-                            autocomplete.currentFilename = tab.fileName
-                            if let fileURL = tab.url {
-                                autocomplete.currentFileURI = fileURL.absoluteString
-                            }
-
-                            autocomplete.updateSuggestions(for: newValue, cursorPosition: cursorIndex)
-                            showAutocomplete = autocomplete.showSuggestions
-
-                            // Notify LSP of document change
-                            if let lspLang = AutocompleteManager.lspLanguageId(forFilename: tab.fileName),
-                               !autocomplete.currentFileURI.isEmpty {
-                                lspDocumentVersion += 1
-                                autocomplete.notifyLSPDocumentChange(
-                                    uri: autocomplete.currentFileURI,
-                                    languageId: lspLang,
-                                    text: newValue,
-                                    version: lspDocumentVersion
-                                )
-                            }
-
-                            // Debounce fold detection — 1.5s after last edit
-                            foldDetectionWork?.cancel()
-                            let foldWork = DispatchWorkItem {
-                                CodeFoldingManager.shared.detectFoldableRegions(in: newValue, filePath: tab.url?.path)
-                            }
-                            foldDetectionWork = foldWork
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: foldWork)
-                            foldingManager.currentText = newValue
-                            gitGutterRefreshToken &+= 1
-                            
-                            // Debounced symbol outline update — 1.5s after last edit
-                            symbolUpdateWork?.cancel()
-                            let symbolWork = DispatchWorkItem {
-                                if let tab = self.editorCore.activeTab {
-                                    TreeSitterSymbolProvider.shared.updateSymbols(for: tab.content, filename: tab.fileName)
-                                }
-                            }
-                            symbolUpdateWork = symbolWork
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: symbolWork)
-                            
-                            // Inline suggestion — manager handles debounce (300ms) + throttle (2s) internally
-                            inlineSuggestionManager.clearSuggestion()
-                            if newValue.count > 10 && !showAutocomplete {
-                                // Use already-computed line/column instead of O(n) prefix scan
-                                inlineSuggestionManager.requestSuggestion(for: newValue, at: .init(line: currentLineNumber, column: currentColumn), fileName: tab.url?.lastPathComponent)
-                            }
-                        }
-                        .onChange(of: cursorIndex) { _, newCursor in
-                            autocomplete.updateSuggestions(for: text, cursorPosition: newCursor)
-                            showAutocomplete = autocomplete.showSuggestions
-                            // Dismiss inline suggestion when cursor moves (user clicked elsewhere)
-                            inlineSuggestionManager.clearSuggestion()
-                        }
+                    editorContentView(geometry: geometry)
                     
-                    if minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap && !perfMonitor.shouldDegradeFeatures {
-                        // Compute search match lines for current file (1-based)
-                        let currentFilePath = tab.url?.path ?? tab.fileName
-                        let searchMatches: Set<Int> = {
-                            guard editorCore.showSearch else { return Set<Int>() }
-                            return Set(findViewModel.searchResults
-                                .filter { $0.filePath == currentFilePath }
-                                .map { $0.lineNumber })
-                        }()
-
-                        // Compute diagnostic lines from LSP proxy (1-based line → severity)
-                        let diagLines: [Int: Int] = {
-                            let lsp = TunnelLSPProxy.shared
-                            guard let fileURI = tab.url?.absoluteString else { return [:] }
-                            let diags = lsp.diagnostics[fileURI] ?? []
-                            var result: [Int: Int] = [:]
-                            // LSP lines are 0-based, our markers use 1-based
-                            for d in diags {
-                                if let sev = d.severity {
-                                    let oneBasedLine = d.range.start.line + 1
-                                    // Only keep the highest severity per line (error > warning)
-                                    if result[oneBasedLine] == nil || sev.rawValue < result[oneBasedLine]! {
-                                        result[oneBasedLine] = sev.rawValue
-                                    }
-                                }
-                            }
-                            return result
-                        }()
-
-                        MinimapView(
-                            content: text,
-                            fileId: currentFilePath,
-                            scrollOffset: scrollOffset,
-                            scrollViewHeight: geometry.size.height,
-                            totalContentHeight: CGFloat(totalLines) * lineHeight,
-                            searchMatchLines: searchMatches,
-                            diagnosticLines: diagLines,
-                            onScrollRequested: { newOffset in
-                                // Minimap requested scroll - update editor position with smooth animation
-                                withAnimation(.easeOut(duration: 0.15)) {
-                                    scrollOffset = newOffset
-                                    // Convert back from pixels to line number
-                                    let newLine = Int(newOffset / max(lineHeight, 1))
-                                    scrollPosition = max(0, min(newLine, totalLines - 1))
-                                }
-                            }
-                        )
-                        .frame(width: 60)
-                    }
+                    minimapSection(geometry: geometry)
                 }
                 .background(theme.editorBackground)
 
-                // Sticky Header Overlay (FEAT-040)
-                if LargeFileHandler.shared.currentTier.enableStickyHeaders && !perfMonitor.shouldDegradeFeatures {
-                StickyHeaderView(
-                    text: text,
-                    currentLine: scrollPosition,
-                    theme: theme,
-                    lineHeight: lineHeight,
-                    foldRegions: foldingManager.foldRegions,
-                    onSelect: { line in
-                        requestedLineSelection = line
-                    }
-                )
-                .padding(.leading, lineNumbersStyle != "off" ? 70 : 0)
-                .padding(.trailing, minimapEnabled && LargeFileHandler.shared.currentTier.enableMinimap ? 60 : 0)
-                }
-
-                // Inlay Hints Overlay (type hints, parameter names)
-                if LargeFileHandler.shared.currentTier.enableInlayHints && !perfMonitor.shouldDegradeFeatures {
-                InlayHintsOverlay(
-                    code: text,
-                    language: tab.language,
-                    scrollPosition: scrollPosition,
-                    lineHeight: lineHeight,
-                    fontSize: editorCore.editorFontSize,
-                    gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
-                    rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 60
-                )
-                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
-                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 60)
-                }
-
-                // Indentation guide lines (FEAT-indent-guides)
-                if indentGuides && LargeFileHandler.shared.currentTier.enableIndentGuides {
-                IndentGuidesOverlay(
-                    code: text,
-                    scrollPosition: scrollPosition,
-                    lineHeight: lineHeight,
-                    fontSize: editorCore.editorFontSize,
-                    gutterWidth: lineNumbersStyle != "off" ? 60 : 0,
-                    rightReservedWidth: tab.fileName.hasSuffix(".json") ? 0 : 80,
-                    guideColor: theme.editorForeground.opacity(0.10),
-                    activeGuideColor: theme.editorForeground.opacity(0.35),
-                    currentLine: currentLineNumber
-                )
-                .padding(.leading, lineNumbersStyle != "off" ? 60 : 0)
-                .padding(.trailing, tab.fileName.hasSuffix(".json") ? 0 : 80)
-                }
-
-                // FEAT-071 Git gutter indicators (added/modified/deleted)
-                // Positioned as a narrow (6 pt) strip at the right edge of the line-number
-                // gutter so it aligns with VSCode-style change bars.
-                if let fileURL = tab.url, lineNumbersStyle != "off" {
-                    let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
-                    let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
-                    let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
-                    GitGutterView(
-                        fileURL: fileURL,
-                        visibleLineRange: firstVisible..<lastVisible,
-                        lineHeight: lineHeight,
-                        contentTopInset: 8,
-                        selectedLine: currentLineNumber,
-                        refreshToken: AnyHashable(gitGutterRefreshToken)
-                    )
-                    .frame(width: 6)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.leading, 52)
-                    .allowsHitTesting(false)
-                    .clipped()
-                }
-                // Breakpoint gutter (skip when performance degraded — matches SplitEditorView behaviour)
-                if !perfMonitor.shouldDegradeFeatures {
-                    if let fileURL = tab.url, lineNumbersStyle != "off" {
-                        let visibleCount = max(1, Int(geometry.size.height / max(lineHeight, 1)) + 2)
-                        let firstVisible = max(1, Int(scrollOffset / max(lineHeight, 1)) + 1)
-                        let lastVisible = min(totalLines + 1, firstVisible + visibleCount)
-                        BreakpointGutterView(
-                            filePath: fileURL.path,
-                            visibleLineRange: firstVisible..<lastVisible,
-                            lineHeight: lineHeight,
-                            contentTopInset: 8,
-                            scrollOffset: scrollOffset
-                        )
-                        .frame(width: 28)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.leading, 24)
-                        .clipped()
-                    }
-                }
-                // Inline suggestion ghost text
-                if inlineSuggestionManager.currentSuggestion != nil && !showAutocomplete && inlineSuggestions {
-                    InlineSuggestionView(
-                        code: text,
-                        language: CodeLanguage(from: tab.url?.pathExtension ?? "swift"),
-                        scrollPosition: max(0, Int(scrollOffset / lineHeight)),
-                        lineHeight: lineHeight,
-                        fontSize: editorCore.editorFontSize
-                    )
-                    .environmentObject(inlineSuggestionManager)
-                    .allowsHitTesting(false)
-                }
-                if showAutocomplete && !autocomplete.suggestionItems.isEmpty {
-                    AutocompletePopup(
-                        suggestions: autocomplete.suggestionItems,
-                        selectedIndex: autocomplete.selectedIndex,
-                        theme: theme
-                    ) { index in
-                        autocomplete.selectedIndex = index
-                        var tempText = text
-                        var tempCursor = cursorIndex
-                        autocomplete.commitCurrentSuggestion(into: &tempText, cursorPosition: &tempCursor)
-                        if tempText != text {
-                            text = tempText
-                            cursorIndex = tempCursor
-                            requestedCursorIndex = tempCursor
-                        }
-                        showAutocomplete = false
-                    }
-                    .offset(x: {
-                        let gutterWidth = lineNumbersStyle != "off" ? CGFloat(max(String(totalLines).count, 2)) * 9.0 + 35.0 : 8.0
-                        return gutterWidth
-                    }(), y: CGFloat(currentLineNumber) * lineHeight - scrollOffset)
-                }
+                editorOverlays(geometry: geometry)
             }
         }
         }
@@ -1835,6 +1842,7 @@ struct AutocompletePopup: View {
         case .stdlib: return "curlybraces"
         case .member: return "arrow.right.circle.fill"
         case .snippet: return "curlybraces.square.fill"
+        case .lsp: return "server.rack"
         }
     }
     
@@ -1845,6 +1853,7 @@ struct AutocompletePopup: View {
         case .stdlib: return .orange
         case .member: return .green
         case .snippet: return .cyan
+        case .lsp: return .teal
         }
     }
 }

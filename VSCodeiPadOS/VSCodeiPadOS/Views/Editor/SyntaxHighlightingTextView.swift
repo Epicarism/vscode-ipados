@@ -7,7 +7,7 @@
 
 import SwiftUI
 import UIKit
-
+import Combine
 /// Thread-safe file-level regex cache: NSRegularExpression is thread-safe once created,
 /// so we compile each pattern+options pair exactly once and reuse across all highlight passes.
 /// The lock protects the dictionary from concurrent read/write corruption.
@@ -147,7 +147,7 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         
         textView.delegate = context.coordinator
         textView.editorCore = editorCore
-        
+        context.coordinator.currentTextView = textView
         // Code folding support
         textView.foldingManager = CodeFoldingManager.shared
         textView.fileId = filename
@@ -492,9 +492,37 @@ struct SyntaxHighlightingTextView: UIViewRepresentable {
         // PERF: Debounce SwiftUI binding updates to avoid view re-renders on every keystroke
         private var textUpdateWorkItem: DispatchWorkItem?
         private let textUpdateDebounceInterval: TimeInterval = 0.3  // 300ms
-        
+
+        // Semantic token overlay: observe ViewportHighlightManager's published tokens
+        private var semanticTokenCancellable: AnyCancellable?
+        weak var currentTextView: UITextView?
+
         init(_ parent: SyntaxHighlightingTextView) {
             self.parent = parent
+            super.init()
+
+            // Subscribe to semantic token updates from ViewportHighlightManager
+            semanticTokenCancellable = ViewportHighlightManager.shared.$visibleSemanticTokens
+                .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
+                .sink { [weak self] tokens in
+                    guard let self = self,
+                          let textView = self.currentTextView,
+                          !tokens.isEmpty else { return }
+                    // Apply semantic overlays using O(1) newline offset lookup
+                    let viewport = ViewportHighlightManager.shared.currentViewport ?? ViewportRegion(
+                        firstVisibleLine: 0,
+                        lastVisibleLine: 1000,
+                        bufferLinesBefore: 0,
+                        bufferLinesAfter: 0,
+                        totalLines: 1000
+                    )
+                    let offsets = self.cachedNewlineOffsets.isEmpty ? nil : self.cachedNewlineOffsets
+                    ViewportHighlightManager.shared.applySemanticOverlays(
+                        to: textView,
+                        in: viewport,
+                        newlineOffsets: offsets
+                    )
+                }
         }
         
         // MARK: - UIGestureRecognizerDelegate

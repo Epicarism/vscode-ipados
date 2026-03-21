@@ -10,6 +10,7 @@ typealias AutocompleteSuggestionKind = AutocompleteManager.SuggestionKind
 /// - Current file symbol extraction
 /// - Swift stdlib completions (top-level + a small set of member completions)
 /// - LSP-powered completions when a tunnel is connected
+@MainActor
 final class AutocompleteManager: ObservableObject {
 
     /// Current filename for language detection (set by editor)
@@ -499,20 +500,24 @@ final class AutocompleteManager: ObservableObject {
         // Snippet suggestions: expand body with tab-stop placeholders and begin session
         if suggestion.kind == .snippet {
             let lang = Self.snippetLanguage(forFilename: currentFilename) ?? "swift"
-            if let snippet = SnippetManager.shared.snippet(forTrigger: suggestion.insertText, language: lang) {
-                let (expandedText, tabStops) = SnippetManager.shared.expand(snippet)
-                text.replaceSubrange(replacementRange, with: expandedText)
-                // Activate tab-stop navigation so Tab key advances through $1, $2, …
-                SnippetManager.shared.beginTabStopSession(snippet: snippet, insertedAt: insertionOffset)
-                // Position cursor at the first tab stop ($1) without advancing the session
-                if let firstStop = tabStops.first {
-                    cursorPosition = min(insertionOffset + firstStop.offset, text.count)
-                } else {
-                    cursorPosition = min(insertionOffset + expandedText.count, text.count)
+            // SnippetManager is @MainActor — access via MainActor.assumeIsolated
+            // since acceptSuggestion is always called from the main thread
+            MainActor.assumeIsolated {
+                if let snippet = SnippetManager.shared.snippet(forTrigger: suggestion.insertText, language: lang) {
+                    let (expandedText, tabStops) = SnippetManager.shared.expand(snippet)
+                    text.replaceSubrange(replacementRange, with: expandedText)
+                    // Activate tab-stop navigation so Tab key advances through $1, $2, ...
+                    SnippetManager.shared.beginTabStopSession(snippet: snippet, insertedAt: insertionOffset)
+                    // Position cursor at the first tab stop ($1) without advancing the session
+                    if let firstStop = tabStops.first {
+                        cursorPosition = min(insertionOffset + firstStop.offset, text.count)
+                    } else {
+                        cursorPosition = min(insertionOffset + expandedText.count, text.count)
+                    }
+                    hideSuggestions()
                 }
-                hideSuggestions()
-                return
             }
+            if suggestion.kind == .snippet { return }
         }
 
         text.replaceSubrange(replacementRange, with: suggestion.insertText)

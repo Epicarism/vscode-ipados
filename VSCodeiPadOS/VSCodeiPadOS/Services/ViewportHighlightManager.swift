@@ -512,8 +512,15 @@ final class ViewportHighlightManager: ObservableObject {
                 let requestLineCount = request.lineRange.count
                 
                 // Collect tokens on the cache actor (off MainActor)
+                let requestViewport = ViewportRegion(
+                    firstVisibleLine: request.lineRange.lowerBound,
+                    lastVisibleLine: request.lineRange.upperBound,
+                    bufferLinesBefore: 0,
+                    bufferLinesAfter: 0,
+                    totalLines: request.lineRange.upperBound + 1
+                )
                 let tokens = await cache.visibleTokens(
-                    for: request,
+                    for: requestViewport,
                     fileId: request.fileId
                 )
                 
@@ -533,9 +540,10 @@ final class ViewportHighlightManager: ObservableObject {
                 totalLinesProcessed += requestLineCount
                 
                 // Yield to UI if we've been processing too long
-                if elapsed > 8 || totalLinesProcessed >= await MainActor.run(body: { [weak self] in
+                let maxLines = await MainActor.run { [weak self] in
                     self?.maxHighlightLinesPerFrame ?? 200
-                }) {
+                }
+                if elapsed > 8 || totalLinesProcessed >= maxLines {
                     try? await Task.sleep(nanoseconds: 1_000_000)  // 1ms yield
                     totalLinesProcessed = 0
                 }

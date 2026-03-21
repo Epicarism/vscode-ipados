@@ -179,6 +179,12 @@
 		CF1A2B3C4D5E6F7A8B9C0E12 /* TunnelLSPProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E13 /* TunnelWebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */; };
 		CF1A2B3C4D5E6F7A8B9C0E14 /* WorkspaceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */; };
+		EAF077D5879656E75BE10BF1 /* EditorConfigService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E7A85E0C117837119F7007A /* EditorConfigService.swift */; };
+		A5FD654C96B1BE833A4B7B91 /* GoToDefinitionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488BA5B405DFE67B4B34D6E3 /* GoToDefinitionService.swift */; };
+		274C1A975672D44B3B660BE5 /* LinkDetectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDFDE0C849724D4146E767D5 /* LinkDetectionManager.swift */; };
+		951545361A9B08F4CEC4DDC1 /* RenameService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93F6D1198707A073540DA81D /* RenameService.swift */; };
+		FE616DBB14796CA5668D772E /* TreeSitterSymbolProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E766A5C17A81F668F94A4E /* TreeSitterSymbolProvider.swift */; };
+		D6E7F8091A2B3C4D5E6F7081 /* SymbolOutlineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B1C3D4E5F60718293A4B5C /* SymbolOutlineView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -356,9 +362,15 @@
 		CF1A2B3C4D5E6F7A8B9C0D0F /* SSHTunnelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SSHTunnelBridge.swift; path = VSCodeiPadOS/Services/SSHTunnelBridge.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D10 /* SyntaxHighlightCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyntaxHighlightCache.swift; path = Services/SyntaxHighlightCache.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D11 /* TunnelFileSystemBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelFileSystemBridge.swift; path = Services/TunnelFileSystemBridge.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelLSPProxy.swift; path = Services/TunnelLSPProxy.swift; sourceTree = "<group>"; };
-		CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelWebSocketClient.swift; path = Services/TunnelWebSocketClient.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D12 /* TunnelLSPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelLSPProxy.swift; path = VSCodeiPadOS/Services/TunnelLSPProxy.swift; sourceTree = "<group>"; };
+		CF1A2B3C4D5E6F7A8B9C0D13 /* TunnelWebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TunnelWebSocketClient.swift; path = VSCodeiPadOS/Services/TunnelWebSocketClient.swift; sourceTree = "<group>"; };
 		CF1A2B3C4D5E6F7A8B9C0D14 /* WorkspaceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettings.swift; sourceTree = "<group>"; };
+		1E7A85E0C117837119F7007A /* EditorConfigService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = EditorConfigService.swift; path = Services/EditorConfigService.swift; sourceTree = "<group>"; };
+		488BA5B405DFE67B4B34D6E3 /* GoToDefinitionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GoToDefinitionService.swift; path = Services/GoToDefinitionService.swift; sourceTree = "<group>"; };
+		CDFDE0C849724D4146E767D5 /* LinkDetectionManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LinkDetectionManager.swift; path = Services/LinkDetectionManager.swift; sourceTree = "<group>"; };
+		93F6D1198707A073540DA81D /* RenameService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RenameService.swift; path = Services/RenameService.swift; sourceTree = "<group>"; };
+		34E766A5C17A81F668F94A4E /* TreeSitterSymbolProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = TreeSitterSymbolProvider.swift; path = Services/TreeSitterSymbolProvider.swift; sourceTree = "<group>"; };
+		A2B1C3D4E5F60718293A4B5C /* SymbolOutlineView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SymbolOutlineView.swift; path = Views/Panels/SymbolOutlineView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -400,6 +412,12 @@
 				4007 /* Views */,
 				59E70842EC260BF4AA42344E /* Array+Safe.swift */,
 				8DDF346FA8697F71C1802A47 /* BracketMatchingManager.swift */,
+				A2B1C3D4E5F60718293A4B5C /* SymbolOutlineView.swift */,
+				34E766A5C17A81F668F94A4E /* TreeSitterSymbolProvider.swift */,
+				93F6D1198707A073540DA81D /* RenameService.swift */,
+				CDFDE0C849724D4146E767D5 /* LinkDetectionManager.swift */,
+				488BA5B405DFE67B4B34D6E3 /* GoToDefinitionService.swift */,
+				1E7A85E0C117837119F7007A /* EditorConfigService.swift */,
 				885F3C3B4438947AA7802BF5 /* Codicon.swift */,
 				FA35FC9065D549599858CE86 /* CommandPaletteView.swift */,
 				14A76A316E743FE29B6747A5 /* ErrorBoundaryView.swift */,
@@ -936,6 +954,12 @@
 				8019 /* KeyboardShortcutsView.swift in Sources */,
 				267E5C73339E4A2046BCD25A /* Array+Safe.swift in Sources */,
 				5AC9E5FE66317900502462CC /* BracketMatchingManager.swift in Sources */,
+				D6E7F8091A2B3C4D5E6F7081 /* SymbolOutlineView.swift in Sources */,
+				FE616DBB14796CA5668D772E /* TreeSitterSymbolProvider.swift in Sources */,
+				951545361A9B08F4CEC4DDC1 /* RenameService.swift in Sources */,
+				274C1A975672D44B3B660BE5 /* LinkDetectionManager.swift in Sources */,
+				A5FD654C96B1BE833A4B7B91 /* GoToDefinitionService.swift in Sources */,
+				EAF077D5879656E75BE10BF1 /* EditorConfigService.swift in Sources */,
 				BB07DD2157DF60C9BB3E38D7 /* Codicon.swift in Sources */,
 				E398DE294E51FA1E5B508CDA /* CommandPaletteView.swift in Sources */,
 				861AF3F49041DDA8E3DFE5A1 /* ErrorBoundaryView.swift in Sources */,
@@ -967,6 +991,8 @@
 			CF1A2B3C4D5E6F7A8B9C0E0B /* HapticFeedback.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E0F /* SSHTunnelBridge.swift in Sources */,
 			CF1A2B3C4D5E6F7A8B9C0E0C /* RSAAuthDelegate.swift in Sources */,
+				CF1A2B3C4D5E6F7A8B9C0E12 /* TunnelLSPProxy.swift in Sources */,
+				CF1A2B3C4D5E6F7A8B9C0E13 /* TunnelWebSocketClient.swift in Sources */,
 
 		);
 		runOnlyForDeploymentPostprocessing = 0;

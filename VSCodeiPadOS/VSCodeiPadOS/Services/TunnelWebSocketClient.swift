@@ -35,7 +35,7 @@ enum TunnelMessageType: String, Codable {
     case extensionResponse = "extension.response"
 }
 
-struct TunnelMessage: Codable, Identifiable {
+struct TunnelMessage: Codable, Identifiable, @unchecked Sendable {
     let id: String
     let type: TunnelMessageType
     let channel: String?
@@ -60,7 +60,7 @@ struct TunnelMessage: Codable, Identifiable {
 }
 
 /// Type-erased Codable wrapper for heterogeneous payloads
-struct AnyCodable: Codable {
+struct AnyCodable: Codable, @unchecked Sendable {
     let value: Any
     
     init(_ value: Any) {
@@ -228,7 +228,7 @@ final class TunnelWebSocketClient: ObservableObject {
     // Message handling
     private var messageQueue: [TunnelMessage] = []
     private var pendingRequests: [String: CheckedContinuation<TunnelMessage, Error>] = [:]
-    private var subscriptions: [TunnelMessageType: [UUID: (TunnelMessage) -> Void]] = [:]
+    private var subscriptions: [TunnelMessageType: [UUID: @Sendable (TunnelMessage) -> Void]] = [:]
     
     // Timers
     private var heartbeatTimer: Timer?

@@ -25,7 +25,7 @@ struct EditorConfigFileSettings {
     /// Apply these settings onto CodeFormatter, overriding only non-nil values.
     /// Returns true if any setting was changed.
     @discardableResult
-    func apply(to formatter: CodeFormatter) -> Bool {
+    @MainActor func apply(to formatter: CodeFormatter) -> Bool {
         var changed = false
         if let style = indentStyle {
             let useTabs = (style == "tab")
@@ -368,8 +368,8 @@ actor EditorConfigService {
 
         // Remove single-line comments (// ...)
         cleaned = cleaned.components(separatedBy: "\n").map { line in
-            if let slashIdx = line.firstIndex(of: "//") {
-                return String(line[..<slashIdx]).trimmingCharacters(in: .whitespaces)
+            if let slashRange = line.range(of: "//") {
+                return String(line[..<slashRange.lowerBound]).trimmingCharacters(in: .whitespaces)
             }
             return line
         }.joined(separator: "\n")
