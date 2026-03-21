@@ -1283,6 +1283,7 @@ struct IDEEditorView: View {
                     currentLine: scrollPosition,
                     theme: theme,
                     lineHeight: lineHeight,
+                    foldRegions: foldingManager.foldRegions,
                     onSelect: { line in
                         requestedLineSelection = line
                     }
