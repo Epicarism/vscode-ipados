@@ -767,6 +767,23 @@ final class TunnelLSPProxy: ObservableObject {
         return try? decoder.decode(LSPSignatureHelp.self, from: resultData)
     }
     
+    /// Rename symbol
+    func rename(
+        uri: String,
+        position: LSPPosition,
+        languageId: String,
+        newName: String
+    ) async throws -> LSPWorkspaceEdit? {
+        let result = try await sendRequest("textDocument/rename", params: [
+            "textDocument": AnyCodable(["uri": AnyCodable(uri)]),
+            "position": AnyCodable(["line": AnyCodable(position.line), "character": AnyCodable(position.character)]),
+            "newName": AnyCodable(newName)
+        ], languageId: languageId)
+        guard let result = result else { return nil }
+        let resultData = try encoder.encode(result)
+        return try? decoder.decode(LSPWorkspaceEdit.self, from: resultData)
+    }
+    
     // MARK: - JSON-RPC Transport
     
     private func sendRequest(

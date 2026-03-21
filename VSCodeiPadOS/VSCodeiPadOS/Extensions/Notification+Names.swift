@@ -40,6 +40,10 @@ extension Notification.Name {
     static let addCursorBelow = Notification.Name("AddCursorBelow")
     /// Navigate to the definition of the symbol under the cursor.
     static let goToDefinition = Notification.Name("GoToDefinition")
+    /// Rename the symbol under the cursor.
+    static let renameSymbol = Notification.Name("RenameSymbol")
+    /// Rename operation completed with LSP edits.
+    static let renameCompleted = Notification.Name("RenameCompleted")
 
     // MARK: - View
 
