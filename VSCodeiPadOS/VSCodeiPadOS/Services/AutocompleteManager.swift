@@ -56,7 +56,8 @@ final class AutocompleteManager: ObservableObject {
 
     // MARK: - Completion sources
 
-    private let keywords: [String] = [
+    // Swift keywords
+    private let swiftKeywords: [String] = [
         "import", "func", "var", "let", "class", "struct", "enum",
         "if", "else", "for", "while", "switch", "case", "return",
         "true", "false", "nil", "self", "super", "init", "deinit",
@@ -68,7 +69,43 @@ final class AutocompleteManager: ObservableObject {
         "convenience", "required", "override"
     ]
 
-    private let stdlibTopLevel: [String] = [
+    // TypeScript/JavaScript keywords
+    private let tsKeywords: [String] = [
+        "const", "let", "var", "function", "class", "interface", "type",
+        "enum", "if", "else", "for", "while", "switch", "case", "return",
+        "import", "export", "default", "async", "await", "try", "catch",
+        "throw", "new", "this", "typeof", "instanceof", "void",
+        "null", "undefined", "true", "false", "extends", "implements",
+        "abstract", "readonly", "private", "public", "protected", "static",
+        "declare", "namespace", "module", "require", "yield", "delete",
+        "in", "of", "break", "continue", "do", "finally", "super",
+        "as", "from", "satisfies", "keyof", "infer"
+    ]
+
+    // Python keywords
+    private let pyKeywords: [String] = [
+        "def", "class", "if", "elif", "else", "for", "while", "return",
+        "import", "from", "as", "try", "except", "finally", "raise",
+        "with", "pass", "break", "continue", "yield", "lambda",
+        "and", "or", "not", "in", "is", "True", "False", "None",
+        "global", "nonlocal", "assert", "del", "async", "await",
+        "match", "case", "type"
+    ]
+
+    /// Language-aware keyword lookup
+    private var keywords: [String] {
+        switch currentLanguageId {
+        case "typescript", "javascript", "typescriptreact", "javascriptreact":
+            return tsKeywords
+        case "python":
+            return pyKeywords
+        default:
+            return swiftKeywords
+        }
+    }
+
+    // Swift stdlib
+    private let swiftStdlib: [String] = [
         // Common types
         "Any", "AnyObject", "Never", "Void",
         "Bool",
@@ -94,6 +131,77 @@ final class AutocompleteManager: ObservableObject {
         "assert", "assertionFailure", "precondition", "preconditionFailure", "fatalError",
         "min", "max", "abs", "zip", "stride"
     ]
+
+    // TypeScript/JavaScript stdlib
+    private let tsStdlib: [String] = [
+        // Built-in types
+        "Array", "Map", "Set", "WeakMap", "WeakSet", "Promise",
+        "Object", "String", "Number", "Boolean", "Symbol", "BigInt",
+        "Date", "RegExp", "Error", "TypeError", "RangeError", "SyntaxError",
+        "JSON", "Math", "Proxy", "Reflect",
+        // DOM / Web APIs
+        "console", "document", "window", "navigator",
+        "setTimeout", "setInterval", "clearTimeout", "clearInterval",
+        "fetch", "Request", "Response", "Headers",
+        "URL", "URLSearchParams", "FormData", "Blob",
+        // Node.js
+        "Buffer", "process", "require", "module", "exports",
+        "__dirname", "__filename",
+        // Common utility
+        "parseInt", "parseFloat", "isNaN", "isFinite",
+        "encodeURIComponent", "decodeURIComponent", "atob", "btoa",
+        // Iterators
+        "Iterator", "Generator", "AsyncGenerator",
+        // TS-specific
+        "Partial", "Required", "Readonly", "Record",
+        "Pick", "Omit", "Exclude", "Extract",
+        "NonNullable", "ReturnType", "Parameters", "InstanceType",
+        "Awaited", "ConstructorParameters"
+    ]
+
+    // Python stdlib
+    private let pyStdlib: [String] = [
+        // Built-in functions
+        "print", "len", "range", "enumerate", "zip", "map", "filter",
+        "sorted", "reversed", "list", "dict", "set", "tuple", "frozenset",
+        "str", "int", "float", "bool", "bytes", "bytearray", "complex",
+        "type", "isinstance", "issubclass", "super", "property",
+        "staticmethod", "classmethod", "abs", "min", "max", "sum",
+        "any", "all", "open", "input", "format", "repr", "hash",
+        "id", "dir", "vars", "getattr", "setattr", "hasattr", "delattr",
+        "iter", "next", "callable", "round", "pow", "divmod",
+        "hex", "oct", "bin", "ord", "chr", "ascii",
+        // Common modules
+        "os", "sys", "json", "re", "math", "datetime", "pathlib",
+        "collections", "itertools", "functools", "typing",
+        "dataclasses", "enum", "abc", "copy", "io", "logging",
+        "unittest", "pytest", "asyncio", "aiohttp",
+        // Common types
+        "Optional", "Union", "List", "Dict", "Tuple", "Set",
+        "Any", "Callable", "TypeVar", "Generic", "Protocol",
+        "dataclass", "field",
+        // Exception types
+        "Exception", "ValueError", "TypeError", "KeyError",
+        "IndexError", "AttributeError", "RuntimeError", "IOError",
+        "FileNotFoundError", "ImportError", "StopIteration"
+    ]
+
+    /// Language-aware stdlib lookup
+    private var stdlibTopLevel: [String] {
+        switch currentLanguageId {
+        case "typescript", "javascript", "typescriptreact", "javascriptreact":
+            return tsStdlib
+        case "python":
+            return pyStdlib
+        default:
+            return swiftStdlib
+        }
+    }
+
+    /// Detect current language from filename
+    private var currentLanguageId: String {
+        Self.lspLanguageId(forFilename: currentFilename) ?? "swift"
+    }
 
     private let memberCompletions: [String: [String]] = [
         // MARK: - Strings & Collections
@@ -469,8 +577,7 @@ final class AutocompleteManager: ObservableObject {
     }
 
     private func extractSymbols(from text: String) -> [String] {
-        // Very lightweight symbol extraction: looks for common declarations.
-        // Intentionally best-effort; keeps FEAT-046 self-contained.
+        // Multi-language symbol extraction: detects declarations for the current language.
         var results = Set<String>()
 
         func addMatches(pattern: String) {
@@ -486,12 +593,37 @@ final class AutocompleteManager: ObservableObject {
             }
         }
 
-        // func Foo
-        addMatches(pattern: "\\bfunc\\s+([A-Za-z_][A-Za-z0-9_]*)")
-        // class/struct/enum/protocol/typealias Foo
-        addMatches(pattern: "\\b(?:class|struct|enum|protocol|typealias)\\s+([A-Za-z_][A-Za-z0-9_]*)")
-        // let/var foo (captures first name before : = , )
-        addMatches(pattern: "\\b(?:let|var)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*[:=,])")
+        switch currentLanguageId {
+        case "typescript", "javascript", "typescriptreact", "javascriptreact":
+            // function declarations
+            addMatches(pattern: "\\b(?:async\\s+)?function\\s*\\*?\\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+            // arrow functions assigned to const/let/var
+            addMatches(pattern: "\\b(?:const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|[A-Za-z_$])\\s*=>")
+            // class/interface/type/enum
+            addMatches(pattern: "\\b(?:class|interface|type|enum)\\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+            // const/let/var declarations
+            addMatches(pattern: "\\b(?:const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*[=:]")
+            // export declarations
+            addMatches(pattern: "\\bexport\\s+(?:default\\s+)?(?:class|interface|type|enum|function|const|let|var)\\s+([A-Za-z_$][A-Za-z0-9_$]*)")
+
+        case "python":
+            // def function
+            addMatches(pattern: "\\b(?:async\\s+)?def\\s+([A-Za-z_][A-Za-z0-9_]*)")
+            // class
+            addMatches(pattern: "\\bclass\\s+([A-Za-z_][A-Za-z0-9_]*)")
+            // top-level assignments (UPPER_CASE = constants)
+            addMatches(pattern: "^([A-Z][A-Z0-9_]*)\\s*=")
+            // regular variable assignments at module level
+            addMatches(pattern: "^([A-Za-z_][A-Za-z0-9_]*)\\s*[=:]")
+
+        default:
+            // Swift: func Foo
+            addMatches(pattern: "\\bfunc\\s+([A-Za-z_][A-Za-z0-9_]*)")
+            // class/struct/enum/protocol/typealias Foo
+            addMatches(pattern: "\\b(?:class|struct|enum|protocol|typealias)\\s+([A-Za-z_][A-Za-z0-9_]*)")
+            // let/var foo (captures first name before : = , )
+            addMatches(pattern: "\\b(?:let|var)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*[:=,])")
+        }
 
         return results.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
