@@ -65,6 +65,8 @@ final class BracketMatchingManager: @unchecked Sendable {
             let char = chars[checkPos]
             
             if let (bracketType, isOpen) = BracketType.from(char: char) {
+                // Skip brackets inside strings or comments
+                if Self.isInsideStringOrComment(in: text, at: checkPos) { return nil }
                 if isOpen {
                     // Search forward for closing bracket
                     if let closeIndex = findClosingBracket(in: chars, from: checkPos, type: bracketType) {
@@ -120,10 +122,11 @@ final class BracketMatchingManager: @unchecked Sendable {
                 continue
             }
             
-            // Skip brackets inside strings
-            if inString { continue }
+            // Skip brackets inside strings, comments, or template strings
+            if Self.isInsideStringOrComment(in: text, at: index) { continue }
             
             // Check for brackets
+            if let (bracketType, isOpen) = BracketType.from(char: char) {
             if let (bracketType, isOpen) = BracketType.from(char: char) {
                 if isOpen {
                     stacks[bracketType]?.append(index)
@@ -182,6 +185,43 @@ final class BracketMatchingManager: @unchecked Sendable {
     }
     
     // MARK: - Private Helpers
+    
+    /// Determines if a character at `position` in `text` is inside a string literal,
+    /// line comment, or block comment by scanning from the start of the text.
+    static func isInsideStringOrComment(in text: String, at position: Int) -> Bool {
+        let chars = Array(text.unicodeScalars.prefix(position + 1))
+        var inLineComment = false
+        var inBlockComment = false
+        var inString = false
+        var stringChar: UnicodeScalar = "\""
+        var inTemplateString = false
+        var i = 0
+        while i < position {
+            guard i < chars.count else { break }
+            let c = chars[i]
+            let next: UnicodeScalar? = (i + 1 < chars.count) ? chars[i + 1] : nil
+            if inBlockComment {
+                if c == "*" && next == "/" { inBlockComment = false; i += 2; continue }
+                i += 1; continue
+            }
+            if inLineComment {
+                if c == "\n" { inLineComment = false }
+                i += 1; continue
+            }
+            if inString || inTemplateString {
+                if c == "\\" { i += 2; continue }
+                if inTemplateString && c == "`" { inTemplateString = false; i += 1; continue }
+                if inString && c == stringChar { inString = false; i += 1; continue }
+                i += 1; continue
+            }
+            if c == "/" && next == "/" { inLineComment = true; i += 2; continue }
+            if c == "/" && next == "*" { inBlockComment = true; i += 2; continue }
+            if c == "\"" || c == "'" { inString = true; stringChar = c; i += 1; continue }
+            if c == "`" { inTemplateString = true; i += 1; continue }
+            i += 1
+        }
+        return inString || inLineComment || inBlockComment || inTemplateString
+    }
     
     private func findClosingBracket(in chars: [Character], from startIndex: Int, type: BracketType) -> Int? {
         var depth = 1

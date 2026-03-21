@@ -1245,6 +1245,21 @@ struct RunestoneEditorView: UIViewRepresentable {
             // MARK: Auto-indent on Enter
             // ---------------------------------------------------------------
             if text == "\n" {
+                // Emmet expansion on Enter (when enabled in settings)
+                if let (expansion, abbrevRange) = EmmetEngine.shared.tryExpand(
+                    in: textView.text,
+                    cursorLocation: range.location,
+                    filename: parent.filename,
+                    trigger: .enter
+                ) {
+                    textView.text = (textView.text as NSString).replacingCharacters(in: abbrevRange, with: expansion)
+                    let cursorPos = abbrevRange.location + (expansion as NSString).length
+                    textView.selectedRange = NSRange(location: cursorPos, length: 0)
+                    textViewDidChange(textView)
+                    return false
+                }
+
+
                 let nsText = textView.text as NSString
                 // Range of the current line
                 let lineRange = nsText.lineRange(for: NSRange(location: range.location, length: 0))
@@ -1297,6 +1312,25 @@ struct RunestoneEditorView: UIViewRepresentable {
                 adjustBreakpointsForEdit(range: range, replacementText: insertion, in: nsText)
                 textViewDidChange(textView)
                 return false
+            }
+
+            // ---------------------------------------------------------------
+            // MARK: Emmet expansion on Space (when enabled in settings)
+            // ---------------------------------------------------------------
+            if text == " " {
+                if let (expansion, abbrevRange) = EmmetEngine.shared.tryExpand(
+                    in: textView.text,
+                    cursorLocation: range.location,
+                    filename: parent.filename,
+                    trigger: .space
+                ) {
+                    textView.text = (textView.text as NSString).replacingCharacters(in: abbrevRange, with: expansion)
+                    let cursorPos = abbrevRange.location + (expansion as NSString).length
+                    textView.selectedRange = NSRange(location: cursorPos, length: 0)
+                    textViewDidChange(textView)
+                    return false
+                }
+                // Fall through to default Space handling
             }
 
             // ---------------------------------------------------------------

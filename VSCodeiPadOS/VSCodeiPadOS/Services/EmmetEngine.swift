@@ -2,7 +2,7 @@
 //  VSCodeiPadOS
 //
 //  Lightweight Emmet abbreviation expansion engine for HTML and CSS files.
-//  Triggered on Tab key when cursor is at the end of a valid abbreviation.
+//  Triggered on Tab key (always) and optionally on Enter/Space.
 
 import Foundation
 
@@ -11,8 +11,29 @@ import Foundation
 /// Emmet expansion engine. Call expand(_:for:) with the abbreviation and filename.
 public final class EmmetEngine: @unchecked Sendable {
 
+    /// Trigger key that invoked Emmet expansion.
+    public enum EmmetTrigger: Sendable {
+        case tab
+        case enter
+        case space
+    }
+
     public static let shared = EmmetEngine()
     private init() {}
+
+    // MARK: - Settings
+
+    /// Whether Emmet expansion should trigger on Enter key (default: false).
+    public var expandOnEnter: Bool {
+        get { UserDefaults.standard.bool(forKey: "emmetExpandOnEnter") }
+        set { UserDefaults.standard.set(newValue, forKey: "emmetExpandOnEnter") }
+    }
+
+    /// Whether Emmet expansion should trigger on Space key (default: false).
+    public var expandOnSpace: Bool {
+        get { UserDefaults.standard.bool(forKey: "emmetExpandOnSpace") }
+        set { UserDefaults.standard.set(newValue, forKey: "emmetExpandOnSpace") }
+    }
 
     // MARK: - Entry point
 
@@ -730,35 +751,33 @@ extension EmmetEngine {
 
 extension EmmetEngine {
 
-    /// Called from the Tab key handler in RunestoneEditorView.Coordinator.
+    /// Called from key handlers in RunestoneEditorView.Coordinator.
     ///
     /// Locates the abbreviation immediately before `cursorLocation` in `text`,
     /// expands it, and returns the expansion with its replacement range — or nil
     /// if no Emmet expansion applies.
     ///
-    /// Usage inside `textView(_:shouldChangeTextIn:replacementText:)`:
-    /// ```swift
-    /// if text == "\t",
-    ///    let (expansion, abbrevRange) = EmmetEngine.shared.tryExpand(
-    ///        in: textView.text,
-    ///        cursorLocation: range.location,
-    ///        filename: parent.filename) {
-    ///     let ms = NSMutableString(string: textView.text)
-    ///     ms.replaceCharacters(in: abbrevRange, with: expansion)
-    ///     textView.text = ms as String
-    ///     let cursor = abbrevRange.location + (expansion as NSString).length
-    ///     textView.selectedRange = NSRange(location: cursor, length: 0)
-    ///     textViewDidChange(textView)
-    ///     return false
-    /// }
-    /// ```
+    /// When `trigger` is `.enter` the expansion is followed by a newline;
+    /// when `.space` it is followed by a space character; `.tab` appends nothing.
+    /// Non-tab triggers are only attempted when the corresponding setting is enabled.
     public func tryExpand(
         in text: String,
         cursorLocation: Int,
-        filename: String
+        filename: String,
+        trigger: EmmetTrigger = .tab
     ) -> (expansion: String, replacementRange: NSRange)? {
 
         guard isSupported(for: filename) else { return nil }
+
+        // Non-tab triggers require opt-in setting
+        switch trigger {
+        case .tab:
+            break
+        case .enter:
+            guard expandOnEnter else { return nil }
+        case .space:
+            guard expandOnSpace else { return nil }
+        }
 
         let ns = text as NSString
         // Characters that terminate an abbreviation when encountered walking backwards
@@ -793,6 +812,14 @@ extension EmmetEngine {
 
         guard let expansion = expand(trimmed, for: filename) else { return nil }
 
-        return (expansion, NSRange(location: start, length: cursorLocation - start))
+        // Append the trigger character so the expected keystroke still happens
+        let suffix: String
+        switch trigger {
+        case .tab:   suffix = ""
+        case .enter: suffix = "\n"
+        case .space: suffix = " "
+        }
+
+        return (expansion + suffix, NSRange(location: start, length: cursorLocation - start))
     }
 }
