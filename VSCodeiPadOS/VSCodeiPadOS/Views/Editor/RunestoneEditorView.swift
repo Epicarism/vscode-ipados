@@ -26,6 +26,7 @@ import TreeSitterCRunestone
 import TreeSitterCPPRunestone
 import TreeSitterCSharpRunestone
 import TreeSitterJavaRunestone
+import TreeSitterKotlinRunestone
 import TreeSitterRubyRunestone
 import TreeSitterPHPRunestone
 import TreeSitterYAMLRunestone
@@ -508,10 +509,9 @@ struct RunestoneEditorView: UIViewRepresentable {
         case "java":
             return TreeSitterLanguage.java
         
-        // Kotlin - no grammar available; plain text
-        // To add: import TreeSitterKotlinRunestone and return TreeSitterLanguage.kotlin
+        // Kotlin
         case "kt", "kts":
-            return nil
+            return TreeSitterLanguage.kotlin
         
         // C / C++
         case "c", "h":
