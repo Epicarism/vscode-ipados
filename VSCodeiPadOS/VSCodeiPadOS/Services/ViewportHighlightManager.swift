@@ -712,15 +712,21 @@ final class ViewportHighlightManager: ObservableObject {
     
     /// Apply semantic token overlays to a text view for the current viewport.
     /// This MUST run on MainActor because it touches UITextStorage.
+    ///
+    /// - Parameter newlineOffsets: Optional sorted array of UTF-16 offsets for each '\n'.
+    ///   When provided, line start lookups are O(1) instead of scanning from file start.
+    ///   This cache is maintained by RunestoneEditorView.Coordinator.
     func applySemanticOverlays(
         to textView: UITextView,
         in viewport: ViewportRegion,
-        baseFont: UIFont = .monospacedSystemFont(ofSize: 14, weight: .regular)
+        baseFont: UIFont = .monospacedSystemFont(ofSize: 14, weight: .regular),
+        newlineOffsets: [Int]? = nil
     ) {
         guard enableSemanticTokens, !visibleSemanticTokens.isEmpty else { return }
         
         let textStorage = textView.textStorage
         let text = textStorage.string
+        let totalUTF16 = text.utf16.count
         
         // Find the range of lines we actually need offsets for
         var minLine = Int.max
@@ -731,47 +737,71 @@ final class ViewportHighlightManager: ObservableObject {
         }
         guard minLine <= maxLine else { return }
         
-        // Walk text counting newlines only up to maxLine+1 — O(viewport) not O(file)
-        // Use UTF-16 view since NSAttributedString/NSRange use UTF-16 offsets
-        let utf16 = text.utf16
+        // Build line start offsets and line lengths
         var lineStartOffsets: [Int: Int] = [:] // line number -> UTF-16 offset
+        var lineLengths: [Int: Int] = [:]
         lineStartOffsets.reserveCapacity(maxLine - minLine + 2)
-        var currentLine = 0
-        var utf16Offset = 0
+        lineLengths.reserveCapacity(maxLine - minLine + 1)
         
-        if minLine == 0 {
-            lineStartOffsets[0] = 0
-        }
-        
-        for ch in utf16 {
-            if currentLine > maxLine { break } // Stop early — don't scan rest of file
-            utf16Offset += 1
-            if ch == 0x0A { // newline
-                currentLine += 1
-                if currentLine >= minLine && currentLine <= maxLine {
-                    lineStartOffsets[currentLine] = utf16Offset
+        if let offsets = newlineOffsets {
+            // ── O(1) per line using cached newline positions ──
+            // offsets[i] = UTF-16 position of the i-th '\n' character.
+            // Line 0 starts at 0. Line N (N>0) starts at offsets[N-1] + 1.
+            // Line N ends at offsets[N] (exclusive) or totalUTF16 for the last line.
+            for line in minLine...maxLine {
+                let start: Int
+                if line == 0 {
+                    start = 0
+                } else if line - 1 < offsets.count {
+                    start = offsets[line - 1] + 1
+                } else {
+                    continue // line out of range
+                }
+                guard start <= totalUTF16 else { continue }
+                lineStartOffsets[line] = start
+                
+                let end: Int
+                if line < offsets.count {
+                    end = offsets[line]
+                } else {
+                    end = totalUTF16
+                }
+                lineLengths[line] = end - start
+            }
+        } else {
+            // ── Fallback: walk text counting newlines up to maxLine ──
+            let utf16 = text.utf16
+            var currentLine = 0
+            var utf16Offset = 0
+            
+            if minLine == 0 {
+                lineStartOffsets[0] = 0
+            }
+            
+            for ch in utf16 {
+                if currentLine > maxLine { break }
+                utf16Offset += 1
+                if ch == 0x0A {
+                    currentLine += 1
+                    if currentLine >= minLine && currentLine <= maxLine {
+                        lineStartOffsets[currentLine] = utf16Offset
+                    }
                 }
             }
-        }
-        
-        // Build a quick line-length lookup for bounds checking
-        // We need the length of each line in the token range
-        var lineLengths: [Int: Int] = [:]
-        lineLengths.reserveCapacity(maxLine - minLine + 1)
-        for line in minLine...maxLine {
-            guard let start = lineStartOffsets[line] else { continue }
-            // Find end of this line
-            var endOffset = start
-            let startIdx = utf16.index(utf16.startIndex, offsetBy: start)
-            var idx = startIdx
-            while idx < utf16.endIndex && utf16[idx] != 0x0A {
-                endOffset += 1
-                idx = utf16.index(after: idx)
+            
+            // Build line lengths by scanning each line
+            for line in minLine...maxLine {
+                guard let start = lineStartOffsets[line] else { continue }
+                var endOffset = start
+                let startIdx = utf16.index(utf16.startIndex, offsetBy: start)
+                var idx = startIdx
+                while idx < utf16.endIndex && utf16[idx] != 0x0A {
+                    endOffset += 1
+                    idx = utf16.index(after: idx)
+                }
+                lineLengths[line] = endOffset - start
             }
-            lineLengths[line] = endOffset - start
         }
-        
-        let totalUTF16 = text.utf16.count
         
         textStorage.beginEditing()
         
