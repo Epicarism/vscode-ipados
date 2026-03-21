@@ -294,6 +294,10 @@ class EditorCore: ObservableObject {
     var currentSelection: String = ""
     var currentSelectionRange: NSRange?
 
+    // Column/box selection mode
+    @Published var columnSelectionMode = false
+    let columnSelectionManager = ColumnSelectionManager()
+
     // Selection request for find/replace navigation
     @Published var requestedSelection: NSRange?
 
@@ -2151,6 +2155,15 @@ mod tests {
         }
     }
 
+    /// Toggle column/box selection mode
+    func toggleColumnSelection() {
+        columnSelectionMode.toggle()
+        if !columnSelectionMode {
+            columnSelectionManager.reset()
+        }
+        objectWillChange.send()
+    }
+
     /// Returns (prefix, suffix) for block comment languages, nil for line comments
     private func blockCommentWrappers(for fileName: String) -> (prefix: String, suffix: String)? {
         let ext = (fileName as NSString).pathExtension.lowercased()
@@ -2599,6 +2612,128 @@ extension EditorCore {
         UserDefaults.standard.removeObject(forKey: Self.lastActiveTabPathKey)
         restoredWorkspace = false
     }
+}
+
+// MARK: - Column Selection Manager
+
+/// Manages column/box (rectangular) selection state.
+/// Tracks anchor and current cursor positions in (line, col) coordinates and
+/// computes the character ranges for the rectangular region.
+class ColumnSelectionManager {
+
+    /// Whether column selection is currently active
+    var isActive: Bool = false
+
+    /// Anchor position in 0-based (line, column) where selection started
+    var anchorLine: Int = 0
+    var anchorCol: Int = 0
+
+    /// Current drag position in 0-based (line, column)
+    var currentLine: Int = 0
+    var currentCol: Int = 0
+
+    /// Whether the anchor has been set (first click in column mode)
+    var hasAnchor: Bool = false
+
+    /// Compute the character offset ranges for each line in the column selection.
+    /// - Parameters:
+    ///   - text: The full document text as NSString
+    ///   - newlineOffsets: Sorted array of newline character offsets
+    /// - Returns: Array of (1-based line number, NSRange) for each selected row
+    func computeRanges(text: NSString, newlineOffsets: [Int]) -> [(line: Int, range: NSRange)] {
+        let minLine = min(anchorLine, currentLine)
+        let maxLine = max(anchorLine, currentLine)
+        let minCol = min(anchorCol, currentCol)
+        let maxCol = max(anchorCol, currentCol)
+
+        var result: [(line: Int, range: NSRange)] = []
+
+        for lineNum in minLine...maxLine {
+            // Get line start offset
+            let lineStart: Int
+            if lineNum == 0 {
+                lineStart = 0
+            } else if lineNum - 1 < newlineOffsets.count {
+                lineStart = newlineOffsets[lineNum - 1] + 1
+            } else {
+                break
+            }
+
+            // Get line end offset
+            let lineEnd: Int
+            if lineNum < newlineOffsets.count {
+                lineEnd = newlineOffsets[lineNum]
+            } else {
+                lineEnd = text.length
+            }
+
+            let lineLength = lineEnd - lineStart
+
+            // Clamp columns to line length
+            let clampedStart = min(minCol, lineLength)
+            let clampedEnd = min(maxCol, lineLength)
+
+            if clampedStart < clampedEnd {
+                result.append((
+                    line: lineNum + 1, // 1-based for display
+                    range: NSRange(location: lineStart + clampedStart, length: clampedEnd - clampedStart)
+                ))
+            }
+        }
+
+        return result
+    }
+
+    /// Get insertion positions for column mode text input.
+    /// Returns character offsets where text should be inserted (at minCol for each line).
+    func insertionPositions(text: NSString, newlineOffsets: [Int]) -> [Int] {
+        let minLine = min(anchorLine, currentLine)
+        let maxLine = max(anchorLine, currentLine)
+        let insertCol = min(anchorCol, currentCol)
+
+        var positions: [Int] = []
+
+        for lineNum in minLine...maxLine {
+            let lineStart: Int
+            if lineNum == 0 {
+                lineStart = 0
+            } else if lineNum - 1 < newlineOffsets.count {
+                lineStart = newlineOffsets[lineNum - 1] + 1
+            } else {
+                break
+            }
+
+            let lineEnd: Int
+            if lineNum < newlineOffsets.count {
+                lineEnd = newlineOffsets[lineNum]
+            } else {
+                lineEnd = text.length
+            }
+
+            let lineLength = lineEnd - lineStart
+            let clampedCol = min(insertCol, lineLength)
+            positions.append(lineStart + clampedCol)
+        }
+
+        return positions
+    }
+
+    /// Reset all column selection state
+    func reset() {
+        isActive = false
+        hasAnchor = false
+        anchorLine = 0
+        anchorCol = 0
+        currentLine = 0
+        currentCol = 0
+    }
+}
+
+// MARK: - Column Selection Notification
+
+extension Notification.Name {
+    /// Toggle column/box selection mode (Cmd+Shift+L)
+    static let toggleColumnSelection = Notification.Name("ToggleColumnSelection")
 }
 
 // MARK: - Notification Names for Code Folding

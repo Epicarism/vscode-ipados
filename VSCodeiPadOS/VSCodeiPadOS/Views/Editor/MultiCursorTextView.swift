@@ -232,6 +232,15 @@ extension MultiCursorTextView {
         // NOTE: Cmd+Shift+L (Select All Occurrences) is in SelectionMenuCommands.swift
         // NOTE: Cmd+G (Go to Line) is in GoMenuCommands.swift
 
+        // Cmd+Option+C: Toggle column/box selection mode
+        // (VS Code uses Alt+Shift+Click for column selection; this is the keyboard toggle)
+        commands.append(UIKeyCommand(
+            title: "Toggle Column Selection",
+            action: #selector(toggleColumnSelection),
+            input: "c",
+            modifierFlags: [.command, .alternate]
+        ))
+
         // Escape: Dismiss autocomplete if visible, else exit multi-cursor mode
         // This is editor-specific and NOT a menu command
         commands.append(UIKeyCommand(
@@ -269,7 +278,16 @@ extension MultiCursorTextView {
         if onDismissAutocomplete?() == true {
             return
         }
+        // Exit column selection mode if active
+        if editorCore?.columnSelectionMode == true {
+            editorCore?.toggleColumnSelection()
+            return
+        }
         editorCore?.escapeMultiCursor()
         updateCursorDisplay()
+    }
+
+    @objc private func toggleColumnSelection() {
+        NotificationCenter.default.post(name: .toggleColumnSelection, object: nil)
     }
 }

@@ -250,6 +250,63 @@ class MultiCursorState: ObservableObject {
     }
 }
 
+// MARK: - Column Selection Model
+
+/// Represents the state of a column/box (rectangular) selection.
+/// Used by ColumnSelectionManager to persist and communicate selection state.
+struct ColumnSelection: Equatable {
+    /// Whether column selection is currently active
+    var isActive: Bool = false
+
+    /// Anchor position where the column selection started (0-based line, column)
+    var anchorLine: Int = 0
+    var anchorCol: Int = 0
+
+    /// Current cursor position for the column selection end (0-based line, column)
+    var currentLine: Int = 0
+    var currentCol: Int = 0
+
+    /// The number of lines spanned by this column selection
+    var lineSpan: Int {
+        abs(currentLine - anchorLine) + 1
+    }
+
+    /// The number of columns spanned by this column selection
+    var columnSpan: Int {
+        abs(currentCol - anchorCol) + 1
+    }
+
+    /// The minimum line (0-based) in the selection range
+    var minLine: Int { min(anchorLine, currentLine) }
+
+    /// The maximum line (0-based) in the selection range
+    var maxLine: Int { max(anchorLine, currentLine) }
+
+    /// The minimum column in the selection range
+    var minCol: Int { min(anchorCol, currentCol) }
+
+    /// The maximum column in the selection range
+    var maxCol: Int { max(anchorCol, currentCol) }
+
+    /// Convert to a snapshot that can be used to restore the selection later
+    func snapshot() -> ColumnSelectionSnapshot {
+        ColumnSelectionSnapshot(
+            anchorLine: anchorLine,
+            anchorCol: anchorCol,
+            currentLine: currentLine,
+            currentCol: currentCol
+        )
+    }
+}
+
+/// A lightweight value type for persisting column selection state across view updates
+struct ColumnSelectionSnapshot: Equatable {
+    let anchorLine: Int
+    let anchorCol: Int
+    let currentLine: Int
+    let currentCol: Int
+}
+
 // MARK: - Occurrence Finding
 
 extension String {

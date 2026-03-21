@@ -676,7 +676,25 @@ struct RunestoneEditorView: UIViewRepresentable {
             layer.zPosition = 99
             return layer
         }()
-        
+
+        // MARK: - Column Selection Overlay
+        /// Overlay layer for rendering rectangular (column/box) selection highlights.
+        private let columnSelectionLayer: CAShapeLayer = {
+            let layer = CAShapeLayer()
+            layer.fillColor = UIColor.systemBlue.withAlphaComponent(0.25).cgColor
+            layer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.55).cgColor
+            layer.lineWidth = 1.0
+            layer.zPosition = 97
+            layer.name = "columnSelection"
+            return layer
+        }()
+
+        /// Gesture recognizer for Option+drag column selection activation
+        private var columnSelectionPanGesture: UIPanGestureRecognizer?
+
+        /// Whether a column selection drag is in progress
+        private var isColumnDragActive = false
+
         init(_ parent: RunestoneEditorView) {
             self.parent = parent
             self.lastFontSize = parent.fontSize
@@ -704,7 +722,8 @@ struct RunestoneEditorView: UIViewRepresentable {
                 .duplicateLineUp, .duplicateLineDown, .addNextOccurrence, .selectAllOccurrences,
                 .selectLine, .indentLines, .outdentLines, .joinLines,
                 .insertLineBelow, .insertLineAbove,
-                .expandSelection, .shrinkSelection
+                .expandSelection, .shrinkSelection,
+                .toggleColumnSelection
             ]
             for name in actions {
                 editorActionObservers.append(
@@ -796,6 +815,15 @@ struct RunestoneEditorView: UIViewRepresentable {
                 NotificationCenter.default.addObserver(forName: .hideSearch, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
                         self?.multiCursorManager.reset()
+                    }
+                }
+            )
+
+            // Column selection: listen for toggle notification (Cmd+Shift+L)
+            editorActionObservers.append(
+                NotificationCenter.default.addObserver(forName: .toggleColumnSelection, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.handleToggleColumnSelection()
                     }
                 }
             )
@@ -1111,6 +1139,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             if multiCursorManager.isActive {
                 multiCursorManager.updateDisplay()
             }
+            // Refresh column selection overlay when cursor moves
+            updateColumnSelectionDisplay(in: textView)
         }
         
         func textViewDidBeginEditing(_ textView: TextView) {
@@ -1121,6 +1151,8 @@ struct RunestoneEditorView: UIViewRepresentable {
             if bracketGuideLayer.superlayer == nil {
                 textView.layer.addSublayer(bracketGuideLayer)
             }
+            // Install Option+drag gesture for column selection
+            installColumnSelectionGesture(on: textView)
         }
         
         func textViewDidEndEditing(_ textView: TextView) {
@@ -1129,6 +1161,22 @@ struct RunestoneEditorView: UIViewRepresentable {
         
         func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
 
+            // ---------------------------------------------------------------
+            // MARK: Column selection text input interception
+            // ---------------------------------------------------------------
+            if parent.editorCore.columnSelectionMode && parent.editorCore.columnSelectionManager.isActive {
+                if text.isEmpty && range.length > 0 {
+                    // Delete in column mode
+                    handleColumnDelete(textView: textView)
+                    textViewDidChange(textView)
+                    return false
+                } else if !text.isEmpty {
+                    // Insert text at all column positions
+                    handleColumnInsert(text: text, textView: textView)
+                    textViewDidChange(textView)
+                    return false
+                }
+            }
             // ---------------------------------------------------------------
             // MARK: Multi-cursor text input interception
             // ---------------------------------------------------------------
@@ -1632,8 +1680,256 @@ struct RunestoneEditorView: UIViewRepresentable {
             }
         }
         
+        // MARK: - Column Selection Helpers
+
+        private func handleToggleColumnSelection() {
+            parent.editorCore.toggleColumnSelection()
+            if parent.editorCore.columnSelectionMode {
+                // Set anchor to current cursor position
+                let sel = textView?.selectedRange ?? NSRange(location: 0, length: 0)
+                let csm = parent.editorCore.columnSelectionManager
+                csm.reset()
+                csm.isActive = true
+                csm.anchorLine = max(0, parent.currentLineNumber - 1)
+                csm.anchorCol = max(0, parent.currentColumn - 1)
+                csm.currentLine = csm.anchorLine
+                csm.currentCol = csm.anchorCol
+                csm.hasAnchor = true
+            } else {
+                clearColumnSelectionOverlay()
+            }
+        }
+
+        private func updateColumnSelectionDisplay(in textView: TextView) {
+            let csm = parent.editorCore.columnSelectionManager
+            guard parent.editorCore.columnSelectionMode, csm.isActive, csm.hasAnchor else {
+                clearColumnSelectionOverlay()
+                return
+            }
+
+            // Update current position from selection (if not in a drag)
+            if !isColumnDragActive {
+                let sel = textView.selectedRange
+                let nsText = textView.text as NSString
+                let line = lineNumber(forOffset: sel.location)
+
+                // Get column for the line
+                let lineStart: Int
+                if line <= 1 {
+                    lineStart = 0
+                } else {
+                    let idx = line - 2
+                    lineStart = (idx < newlineOffsets.count) ? newlineOffsets[idx] + 1 : 0
+                }
+                let col = sel.location - lineStart
+                csm.currentLine = line - 1  // Convert to 0-based
+                csm.currentCol = col
+            }
+
+            // Render the column selection rectangles
+            renderColumnSelection(in: textView)
+        }
+
+        private func renderColumnSelection(in textView: TextView) {
+            let csm = parent.editorCore.columnSelectionManager
+            let nsText = textView.text as NSString
+            let ranges = csm.computeRanges(text: nsText, newlineOffsets: newlineOffsets)
+
+            guard !ranges.isEmpty else {
+                columnSelectionLayer.path = nil
+                return
+            }
+
+            let path = CGMutablePath()
+            for (_, range) in ranges {
+                // Get rects for this range
+                guard let textInput = textView as? UITextInput,
+                      let start = textInput.position(from: textInput.beginningOfDocument, offset: range.location),
+                      let end = textInput.position(from: textInput.beginningOfDocument, offset: range.location + range.length),
+                      let tRange = textInput.textRange(from: start, to: end) else { continue }
+
+                // Get selection rects for this range
+                let selRects = textView.selectionRects(for: tRange)
+                for rect in selRects {
+                    let highlightRect = rect.rect.insetBy(dx: 0, dy: 1)
+                    path.addRect(highlightRect)
+                }
+            }
+
+            // Install the layer if needed
+            if columnSelectionLayer.superlayer == nil, let textViewLayer = textView.layer {
+                textViewLayer.addSublayer(columnSelectionLayer)
+            }
+            columnSelectionLayer.path = path
+        }
+
+        private func clearColumnSelectionOverlay() {
+            columnSelectionLayer.path = nil
+        }
+
+        private func handleColumnInsert(text: String, textView: TextView) {
+            let csm = parent.editorCore.columnSelectionManager
+            let nsText = textView.text as NSString
+
+            // Get the ranges to replace and insertion positions
+            let ranges = csm.computeRanges(text: nsText, newlineOffsets: newlineOffsets)
+            let insertPositions = csm.insertionPositions(text: nsText, newlineOffsets: newlineOffsets)
+
+            guard !insertPositions.isEmpty else { return }
+
+            let fullText = NSMutableString(string: textView.text)
+            let textLen = (text as NSString).length
+
+            // Sort ranges by location (descending) to process from bottom-up
+            let sortedRanges = ranges.sorted { $0.range.location > $1.range.location }
+
+            // If there are existing ranges (multi-row selection), replace them
+            // Otherwise, just insert at positions
+            if !sortedRanges.isEmpty && sortedRanges.first!.range.length > 0 {
+                for (_, range) in sortedRanges {
+                    let safeRange = NSRange(
+                        location: min(range.location, fullText.length),
+                        length: min(range.length, max(0, fullText.length - range.location))
+                    )
+                    fullText.replaceCharacters(in: safeRange, with: text)
+                }
+            } else {
+                // Insert at each position (bottom-up to preserve offsets)
+                for pos in insertPositions.sorted().reversed() {
+                    let clampedPos = min(pos, fullText.length)
+                    fullText.insert(text, at: clampedPos)
+                }
+            }
+
+            textView.text = fullText as String
+
+            // Move cursor to the first insertion position after the edit
+            let newPos = insertPositions.sorted().first ?? 0
+            textView.selectedRange = NSRange(location: newPos + textLen, length: 0)
+
+            // Rebuild newline offsets
+            rebuildNewlineOffsets(for: fullText)
+
+            // Clear column selection after typing
+            csm.hasAnchor = false
+            csm.isActive = false
+            parent.editorCore.columnSelectionMode = false
+            clearColumnSelectionOverlay()
+        }
+
+        private func handleColumnDelete(textView: TextView) {
+            let csm = parent.editorCore.columnSelectionManager
+            let nsText = textView.text as NSString
+            let ranges = csm.computeRanges(text: nsText, newlineOffsets: newlineOffsets)
+
+            guard !ranges.isEmpty else { return }
+
+            let fullText = NSMutableString(string: textView.text)
+
+            // Delete ranges bottom-up
+            let sortedRanges = ranges.sorted { $0.range.location > $1.range.location }
+            for (_, range) in sortedRanges {
+                let safeRange = NSRange(
+                    location: min(range.location, fullText.length),
+                    length: min(range.length, max(0, fullText.length - range.location))
+                )
+                fullText.replaceCharacters(in: safeRange, with: "")
+            }
+
+            textView.text = fullText as String
+
+            // Move cursor to first range position
+            let newPos = ranges.sorted { $0.range.location < $1.range.location }.first?.range.location ?? 0
+            textView.selectedRange = NSRange(location: newPos, length: 0)
+
+            // Rebuild newline offsets
+            rebuildNewlineOffsets(for: fullText)
+
+            // Clear column selection
+            csm.hasAnchor = false
+            csm.isActive = false
+            parent.editorCore.columnSelectionMode = false
+            clearColumnSelectionOverlay()
+        }
+
+        /// Convert a point in the text view to (0-based line, 0-based column)
+        private func lineAndColumn(at point: CGPoint, in textView: TextView) -> (line: Int, col: Int)? {
+            guard let textInput = textView as? UITextInput else { return nil }
+            guard let tapPosition = textInput.closestPosition(to: point) else { return nil }
+
+            let offset = textInput.offset(from: textInput.beginningOfDocument, to: tapPosition)
+            let nsText = textView.text as NSString
+
+            let line = lineNumber(forOffset: offset)
+
+            // Get column
+            let lineStart: Int
+            if line <= 1 {
+                lineStart = 0
+            } else {
+                let idx = line - 2
+                lineStart = (idx < newlineOffsets.count) ? newlineOffsets[idx] + 1 : 0
+            }
+            let col = offset - lineStart
+
+            return (line: line - 1, col: col)  // 0-based
+        }
+
+        /// Handle Option+drag for column selection
+        @objc private func handleColumnDrag(_ gesture: UIPanGestureRecognizer) {
+            guard let textView = textView else { return }
+            let point = gesture.location(in: textView)
+
+            switch gesture.state {
+            case .began:
+                // On iOS 17+, verify Option key is held before activating column selection.
+                // On older iOS, always allow (rely on keyboard toggle Cmd+Option+C).
+                if #available(iOS 17, *) {
+                    let optionHeld = UIKeyModifierFlags.option
+                        .contains(UIKeyModifierFlags(rawValue: gesture.modifierFlags.rawValue))
+                    guard optionHeld else { return }
+                }
+                // Activate column selection mode if not already active
+                if !parent.editorCore.columnSelectionMode {
+                    parent.editorCore.columnSelectionMode = true
+                }
+                isColumnDragActive = true
+                if let lc = lineAndColumn(at: point, in: textView) {
+                    let csm = parent.editorCore.columnSelectionManager
+                    if !csm.hasAnchor {
+                        csm.anchorLine = lc.line
+                        csm.anchorCol = lc.col
+                        csm.hasAnchor = true
+                    }
+                    csm.isActive = true
+                    csm.currentLine = lc.line
+                    csm.currentCol = lc.col
+                }
+            case .changed:
+                if isColumnDragActive, let lc = lineAndColumn(at: point, in: textView) {
+                    let csm = parent.editorCore.columnSelectionManager
+                    csm.currentLine = lc.line
+                    csm.currentCol = lc.col
+                    renderColumnSelection(in: textView)
+                }
+            case .ended, .cancelled:
+                isColumnDragActive = false
+            default:
+                break
+            }
+        }
+
+        /// Install Option+drag gesture recognizer on the text view
+        func installColumnSelectionGesture(on textView: TextView) {
+            guard columnSelectionPanGesture == nil else { return }
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(handleColumnDrag))
+            pan.delegate = self  // We'll implement UIGestureRecognizerDelegate
+            columnSelectionPanGesture = pan
+            textView.addGestureRecognizer(pan)
+        }
+
         // MARK: - Editor Action Handlers (Keyboard Shortcuts)
-        
+
         private func handleEditorAction(_ name: Notification.Name) {
             guard let textView = textView else { return }
             switch name {
@@ -1653,6 +1949,7 @@ struct RunestoneEditorView: UIViewRepresentable {
             case .insertLineAbove: performInsertLineAbove(textView)
             case .expandSelection: performExpandSelection(textView)
             case .shrinkSelection: performShrinkSelection(textView)
+            case .toggleColumnSelection: handleToggleColumnSelection()
             default: break
             }
         }
@@ -2368,6 +2665,29 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.undoManager?.endUndoGrouping()
             textViewDidChange(textView)
         }
+    }
+}
+
+// MARK: - Column Selection Gesture Delegate
+
+extension RunestoneEditorView.Coordinator: UIGestureRecognizerDelegate {
+    /// Allow simultaneous recognition with Runestone's built-in gestures.
+    /// Column selection activation is gated in handleColumnDrag where we can
+    /// safely check UIKeyModifierFlags without an iOS 17 requirement.
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === columnSelectionPanGesture else { return true }
+        if #available(iOS 17, *) {
+            // Only start column drag when Option key is held
+            return UIKeyModifierFlags.option.contains(UIKeyModifierFlags(rawValue: gestureRecognizer.modifierFlags.rawValue))
+        }
+        // Pre-iOS 17 fallback: always allow; option check happens in handleColumnDrag
+        return true
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Allow simultaneous with Runestone's built-in gestures
+        return true
     }
 }
 
