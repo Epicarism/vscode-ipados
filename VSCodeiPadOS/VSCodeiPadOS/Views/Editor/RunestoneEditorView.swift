@@ -10,6 +10,7 @@ import os
 import SwiftUI
 import UIKit
 import Runestone
+import TreeSitter
 import TreeSitterSwiftRunestone
 import TreeSitterJavaScriptRunestone
 import TreeSitterTypeScriptRunestone
@@ -167,6 +168,13 @@ struct RunestoneEditorView: UIViewRepresentable {
             textView.text = text
         }
         
+        // Set TreeSitter language for AST-aware bracket matching
+        if let language = getTreeSitterLanguage(for: filename) {
+            BracketMatchingManager.shared.setTreeSitterLanguage(language.languagePointer)
+        } else {
+            BracketMatchingManager.shared.setTreeSitterLanguage(nil)
+        }
+
         // Set theme AFTER setState to ensure it takes effect
         // setState may reset internal rendering state, so theme must come after
         textView.theme = makeRunestoneTheme()
@@ -299,6 +307,13 @@ struct RunestoneEditorView: UIViewRepresentable {
                 textView.text = text
             }
             
+            // Update TreeSitter language for bracket matching on file switch
+            if let language = getTreeSitterLanguage(for: filename) {
+                BracketMatchingManager.shared.setTreeSitterLanguage(language.languagePointer)
+            } else {
+                BracketMatchingManager.shared.setTreeSitterLanguage(nil)
+            }
+
             // CRITICAL: Re-apply theme AFTER setState - setState may reset rendering state
             textView.theme = makeRunestoneTheme()
             
@@ -333,6 +348,13 @@ struct RunestoneEditorView: UIViewRepresentable {
                 textView.text = text
             }
             
+            // Update TreeSitter language for bracket matching on external text change
+            if let language = getTreeSitterLanguage(for: filename) {
+                BracketMatchingManager.shared.setTreeSitterLanguage(language.languagePointer)
+            } else {
+                BracketMatchingManager.shared.setTreeSitterLanguage(nil)
+            }
+
             // CRITICAL: Re-apply theme AFTER setState - setState may reset rendering state
             textView.theme = makeRunestoneTheme()
             
@@ -816,11 +838,12 @@ struct RunestoneEditorView: UIViewRepresentable {
                     }
                 }
             )
-            // Escape key: exit multi-cursor mode (also hides search)
+            // Escape key: exit multi-cursor mode and end snippet tab-stop session
             editorActionObservers.append(
                 NotificationCenter.default.addObserver(forName: .hideSearch, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
                         self?.multiCursorManager.reset()
+                        SnippetManager.shared.endTabStopSession()
                     }
                 }
             )

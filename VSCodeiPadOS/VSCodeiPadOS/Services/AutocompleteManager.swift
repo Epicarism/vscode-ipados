@@ -494,11 +494,29 @@ final class AutocompleteManager: ObservableObject {
         guard let context = completionContext(in: text, cursorPosition: safeCursor) else { return }
 
         let replacementRange = context.replacementRange
-        text.replaceSubrange(replacementRange, with: suggestion.insertText)
+        let insertionOffset = text.distance(from: text.startIndex, to: replacementRange.lowerBound)
 
-        // Move cursor to end of inserted text.
-        let newCursorOffset = text.distance(from: text.startIndex, to: replacementRange.lowerBound) + suggestion.insertText.count
-        cursorPosition = min(newCursorOffset, text.count)
+        // Snippet suggestions: expand body with tab-stop placeholders and begin session
+        if suggestion.kind == .snippet {
+            let lang = Self.snippetLanguage(forFilename: currentFilename) ?? "swift"
+            if let snippet = SnippetManager.shared.snippet(forTrigger: suggestion.insertText, language: lang) {
+                let (expandedText, tabStops) = SnippetManager.shared.expand(snippet)
+                text.replaceSubrange(replacementRange, with: expandedText)
+                // Activate tab-stop navigation so Tab key advances through $1, $2, …
+                SnippetManager.shared.beginTabStopSession(snippet: snippet, insertedAt: insertionOffset)
+                // Position cursor at the first tab stop ($1) without advancing the session
+                if let firstStop = tabStops.first {
+                    cursorPosition = min(insertionOffset + firstStop.offset, text.count)
+                } else {
+                    cursorPosition = min(insertionOffset + expandedText.count, text.count)
+                }
+                hideSuggestions()
+                return
+            }
+        }
+
+        text.replaceSubrange(replacementRange, with: suggestion.insertText)
+        cursorPosition = min(insertionOffset + suggestion.insertText.count, text.count)
 
         hideSuggestions()
     }

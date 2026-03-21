@@ -1,12 +1,127 @@
 import Foundation
 import UIKit
+import TreeSitter
 
 /// Manages bracket matching and highlighting for the editor.
 /// Supports: (), [], {}, <> (in certain contexts)
+///
+/// When a TreeSitter language is configured via ``setTreeSitterLanguage(_:)``,
+/// uses AST-aware analysis to accurately detect strings and comments across
+/// all supported languages. Falls back to a character-level scanner when
+/// TreeSitter is unavailable.
 final class BracketMatchingManager: @unchecked Sendable {
     static let shared = BracketMatchingManager()
     private init() {}
-    
+
+    // MARK: - TreeSitter Integration
+
+    /// TreeSitter language pointer for the current document.
+    /// Set by the editor Coordinator when a file with TreeSitter support is loaded.
+    /// When nil, bracket matching falls back to the character-level scanner.
+    private var _tsLanguagePointer: UnsafePointer<TSLanguage>?
+    private var _tsParser: OpaquePointer?
+    private var _tsTree: OpaquePointer?
+    private var _tsCachedUTF16: [UInt16]?
+
+    /// Configure the TreeSitter language for AST-aware bracket matching.
+    /// Call with `nil` when switching to a file without TreeSitter support.
+    func setTreeSitterLanguage(_ pointer: UnsafePointer<TSLanguage>?) {
+        // Clean up old parse tree
+        if let tree = _tsTree { ts_tree_delete(tree); _tsTree = nil }
+        _tsCachedUTF16 = nil
+        _tsLanguagePointer = pointer
+        // Reset parser so it picks up the new language
+        if let parser = _tsParser { ts_parser_delete(parser); _tsParser = nil }
+    }
+
+    /// Lazily create or return the cached TreeSitter parser configured with the current language.
+    private func tsParser() -> OpaquePointer? {
+        guard let langPtr = _tsLanguagePointer else { return nil }
+        if let existing = _tsParser { return existing }
+        let parser = ts_parser_new()
+        ts_parser_set_language(parser, langPtr)
+        _tsParser = parser
+        return parser
+    }
+
+    /// Returns a cached or freshly parsed TreeSitter syntax tree for the text.
+    /// Returns nil if TreeSitter is not configured or parsing fails.
+    private func getCachedTree(for text: String) -> OpaquePointer? {
+        guard _tsLanguagePointer != nil else { return nil }
+
+        let utf16 = Array(text.utf16)
+
+        // Reuse cached tree if text (UTF-16 representation) hasn't changed
+        if let cached = _tsCachedUTF16, cached == utf16, let tree = _tsTree {
+            return tree
+        }
+
+        // Invalidate stale tree
+        if let oldTree = _tsTree { ts_tree_delete(oldTree); _tsTree = nil }
+
+        guard let parser = tsParser() else { return nil }
+        let byteCount = utf16.count * 2
+        guard byteCount > 0 else { return nil }
+
+        let newTree: OpaquePointer? = utf16.withUnsafeBufferPointer { ptr -> OpaquePointer? in
+            guard let base = ptr.baseAddress else { return nil }
+            let bytes = UnsafeRawPointer(base).assumingMemoryBound(to: UInt8.self)
+            return ts_parser_parse_string_encoding(
+                parser, nil, bytes, UInt32(byteCount), TSInputEncodingUTF16
+            )
+        }
+
+        guard let tree = newTree else { return nil }
+        _tsTree = tree
+        _tsCachedUTF16 = utf16
+        return tree
+    }
+
+    deinit {
+        if let tree = _tsTree { ts_tree_delete(tree) }
+        if let parser = _tsParser { ts_parser_delete(parser) }
+    }
+
+    // MARK: - TreeSitter AST Node Types
+
+    /// Node types that represent string literals across TreeSitter grammars.
+    private static let tsStringNodeTypes: Set<String> = [
+        "string", "string_literal", "template_string",
+        "interpreted_string_literal", "raw_string_literal",
+        "char_literal", "character",
+        "string_content", "template_literal", "string_expression",
+        "quoted_string", "double_quoted_string", "single_quoted_string",
+        "triple_quoted_string", "raw_string", "heredoc_string",
+        "doc_string", "f_string", "fstring", "concatenated_string",
+        "system_string_literal", "string_fragment", "escape_sequence",
+    ]
+
+    /// Node types that represent comments across TreeSitter grammars.
+    private static let tsCommentNodeTypes: Set<String> = [
+        "comment", "line_comment", "block_comment",
+        "documentation_comment", "doc_comment",
+        "multiline_comment", "single_line_comment",
+    ]
+
+    /// Check if a TreeSitter node (or any of its ancestors) represents a string or comment.
+    /// Walks up the tree because brackets inside strings may appear in inner anonymous nodes
+    /// (e.g. `string_content` inside `string_literal`).
+    private func tsNodeIsStringOrComment(_ node: TSNode) -> Bool {
+        var current = node
+        // Walk up at most 8 ancestors to avoid pathological cases
+        for _ in 0..<8 {
+            if ts_node_is_null(current) { return false }
+            if let typeStr = ts_node_type(current) {
+                let nodeType = String(cString: typeStr)
+                if Self.tsStringNodeTypes.contains(nodeType) || Self.tsCommentNodeTypes.contains(nodeType) {
+                    return true
+                }
+            }
+            current = ts_node_parent(current)
+        }
+        return false
+    }
+
     // MARK: - Models
     
     struct BracketPair: Equatable {
@@ -65,8 +180,8 @@ final class BracketMatchingManager: @unchecked Sendable {
             let char = chars[checkPos]
             
             if let (bracketType, isOpen) = BracketType.from(char: char) {
-                // Skip brackets inside strings or comments
-                if Self.isInsideStringOrComment(in: text, at: checkPos) { return nil }
+                // Skip brackets inside strings or comments (TreeSitter-aware)
+                if Self.isInsideStringOrComment(in: text, at: checkPos, manager: self) { return nil }
                 if isOpen {
                     // Search forward for closing bracket
                     if let closeIndex = findClosingBracket(in: chars, from: checkPos, type: bracketType) {
@@ -97,8 +212,8 @@ final class BracketMatchingManager: @unchecked Sendable {
         let chars = Array(text)
         
         for (index, char) in chars.enumerated() {
-            // Skip brackets inside strings, comments, or template strings
-            if Self.isInsideStringOrComment(in: text, at: index) { continue }
+            // Skip brackets inside strings, comments, or template strings (TreeSitter-aware)
+            if Self.isInsideStringOrComment(in: text, at: index, manager: self) { continue }
             
             // Check for brackets
             if let (bracketType, isOpen) = BracketType.from(char: char) {
@@ -158,11 +273,49 @@ final class BracketMatchingManager: @unchecked Sendable {
         return max(0, depth)
     }
     
-    // MARK: - Private Helpers
+    // MARK: - String/Comment Detection (TreeSitter + Scanner Fallback)
     
     /// Determines if a character at `position` in `text` is inside a string literal,
-    /// line comment, or block comment by scanning from the start of the text.
-    static func isInsideStringOrComment(in text: String, at position: Int) -> Bool {
+    /// line comment, or block comment.
+    ///
+    /// **TreeSitter path:** Uses the parsed syntax tree (if available) to check whether
+    /// the node at the given byte offset is a string or comment type. This correctly
+    /// handles language-specific string/comment syntax (e.g. Python `"""`, Go backtick
+    /// raw strings, Rust `r"…"`, Swift multiline `"""`, etc.).
+    ///
+    /// **Fallback:** When no TreeSitter tree is available, falls back to the character-
+    /// level scanner that handles C-style `//`/`/* */` comments, double/single-quoted
+    /// strings, and JavaScript-style backtick template strings.
+    ///
+    /// - Parameters:
+    ///   - text: The full source text.
+    ///   - position: Character index (UTF-16 compatible) to test.
+    ///   - manager: The `BracketMatchingManager` instance that holds the TreeSitter state.
+    static func isInsideStringOrComment(in text: String, at position: Int, manager: BracketMatchingManager = .shared) -> Bool {
+        // --- TreeSitter AST path ---
+        if let tree = manager.getCachedTree(for: text) {
+            let rootNode = ts_tree_root_node(tree)
+            // Convert position to UTF-16 byte offset for TreeSitter
+            let byteOffset = UInt32(position * 2)
+            let point = TSPoint(row: 0, column: 0)
+            // Use descendant_for_byte_range to find the deepest node at the byte offset
+            let node = ts_node_descendant_for_byte_range(rootNode, byteOffset, byteOffset)
+            if !ts_node_is_null(node) && manager.tsNodeIsStringOrComment(node) {
+                return true
+            }
+            // TreeSitter says it's NOT inside a string/comment — trust it and return false.
+            // Only fall through to the scanner if TreeSitter couldn't parse at all.
+            return false
+        }
+
+        // --- Character-level scanner fallback ---
+        return isInsideStringOrCommentScanner(in: text, at: position)
+    }
+
+    /// Character-level scanner for string/comment detection.
+    /// Handles C-style comments, quoted strings, and backtick template strings.
+    /// Used as a fallback when TreeSitter is unavailable.
+    private static func isInsideStringOrCommentScanner(in text: String, at position: Int) -> Bool {
         let chars = Array(text.unicodeScalars.prefix(position + 1))
         var inLineComment = false
         var inBlockComment = false

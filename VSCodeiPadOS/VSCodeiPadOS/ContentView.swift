@@ -838,7 +838,7 @@ struct ContentView: View {
             case .testing:
                 TestView()
             case .outline:
-                OutlineView(editorCore: editorCore, onJumpToLine: { line in
+                SymbolOutlineView(onNavigateToLine: { line in
                     editorCore.requestedGoToLine = line
                 })
             }
@@ -1086,6 +1086,7 @@ struct IDEEditorView: View {
     @State private var requestedLineSelection: Int? = nil
     @State private var gitGutterRefreshToken: Int = 0
     @State private var foldDetectionWork: DispatchWorkItem?
+    @State private var symbolUpdateWork: DispatchWorkItem?
 
     @StateObject private var autocomplete = AutocompleteManager()
     @State private var showAutocomplete = false
@@ -1242,6 +1243,16 @@ struct IDEEditorView: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: foldWork)
                             foldingManager.currentText = newValue
                             gitGutterRefreshToken &+= 1
+                            
+                            // Debounced symbol outline update — 1.5s after last edit
+                            symbolUpdateWork?.cancel()
+                            let symbolWork = DispatchWorkItem {
+                                if let tab = self.editorCore.activeTab {
+                                    TreeSitterSymbolProvider.shared.updateSymbols(for: tab.content, filename: tab.fileName)
+                                }
+                            }
+                            symbolUpdateWork = symbolWork
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: symbolWork)
                             
                             // Inline suggestion — manager handles debounce (300ms) + throttle (2s) internally
                             inlineSuggestionManager.clearSuggestion()
@@ -1460,6 +1471,9 @@ struct IDEEditorView: View {
                     version: lspDocumentVersion
                 )
             }
+
+            // Update symbol outline for the current file
+            TreeSitterSymbolProvider.shared.updateSymbols(for: tab.content, filename: tab.fileName)
         }
         .onChange(of: tab.id) { oldTabId, _ in
             // ── Tab switch: save outgoing state, load incoming state ──────────
@@ -1498,6 +1512,9 @@ struct IDEEditorView: View {
                     version: lspDocumentVersion
                 )
             }
+
+            // Update symbol outline for the new tab
+            TreeSitterSymbolProvider.shared.updateSymbols(for: tab.content, filename: tab.fileName)
 
             inlineSuggestionManager.clearSuggestion()
             if editorCore.showSearch {
