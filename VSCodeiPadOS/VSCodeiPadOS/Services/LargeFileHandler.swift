@@ -123,6 +123,10 @@ final class LargeFileHandler: ObservableObject {
     @Published var currentFileInfo: FileSizeInfo?
     @Published var isLoadingLargeFile = false
     @Published var loadProgress: Double = 0
+    @Published var isProgressivelyLoading = false
+    @Published var progressiveContentLoaded: Int64 = 0
+    @Published var progressiveContentTotal: Int64 = 0
+    @Published var progressiveTextSnapshot: String? = nil
     
     // Thresholds
     private let byteSizeThresholds: [(Int, EditorPerformanceTier)] = [
@@ -472,7 +476,179 @@ final class LargeFileHandler: ObservableObject {
         }
         loadingTask = task
     }
-    
+
+    // MARK: - Progressive Loading (P3-25)
+
+    /// Progressively load a file: returns the first 50KB immediately for display,
+    /// then continues loading in background chunks, updating the text snapshot.
+    /// Caller should observe progressiveTextSnapshot for updates.
+    func loadFileProgressively(
+        url: URL,
+        initialChunkSize: Int = 50 * 1024,
+        chunkSize: Int = 50 * 1024,
+        onInitialContent: @Sendable @escaping (String) -> Void,
+        onProgressUpdate: @Sendable @escaping (String) -> Void,
+        completion: @Sendable @escaping (Result<String, Error>) -> Void
+    ) {
+        isProgressivelyLoading = true
+        progressiveContentLoaded = 0
+        progressiveContentTotal = 0
+
+        loadingTask?.cancel()
+
+        let task = Task.detached(priority: .userInitiated) {
+            do {
+                let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+                let fileSize = attrs[.size] as? Int ?? 0
+
+                await MainActor.run { [weak self] in
+                    self?.progressiveContentTotal = Int64(fileSize)
+                    self?.loadProgress = 0
+                }
+
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { handle.closeFile() }
+
+                // Phase 1: Load initial chunk immediately
+                let initialChunk = handle.readData(ofLength: initialChunkSize)
+
+                var accumulated = Data()
+                accumulated.append(initialChunk)
+                let initialBytes = initialChunk.count
+
+                await MainActor.run { [weak self] in
+                    self?.progressiveContentLoaded = Int64(initialBytes)
+                    self?.loadProgress = fileSize > 0 ? Double(initialBytes) / Double(fileSize) : 1.0
+                }
+
+                // Decode initial content (may split multi-byte UTF-8 at boundary)
+                let initialText = self.decodeProgressiveData(accumulated, isComplete: initialBytes >= fileSize)
+
+                // Deliver initial content immediately so editor can display something
+                await MainActor.run { [weak self] in
+                    self?.progressiveTextSnapshot = initialText
+                }
+                onInitialContent(initialText)
+
+                // If file fits in initial chunk, we are done
+                if initialBytes >= fileSize {
+                    await MainActor.run { [weak self] in
+                        self?.isProgressivelyLoading = false
+                        self?.progressiveContentLoaded = Int64(fileSize)
+                        self?.loadProgress = 1.0
+                    }
+                    completion(.success(initialText))
+                    return
+                }
+
+                // Phase 2: Continue loading remaining chunks in background
+                var bytesRead = initialBytes
+
+                while !Task.isCancelled {
+                    let chunk = handle.readData(ofLength: chunkSize)
+                    if chunk.isEmpty { break }
+
+                    accumulated.append(chunk)
+                    bytesRead += chunk.count
+
+                    let pct = Double(bytesRead) / Double(max(1, fileSize))
+
+                    await MainActor.run { [weak self] in
+                        self?.progressiveContentLoaded = Int64(bytesRead)
+                        self?.loadProgress = pct
+                    }
+
+                    // Decode full accumulated content
+                    let updatedText = self.decodeProgressiveData(accumulated, isComplete: bytesRead >= fileSize)
+
+                    await MainActor.run { [weak self] in
+                        self?.progressiveTextSnapshot = updatedText
+                    }
+
+                    // Notify caller so editor can update
+                    onProgressUpdate(updatedText)
+
+                    if bytesRead >= fileSize { break }
+                }
+
+                let finalText = String(data: accumulated, encoding: .utf8)
+                    ?? String(data: accumulated, encoding: .ascii)
+                    ?? ""
+
+                await MainActor.run { [weak self] in
+                    self?.isProgressivelyLoading = false
+                    self?.progressiveContentLoaded = Int64(fileSize)
+                    self?.loadProgress = 1.0
+                    self?.progressiveTextSnapshot = finalText
+                }
+
+                completion(.success(finalText))
+
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.isProgressivelyLoading = false
+                }
+                completion(.failure(error))
+            }
+        }
+        loadingTask = task
+    }
+
+    /// Cancel progressive loading.
+    func cancelProgressiveLoading() {
+        loadingTask?.cancel()
+        loadingTask = nil
+        isProgressivelyLoading = false
+    }
+
+    /// Decode data that may have an incomplete UTF-8 sequence at the end.
+    /// Strips the incomplete trailing bytes unless the data is known to be complete.
+    private func decodeProgressiveData(_ data: Data, isComplete: Bool) -> String {
+        if isComplete {
+            return String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .ascii)
+                ?? ""
+        }
+
+        // UTF-8 continuation bytes: 10xxxxxx (0x80..0xBF)
+        // Multi-byte sequence starts: 0xC0..0xFF (1-4 byte starters)
+        // Walk backwards to find a valid boundary
+        var cutPoint = data.count
+        var i = data.count - 1
+
+        while i >= max(0, data.count - 4) {
+            let byte = data[i]
+            if byte < 0x80 {
+                // ASCII byte, valid boundary
+                cutPoint = i + 1
+                break
+            } else if byte >= 0xC0 {
+                // Start of a multi-byte sequence
+                let expectedLen: Int
+                if byte < 0xE0 { expectedLen = 2 }
+                else if byte < 0xF0 { expectedLen = 3 }
+                else { expectedLen = 4 }
+
+                let remaining = data.count - i
+                if remaining >= expectedLen {
+                    // Complete sequence, valid boundary after it
+                    cutPoint = data.count
+                } else {
+                    // Incomplete sequence, cut before it
+                    cutPoint = i
+                }
+                break
+            }
+            // Continuation byte (0x80..0xBF), keep walking back
+            i -= 1
+        }
+
+        let safeData = data[..<cutPoint]
+        return String(data: safeData, encoding: .utf8)
+            ?? String(data: data, encoding: .ascii)
+            ?? ""
+    }
+
     // MARK: - Line Offset Index
     
     /// Build a line offset index for fast random access

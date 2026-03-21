@@ -1580,23 +1580,41 @@ mod tests {
                 return
             }
 
-            // Use incremental loading for files > 1MB to avoid blocking the main thread
+            // P3-25: Use progressive loading for files > 1MB — display first 50KB immediately
             if fileSize > 1_000_000 {
-                LargeFileHandler.shared.loadFileIncrementally(
+                LargeFileHandler.shared.loadFileProgressively(
                     url: url,
-                    chunkSize: 65536,
-                    progress: { _ in
-                        // Progress tracked automatically via LargeFileHandler.loadProgress
+                    initialChunkSize: 50 * 1024,
+                    chunkSize: 50 * 1024,
+                    onInitialContent: { [weak self] initialContent in
+                        // Create tab immediately with partial content so editor shows something
+                        MainActor.assumeIsolated {
+                            guard let self = self else { return }
+                            let tab = Tab(fileName: url.lastPathComponent, content: initialContent, url: url, fileEncoding: String.Encoding.utf8.rawValue)
+                            self.tabs.append(tab)
+                            self.activeTabId = tab.id
+                            self.updateLargeFileStatus()
+                        }
+                    },
+                    onProgressUpdate: { [weak self] updatedContent in
+                        // Update the tab content as more chunks load
+                        MainActor.assumeIsolated {
+                            guard let self = self,
+                                  let tabIdx = self.tabs.indices.last,
+                                  self.tabs[tabIdx].url == url else { return }
+                            self.tabs[tabIdx].content = updatedContent
+                        }
                     },
                     completion: { [weak self] result in
                         MainActor.assumeIsolated {
                             guard let self = self else { return }
                             switch result {
-                            case .success(let content):
-                                let newTab = Tab(fileName: url.lastPathComponent, content: content, url: url, fileEncoding: String.Encoding.utf8.rawValue)
-                                self.tabs.append(newTab)
-                                self.activeTabId = newTab.id
-                                self.updateLargeFileStatus()
+                            case .success(let finalContent):
+                                // Ensure tab has final content
+                                if let tabIdx = self.tabs.indices.last,
+                                   self.tabs[tabIdx].url == url {
+                                    self.tabs[tabIdx].content = finalContent
+                                }
                                 // P3-24: Apply EditorConfig / .prettierrc settings for this file
                                 Task {
                                     await EditorConfigService.shared.loadConfigs(for: url.deletingLastPathComponent().path)
@@ -1604,9 +1622,9 @@ mod tests {
                                     settings.apply(to: CodeFormatter.shared)
                                 }
                                 Task { @MainActor in RecentFileManager.shared.addRecentFile(url) }
-                                SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
+                                SpotlightManager.shared.indexFile(url: url, content: finalContent, fileName: url.lastPathComponent)
                             case .failure(let error):
-                                AppLogger.editor.error("Error loading large file incrementally: \(error)")
+                                AppLogger.editor.error("Error loading large file progressively: \(error)")
                                 if retained { self.releaseSecurityScopedAccess(to: url) }
                             }
                         }
