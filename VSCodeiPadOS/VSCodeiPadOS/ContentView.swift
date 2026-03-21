@@ -1095,6 +1095,7 @@ struct IDEEditorView: View {
     @StateObject private var findViewModel = FindViewModel()
     @StateObject private var inlineSuggestionManager = InlineSuggestionManager()
     @ObservedObject private var perfMonitor = EditorPerformanceMonitor.shared
+    @StateObject private var goToDefService = GoToDefinitionService()
 
     
     // MARK: - Shared Autocomplete Handlers
@@ -1538,6 +1539,28 @@ struct IDEEditorView: View {
             }
         }
 
+        // MARK: - Go to Definition
+        .onReceive(NotificationCenter.default.publisher(for: .goToDefinition)) { notification in
+            guard let info = notification.userInfo,
+                  let uri = info["uri"] as? String,
+                  let line = info["line"] as? Int,
+                  let character = info["character"] as? Int,
+                  let languageId = info["languageId"] as? String else { return }
+            goToDefService.goToDefinition(uri: uri, line: line, character: character, languageId: languageId)
+        }
+        .sheet(isPresented: $goToDefService.showPeek) {
+            if let result = goToDefService.results.first {
+                PeekDefinitionView(
+                    editorCore: editorCore,
+                    targetFile: result.fileName,
+                    targetLine: result.line,
+                    content: result.preview,
+                    onClose: { goToDefService.showPeek = false },
+                    onOpen: { goToDefService.showPeek = false }
+                )
+                .frame(minWidth: 400, minHeight: 250)
+            }
+        }
 
     }
     
