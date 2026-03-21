@@ -1597,6 +1597,12 @@ mod tests {
                                 self.tabs.append(newTab)
                                 self.activeTabId = newTab.id
                                 self.updateLargeFileStatus()
+                                // P3-24: Apply EditorConfig / .prettierrc settings for this file
+                                Task {
+                                    await EditorConfigService.shared.loadConfigs(for: url.deletingLastPathComponent().path)
+                                    let settings = await EditorConfigService.shared.settingsForFile(at: url.path)
+                                    settings.apply(to: CodeFormatter.shared)
+                                }
                                 Task { @MainActor in RecentFileManager.shared.addRecentFile(url) }
                                 SpotlightManager.shared.indexFile(url: url, content: content, fileName: url.lastPathComponent)
                             case .failure(let error):
@@ -1623,6 +1629,13 @@ mod tests {
             tabs.append(newTab)
             activeTabId = newTab.id
             updateLargeFileStatus()
+
+            // P3-24: Apply EditorConfig / .prettierrc settings for this file
+            Task {
+                await EditorConfigService.shared.loadConfigs(for: url.deletingLastPathComponent().path)
+                let settings = await EditorConfigService.shared.settingsForFile(at: url.path)
+                settings.apply(to: CodeFormatter.shared)
+            }
 
             if encoding != .utf8 {
                 AppLogger.editor.info("Opened \(url.lastPathComponent) with encoding \(encoding) (fallback from UTF-8)")
